@@ -1,0 +1,23 @@
+const mongoose = require('mongoose');
+
+const heroSchema = new mongoose.Schema({
+    image: { type: String, required: true },
+    altText: { type: String },
+    subtitle: { type: String, required: true },
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    button1Name: { type: String, default: 'View Our Projects' },
+    button1Url: { type: String, default: '/projects-list' },
+    button2Name: { type: String, default: 'Get Free Consultation' },
+    button2Url: { type: String, default: '/contact-list' },
+    isActive: { type: Boolean, default: true },
+    schedule: {
+        startDate: String,
+        startTime: String,
+        endDate: String,
+        endTime: String
+    },
+    createdAt: { type: Date, default: Date.now }
+});
+
+module.exports = mongoose.model('Hero', heroSchema);
