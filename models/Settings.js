@@ -34,7 +34,20 @@ const settingsSchema = new mongoose.Schema({
     topbarDate: {
         type: String,
         default: "15–17 October 2026"
+    },
+    headerScripts: {
+        type: String,
+        default: ""
+    },
+    footerScripts: {
+        type: String,
+        default: ""
+    },
+    supportDeskText: {
+        type: String,
+        default: "For exhibitors and delegates traveling from abroad, our international support team is available 24/7 during the expo period for visa, travel, and logistics assistance."
     }
 }, { timestamps: true });
+
 
 module.exports = mongoose.model('Settings', settingsSchema);

@@ -26,6 +26,19 @@ const parallaxRoutes = require('./routes/parallax');
 const testimonialsRoutes = require('./routes/testimonials');
 const countersRoutes = require('./routes/counters');
 const blogsRoutes = require('./routes/blogs');
+const globalPlatformRoutes = require('./routes/globalPlatform');
+const visionMissionRoutes = require('./routes/visionMission');
+const whyAttendRoutes = require('./routes/whyAttend');
+const whoShouldAttendRoutes = require('./routes/whoShouldAttend');
+const organizedByRoutes = require('./routes/organizedBy');
+const whyExhibitRoutes = require('./routes/whyExhibit');
+const stallVendorRoutes = require('./routes/stallVendor');
+const exhibitorRoutes = require('./routes/exhibitor');
+const advisoryRoutes = require('./routes/advisory');
+const galleryRoutes = require('./routes/gallery');
+const contactEnquiryRoutes = require('./routes/contactEnquiry');
+const sitemapRoutes = require('./routes/sitemap');
+const socialMediaRoutes = require('./routes/socialMedia');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,6 +52,32 @@ app.use('/uploads', express.static('uploads'));
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas'))
     .catch(err => console.error('MongoDB connection error:', err));
+
+// Dynamic Sitemap Route
+app.use('/sitemap.xml', sitemapRoutes);
+
+// Serve SEO files from root (e.g., /sitemap.xml)
+app.use(async (req, res, next) => {
+    try {
+        const SeoFile = require('./models/SeoFile');
+        const filename = req.path.substring(1); // Remove leading slash
+        if (filename && !filename.includes('/')) {
+            const seoFile = await SeoFile.findOne({ originalName: filename });
+            if (seoFile) {
+                const path = require('path');
+                const fs = require('fs');
+                const filePath = path.join(__dirname, seoFile.path.startsWith('/') ? seoFile.path.substring(1) : seoFile.path);
+                if (fs.existsSync(filePath)) {
+                    return res.sendFile(filePath);
+                }
+            }
+        }
+        next();
+    } catch (error) {
+        next();
+    }
+});
+
 
 // Basic Route
 app.get('/', (req, res) => {
@@ -147,13 +186,37 @@ app.get('/api/verify-token', (req, res) => {
     }
 });
 
+// Middleware to verify JWT token for protected routes
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'ihwe_secret_2026');
+        req.user = decoded;
+        next();
+    } catch (err) {
+        return res.status(401).json({ success: false, message: 'Token expired or invalid' });
+    }
+};
+
 // Change Credentials Route (Username & Password)
-app.put('/api/admin/change-password', async (req, res) => {
+app.put('/api/admin/change-password', verifyToken, async (req, res) => {
     try {
         const { adminId, currentPassword, newPassword, newUsername } = req.body;
 
         if (!adminId || !currentPassword) {
             return res.status(400).json({ success: false, message: 'Missing required fields (adminId & currentPassword)' });
+        }
+
+        // Security check: only allow users to change their own password
+        // Unless it's a Super Admin (you can extend this logic if needed)
+        if (req.user.id !== adminId && req.user.role !== 'Super Admin') {
+            return res.status(403).json({ success: false, message: 'Unauthorized to change this password' });
         }
 
         if (!newPassword && !newUsername) {
@@ -167,7 +230,7 @@ app.put('/api/admin/change-password', async (req, res) => {
 
         const isMatch = await user.comparePassword(currentPassword);
         if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Invalid current password' });
+            return res.status(400).json({ success: false, message: 'Invalid current password' });
         }
 
         // Update fields if provided
@@ -216,6 +279,28 @@ app.use('/api/parallax', parallaxRoutes);
 app.use('/api/testimonials', testimonialsRoutes);
 app.use('/api/counters', countersRoutes);
 app.use('/api/blogs', blogsRoutes);
+app.use('/api/global-platform', globalPlatformRoutes);
+app.use('/api/vision-mission', visionMissionRoutes);
+app.use('/api/why-attend', whyAttendRoutes);
+app.use('/api/who-should-attend', whoShouldAttendRoutes);
+app.use('/api/organized-by', organizedByRoutes);
+app.use('/api/why-exhibit-manage', whyExhibitRoutes);
+app.use('/api/seo', require('./routes/seo'));
+app.use('/api/seo-settings', require('./routes/seoSettings.js'));
+app.use('/api/why-exhibit', require('./routes/whyExhibit'));
+app.use('/api/why-visit', require('./routes/whyVisit'));
+app.use('/api/hero-background', require('./routes/heroBackground'));
+app.use('/api/exhibitor-profile', require('./routes/exhibitorProfile'));
+app.use('/api/e-promotion', require('./routes/ePromotion'));
+app.use('/api/stall-vendor', stallVendorRoutes);
+app.use('/api/partners', require('./routes/partners'));
+app.use('/api/exhibitor', exhibitorRoutes);
+app.use('/api/advisory-members', advisoryRoutes);
+app.use('/api/gallery', galleryRoutes);
+app.use('/api/contact-enquiry', contactEnquiryRoutes);
+app.use('/api/buyer-registration', require('./routes/buyerRegistration'));
+app.use('/api/social-media', socialMediaRoutes);
+
 
 app.listen(PORT, () => {
     console.log("Server is running on port " + PORT);
