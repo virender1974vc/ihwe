@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const DownloadPdf = require('../models/DownloadPdf');
+const downloadPdfController = require('../controllers/downloadPdfController');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -69,110 +69,24 @@ const uploadPdf = multer({
 });
 
 // @route   GET /api/download-pdf
-// @desc    Get resources section data (creates default if none exists)
-router.get('/', async (req, res) => {
-    try {
-        let data = await DownloadPdf.findOne();
-        if (!data) {
-            data = await new DownloadPdf({}).save();
-        }
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch download-pdf error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.get('/', (req, res) => downloadPdfController.getResourcesData(req, res));
 
 // @route   POST /api/download-pdf/headings
-// @desc    Update resources section headings
-router.post('/headings', verifyToken, async (req, res) => {
-    try {
-        const { subheading, heading, highlightTitle, description } = req.body;
-        let data = await DownloadPdf.findOne();
-        if (!data) {
-            data = new DownloadPdf({ subheading, heading, highlightTitle, description });
-        } else {
-            data.subheading = subheading;
-            data.heading = heading;
-            data.highlightTitle = highlightTitle;
-            data.description = description;
-        }
-        await data.save();
-        res.json({ success: true, data, message: 'Headings updated successfully' });
-    } catch (error) {
-        console.error('Update headings error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/headings', verifyToken, (req, res) => downloadPdfController.updateHeadings(req, res));
 
 // @route   POST /api/download-pdf/cards
-// @desc    Add a new PDF resource card
-router.post('/cards', verifyToken, async (req, res) => {
-    try {
-        const cardData = req.body;
-        let data = await DownloadPdf.findOne();
-        if (!data) data = new DownloadPdf({});
-        data.cards.push(cardData);
-        await data.save();
-        res.json({ success: true, data: data.cards[data.cards.length - 1], message: 'Card added successfully' });
-    } catch (error) {
-        console.error('Add card error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/cards', verifyToken, (req, res) => downloadPdfController.addCard(req, res));
 
 // @route   PUT /api/download-pdf/cards/:id
-// @desc    Update a PDF resource card
-router.put('/cards/:id', verifyToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updateData = req.body;
-        const data = await DownloadPdf.findOne();
-        if (!data) return res.status(404).json({ success: false, message: 'Data not found' });
-        
-        const cardIndex = data.cards.findIndex(c => c._id.toString() === id);
-        if (cardIndex === -1) return res.status(404).json({ success: false, message: 'Card not found' });
-        
-        Object.assign(data.cards[cardIndex], updateData);
-        await data.save();
-        res.json({ success: true, data: data.cards[cardIndex], message: 'Card updated successfully' });
-    } catch (error) {
-        console.error('Update card error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.put('/cards/:id', verifyToken, (req, res) => downloadPdfController.updateCard(req, res));
 
 // @route   DELETE /api/download-pdf/cards/:id
-// @desc    Delete a PDF resource card
-router.delete('/cards/:id', verifyToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const data = await DownloadPdf.findOne();
-        if (!data) return res.status(404).json({ success: false, message: 'Data not found' });
-        
-        data.cards = data.cards.filter(c => c._id.toString() !== id);
-        await data.save();
-        res.json({ success: true, message: 'Card deleted successfully' });
-    } catch (error) {
-        console.error('Delete card error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.delete('/cards/:id', verifyToken, (req, res) => downloadPdfController.deleteCard(req, res));
 
 // @route   POST /api/download-pdf/upload-image
-// @desc    Upload resource cover image
-router.post('/upload-image', verifyToken, uploadImage.single('image'), (req, res) => {
-    if (!req.file) return res.status(400).json({ success: false, message: 'Please upload an image' });
-    const imagePath = `/uploads/downloads/images/${req.file.filename}`;
-    res.json({ success: true, url: imagePath, message: 'Image uploaded successfully' });
-});
+router.post('/upload-image', verifyToken, uploadImage.single('image'), (req, res) => downloadPdfController.uploadImage(req, res));
 
 // @route   POST /api/download-pdf/upload-pdf
-// @desc    Upload resource PDF file
-router.post('/upload-pdf', verifyToken, uploadPdf.single('pdf'), (req, res) => {
-    if (!req.file) return res.status(400).json({ success: false, message: 'Please upload a PDF' });
-    const pdfPath = `/uploads/downloads/pdf/${req.file.filename}`;
-    res.json({ success: true, url: pdfPath, message: 'PDF uploaded successfully' });
-});
+router.post('/upload-pdf', verifyToken, uploadPdf.single('pdf'), (req, res) => downloadPdfController.uploadPdf(req, res));
 
 module.exports = router;

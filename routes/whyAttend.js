@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const WhyAttend = require('../models/WhyAttend');
 const jwt = require('jsonwebtoken');
+const whyAttendController = require('../controllers/whyAttendController');
 
 // Middleware to verify admin token
 const verifyToken = (req, res, next) => {
@@ -17,94 +17,18 @@ const verifyToken = (req, res, next) => {
 };
 
 // Get Why Attend content
-router.get('/', async (req, res) => {
-    try {
-        let content = await WhyAttend.findOne();
-        if (!content) {
-            content = await WhyAttend.create({
-                subheading: 'Why Attend?',
-                heading: 'Expo Highlights',
-                highlightText: 'Highlights',
-                cards: [
-                    { title: '200+ Exhibitors', icon: 'Globe', desc: 'Across Health & Wellness sectors' },
-                    { title: 'Yoga & Meditation', icon: 'Sun', desc: 'Live sessions and demonstrations' },
-                    { title: 'Seminars', icon: 'BookOpen', desc: 'Expert-led panel discussions' },
-                    { title: 'Checkup Camps', icon: 'Stethoscope', desc: 'Free health screening zones' },
-                    { title: 'Networking', icon: 'Users', desc: 'Premium B2B meeting spaces' },
-                    { title: 'Product Launches', icon: 'Zap', desc: 'New healthcare innovations' }
-                ]
-            });
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.get('/', (req, res) => whyAttendController.getContent(req, res));
 
 // Update headings
-router.post('/headings', verifyToken, async (req, res) => {
-    try {
-        const { subheading, heading, highlightText } = req.body;
-        const updated = await WhyAttend.findOneAndUpdate(
-            {},
-            { subheading, heading, highlightText, lastUpdated: Date.now() },
-            { new: true, upsert: true }
-        );
-        res.json({ success: true, data: updated });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/headings', verifyToken, (req, res) => whyAttendController.updateHeadings(req, res));
 
 // Add card
-router.post('/cards', verifyToken, async (req, res) => {
-    try {
-        const { title, icon, desc } = req.body;
-        const updated = await WhyAttend.findOneAndUpdate(
-            {},
-            { $push: { cards: { title, icon, desc } }, lastUpdated: Date.now() },
-            { new: true, upsert: true }
-        );
-        res.json({ success: true, data: updated });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/cards', verifyToken, (req, res) => whyAttendController.addCard(req, res));
 
 // Update card
-router.put('/cards/:id', verifyToken, async (req, res) => {
-    try {
-        const { title, icon, desc } = req.body;
-        const updated = await WhyAttend.findOneAndUpdate(
-            { 'cards._id': req.params.id },
-            { 
-                $set: { 
-                    'cards.$.title': title,
-                    'cards.$.icon': icon,
-                    'cards.$.desc': desc
-                },
-                lastUpdated: Date.now()
-            },
-            { new: true }
-        );
-        res.json({ success: true, data: updated });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.put('/cards/:id', verifyToken, (req, res) => whyAttendController.updateCard(req, res));
 
 // Delete card
-router.delete('/cards/:id', verifyToken, async (req, res) => {
-    try {
-        const updated = await WhyAttend.findOneAndUpdate(
-            {},
-            { $pull: { cards: { _id: req.params.id } }, lastUpdated: Date.now() },
-            { new: true }
-        );
-        res.json({ success: true, data: updated });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.delete('/cards/:id', verifyToken, (req, res) => whyAttendController.deleteCard(req, res));
 
 module.exports = router;

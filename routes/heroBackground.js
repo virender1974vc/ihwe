@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const HeroBackground = require('../models/HeroBackground');
+const heroBackgroundController = require('../controllers/heroBackgroundController');
 
 // JWT middleware
 const verifyToken = (req, res, next) => {
@@ -45,85 +45,18 @@ const upload = multer({
 });
 
 // GET /api/hero-background — Get all
-router.get('/', async (req, res) => {
-    try {
-        const data = await HeroBackground.find().sort({ createdAt: -1 });
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch hero-background error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.get('/', (req, res) => heroBackgroundController.getAllHeroBackgrounds(req, res));
 
 // GET /api/hero-background/:id — Get by ID
-router.get('/:id', async (req, res) => {
-    try {
-        const data = await HeroBackground.findById(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.get('/:id', (req, res) => heroBackgroundController.getHeroBackgroundById(req, res));
 
 // POST /api/hero-background/create
-router.post('/create', verifyToken, upload.single('backgroundImage'), async (req, res) => {
-    try {
-        const { pageName, imageAltText, title, heading, shortDescription, status } = req.body;
-        
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'Please upload a background image' });
-        }
-
-        const newHero = new HeroBackground({
-            pageName,
-            backgroundImage: `/uploads/hero-bg/${req.file.filename}`,
-            imageAltText,
-            title,
-            heading,
-            shortDescription,
-            status: status || 'Active'
-        });
-
-        await newHero.save();
-        res.status(201).json({ success: true, data: newHero, message: 'Hero background created successfully' });
-    } catch (error) {
-        console.error('Create hero-background error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/create', verifyToken, upload.single('backgroundImage'), (req, res) => heroBackgroundController.createHeroBackground(req, res));
 
 // PUT /api/hero-background/update/:id
-router.put('/update/:id', verifyToken, upload.single('backgroundImage'), async (req, res) => {
-    try {
-        const { pageName, imageAltText, title, heading, shortDescription, status } = req.body;
-        const updateData = { pageName, imageAltText, title, heading, shortDescription, status };
-
-        if (req.file) {
-            updateData.backgroundImage = `/uploads/hero-bg/${req.file.filename}`;
-        }
-
-        const data = await HeroBackground.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-
-        res.json({ success: true, data, message: 'Hero background updated successfully' });
-    } catch (error) {
-        console.error('Update hero-background error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.put('/update/:id', verifyToken, upload.single('backgroundImage'), (req, res) => heroBackgroundController.updateHeroBackground(req, res));
 
 // DELETE /api/hero-background/delete/:id
-router.delete('/delete/:id', verifyToken, async (req, res) => {
-    try {
-        const data = await HeroBackground.findByIdAndDelete(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        
-        // Optional: delete image file from disk
-        res.json({ success: true, message: 'Hero background deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.delete('/delete/:id', verifyToken, (req, res) => heroBackgroundController.deleteHeroBackground(req, res));
 
 module.exports = router;

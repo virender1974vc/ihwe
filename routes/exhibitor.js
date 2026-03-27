@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const Exhibitor = require('../models/Exhibitor');
 const path = require('path');
 const fs = require('fs');
+const exhibitorController = require('../controllers/exhibitorController');
 
 // Multer Config for Image Upload
 const storage = multer.diskStorage({
@@ -25,77 +25,15 @@ const upload = multer({
 });
 
 // GET all exhibitors
-router.get('/', async (req, res) => {
-    try {
-        const exhibitors = await Exhibitor.find().sort({ createdAt: -1 });
-        res.json({ success: true, data: exhibitors });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.get('/', (req, res) => exhibitorController.getAllExhibitors(req, res));
 
 // POST add new exhibitor
-router.post('/', upload.single('image'), async (req, res) => {
-    try {
-        const { title, location, websiteUrl, altText } = req.body;
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'Image is required' });
-        }
-
-        const newExhibitor = new Exhibitor({
-            title,
-            location,
-            websiteUrl,
-            image: req.file.path,
-            altText: altText || title
-        });
-
-        await newExhibitor.save();
-        res.status(201).json({ success: true, message: 'Exhibitor added successfully', data: newExhibitor });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/', upload.single('image'), (req, res) => exhibitorController.addExhibitor(req, res));
 
 // PUT update exhibitor
-router.put('/:id', upload.single('image'), async (req, res) => {
-    try {
-        const { title, location, websiteUrl, altText } = req.body;
-        let updateData = { title, location, websiteUrl, altText };
-
-        if (req.file) {
-            updateData.image = req.file.path;
-            // Optionally delete old image
-            const oldExhibitor = await Exhibitor.findById(req.params.id);
-            if (oldExhibitor && oldExhibitor.image && fs.existsSync(oldExhibitor.image)) {
-                fs.unlinkSync(oldExhibitor.image);
-            }
-        }
-
-        const updatedExhibitor = await Exhibitor.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        res.json({ success: true, message: 'Exhibitor updated successfully', data: updatedExhibitor });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.put('/:id', upload.single('image'), (req, res) => exhibitorController.updateExhibitor(req, res));
 
 // DELETE exhibitor
-router.delete('/:id', async (req, res) => {
-    try {
-        const exhibitor = await Exhibitor.findById(req.params.id);
-        if (!exhibitor) {
-            return res.status(404).json({ success: false, message: 'Exhibitor not found' });
-        }
-
-        if (exhibitor.image && fs.existsSync(exhibitor.image)) {
-            fs.unlinkSync(exhibitor.image);
-        }
-
-        await Exhibitor.findByIdAndDelete(req.params.id);
-        res.json({ success: true, message: 'Exhibitor deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.delete('/:id', (req, res) => exhibitorController.deleteExhibitor(req, res));
 
 module.exports = router;

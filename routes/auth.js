@@ -1,37 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../models/User');
+const authController = require('../controllers/authController');
+const { verifyToken } = require('../utils/verifyToken');
 
-// LOGIN API
-router.post('/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
+// @route   POST /api/register
+router.post('/register', (req, res) => authController.register(req, res));
 
-        const user = await User.findOne({ username });
+// @route   POST /api/login
+router.post('/login', (req, res) => authController.login(req, res));
 
-        if (!user) {
-            return res.status(401).json({ message: "Invalid username or password" });
-        }
+// @route   POST /api/logout
+router.post('/logout', (req, res) => authController.logout(req, res));
 
-        const isMatch = await user.comparePassword(password);
+// @route   GET /api/verify-token
+router.get('/verify-token', (req, res) => authController.verifyToken(req, res));
 
-        if (!isMatch) {
-            return res.status(401).json({ message: "Invalid username or password" });
-        }
-
-        res.json({
-            success: true,
-            user: {
-                id: user._id,
-                username: user.username,
-                role: user.role
-            }
-        });
-
-    } catch (error) {
-        console.error("Login error:", error);
-        res.status(500).json({ message: "Server error" });
-    }
-});
+// @route   PUT /api/admin/change-password
+router.put('/admin/change-password', verifyToken, (req, res) => authController.changePassword(req, res));
 
 module.exports = router;

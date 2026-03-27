@@ -45,7 +45,8 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '100mb' }));
+app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use('/uploads', express.static('uploads'));
 
 // MongoDB Connection
@@ -94,172 +95,9 @@ app.get('/api/test', (req, res) => {
     res.json({ success: true, message: 'Correct server is running (IHWE/backend)' });
 });
 
-// Register API Route (To create first admin)
-app.post('/api/register', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ success: false, message: 'Missing username or password' });
-        }
-
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(409).json({ success: false, message: 'User already exists' });
-        }
-
-        const newUser = new User({ username, password, role: 'Super Admin' });
-        await newUser.save();
-        res.status(201).json({ success: true, message: 'Admin created successfully', user: { username: newUser.username } });
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// Login API Route
-app.post('/api/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ success: false, message: 'Missing username or password' });
-        }
-
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
-        }
-
-        const isMatch = await user.comparePassword(password);
-        if (!isMatch) {
-            return res.status(401).json({ success: false, message: 'Invalid credentials' });
-        }
-
-        const token = jwt.sign(
-            { id: user._id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'ihwe_secret_2026',
-            { expiresIn: '24h' }
-        );
-
-        // Update lastLogin
-        user.lastLogin = new Date();
-        await user.save();
-
-        res.json({
-            success: true,
-            message: 'Login successful',
-            token,
-            admin: {
-                _id: user._id,
-                username: user.username,
-                role: user.role,
-                mobile: user.mobile || ''
-            }
-        });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
-
-// Logout API (optional — for token blacklisting in future)
-app.post('/api/logout', (req, res) => {
-    res.json({ success: true, message: 'Logged out successfully' });
-});
-
-// Verify Token Route — called on every page refresh to check session validity
-app.get('/api/verify-token', (req, res) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: 'No token provided' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'ihwe_secret_2026');
-        res.json({ success: true, user: decoded });
-    } catch (err) {
-        return res.status(401).json({ success: false, message: 'Token expired or invalid' });
-    }
-});
-
-// Middleware to verify JWT token for protected routes
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ success: false, message: 'No token provided' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'ihwe_secret_2026');
-        req.user = decoded;
-        next();
-    } catch (err) {
-        return res.status(401).json({ success: false, message: 'Token expired or invalid' });
-    }
-};
-
-// Change Credentials Route (Username & Password)
-app.put('/api/admin/change-password', verifyToken, async (req, res) => {
-    try {
-        const { adminId, currentPassword, newPassword, newUsername } = req.body;
-
-        if (!adminId || !currentPassword) {
-            return res.status(400).json({ success: false, message: 'Missing required fields (adminId & currentPassword)' });
-        }
-
-        // Security check: only allow users to change their own password
-        // Unless it's a Super Admin (you can extend this logic if needed)
-        if (req.user.id !== adminId && req.user.role !== 'Super Admin') {
-            return res.status(403).json({ success: false, message: 'Unauthorized to change this password' });
-        }
-
-        if (!newPassword && !newUsername) {
-            return res.status(400).json({ success: false, message: 'Provide at least a new password or a new username' });
-        }
-
-        const user = await User.findById(adminId);
-        if (!user) {
-            return res.status(404).json({ success: false, message: 'Admin not found' });
-        }
-
-        const isMatch = await user.comparePassword(currentPassword);
-        if (!isMatch) {
-            return res.status(400).json({ success: false, message: 'Invalid current password' });
-        }
-
-        // Update fields if provided
-        if (newUsername) {
-            // Check if username already exists
-            const existingUser = await User.findOne({ username: newUsername });
-            if (existingUser && existingUser._id.toString() !== adminId) {
-                return res.status(409).json({ success: false, message: 'Username already taken' });
-            }
-            user.username = newUsername;
-        }
-
-        if (newPassword) {
-            user.password = newPassword;
-        }
-
-        await user.save();
-
-        res.json({
-            success: true,
-            message: 'Credentials updated successfully',
-            user: { username: user.username }
-        });
-
-    } catch (error) {
-        console.error('Change password error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+// Auth Routes (Modular)
+const authRoutes = require('./routes/auth');
+app.use('/api', authRoutes);
 
 // API Routes
 app.use('/api/sidebar', sidebarRoutes);
@@ -300,6 +138,8 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/contact-enquiry', contactEnquiryRoutes);
 app.use('/api/buyer-registration', require('./routes/buyerRegistration'));
 app.use('/api/social-media', socialMediaRoutes);
+app.use('/api/verify', require('./routes/verify'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 
 app.listen(PORT, () => {
