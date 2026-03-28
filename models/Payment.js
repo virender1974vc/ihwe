@@ -1,0 +1,40 @@
+const mongoose = require("mongoose");
+const { secondaryDB } = require("../config/secondaryDb");
+const paymentSchema = new mongoose.Schema(
+  {
+    ex_no: { type: String, default: "" },
+    invoice_id: { type: String, required: true },
+    f_amount: { type: String, required: true },
+    amount_text: { type: String, required: true },
+    tds_text: { type: String, default: "" },
+    payment_date: { type: String, required: true },
+    debit_note_no: { type: String, default: "" },
+    debit_note_ammount: { type: String, default: "" },
+    debit_note_date: { type: String, default: "" },
+    pymnt_type: { type: String, default: "" },
+    payment_mode: { type: String, required: true },
+    cash_receipt_no: { type: String, default: "" },
+    cheque_name: { type: String, default: "" },
+    cheque_no: { type: String, default: "" },
+    cheque_date: { type: String, default: "" },
+    cheque_bank: { type: String, default: "" },
+    card_type: { type: String, default: "" },
+    card_name: { type: String, default: "" },
+    card_transaction_no: { type: String, default: "" },
+    card_last_digit: { type: String, default: "" },
+    card_date: { type: String, default: "" },
+    card_bank: { type: String, default: "" },
+    wallet_name: { type: String, default: "" },
+    wallet_transaction_no: { type: String, default: "" },
+    wallet_mobile: { type: String, default: "" },
+    neft_bank: { type: String, default: "" },
+    utr_no: { type: String, default: "" },
+    bankId: { type: String, default: "" },
+    neft_date: { type: String, default: "" },
+    status: { type: Number, default: 1 },
+    added_by: { type: String, default: "Admin" },
+  },
+  { timestamps: { createdAt: "added", updatedAt: "updated" } },
+);
+
+module.exports = secondaryDB.model("Payment", paymentSchema);
