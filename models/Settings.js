@@ -46,6 +46,14 @@ const settingsSchema = new mongoose.Schema({
     supportDeskText: {
         type: String,
         default: "For exhibitors and delegates traveling from abroad, our international support team is available 24/7 during the expo period for visa, travel, and logistics assistance."
+    },
+    onlineAdvancePercentage: {
+        type: Number,
+        default: 50
+    },
+    manualAdvancePercentage: {
+        type: Number,
+        default: 50
     }
 }, { timestamps: true });
 

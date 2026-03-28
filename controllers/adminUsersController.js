@@ -9,7 +9,7 @@ class AdminUsersController {
      */
     async getAllAdmins(req, res) {
         try {
-            const data = await adminUsersService.getAllAdmins();
+            const data = await adminUsersService.getAllAdmins(req.user);
             res.json({ success: true, data });
         } catch (error) {
             console.error('Fetch admins error:', error);
@@ -27,8 +27,8 @@ class AdminUsersController {
                 return res.status(400).json({ success: false, message: 'Username and password are required' });
             }
 
-            const data = await adminUsersService.createAdmin(req.body);
-            res.status(201).json({ success: true, message: 'Admin created successfully', data });
+            const data = await adminUsersService.createAdmin(req.body, req.user);
+            res.status(201).json({ success: true, message: 'User created successfully', data });
         } catch (error) {
             console.error('Create admin error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
@@ -40,8 +40,8 @@ class AdminUsersController {
      */
     async updateAdmin(req, res) {
         try {
-            const data = await adminUsersService.updateAdmin(req.params.id, req.body);
-            res.json({ success: true, message: 'Admin updated successfully', data });
+            const data = await adminUsersService.updateAdmin(req.params.id, req.body, req.user);
+            res.json({ success: true, message: 'User updated successfully', data });
         } catch (error) {
             console.error('Update admin error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
@@ -60,8 +60,8 @@ class AdminUsersController {
                 return res.status(403).json({ success: false, message: 'You cannot delete your own account' });
             }
 
-            await adminUsersService.deleteAdmin(adminId);
-            res.json({ success: true, message: 'Admin deleted successfully' });
+            await adminUsersService.deleteAdmin(adminId, req.user);
+            res.json({ success: true, message: 'User deleted successfully' });
         } catch (error) {
             console.error('Delete admin error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });

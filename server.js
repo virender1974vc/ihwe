@@ -39,15 +39,25 @@ const galleryRoutes = require('./routes/gallery');
 const contactEnquiryRoutes = require('./routes/contactEnquiry');
 const sitemapRoutes = require('./routes/sitemap');
 const socialMediaRoutes = require('./routes/socialMedia');
+const exhibitorRegistrationRoutes = require('./routes/exhibitorRegistration');
+const stallRoutes = require('./routes/stalls');
+const eventRoutes = require('./routes/events');
+const stallRateRoutes = require('./routes/stallRates');
+const termsAndConditionsRoutes = require('./routes/termsAndConditions');
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Razorpay Webhook - must be before bodyParser (needs raw body)
+app.use('/api/payment/webhook', require('./routes/payment'));
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 app.use('/uploads', express.static('uploads'));
+app.use('/temp', express.static('temp'));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
@@ -140,6 +150,16 @@ app.use('/api/buyer-registration', require('./routes/buyerRegistration'));
 app.use('/api/social-media', socialMediaRoutes);
 app.use('/api/verify', require('./routes/verify'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/exhibitor-registration', exhibitorRegistrationRoutes);
+app.use('/api/exhibitor-auth', require('./routes/exhibitorAuth'));
+app.use('/api/stalls', stallRoutes);
+app.use('/api/payment', require('./routes/payment'));
+app.use('/api/registrations', require('./routes/registrations'));
+app.use('/api/events', eventRoutes);
+app.use('/api/stall-rates', stallRateRoutes);
+app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
+app.use('/api/public', require('./routes/publicRoutes'));
+
 
 
 app.listen(PORT, () => {

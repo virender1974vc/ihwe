@@ -22,7 +22,7 @@ class SettingsService {
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings({});
 
-        const { logo, emails, phones, addresses, mapIframe, marqueeText, topbarDate } = updateData;
+        const { logo, emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage } = updateData;
 
         if (logo) settings.logo = logo;
         if (emails) settings.emails = emails;
@@ -31,6 +31,9 @@ class SettingsService {
         if (mapIframe !== undefined) settings.mapIframe = mapIframe;
         if (marqueeText !== undefined) settings.marqueeText = marqueeText;
         if (topbarDate !== undefined) settings.topbarDate = topbarDate;
+        if (supportDeskText !== undefined) settings.supportDeskText = supportDeskText;
+        if (onlineAdvancePercentage !== undefined) settings.onlineAdvancePercentage = onlineAdvancePercentage;
+        if (manualAdvancePercentage !== undefined) settings.manualAdvancePercentage = manualAdvancePercentage;
 
         return await settings.save();
     }
