@@ -17,7 +17,7 @@ class GalleryService {
         if (title) {
             query.title = title;
         }
-        return await GalleryItem.find(query).sort({ createdAt: -1 });
+        return await GalleryItem.find(query).populate('galleryCategoryId').sort({ createdAt: -1 });
     }
 
     /**

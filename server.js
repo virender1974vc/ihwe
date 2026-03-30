@@ -219,6 +219,7 @@ app.use("/api/partners", require("./routes/partners"));
 app.use("/api/exhibitor", exhibitorRoutes);
 app.use("/api/advisory-members", advisoryRoutes);
 app.use("/api/gallery", galleryRoutes);
+app.use("/api/gallery-category", galleryCategoryRoutes);
 app.use("/api/contact-enquiry", contactEnquiryRoutes);
 app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
 app.use("/api/social-media", socialMediaRoutes);

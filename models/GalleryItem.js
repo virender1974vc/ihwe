@@ -15,6 +15,11 @@ const GalleryItemSchema = new mongoose.Schema(
       required: true,
       enum: ["photo", "video", "press"],
     },
+    galleryCategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GalleryCategory",
+      required: false,
+    },
     mediaType: {
       type: String,
       required: true,
