@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const multer = require('multer');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
@@ -36,6 +37,7 @@ const stallVendorRoutes = require('./routes/stallVendor');
 const exhibitorRoutes = require('./routes/exhibitor');
 const advisoryRoutes = require('./routes/advisory');
 const galleryRoutes = require('./routes/gallery');
+const galleryCategoryRoutes = require('./routes/galleryCategory');
 const contactEnquiryRoutes = require('./routes/contactEnquiry');
 const sitemapRoutes = require('./routes/sitemap');
 const socialMediaRoutes = require('./routes/socialMedia');
@@ -135,11 +137,27 @@ app.use('/api/partners', require('./routes/partners'));
 app.use('/api/exhibitor', exhibitorRoutes);
 app.use('/api/advisory-members', advisoryRoutes);
 app.use('/api/gallery', galleryRoutes);
+app.use('/api/gallery-category', galleryCategoryRoutes);
 app.use('/api/contact-enquiry', contactEnquiryRoutes);
 app.use('/api/buyer-registration', require('./routes/buyerRegistration'));
 app.use('/api/social-media', socialMediaRoutes);
 app.use('/api/verify', require('./routes/verify'));
 app.use('/api/analytics', require('./routes/analytics'));
+
+// Global Error Handler (Handles Multer and other middleware errors)
+app.use((err, req, res, next) => {
+    console.error('❌ Global Error:', err.message);
+    if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ success: false, message: 'File is too large! Maximum limit is 100MB.' });
+        }
+        return res.status(400).json({ success: false, message: err.message });
+    }
+    res.status(err.status || 500).json({ 
+        success: false, 
+        message: err.message || 'Internal Server Error' 
+    });
+});
 
 
 app.listen(PORT, () => {

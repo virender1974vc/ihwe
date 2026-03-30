@@ -31,7 +31,7 @@ class ExhibitorController {
                 title,
                 location,
                 websiteUrl,
-                image: req.file.path,
+                image: `/uploads/exhibitors/${req.file.filename}`,
                 altText: altText || title
             };
 
@@ -51,7 +51,7 @@ class ExhibitorController {
             let updateData = { title, location, websiteUrl, altText };
 
             if (req.file) {
-                updateData.image = req.file.path;
+                updateData.image = `/uploads/exhibitors/${req.file.filename}`;
                 const oldExhibitor = await exhibitorService.getExhibitorById(req.params.id);
                 if (oldExhibitor && oldExhibitor.image && fs.existsSync(oldExhibitor.image)) {
                     fs.unlinkSync(oldExhibitor.image);
