@@ -34,6 +34,8 @@ const createBank = async (req, res) => {
     const { bankname, bankbranch, accountno, ifsccode, status, added_by } =
       req.body;
 
+    console.log("Creating bank with data:", req.body);
+
     const newBank = new BankList({
       bankname,
       bankbranch,
@@ -41,12 +43,13 @@ const createBank = async (req, res) => {
       ifsccode,
       status,
       added_by,
-      added: new Date(),
     });
 
     const savedBank = await newBank.save();
+    console.log("Bank saved successfully:", savedBank);
     res.status(201).json(savedBank);
   } catch (err) {
+    console.error("Error creating bank:", err);
     res.status(500).json({
       message: "Error creating bank",
       error: err.message,

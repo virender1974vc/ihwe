@@ -5,7 +5,7 @@ const CrmExhibitorCategorySchema = new mongoose.Schema(
     cat_id: { type: Number, required: true },
     cat_name: { type: String, required: true },
     cat_status: { type: String, required: true },
-    cat_added: { type: Date, required: true },
+    cat_added: { type: Date },
     updated_by: {
       type: String,
       default: null,

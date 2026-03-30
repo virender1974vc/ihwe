@@ -5,7 +5,7 @@ const NatureOfBusinessSchema = new mongoose.Schema(
     nature_id: { type: Number, required: true },
     nature_name: { type: String, required: true },
     nature_status: { type: String, default: "active" },
-    added: { type: Date, required: true },
+    added: { type: Date },
     updated_by: {
       type: String,
       default: null,

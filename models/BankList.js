@@ -9,7 +9,7 @@ const BankListSchema = new mongoose.Schema(
     status: { type: String, required: true },
 
     added_by: { type: String },
-    added: { type: Date, required: true },
+    added: { type: Date },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );
