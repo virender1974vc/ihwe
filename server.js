@@ -44,7 +44,7 @@ const stallRoutes = require('./routes/stalls');
 const eventRoutes = require('./routes/events');
 const stallRateRoutes = require('./routes/stallRates');
 const termsAndConditionsRoutes = require('./routes/termsAndConditions');
-
+const dashboardRoutes = require('./routes/dashboard');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -159,8 +159,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/stall-rates', stallRateRoutes);
 app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
 app.use('/api/public', require('./routes/publicRoutes'));
-
-
+app.use('/api/dashboard', dashboardRoutes);
 
 app.listen(PORT, () => {
     console.log("Server is running on port " + PORT);
