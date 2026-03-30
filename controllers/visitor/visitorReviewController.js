@@ -5,7 +5,7 @@ const createVisitorReview = async (req, res) => {
   try {
     const review = new VisitorReview(req.body);
     const saved = await review.save();
-    res.status(201).json(saved);
+    res.status(201).json({ data: saved });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -15,7 +15,7 @@ const createVisitorReview = async (req, res) => {
 const getAllVisitorReviews = async (req, res) => {
   try {
     const reviews = await VisitorReview.find().sort({ added: -1 });
-    res.json(reviews);
+    res.json({ data: reviews });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -27,7 +27,7 @@ const getReviewsByVisitorId = async (req, res) => {
     const reviews = await VisitorReview.find({
       visitor_id: req.params.visitor_id,
     });
-    res.json(reviews);
+    res.json({ data: reviews });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -38,7 +38,7 @@ const getVisitorReviewById = async (req, res) => {
   try {
     const review = await VisitorReview.findById(req.params.id);
     if (!review) return res.status(404).json({ message: "Not found" });
-    res.json(review);
+    res.json({ data: review });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -53,7 +53,7 @@ const updateVisitorReview = async (req, res) => {
       { new: true },
     );
     if (!updated) return res.status(404).json({ message: "Not found" });
-    res.json(updated);
+    res.json({ data: updated });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
