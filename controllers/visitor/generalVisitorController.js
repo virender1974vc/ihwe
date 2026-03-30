@@ -6,7 +6,7 @@ const {
 exports.getAllGeneralVisitors = async (req, res) => {
   try {
     const visitors = await GeneralVisitor.find().sort({ createdAt: -1 });
-    res.json(visitors);
+    res.json({ data: visitors });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -16,7 +16,7 @@ exports.getGeneralVisitorById = async (req, res) => {
   try {
     const visitor = await GeneralVisitor.findById(req.params.id);
     if (!visitor) return res.status(404).json({ message: "Visitor not found" });
-    res.json(visitor);
+    res.json({ data: visitor });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -29,7 +29,7 @@ exports.createGeneralVisitor = async (req, res) => {
     req.body.registrationId = registrationId;
     const visitor = new GeneralVisitor({ ...req.body, registrationId });
     const saved = await visitor.save();
-    res.status(201).json(saved);
+    res.status(201).json({ data: saved });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -43,7 +43,7 @@ exports.updateGeneralVisitor = async (req, res) => {
       { new: true },
     );
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
-    res.json(updated);
+    res.json({ data: updated });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

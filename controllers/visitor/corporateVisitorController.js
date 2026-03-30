@@ -7,7 +7,7 @@ const {
 const getAllCorporateVisitors = async (req, res) => {
   try {
     const visitors = await CorporateVisitor.find().sort({ createdAt: -1 });
-    res.json(visitors);
+    res.json({ data: visitors });
   } catch (err) {
     res.status(500).json({
       message: err.message,
@@ -22,7 +22,7 @@ const getCorporateVisitorById = async (req, res) => {
 
     if (!visitor) return res.status(404).json({ message: "Visitor not found" });
 
-    res.json(visitor);
+    res.json({ data: visitor });
   } catch (err) {
     res.status(500).json({
       message: err.message,
@@ -42,7 +42,7 @@ const createCorporateVisitor = async (req, res) => {
 
     const saved = await visitor.save();
 
-    res.status(201).json(saved);
+    res.status(201).json({ data: saved });
   } catch (err) {
     res.status(500).json({
       message: err.message,
@@ -61,7 +61,7 @@ const updateCorporateVisitor = async (req, res) => {
 
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
 
-    res.json(updated);
+    res.json({ data: updated });
   } catch (err) {
     res.status(500).json({
       message: err.message,
