@@ -24,6 +24,11 @@ const contactEnquirySchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    status: {
+        type: String,
+        enum: ["new", "pending", "contacted", "resolved"],
+        default: "new",
+    },
     createdAt: {
         type: Date,
         default: Date.now
