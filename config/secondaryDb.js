@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const secondaryDB = mongoose.createConnection(process.env.MONGO_URI_MAIN);
+const secondaryDB = mongoose.createConnection(process.env.MONGO_URI_SECONDARY);
 
 secondaryDB.on("connected", () =>
   console.log("✅ SECONDARY MongoDB connected"),
