@@ -53,6 +53,10 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         type: String,
         default: null // Name of marketing person
     },
+    spokenWith: {
+        type: String,
+        default: null // Name of staff who spoke with them
+    },
     filledBy: {
         type: String,
         default: 'User' // Name of admin/employee or 'User'

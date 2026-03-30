@@ -61,7 +61,7 @@ class ExhibitorAuthController {
             await exhibitor.save();
 
             const token = jwt.sign(
-                { id: exhibitor._id, role: 'exhibitor', email: exhibitor.contact1.email, exhibitorName: exhibitor.exhibitorName },
+                { id: exhibitor._id, role: 'exhibitor', email: exhibitor.contact1.email, mobile: exhibitor.contact1.mobile, exhibitorName: exhibitor.exhibitorName },
                 process.env.JWT_SECRET || 'fallback_secret_key',
                 { expiresIn: '7d' }
             );
@@ -77,18 +77,81 @@ class ExhibitorAuthController {
         }
     }
 
+    // Send OTP to mobile
+    async sendMobileOtp(req, res) {
+        try {
+            const { mobile } = req.body;
+            if (!mobile)
+                return res.status(400).json({ success: false, message: 'Mobile number is required' });
+
+            const exhibitor = await ExhibitorRegistration.findOne({ 'contact1.mobile': mobile })
+                .sort({ createdAt: -1 });
+
+            if (!exhibitor)
+                return res.status(404).json({ success: false, message: 'Exhibitor with this mobile number not found' });
+
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            exhibitor.otp = otp;
+            exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+            await exhibitor.save();
+
+            // Try sending via WhatsApp if available
+            const { sendWhatsAppOTP } = require('../utils/whatsapp');
+            await sendWhatsAppOTP(mobile, otp);
+            
+            // Also send via email if exists
+            if (exhibitor.contact1.email) {
+                await emailService.sendOtpEmail(exhibitor.contact1.email, otp, exhibitor.exhibitorName);
+            }
+
+            res.status(200).json({
+                success: true,
+                message: 'OTP sent to mobile & email',
+                exhibitorId: exhibitor._id
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     async getMyDashboard(req, res) {
         try {
             if (req.user.role !== 'exhibitor')
                 return res.status(403).json({ success: false, message: 'Access denied. Exhibitors only.' });
 
-            const registration = await ExhibitorRegistration.findById(req.user.id)
-                .populate('eventId', 'name date location venue');
+            // Find all registrations for this user by email OR mobile
+            const email = req.user.email;
+            const mobile = req.user.mobile;
 
-            if (!registration)
-                return res.status(404).json({ success: false, message: 'Registration not found' });
+            const registrations = await ExhibitorRegistration.find({
+                $or: [
+                    { 'contact1.email': email },
+                    { 'contact1.mobile': mobile }
+                ]
+            })
+            .populate('eventId', 'name date location venue startDate endDate')
+            .sort({ createdAt: -1 });
 
-            res.status(200).json({ success: true, data: registration });
+            if (!registrations || registrations.length === 0)
+                return res.status(404).json({ success: false, message: 'No registrations found' });
+
+            // If an ID is provided in query, return that specific one
+            const selectedId = req.query.id;
+            let selectedRegistration = null;
+            if (selectedId) {
+                selectedRegistration = registrations.find(r => r._id.toString() === selectedId);
+            }
+
+            // Default to latest if not specified or not found
+            if (!selectedRegistration) {
+                selectedRegistration = registrations[0];
+            }
+
+            res.status(200).json({
+                success: true,
+                data: selectedRegistration,
+                allRegistrations: registrations
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
