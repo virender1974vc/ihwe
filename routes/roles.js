@@ -1,16 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const rolesController = require('../controllers/rolesController');
 
 // For now, return empty roles list
-// In future, create a Role model and manage roles from DB
-router.get('/', async (req, res) => {
-    try {
-        // Return an empty array — roles can be expanded later
-        res.json([]);
-    } catch (error) {
-        console.error('Roles fetch error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
+router.get('/', (req, res) => rolesController.getAllRoles(req, res));
 
 module.exports = router;

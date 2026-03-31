@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const Marquee = require('../models/Marquee');
+const marqueeController = require('../controllers/marqueeController');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -18,38 +18,10 @@ const verifyToken = (req, res, next) => {
 
 // @route   GET /api/marquee
 // @desc    Get marquee settings
-router.get('/', async (req, res) => {
-    try {
-        let marquee = await Marquee.findOne();
-        if (!marquee) {
-            marquee = await new Marquee({}).save();
-        }
-        res.json({ success: true, data: marquee });
-    } catch (error) {
-        console.error('Fetch marquee error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.get('/', (req, res) => marqueeController.getMarquee(req, res));
 
 // @route   POST /api/marquee
 // @desc    Update marquee settings
-router.post('/', verifyToken, async (req, res) => {
-    try {
-        const { text, bgColor } = req.body;
-        let marquee = await Marquee.findOne();
-        if (!marquee) {
-            marquee = new Marquee({});
-        }
-
-        if (text !== undefined) marquee.text = text;
-        if (bgColor !== undefined) marquee.bgColor = bgColor;
-
-        await marquee.save();
-        res.json({ success: true, data: marquee, message: 'Marquee updated successfully' });
-    } catch (error) {
-        console.error('Update marquee error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/', verifyToken, (req, res) => marqueeController.updateMarquee(req, res));
 
 module.exports = router;

@@ -14,7 +14,13 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        default: 'admin'
+        enum: ['super-admin', 'accountant-admin', 'marketing-admin', 'digital-admin', 'accountant-employee', 'marketing-employee', 'digital-employee', 'employee'],
+        default: 'employee'
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     },
     mobile: {
         type: String,

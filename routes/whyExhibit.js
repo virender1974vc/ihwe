@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const WhyExhibit = require('../models/WhyExhibit');
+const whyExhibitController = require('../controllers/whyExhibitController');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -44,130 +44,21 @@ const upload = multer({
 });
 
 // Get content
-router.get('/', async (req, res) => {
-    try {
-        let content = await WhyExhibit.findOne();
-        if (!content) {
-            content = await WhyExhibit.create({
-                subheading: 'Empower Your Business',
-                heading: 'Drive Growth & Innovation',
-                highlightText: 'Growth & Innovation',
-                shortDescription: 'Join IH&WE 2026 to connect with global innovators and access new market opportunities through our specialized exhibitor platforms and elite networking events.',
-                benefits: []
-            });
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.get('/', (req, res) => whyExhibitController.getContent(req, res));
 
 // Update Headings
-router.post('/headings', verifyToken, async (req, res) => {
-    try {
-        const { subheading, heading, highlightText, shortDescription } = req.body;
-        const content = await WhyExhibit.findOneAndUpdate(
-            {},
-            { subheading, heading, highlightText, shortDescription, lastUpdated: Date.now() },
-            { upsert: true, new: true }
-        );
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/headings', verifyToken, (req, res) => whyExhibitController.updateHeadings(req, res));
 
 // Add Benefit
-router.post('/benefits', verifyToken, upload.single('image'), async (req, res) => {
-    try {
-        const { title, description, buttonName, buttonLink, imageAlt, accent, icon } = req.body;
-        let benefitData = { title, description, buttonName, buttonLink, imageAlt, accent, icon };
-        
-        if (req.file) {
-            benefitData.image = `/uploads/exhibit/${req.file.filename}`;
-        }
-
-        const content = await WhyExhibit.findOneAndUpdate(
-            {},
-            { $push: { benefits: benefitData }, lastUpdated: Date.now() },
-            { upsert: true, new: true }
-        );
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/benefits', verifyToken, upload.single('image'), (req, res) => whyExhibitController.addBenefit(req, res));
 
 // Update Benefit
-router.put('/benefits/:id', verifyToken, upload.single('image'), async (req, res) => {
-    try {
-        const { title, description, buttonName, buttonLink, imageAlt, accent, icon } = req.body;
-        const content = await WhyExhibit.findOne();
-        const benefit = content.benefits.id(req.params.id);
-        
-        if (benefit) {
-            benefit.title = title;
-            benefit.description = description;
-            benefit.buttonName = buttonName;
-            benefit.buttonLink = buttonLink;
-            benefit.imageAlt = imageAlt;
-            benefit.accent = accent;
-            benefit.icon = icon;
-            if (req.file) {
-                benefit.image = `/uploads/exhibit/${req.file.filename}`;
-            }
-            content.lastUpdated = Date.now();
-            await content.save();
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.put('/benefits/:id', verifyToken, upload.single('image'), (req, res) => whyExhibitController.updateBenefit(req, res));
 
 // Delete Benefit
-router.delete('/benefits/:id', verifyToken, async (req, res) => {
-    try {
-        const content = await WhyExhibit.findOneAndUpdate(
-            {},
-            { $pull: { benefits: { _id: req.params.id } }, lastUpdated: Date.now() },
-            { new: true }
-        );
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.delete('/benefits/:id', verifyToken, (req, res) => whyExhibitController.deleteBenefit(req, res));
 
 // Update CTA Section
-router.post('/cta', verifyToken, upload.single('ctaImage'), async (req, res) => {
-    try {
-        const { 
-            ctaTitle, ctaHighlightText, ctaDescription, 
-            ctaButton1Name, ctaButton1Link, ctaButton2Name, ctaButton2Link, 
-            ctaImageAlt 
-        } = req.body;
-        
-        let updateData = { 
-            ctaTitle, ctaHighlightText, ctaDescription, 
-            ctaButton1Name, ctaButton1Link, ctaButton2Name, ctaButton2Link, 
-            ctaImageAlt, 
-            lastUpdated: Date.now() 
-        };
-        
-        if (req.file) {
-            updateData.ctaImage = `/uploads/exhibit/${req.file.filename}`;
-        }
-
-        const content = await WhyExhibit.findOneAndUpdate(
-            {},
-            updateData,
-            { upsert: true, new: true }
-        );
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/cta', verifyToken, upload.single('ctaImage'), (req, res) => whyExhibitController.updateCTA(req, res));
 
 module.exports = router;

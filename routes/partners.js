@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const PartnerGroup = require('../models/PartnerGroup');
+const partnersController = require('../controllers/partnersController');
 
 // JWT middleware
 const verifyToken = (req, res, next) => {
@@ -49,133 +49,31 @@ const upload = multer({
  */
 
 // GET /api/partners — public
-router.get('/', async (req, res) => {
-    try {
-        const groups = await PartnerGroup.find().sort({ order: 1 });
-        res.json({ success: true, data: groups });
-    } catch (error) {
-        console.error('Fetch partners error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.get('/', (req, res) => partnersController.getAllGroups(req, res));
 
 // POST /api/partners/groups — add a new group
-router.post('/groups', verifyToken, async (req, res) => {
-    try {
-        const { subheading, heading, highlightText } = req.body;
-        const count = await PartnerGroup.countDocuments();
-        const newGroup = new PartnerGroup({ subheading, heading, highlightText, order: count });
-        await newGroup.save();
-        res.json({ success: true, data: newGroup, message: 'Partner group added successfully' });
-    } catch (error) {
-        console.error('Add group error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/groups', verifyToken, (req, res) => partnersController.addGroup(req, res));
 
 // PUT /api/partners/groups/:groupId — update group headings
-router.put('/groups/:groupId', verifyToken, async (req, res) => {
-    try {
-        const { subheading, heading, highlightText } = req.body;
-        const group = await PartnerGroup.findByIdAndUpdate(
-            req.params.groupId,
-            { subheading, heading, highlightText, updatedAt: Date.now() },
-            { new: true }
-        );
-        if (!group) return res.status(404).json({ success: false, message: 'Group not found' });
-        res.json({ success: true, data: group, message: 'Group updated successfully' });
-    } catch (error) {
-        console.error('Update group error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.put('/groups/:groupId', verifyToken, (req, res) => partnersController.updateGroup(req, res));
 
 // DELETE /api/partners/groups/:groupId
-router.delete('/groups/:groupId', verifyToken, async (req, res) => {
-    try {
-        const group = await PartnerGroup.findByIdAndDelete(req.params.groupId);
-        if (!group) return res.status(404).json({ success: false, message: 'Group not found' });
-        res.json({ success: true, message: 'Partner group deleted successfully' });
-    } catch (error) {
-        console.error('Delete group error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.delete('/groups/:groupId', verifyToken, (req, res) => partnersController.deleteGroup(req, res));
 
 /**
  * ── PARTNER LOGO ROUTES ──────────────────────────────────────────────────
  */
 
 // POST /api/partners/groups/:groupId/partners — add a partner to a group
-router.post('/groups/:groupId/partners', verifyToken, async (req, res) => {
-    try {
-        const { name, logo, imageAlt } = req.body;
-        const group = await PartnerGroup.findById(req.params.groupId);
-        if (!group) return res.status(404).json({ success: false, message: 'Group not found' });
-
-        const order = group.partners.length;
-        group.partners.push({ name, logo, imageAlt, order });
-        group.updatedAt = Date.now();
-        await group.save();
-
-        res.json({ success: true, data: group, message: 'Partner added successfully' });
-    } catch (error) {
-        console.error('Add partner error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/groups/:groupId/partners', verifyToken, (req, res) => partnersController.addPartner(req, res));
 
 // PUT /api/partners/groups/:groupId/partners/:partnerId — update partner details
-router.put('/groups/:groupId/partners/:partnerId', verifyToken, async (req, res) => {
-    try {
-        const { name, logo, imageAlt } = req.body;
-        const group = await PartnerGroup.findById(req.params.groupId);
-        if (!group) return res.status(404).json({ success: false, message: 'Group not found' });
-
-        const partner = group.partners.id(req.params.partnerId);
-        if (!partner) return res.status(404).json({ success: false, message: 'Partner not found' });
-
-        if (name !== undefined) partner.name = name;
-        if (logo !== undefined) partner.logo = logo;
-        if (imageAlt !== undefined) partner.imageAlt = imageAlt;
-
-        group.updatedAt = Date.now();
-        await group.save();
-
-        res.json({ success: true, data: group, message: 'Partner updated successfully' });
-    } catch (error) {
-        console.error('Update partner error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.put('/groups/:groupId/partners/:partnerId', verifyToken, (req, res) => partnersController.updatePartner(req, res));
 
 // DELETE /api/partners/groups/:groupId/partners/:partnerId
-router.delete('/groups/:groupId/partners/:partnerId', verifyToken, async (req, res) => {
-    try {
-        const group = await PartnerGroup.findById(req.params.groupId);
-        if (!group) return res.status(404).json({ success: false, message: 'Group not found' });
-
-        group.partners = group.partners.filter(p => p._id.toString() !== req.params.partnerId);
-        group.updatedAt = Date.now();
-        await group.save();
-
-        res.json({ success: true, data: group, message: 'Partner deleted successfully' });
-    } catch (error) {
-        console.error('Delete partner error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.delete('/groups/:groupId/partners/:partnerId', verifyToken, (req, res) => partnersController.deletePartner(req, res));
 
 // POST /api/partners/upload-logo — upload image
-router.post('/upload-logo', verifyToken, upload.single('logo'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-        const imageUrl = `/uploads/partners/${req.file.filename}`;
-        res.json({ success: true, imageUrl, message: 'Logo uploaded successfully' });
-    } catch (error) {
-        console.error('Logo upload error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/upload-logo', verifyToken, upload.single('logo'), (req, res) => partnersController.uploadLogo(req, res));
 
 module.exports = router;

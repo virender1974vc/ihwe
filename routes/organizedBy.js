@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const OrganizedBy = require('../models/OrganizedBy');
+const organizedByController = require('../controllers/organizedByController');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -46,41 +46,9 @@ const upload = multer({
 });
 
 // Get content
-router.get('/', async (req, res) => {
-    try {
-        let content = await OrganizedBy.findOne();
-        if (!content) {
-            content = await OrganizedBy.create({
-                subheading: 'The Visionaries',
-                heading: 'Organized By',
-                highlightText: 'By',
-                badgeText: 'Non-Profit Organization',
-                orgName: 'Namo Gange Trust',
-                quote: 'The Expo is proudly organized by Namo Gange Trust, a non-profit organization working towards the integration of traditional and modern wellness systems for a healthier, more conscious society.',
-                logoAlt: 'Namo Gange Trust'
-            });
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.get('/', (req, res) => organizedByController.getContent(req, res));
 
 // Update content
-router.post('/update', verifyToken, upload.single('logo'), async (req, res) => {
-    try {
-        const { subheading, heading, highlightText, badgeText, orgName, quote, logoAlt } = req.body;
-        let updateData = { subheading, heading, highlightText, badgeText, orgName, quote, logoAlt, lastUpdated: Date.now() };
-        
-        if (req.file) {
-            updateData.logo = `/uploads/organized/${req.file.filename}`;
-        }
-
-        const content = await OrganizedBy.findOneAndUpdate({}, updateData, { upsert: true, new: true });
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/update', verifyToken, upload.single('logo'), (req, res) => organizedByController.updateContent(req, res));
 
 module.exports = router;

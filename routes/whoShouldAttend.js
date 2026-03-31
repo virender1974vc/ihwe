@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const WhoShouldAttend = require('../models/WhoShouldAttend');
+const whoShouldAttendController = require('../controllers/whoShouldAttendController');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -46,95 +46,18 @@ const upload = multer({
 });
 
 // Get content
-router.get('/', async (req, res) => {
-    try {
-        let content = await WhoShouldAttend.findOne();
-        if (!content) {
-            content = await WhoShouldAttend.create({
-                subheading: 'Target Audience',
-                heading: 'Who Should Attend?',
-                highlightText: 'Attend?',
-                image: '/images/who2.png',
-                imageAlt: 'Expo Attendees',
-                groups: [
-                    "Healthcare Professionals & AYUSH Practitioners",
-                    "Wellness Coaches & Yoga Experts",
-                    "Organic Product Companies",
-                    "Hospitals, Clinics, and Medical Institutions",
-                    "Pharma & Nutraceutical Brands",
-                    "Health-Conscious Public"
-                ]
-            });
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.get('/', (req, res) => whoShouldAttendController.getContent(req, res));
 
 // Update Headings & Image
-router.post('/headings', verifyToken, upload.single('image'), async (req, res) => {
-    try {
-        const { subheading, heading, highlightText, imageAlt } = req.body;
-        let updateData = { subheading, heading, highlightText, imageAlt, lastUpdated: Date.now() };
-        
-        if (req.file) {
-            updateData.image = `/uploads/target/${req.file.filename}`;
-        }
-
-        const content = await WhoShouldAttend.findOneAndUpdate({}, updateData, { upsert: true, new: true });
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/headings', verifyToken, upload.single('image'), (req, res) => whoShouldAttendController.updateHeadings(req, res));
 
 // Add Group
-router.post('/groups', verifyToken, async (req, res) => {
-    try {
-        const { group } = req.body;
-        const content = await WhoShouldAttend.findOneAndUpdate(
-            {},
-            { $push: { groups: group }, lastUpdated: Date.now() },
-            { upsert: true, new: true }
-        );
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/groups', verifyToken, (req, res) => whoShouldAttendController.addGroup(req, res));
 
 // Update Group (by index)
-router.put('/groups/:index', verifyToken, async (req, res) => {
-    try {
-        const { index } = req.params;
-        const { group } = req.body;
-        const content = await WhoShouldAttend.findOne();
-        if (content) {
-            content.groups[index] = group;
-            content.lastUpdated = Date.now();
-            await content.save();
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.put('/groups/:index', verifyToken, (req, res) => whoShouldAttendController.updateGroup(req, res));
 
 // Delete Group
-router.delete('/groups/:index', verifyToken, async (req, res) => {
-    try {
-        const { index } = req.params;
-        const content = await WhoShouldAttend.findOne();
-        if (content) {
-            content.groups.splice(index, 1);
-            content.lastUpdated = Date.now();
-            await content.save();
-        }
-        res.json({ success: true, data: content });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.delete('/groups/:index', verifyToken, (req, res) => whoShouldAttendController.deleteGroup(req, res));
 
 module.exports = router;

@@ -2,7 +2,7 @@ const { SitemapStream, streamToPromise } = require('sitemap');
 const { Readable } = require('stream');
 const Blog = require('../models/Blog');
 
-const generateSitemap = async (hostname = 'https://ihwe.co.in') => {
+const generateSitemap = async (hostname = 'https://ihwe.in') => {
     // Static routes from App.tsx
     const staticRoutes = [
         { url: '/', changefreq: 'daily', priority: 1.0 },

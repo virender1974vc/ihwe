@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const FeaturedServices = require('../models/FeaturedServices');
+const featuredServicesController = require('../controllers/featuredServicesController');
 
 // JWT middleware
 const verifyToken = (req, res, next) => {
@@ -45,108 +45,21 @@ const upload = multer({
 });
 
 // GET /api/featured-services — public
-router.get('/', async (req, res) => {
-    try {
-        let data = await FeaturedServices.findOne();
-        if (!data) {
-            data = await new FeaturedServices({}).save();
-        }
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch featured services error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.get('/', (req, res) => featuredServicesController.getFeaturedServices(req, res));
 
 // POST /api/featured-services/headings — update section headings
-router.post('/headings', verifyToken, async (req, res) => {
-    try {
-        const { subheading, heading, highlightText, description } = req.body;
-        let data = await FeaturedServices.findOne();
-        if (!data) {
-            data = new FeaturedServices({ subheading, heading, highlightText, description });
-        } else {
-            data.subheading = subheading;
-            data.heading = heading;
-            data.highlightText = highlightText;
-            data.description = description;
-            data.updatedAt = Date.now();
-        }
-        await data.save();
-        res.json({ success: true, data, message: 'Headings updated successfully' });
-    } catch (error) {
-        console.error('Update headings error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/headings', verifyToken, (req, res) => featuredServicesController.updateHeadings(req, res));
 
 // POST /api/featured-services/cards — add a new card
-router.post('/cards', verifyToken, async (req, res) => {
-    try {
-        const { title, description, icon, image, imageAlt, accent, buttonText, buttonUrl } = req.body;
-        let data = await FeaturedServices.findOne();
-        if (!data) data = new FeaturedServices({});
-        const order = data.cards.length;
-        data.cards.push({ title, description, icon, image, imageAlt, accent, buttonText, buttonUrl, order });
-        data.updatedAt = Date.now();
-        await data.save();
-        res.json({ success: true, data, message: 'Card added successfully' });
-    } catch (error) {
-        console.error('Add card error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/cards', verifyToken, (req, res) => featuredServicesController.addCard(req, res));
 
 // PUT /api/featured-services/cards/:cardId — update card
-router.put('/cards/:cardId', verifyToken, async (req, res) => {
-    try {
-        const { title, description, icon, image, imageAlt, accent, buttonText, buttonUrl } = req.body;
-        const data = await FeaturedServices.findOne();
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        const card = data.cards.id(req.params.cardId);
-        if (!card) return res.status(404).json({ success: false, message: 'Card not found' });
-        card.title = title;
-        card.description = description;
-        card.icon = icon;
-        card.image = image;
-        card.imageAlt = imageAlt;
-        card.accent = accent;
-        card.buttonText = buttonText;
-        card.buttonUrl = buttonUrl;
-        data.updatedAt = Date.now();
-        await data.save();
-        res.json({ success: true, data, message: 'Card updated successfully' });
-    } catch (error) {
-        console.error('Update card error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.put('/cards/:cardId', verifyToken, (req, res) => featuredServicesController.updateCard(req, res));
 
 // DELETE /api/featured-services/cards/:cardId
-router.delete('/cards/:cardId', verifyToken, async (req, res) => {
-    try {
-        const data = await FeaturedServices.findOne();
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        data.cards = data.cards.filter(c => c._id.toString() !== req.params.cardId);
-        data.updatedAt = Date.now();
-        await data.save();
-        res.json({ success: true, message: 'Card deleted successfully' });
-    } catch (error) {
-        console.error('Delete card error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.delete('/cards/:cardId', verifyToken, (req, res) => featuredServicesController.deleteCard(req, res));
 
 // POST /api/featured-services/image — upload image
-router.post('/image', verifyToken, upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
-        const imageUrl = `/uploads/featured-services/${req.file.filename}`;
-        res.json({ success: true, imageUrl, message: 'Image uploaded successfully' });
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/image', verifyToken, upload.single('image'), (req, res) => featuredServicesController.uploadImage(req, res));
 
 module.exports = router;

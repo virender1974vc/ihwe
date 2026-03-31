@@ -4,7 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const EventHighlights = require('../models/EventHighlights');
+const eventHighlightsController = require('../controllers/eventHighlightsController');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -69,91 +69,19 @@ const uploadPdf = multer({
 });
 
 // @route   GET /api/event-highlights
-// @desc    Get event highlights data (creates default if none exists)
-router.get('/', async (req, res) => {
-    try {
-        let data = await EventHighlights.findOne();
-        if (!data) {
-            data = await new EventHighlights({}).save();
-        }
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch event highlights error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+// @desc    Get event highlights data
+router.get('/', (req, res) => eventHighlightsController.getContent(req, res));
 
 // @route   PUT /api/event-highlights
 // @desc    Update event highlights text data
-router.put('/', verifyToken, async (req, res) => {
-    try {
-        const fields = [
-            'subtitle', 'title', 'highlightText', 'countdownDate',
-            'imageAlt', 'downloadButtonName',
-            'eventDate', 'eventDay',
-            'exhibitionHours', 'timezone',
-            'venueName', 'venueAddress',
-            'registerButtonName', 'registerButtonPath', 'isActive'
-        ];
-
-        const updateData = {};
-        fields.forEach(field => {
-            if (req.body[field] !== undefined) updateData[field] = req.body[field];
-        });
-
-        let data = await EventHighlights.findOne();
-        if (!data) {
-            data = new EventHighlights(updateData);
-        } else {
-            Object.assign(data, updateData);
-        }
-
-        await data.save();
-        res.json({ success: true, data, message: 'Event highlights updated successfully' });
-    } catch (error) {
-        console.error('Update event highlights error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.put('/', verifyToken, (req, res) => eventHighlightsController.updateContent(req, res));
 
 // @route   POST /api/event-highlights/upload-image
 // @desc    Upload event highlight image
-router.post('/upload-image', verifyToken, uploadImage.single('image'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ success: false, message: 'Please upload an image' });
-
-        const imagePath = `/uploads/event-highlights/${req.file.filename}`;
-
-        let data = await EventHighlights.findOne();
-        if (!data) data = new EventHighlights({});
-        data.image = imagePath;
-        await data.save();
-
-        res.json({ success: true, imagePath, message: 'Image uploaded successfully' });
-    } catch (error) {
-        console.error('Upload image error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/upload-image', verifyToken, uploadImage.single('image'), (req, res) => eventHighlightsController.uploadImage(req, res));
 
 // @route   POST /api/event-highlights/upload-pdf
 // @desc    Upload brochure PDF
-router.post('/upload-pdf', verifyToken, uploadPdf.single('pdf'), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ success: false, message: 'Please upload a PDF' });
-
-        const pdfPath = `/uploads/event-highlights/pdf/${req.file.filename}`;
-
-        let data = await EventHighlights.findOne();
-        if (!data) data = new EventHighlights({});
-        data.pdfFile = pdfPath;
-        await data.save();
-
-        res.json({ success: true, pdfPath, message: 'PDF uploaded successfully' });
-    } catch (error) {
-        console.error('Upload PDF error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-});
+router.post('/upload-pdf', verifyToken, uploadPdf.single('pdf'), (req, res) => eventHighlightsController.uploadPdf(req, res));
 
 module.exports = router;

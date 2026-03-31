@@ -1,0 +1,47 @@
+const mongoose = require("mongoose");
+const { secondaryDB } = require("../../config/secondaryDb");
+const FreeHealthCampSchema = new mongoose.Schema(
+  {
+    registrationId: { type: String, unique: true },
+    firstName: { type: String, required: true },
+    lastName: { type: String, required: true },
+    email: { type: String, required: true },
+    mobile: { type: String, required: true },
+    alternateNo: { type: String },
+    dateOfBirth: { type: String },
+    gender: { type: String },
+    residenceAddress: { type: String },
+    country: { type: String },
+    state: { type: String },
+    city: { type: String },
+    existingMedicalConditions: { type: String },
+    isTakingMedications: { type: String },
+    medicationNames: { type: String },
+    hasAllergies: { type: String },
+    allergyDetails: { type: String },
+    isExperiencingSymptoms: { type: String },
+    symptomDetails: { type: String },
+    healthCheckupServices: {
+      generalHealth: { type: Boolean, default: false },
+      bloodSugar: { type: Boolean, default: false },
+      bloodPressure: { type: Boolean, default: false },
+      eyeCheckup: { type: Boolean, default: false },
+      dentalCheckup: { type: Boolean, default: false },
+      ayurvedaConsultation: { type: Boolean, default: false },
+      nutritionConsultation: { type: Boolean, default: false },
+      other: { type: Boolean, default: false },
+    },
+    preferredDate: { type: String },
+    preferredTimeSlot: { type: String },
+    consentMedicalData: { type: String },
+    agreeToUpdates: { type: String },
+    specificHealthConcerns: { type: String },
+    subscribe: { type: Boolean, default: false },
+    status: { type: String, default: "New Reg." },
+    created_by: { type: String, default: null },
+    updated_by: { type: String, default: null },
+  },
+  { timestamps: true },
+);
+
+module.exports = secondaryDB.model("FreeHealthCamp", FreeHealthCampSchema);
