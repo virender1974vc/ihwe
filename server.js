@@ -98,24 +98,7 @@ mongoose
   })
   .then(() => console.log("✅ Connected to MAIN MongoDB (default connection)"))
   .catch((err) => console.error("❌ MAIN DB connection error:", err));
-
-// 2. Secondary Database – separate connection
-//    For models that need to use this database, you must define them
-//    using `secondaryDB.model()` instead of `mongoose.model()`.
-const secondaryDB = mongoose.createConnection(process.env.MONGO_URI_SECONDARY, {
-  // optional options
-});
-
-secondaryDB.on("connected", () =>
-  console.log("✅ Connected to SECONDARY MongoDB"),
-);
-secondaryDB.on("error", (err) =>
-  console.error("❌ SECONDARY DB connection error:", err),
-);
-
-// Make the secondary connection globally available so models can import it
-// (Alternatively, you can export it from a separate db.js file)
-global.secondaryDB = secondaryDB;
+global.secondaryDB = mongoose;
 
 // ----------------------------------------------
 // Express App
