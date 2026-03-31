@@ -17,6 +17,9 @@ const FeaturedServicesSchema = new mongoose.Schema({
     heading: { type: String, default: 'Focused Industry Zones for Business' },
     highlightText: { type: String, default: 'Industry Zones' },
     description: { type: String, default: 'Navigating the future of healthcare through dedicated specialized zones, connecting buyers with the right global innovators.' },
+    mainButtonText: { type: String, default: 'Exhibit At India Health 2026' },
+    mainButtonUrl: { type: String, default: '/book-a-stand' },
+    mainSubText: { type: String, default: 'Join 2,500+ exhibiting brands from over 25 countries' },
     cards: [ServiceCardSchema],
     updatedAt: { type: Date, default: Date.now }
 });

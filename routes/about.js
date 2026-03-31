@@ -19,28 +19,30 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-// Multer storage for video
-const videoStorage = multer.diskStorage({
+// Multer storage for images
+const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const uploadPath = path.join(__dirname, '../uploads/about');
         if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, `about-video-${Date.now()}${path.extname(file.originalname)}`);
+        cb(null, `about-${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
 
-const uploadVideo = multer({
-    storage: videoStorage,
-    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
-        const filetypes = /mp4|webm|ogg|mov/;
-        if (filetypes.test(file.mimetype) && filetypes.test(path.extname(file.originalname).toLowerCase())) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only video files are allowed'));
+        const filetypes = /jpeg|jpg|png|webp/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimetype && extname) {
+            return cb(null, true);
         }
+        cb(new Error('Only images (jpeg, jpg, png, webp) are allowed'));
     }
 });
 
@@ -52,8 +54,12 @@ router.get('/', (req, res) => aboutController.getAboutData(req, res));
 // @desc    Update about text data
 router.put('/', verifyToken, (req, res) => aboutController.updateAboutText(req, res));
 
-// @route   POST /api/about/video
-// @desc    Upload video for about section
-router.post('/video', verifyToken, uploadVideo.single('video'), (req, res) => aboutController.updateAboutVideo(req, res));
+// @route   POST /api/about/images
+// @desc    Upload images for about section
+router.post('/images', verifyToken, upload.fields([
+    { name: 'image1', maxCount: 1 },
+    { name: 'image2', maxCount: 1 },
+    { name: 'image3', maxCount: 1 }
+]), (req, res) => aboutController.updateAboutImages(req, res));
 
 module.exports = router;

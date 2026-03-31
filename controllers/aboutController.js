@@ -31,16 +31,25 @@ class AboutController {
     }
 
     /**
-     * Upload and update about video.
+     * Upload and update about images.
      */
-    async updateAboutVideo(req, res) {
+    async updateAboutImages(req, res) {
         try {
-            if (!req.file) return res.status(400).json({ success: false, message: 'Please upload a video file' });
-            const videoPath = `/uploads/about/${req.file.filename}`;
-            await aboutService.updateAboutVideo(videoPath);
-            res.json({ success: true, videoPath, message: 'Video uploaded successfully' });
+            if (!req.files) return res.status(400).json({ success: false, message: 'Please upload image files' });
+            
+            const imagePaths = {};
+            if (req.files.image1) imagePaths.image1 = `/uploads/about/${req.files.image1[0].filename}`;
+            if (req.files.image2) imagePaths.image2 = `/uploads/about/${req.files.image2[0].filename}`;
+            if (req.files.image3) imagePaths.image3 = `/uploads/about/${req.files.image3[0].filename}`;
+            
+            if (Object.keys(imagePaths).length === 0) {
+                return res.status(400).json({ success: false, message: 'No images were uploaded' });
+            }
+
+            await aboutService.updateAboutImages(imagePaths);
+            res.json({ success: true, imagePaths, message: 'Images uploaded successfully' });
         } catch (error) {
-            console.error('Upload video error:', error);
+            console.error('Upload images error:', error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
     }

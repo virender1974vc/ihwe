@@ -19,15 +19,18 @@ class FeaturedServicesService {
      * Update section headings.
      */
     async updateHeadings(updateData) {
-        const { subheading, heading, highlightText, description } = updateData;
+        const { subheading, heading, highlightText, description, mainButtonText, mainButtonUrl, mainSubText } = updateData;
         let data = await FeaturedServices.findOne();
         if (!data) {
-            data = new FeaturedServices({ subheading, heading, highlightText, description });
+            data = new FeaturedServices({ subheading, heading, highlightText, description, mainButtonText, mainButtonUrl, mainSubText });
         } else {
             data.subheading = subheading;
             data.heading = heading;
             data.highlightText = highlightText;
             data.description = description;
+            if (mainButtonText !== undefined) data.mainButtonText = mainButtonText;
+            if (mainButtonUrl !== undefined) data.mainButtonUrl = mainButtonUrl;
+            if (mainSubText !== undefined) data.mainSubText = mainSubText;
             data.updatedAt = Date.now();
         }
         return await data.save();

@@ -26,7 +26,7 @@ class AboutService {
         if (!data) {
             data = new About(updateData);
         } else {
-            const fields = ['heading', 'subheading', 'highlightedWord', 'description', 'vision', 'mission'];
+            const fields = ['heading', 'subheading', 'highlightedWord', 'description', 'vision', 'mission', 'image1Alt', 'image2Alt', 'image3Alt'];
             fields.forEach(field => {
                 if (updateData[field] !== undefined) {
                     data[field] = updateData[field];
@@ -37,16 +37,18 @@ class AboutService {
     }
 
     /**
-     * Update about video path.
-     * @param {string} videoPath - New video path.
+     * Update about images paths.
+     * @param {Object} imagePaths - Object containing image paths.
      * @returns {Promise<Object>}
      */
-    async updateAboutVideo(videoPath) {
-        if (!videoPath) throw { status: 400, message: 'Video path is required' };
-        
+    async updateAboutImages(imagePaths) {
         let data = await About.findOne();
         if (!data) data = new About({});
-        data.video = videoPath;
+        
+        if (imagePaths.image1) data.image1 = imagePaths.image1;
+        if (imagePaths.image2) data.image2 = imagePaths.image2;
+        if (imagePaths.image3) data.image3 = imagePaths.image3;
+        
         return await data.save();
     }
 }

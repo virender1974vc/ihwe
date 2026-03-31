@@ -25,7 +25,27 @@ const aboutSchema = new mongoose.Schema({
         type: String,
         default: "Empowering healthcare leaders with breakthrough technologies, fostering cross-border collaboration, and accelerating advancements in patient-centered care."
     },
-    video: {
+    image1: {
+        type: String,
+        default: ""
+    },
+    image1Alt: {
+        type: String,
+        default: ""
+    },
+    image2: {
+        type: String,
+        default: ""
+    },
+    image2Alt: {
+        type: String,
+        default: ""
+    },
+    image3: {
+        type: String,
+        default: ""
+    },
+    image3Alt: {
         type: String,
         default: ""
     }
