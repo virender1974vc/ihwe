@@ -10,6 +10,7 @@ class CountersController {
     async getAllCounters(req, res) {
         try {
             const data = await countersService.getAllCounters();
+            console.log("Fetched Counters:", JSON.stringify(data, null, 2)); // Debug log for blank items
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -58,6 +59,18 @@ class CountersController {
             res.json({ success: true, data });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Delete all "blank" counters that may be corrupted.
+     */
+    async cleanupBlankCounters(req, res) {
+        try {
+            const result = await countersService.cleanupBlankCounters();
+            res.json({ success: true, message: `Cleanup complete. Removed ${result.deletedCount} items.` });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 

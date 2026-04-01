@@ -52,9 +52,26 @@ class CountersService {
      * Delete a counter.
      */
     async deleteCounter(id) {
+        const mongoose = require('mongoose');
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            throw { status: 400, message: 'Invalid Counter ID format' };
+        }
         const counter = await Counter.findByIdAndDelete(id);
         if (!counter) throw { status: 404, message: 'Counter not found' };
         return counter;
+    }
+
+    /**
+     * Delete corrupted/blank counters.
+     */
+    async cleanupBlankCounters() {
+        return await Counter.deleteMany({
+            $or: [
+                { label: "" },
+                { end: { $exists: false } },
+                { end: null }
+            ]
+        });
     }
 }
 

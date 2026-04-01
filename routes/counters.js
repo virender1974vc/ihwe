@@ -30,6 +30,9 @@ router.post('/', upload.single('image'), (req, res) => countersController.create
 // PUT update counter
 router.put('/:id', upload.single('image'), (req, res) => countersController.updateCounter(req, res));
 
+// CLEANUP blank counters
+router.get('/cleanup', (req, res) => countersController.cleanupBlankCounters(req, res));
+
 // DELETE counter
 router.delete('/:id', (req, res) => countersController.deleteCounter(req, res));
 
