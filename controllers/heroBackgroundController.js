@@ -1,4 +1,5 @@
 const heroBackgroundService = require('../services/heroBackgroundService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Hero Background requests.
@@ -51,6 +52,7 @@ class HeroBackgroundController {
             };
 
             const data = await heroBackgroundService.createHeroBackground(heroData);
+            await logActivity(req, 'Created', 'Hero Background', `Added hero background for page: ${pageName}`);
             res.status(201).json({ success: true, data, message: 'Hero background created successfully' });
         } catch (error) {
             console.error('Create hero-background error:', error);
@@ -71,6 +73,7 @@ class HeroBackgroundController {
             }
 
             const data = await heroBackgroundService.updateHeroBackground(req.params.id, updateData);
+            await logActivity(req, 'Updated', 'Hero Background', `Updated hero background for page: ${pageName}`);
             res.json({ success: true, data, message: 'Hero background updated successfully' });
         } catch (error) {
             console.error('Update hero-background error:', error);
@@ -84,6 +87,7 @@ class HeroBackgroundController {
     async deleteHeroBackground(req, res) {
         try {
             await heroBackgroundService.deleteHeroBackground(req.params.id);
+            await logActivity(req, 'Deleted', 'Hero Background', `Deleted hero background ID: ${req.params.id}`);
             res.json({ success: true, message: 'Hero background deleted successfully' });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });

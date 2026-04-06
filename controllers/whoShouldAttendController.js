@@ -1,4 +1,5 @@
 const whoShouldAttendService = require('../services/whoShouldAttendService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Who Should Attend section requests.
@@ -27,6 +28,7 @@ class WhoShouldAttendController {
                 data.image = `/uploads/target/${req.file.filename}`;
             }
             const updatedContent = await whoShouldAttendService.updateHeadings(data);
+            await logActivity(req, 'Updated', 'Target Audience', 'Updated target audience section headings/image');
             res.json({ success: true, data: updatedContent });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -40,6 +42,7 @@ class WhoShouldAttendController {
         try {
             const { group } = req.body;
             const updatedContent = await whoShouldAttendService.addGroup(group);
+            await logActivity(req, 'Created', 'Target Audience', `Added new audience group: ${group}`);
             res.json({ success: true, data: updatedContent });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -54,6 +57,7 @@ class WhoShouldAttendController {
             const { index } = req.params;
             const { group } = req.body;
             const updatedContent = await whoShouldAttendService.updateGroup(index, group);
+            await logActivity(req, 'Updated', 'Target Audience', `Updated audience group: ${group}`);
             res.json({ success: true, data: updatedContent });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -67,6 +71,7 @@ class WhoShouldAttendController {
         try {
             const { index } = req.params;
             const updatedContent = await whoShouldAttendService.deleteGroup(index);
+            await logActivity(req, 'Deleted', 'Target Audience', `Deleted audience group index: ${index}`);
             res.json({ success: true, data: updatedContent });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

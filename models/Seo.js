@@ -33,6 +33,10 @@ const seoSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    updatedBy: {
+        type: String,
+        default: "System"
     }
 }, { timestamps: true });
 

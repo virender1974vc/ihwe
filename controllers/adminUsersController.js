@@ -1,4 +1,5 @@
 const adminUsersService = require('../services/adminUsersService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Admin User requests.
@@ -28,6 +29,7 @@ class AdminUsersController {
             }
 
             const data = await adminUsersService.createAdmin(req.body, req.user);
+            await logActivity(req, 'Created', 'Admin Management', `Created new admin user: ${username}`);
             res.status(201).json({ success: true, message: 'User created successfully', data });
         } catch (error) {
             console.error('Create admin error:', error);
@@ -41,6 +43,7 @@ class AdminUsersController {
     async updateAdmin(req, res) {
         try {
             const data = await adminUsersService.updateAdmin(req.params.id, req.body, req.user);
+            await logActivity(req, 'Updated', 'Admin Management', `Updated admin user: ${req.body.username || data.username}`);
             res.json({ success: true, message: 'User updated successfully', data });
         } catch (error) {
             console.error('Update admin error:', error);
@@ -61,6 +64,7 @@ class AdminUsersController {
             }
 
             await adminUsersService.deleteAdmin(adminId, req.user);
+            await logActivity(req, 'Deleted', 'Admin Management', `Deleted admin user ID: ${adminId}`);
             res.json({ success: true, message: 'User deleted successfully' });
         } catch (error) {
             console.error('Delete admin error:', error);

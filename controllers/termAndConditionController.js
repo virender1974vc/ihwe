@@ -1,4 +1,5 @@
 const termAndConditionService = require('../services/termAndConditionService');
+const { logActivity } = require('../utils/logger');
 
 class TermAndConditionController {
     async getAllTerms(req, res) {
@@ -22,6 +23,7 @@ class TermAndConditionController {
     async addTerm(req, res) {
         try {
             const data = await termAndConditionService.addTerm(req.body);
+            await logActivity(req, 'Created', 'Terms & Conditions', `Added new T&C for page: ${req.body.pageName}`);
             res.status(201).json({ success: true, message: 'Term added successfully', data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -30,6 +32,7 @@ class TermAndConditionController {
     async updateTerm(req, res) {
         try {
             const data = await termAndConditionService.updateTerm(req.params.id, req.body);
+            await logActivity(req, 'Updated', 'Terms & Conditions', `Updated T&C ID: ${req.params.id}`);
             res.json({ success: true, message: 'Term updated successfully', data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -38,6 +41,7 @@ class TermAndConditionController {
     async deleteTerm(req, res) {
         try {
             await termAndConditionService.deleteTerm(req.params.id);
+            await logActivity(req, 'Deleted', 'Terms & Conditions', `Deleted T&C ID: ${req.params.id}`);
             res.json({ success: true, message: 'Term deleted successfully' });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

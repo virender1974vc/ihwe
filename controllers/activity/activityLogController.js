@@ -36,21 +36,22 @@ const getClientIp = (req) => {
 // CREATE
 const createActivityLog = async (req, res) => {
   try {
-    const { user_id, message, link, section, data } = req.body;
+    const { user_id, user, action, module, details, link } = req.body;
 
-    if (!user_id || !message || !section) {
+    if (!user_id || !user || !action || !module || !details) {
       return res.status(400).json({
         success: false,
-        message: "user_id, message and section are required",
+        message: "user_id, user, action, module and details are required",
       });
     }
 
     const log = await ActivityLog.create({
       user_id,
-      message,
+      user,
+      action,
+      module,
+      details,
       link: link || "",
-      section,
-      data: data || {},
       ip_address: getClientIp(req),
     });
 
@@ -60,26 +61,7 @@ const createActivityLog = async (req, res) => {
       data: log,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// GET ALL
-const getAllActivityLogs = async (req, res) => {
-  try {
-    const logs = await ActivityLog.find()
-      .populate("user_id", "name email")
-      .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      count: logs.length,
-      data: logs,
-    });
-  } catch (error) {
+    console.error("Error creating activity log:", error);
     res.status(500).json({
       success: false,
       message: error.message,
@@ -102,6 +84,48 @@ const getActivityLogById = async (req, res) => {
     res.status(200).json({
       success: true,
       data: log,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// GET ALL (with pagination, search, filter)
+const getAllActivityLogs = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = "", module = "" } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    let query = {};
+
+    // Module filter
+    if (module && module !== "all") {
+      query.module = module;
+    }
+
+    // Search filter (on user or details)
+    if (search) {
+      query.$or = [
+        { user: { $regex: search, $options: "i" } },
+        { details: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const total = await ActivityLog.countDocuments(query);
+    const logs = await ActivityLog.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: logs,
+      total,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / parseInt(limit)),
     });
   } catch (error) {
     res.status(500).json({
@@ -142,3 +166,5 @@ module.exports = {
   getActivityLogById,
   deleteActivityLog,
 };
+
+

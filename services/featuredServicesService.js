@@ -18,7 +18,7 @@ class FeaturedServicesService {
     /**
      * Update section headings.
      */
-    async updateHeadings(updateData) {
+    async updateHeadings(updateData, adminName) {
         const { subheading, heading, highlightText, description, mainButtonText, mainButtonUrl, mainSubText } = updateData;
         let data = await FeaturedServices.findOne();
         if (!data) {
@@ -31,27 +31,29 @@ class FeaturedServicesService {
             if (mainButtonText !== undefined) data.mainButtonText = mainButtonText;
             if (mainButtonUrl !== undefined) data.mainButtonUrl = mainButtonUrl;
             if (mainSubText !== undefined) data.mainSubText = mainSubText;
-            data.updatedAt = Date.now();
         }
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
+
 
     /**
      * Add a service card.
      */
-    async addCard(cardData) {
+    async addCard(cardData, adminName) {
         const { title, description, icon, image, imageAlt, accent, buttonText, buttonUrl } = cardData;
         let data = await this.getFeaturedServices();
         const order = data.cards.length;
-        data.cards.push({ title, description, icon, image, imageAlt, accent, buttonText, buttonUrl, order });
-        data.updatedAt = Date.now();
+        data.cards.push({ title, description, icon, image, imageAlt, accent, buttonText, buttonUrl, order, updatedBy: adminName || 'System', updatedAt: new Date() });
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
+
 
     /**
      * Update a service card.
      */
-    async updateCard(cardId, cardData) {
+    async updateCard(cardId, cardData, adminName) {
         const { title, description, icon, image, imageAlt, accent, buttonText, buttonUrl } = cardData;
         const data = await FeaturedServices.findOne();
         if (!data) throw { status: 404, message: 'Not found' };
@@ -68,20 +70,24 @@ class FeaturedServicesService {
         if (buttonText !== undefined) card.buttonText = buttonText;
         if (buttonUrl !== undefined) card.buttonUrl = buttonUrl;
         
-        data.updatedAt = Date.now();
+        card.updatedBy = adminName || 'System';
+        card.updatedAt = new Date();
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
+
 
     /**
      * Delete a service card.
      */
-    async deleteCard(cardId) {
+    async deleteCard(cardId, adminName) {
         const data = await FeaturedServices.findOne();
         if (!data) throw { status: 404, message: 'Not found' };
         data.cards = data.cards.filter(c => c._id.toString() !== cardId);
-        data.updatedAt = Date.now();
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
+
 }
 
 module.exports = new FeaturedServicesService();

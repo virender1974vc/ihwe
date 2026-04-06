@@ -1,4 +1,5 @@
 const organizedByService = require('../services/organizedByService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle OrganizedBy section requests.
@@ -29,6 +30,7 @@ class OrganizedByController {
             }
 
             const data = await organizedByService.updateContent(updateData);
+            await logActivity(req, 'Updated', 'Organized By', 'Updated Organized By content/logo');
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

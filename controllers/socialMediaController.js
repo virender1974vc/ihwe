@@ -1,4 +1,5 @@
 const socialMediaService = require('../services/socialMediaService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Social Media requests.
@@ -23,6 +24,7 @@ class SocialMediaController {
     async updateSocialMedia(req, res) {
         try {
             const data = await socialMediaService.updateSocialMedia(req.body);
+            await logActivity(req, 'Updated', 'Social Media', 'Updated social media links');
             res.json({ success: true, message: 'Social media updated successfully', data });
         } catch (error) {
             console.error('Error updating social media:', error);

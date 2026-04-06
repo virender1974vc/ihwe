@@ -1,4 +1,5 @@
 const whyVisitService = require('../services/whyVisitService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Why Visit section requests.
@@ -23,6 +24,7 @@ class WhyVisitController {
     async updateHeadings(req, res) {
         try {
             const data = await whyVisitService.updateHeadings(req.body);
+            await logActivity(req, 'Updated', 'Why Visit', 'Updated why visit section headings');
             res.json({ success: true, data, message: 'Headings updated' });
         } catch (error) {
             console.error('Update headings error:', error);
@@ -36,6 +38,7 @@ class WhyVisitController {
     async addReason(req, res) {
         try {
             const data = await whyVisitService.addReason(req.body);
+            await logActivity(req, 'Created', 'Why Visit', `Added new reason: ${req.body.title || 'Untitled'}`);
             res.json({ success: true, data, message: 'Reason card added' });
         } catch (error) {
             console.error('Add reason card error:', error);
@@ -49,6 +52,7 @@ class WhyVisitController {
     async updateReason(req, res) {
         try {
             const data = await whyVisitService.updateReason(req.params.reasonId, req.body);
+            await logActivity(req, 'Updated', 'Why Visit', `Updated reason: ${req.body.title || 'ID: ' + req.params.reasonId}`);
             res.json({ success: true, data, message: 'Reason updated' });
         } catch (error) {
             console.error('Update reason error:', error);
@@ -62,6 +66,7 @@ class WhyVisitController {
     async deleteReason(req, res) {
         try {
             await whyVisitService.deleteReason(req.params.reasonId);
+            await logActivity(req, 'Deleted', 'Why Visit', `Deleted reason ID: ${req.params.reasonId}`);
             res.json({ success: true, message: 'Reason deleted' });
         } catch (error) {
             console.error('Delete reason error:', error);

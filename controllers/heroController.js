@@ -1,4 +1,5 @@
 const heroService = require('../services/heroService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Hero slide requests.
@@ -43,6 +44,7 @@ class HeroController {
             };
 
             const data = await heroService.createSlide(slideData);
+            await logActivity(req, 'Created', 'Home Slider', `Added new hero slide: ${title}`);
             res.status(201).json({ success: true, data });
         } catch (error) {
             console.error('Create hero slide error:', error);
@@ -75,6 +77,7 @@ class HeroController {
             }
 
             const data = await heroService.updateSlide(req.params.id, updateData);
+            await logActivity(req, 'Updated', 'Home Slider', `Updated hero slide: ${title || 'ID: ' + req.params.id}`);
             res.json({ success: true, data });
         } catch (error) {
             console.error('Update hero slide error:', error);
@@ -88,6 +91,7 @@ class HeroController {
     async deleteSlide(req, res) {
         try {
             await heroService.deleteSlide(req.params.id);
+            await logActivity(req, 'Deleted', 'Home Slider', `Deleted hero slide ID: ${req.params.id}`);
             res.json({ success: true, message: 'Slide deleted successfully' });
         } catch (error) {
             console.error('Delete hero slide error:', error);

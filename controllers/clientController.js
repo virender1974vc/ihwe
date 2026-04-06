@@ -1,4 +1,5 @@
 const clientService = require('../services/clientService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Client section requests.
@@ -22,6 +23,7 @@ class ClientController {
     async updateHeadings(req, res) {
         try {
             const data = await clientService.updateHeadings(req.body);
+            await logActivity(req, 'Updated', 'Our Clients', 'Updated client section headings');
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -34,6 +36,7 @@ class ClientController {
     async addImage(req, res) {
         try {
             const data = await clientService.addImage(req.body);
+            await logActivity(req, 'Created', 'Our Clients', `Added new client image: ${req.body.altText || 'Untitled'}`);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -58,6 +61,7 @@ class ClientController {
     async deleteImage(req, res) {
         try {
             const data = await clientService.deleteImage(req.params.imageId);
+            await logActivity(req, 'Deleted', 'Our Clients', `Deleted client image ID: ${req.params.imageId}`);
             res.json({ success: true, data });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message });

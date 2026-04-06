@@ -1,4 +1,5 @@
 const marqueeService = require('../services/marqueeService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Marquee settings requests.
@@ -23,6 +24,7 @@ class MarqueeController {
     async updateMarquee(req, res) {
         try {
             const data = await marqueeService.updateMarquee(req.body);
+            await logActivity(req, 'Updated', 'Marquee Text', 'Updated marquee scrolling text');
             res.json({ success: true, data, message: 'Marquee updated successfully' });
         } catch (error) {
             console.error('Update marquee error:', error);

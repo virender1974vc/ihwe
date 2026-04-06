@@ -1,4 +1,5 @@
 const VisitorReview = require("../../models/visitor/VisitorReviewModel");
+const { logActivity } = require("../../utils/logger");
 
 // CREATE
 const createVisitorReview = async (req, res) => {
@@ -53,6 +54,7 @@ const updateVisitorReview = async (req, res) => {
       { new: true },
     );
     if (!updated) return res.status(404).json({ message: "Not found" });
+    await logActivity(req, 'Updated', 'Visitor Reviews', `Updated visitor review ID: ${req.params.id}`);
     res.json({ data: updated });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -64,6 +66,7 @@ const deleteVisitorReview = async (req, res) => {
   try {
     const deleted = await VisitorReview.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Not found" });
+    await logActivity(req, 'Deleted', 'Visitor Reviews', `Deleted visitor review ID: ${req.params.id}`);
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message });

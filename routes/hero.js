@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const heroController = require('../controllers/heroController');
+const { verifyToken } = require('../utils/verifyToken');
 
 // Multer Storage Configuration
 const storage = multer.diskStorage({
@@ -35,7 +36,7 @@ const upload = multer({
 
 // @route   POST /api/hero/create
 // @desc    Create a new hero slide
-router.post('/create', upload.single('image'), (req, res) => heroController.createSlide(req, res));
+router.post('/create', verifyToken, upload.single('image'), (req, res) => heroController.createSlide(req, res));
 
 // @route   GET /api/hero/all
 // @desc    Get all hero slides
@@ -43,10 +44,10 @@ router.get('/all', (req, res) => heroController.getAllSlides(req, res));
 
 // @route   PUT /api/hero/update/:id
 // @desc    Update a hero slide
-router.put('/update/:id', upload.single('image'), (req, res) => heroController.updateSlide(req, res));
+router.put('/update/:id', verifyToken, upload.single('image'), (req, res) => heroController.updateSlide(req, res));
 
 // @route   DELETE /api/hero/delete/:id
 // @desc    Delete a hero slide
-router.delete('/delete/:id', (req, res) => heroController.deleteSlide(req, res));
+router.delete('/delete/:id', verifyToken, (req, res) => heroController.deleteSlide(req, res));
 
 module.exports = router;

@@ -1,4 +1,5 @@
 const ContactEnquiry = require("../models/ContactEnquiry");
+const { logActivity } = require("../utils/logger");
 
 const getStats = async () => {
     return {
@@ -47,6 +48,7 @@ const getAllContacts = async (req, res) => {
 const deleteContact = async (req, res) => {
     try {
         await ContactEnquiry.findByIdAndDelete(req.params.id);
+        await logActivity(req, 'Deleted', 'Contact Enquiries', `Deleted contact enquiry ID: ${req.params.id}`);
         res.json({ success: true, message: "Contact deleted" });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
@@ -54,6 +56,7 @@ const deleteContact = async (req, res) => {
 const bulkDeleteContacts = async (req, res) => {
     try {
         await ContactEnquiry.deleteMany({ _id: { $in: req.body.ids } });
+        await logActivity(req, 'Deleted', 'Contact Enquiries', `Bulk deleted ${req.body.ids.length} contact enquiries`);
         res.json({ success: true, message: "Contacts deleted" });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
@@ -61,6 +64,7 @@ const bulkDeleteContacts = async (req, res) => {
 const updateStatus = async (req, res) => {
     try {
         await ContactEnquiry.findByIdAndUpdate(req.params.id, { status: req.body.status });
+        await logActivity(req, 'Updated', 'Contact Enquiries', `Updated contact ID: ${req.params.id} status to ${req.body.status}`);
         res.json({ success: true, message: "Status updated" });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };
@@ -68,6 +72,7 @@ const updateStatus = async (req, res) => {
 const bulkUpdateStatus = async (req, res) => {
     try {
         await ContactEnquiry.updateMany({ _id: { $in: req.body.ids } }, { status: req.body.status });
+        await logActivity(req, 'Updated', 'Contact Enquiries', `Bulk updated ${req.body.ids.length} contacts status to ${req.body.status}`);
         res.json({ success: true, message: "Statuses updated" });
     } catch (error) { res.status(500).json({ success: false, message: error.message }); }
 };

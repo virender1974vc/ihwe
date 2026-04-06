@@ -9,7 +9,9 @@ const ServiceCardSchema = new mongoose.Schema({
     accent: { type: String, default: '#23471d' },
     buttonText: { type: String, default: 'Explore Zone' },
     buttonUrl: { type: String, default: '#' },
-    order: { type: Number, default: 0 }
+    order: { type: Number, default: 0 },
+    updatedBy: { type: String, default: 'System' },
+    updatedAt: { type: Date, default: Date.now }
 });
 
 const FeaturedServicesSchema = new mongoose.Schema({
@@ -21,7 +23,7 @@ const FeaturedServicesSchema = new mongoose.Schema({
     mainButtonUrl: { type: String, default: '/book-a-stand' },
     mainSubText: { type: String, default: 'Join 2,500+ exhibiting brands from over 25 countries' },
     cards: [ServiceCardSchema],
-    updatedAt: { type: Date, default: Date.now }
-});
+    updatedBy: { type: String, default: 'System' }
+}, { timestamps: true });
 
 module.exports = mongoose.model('FeaturedServices', FeaturedServicesSchema);

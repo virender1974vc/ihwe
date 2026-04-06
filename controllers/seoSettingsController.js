@@ -1,4 +1,5 @@
 const seoSettingsService = require('../services/seoSettingsService');
+const { logActivity } = require('../utils/logger');
 const path = require('path');
 const fs = require('fs');
 
@@ -26,6 +27,7 @@ class SeoSettingsController {
         try {
             const { headerScripts, footerScripts } = req.body;
             await seoSettingsService.updateScripts(headerScripts, footerScripts);
+            await logActivity(req, 'Updated', 'SEO Settings', 'Updated global header/footer scripts');
             res.json({ success: true, message: 'Global scripts updated' });
         } catch (error) {
             console.error('Scripts update error:', error);
@@ -51,6 +53,7 @@ class SeoSettingsController {
             };
 
             const data = await seoSettingsService.uploadFile(fileData);
+            await logActivity(req, 'Created', 'SEO Settings', `Uploaded SEO file: ${req.file.originalname}`);
             res.json({ success: true, message: 'File uploaded', data });
         } catch (error) {
             console.error('File upload error:', error);
@@ -75,6 +78,7 @@ class SeoSettingsController {
             }
 
             const data = await seoSettingsService.deleteFile(req.params.id);
+            await logActivity(req, 'Deleted', 'SEO Settings', `Deleted SEO file: ${file.originalName || 'ID: ' + req.params.id}`);
             res.json({ success: true, message: 'File deleted', data });
         } catch (error) {
             console.error('File delete error:', error);

@@ -1,4 +1,5 @@
 const buyerRegistrationService = require('../services/buyerRegistrationService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Buyer Registration requests.
@@ -49,6 +50,7 @@ class BuyerRegistrationController {
     async updateRegistration(req, res) {
         try {
             const data = await buyerRegistrationService.updateRegistration(req.params.id, req.body);
+            await logActivity(req, 'Updated', 'Buyer Registration', `Updated buyer registration ID: ${req.params.id}`);
             res.json({ success: true, message: 'Registration updated successfully', data });
         } catch (err) {
             console.error('Error updating buyer registration:', err);
@@ -62,6 +64,7 @@ class BuyerRegistrationController {
     async deleteRegistration(req, res) {
         try {
             await buyerRegistrationService.deleteRegistration(req.params.id);
+            await logActivity(req, 'Deleted', 'Buyer Registration', `Deleted buyer registration ID: ${req.params.id}`);
             res.json({ success: true, message: 'Registration removed' });
         } catch (err) {
             console.error('Error deleting buyer registration:', err);

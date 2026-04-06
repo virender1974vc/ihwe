@@ -1,4 +1,5 @@
 const Booking = require("../models/Booking");
+const { logActivity } = require("../utils/logger");
 
 // Helper to get stats
 const getStats = async () => {
@@ -57,6 +58,7 @@ const getAllBookings = async (req, res) => {
 const deleteBooking = async (req, res) => {
     try {
         await Booking.findByIdAndDelete(req.params.id);
+        await logActivity(req, 'Deleted', 'Book A Stand', `Deleted booking ID: ${req.params.id}`);
         res.json({ success: true, message: "Booking deleted" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -67,6 +69,7 @@ const bulkDeleteBookings = async (req, res) => {
     try {
         const { ids } = req.body;
         await Booking.deleteMany({ _id: { $in: ids } });
+        await logActivity(req, 'Deleted', 'Book A Stand', `Bulk deleted ${ids.length} bookings`);
         res.json({ success: true, message: "Bookings deleted" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -77,6 +80,7 @@ const updateBookingStatus = async (req, res) => {
     try {
         const { status } = req.body;
         await Booking.findByIdAndUpdate(req.params.id, { status });
+        await logActivity(req, 'Updated', 'Book A Stand', `Updated booking ID: ${req.params.id} status to ${status}`);
         res.json({ success: true, message: "Status updated" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -87,6 +91,7 @@ const bulkUpdateBookingStatus = async (req, res) => {
     try {
         const { ids, status } = req.body;
         await Booking.updateMany({ _id: { $in: ids } }, { status });
+        await logActivity(req, 'Updated', 'Book A Stand', `Bulk updated ${ids.length} bookings status to ${status}`);
         res.json({ success: true, message: "Statuses updated" });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

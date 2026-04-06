@@ -1,4 +1,5 @@
 const exhibitorService = require('../services/exhibitorService');
+const { logActivity } = require('../utils/logger');
 const fs = require('fs');
 
 /**
@@ -36,6 +37,7 @@ class ExhibitorController {
             };
 
             const data = await exhibitorService.addExhibitor(exhibitorData);
+            await logActivity(req, 'Created', 'Exhibitor List', `Added new exhibitor: ${title}`);
             res.status(201).json({ success: true, message: 'Exhibitor added successfully', data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -59,6 +61,7 @@ class ExhibitorController {
             }
 
             const data = await exhibitorService.updateExhibitor(req.params.id, updateData);
+            await logActivity(req, 'Updated', 'Exhibitor List', `Updated exhibitor: ${title || 'ID: ' + req.params.id}`);
             res.json({ success: true, message: 'Exhibitor updated successfully', data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -80,6 +83,7 @@ class ExhibitorController {
             }
 
             await exhibitorService.deleteExhibitor(req.params.id);
+            await logActivity(req, 'Deleted', 'Exhibitor List', `Deleted exhibitor: ${exhibitor.title || 'ID: ' + req.params.id}`);
             res.json({ success: true, message: 'Exhibitor deleted successfully' });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

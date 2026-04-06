@@ -1,4 +1,5 @@
 const whyExhibitService = require('../services/whyExhibitService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Why Exhibit section requests.
@@ -22,6 +23,7 @@ class WhyExhibitController {
     async updateHeadings(req, res) {
         try {
             const data = await whyExhibitService.updateHeadings(req.body);
+            await logActivity(req, 'Updated', 'Why Exhibit', 'Updated why exhibit section headings');
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -41,6 +43,7 @@ class WhyExhibitController {
             }
 
             const data = await whyExhibitService.addBenefit(benefitData);
+            await logActivity(req, 'Created', 'Why Exhibit', `Added new benefit: ${title}`);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -60,6 +63,7 @@ class WhyExhibitController {
             }
 
             const data = await whyExhibitService.updateBenefit(req.params.id, benefitData);
+            await logActivity(req, 'Updated', 'Why Exhibit', `Updated benefit: ${title || 'ID: ' + req.params.id}`);
             res.json({ success: true, data });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message });
@@ -72,6 +76,7 @@ class WhyExhibitController {
     async deleteBenefit(req, res) {
         try {
             const data = await whyExhibitService.deleteBenefit(req.params.id);
+            await logActivity(req, 'Deleted', 'Why Exhibit', `Deleted benefit ID: ${req.params.id}`);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -100,6 +105,7 @@ class WhyExhibitController {
             }
 
             const data = await whyExhibitService.updateCTA(updateData);
+            await logActivity(req, 'Updated', 'Why Exhibit', 'Updated Why Exhibit CTA section');
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

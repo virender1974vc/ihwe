@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const WhoWeAre = require('../models/WhoWeAre');
+const { logActivity } = require('../utils/logger');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -82,6 +83,7 @@ router.post('/', verifyToken, async (req, res) => {
         }
 
         await data.save();
+        await logActivity(req, 'Updated', 'Who We Are', 'Updated Who We Are content');
         res.json({ success: true, data, message: 'Who We Are content updated successfully' });
     } catch (error) {
         console.error('Update who-we-are error:', error);
@@ -95,6 +97,7 @@ router.post('/image', verifyToken, upload.single('image'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, message: 'Please upload an image' });
         const imageUrl = `/uploads/who-we-are/${req.file.filename}`;
+        await logActivity(req, 'Updated', 'Who We Are', 'Uploaded Who We Are section image');
         res.json({ success: true, imageUrl, message: 'Image uploaded successfully' });
     } catch (error) {
         console.error('Upload error:', error);

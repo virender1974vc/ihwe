@@ -1,4 +1,5 @@
 const seoService = require('../services/seoService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle SEO requests.
@@ -19,7 +20,8 @@ class SeoController {
                 openGraphTags,
                 schemaMarkup,
                 canonicalTag,
-                isActive: isActive === 'true' || isActive === true
+                isActive: isActive === 'true' || isActive === true,
+                updatedBy: req.user?.username || 'SYSTEM'
             };
 
             if (req.file) {
@@ -27,6 +29,7 @@ class SeoController {
             }
 
             const data = await seoService.createOrUpdateSeo(page, updateData);
+            await logActivity(req, 'Updated', 'SEO', `Saved SEO meta for page: ${page}`);
             res.json({ success: true, message: 'SEO data saved successfully', data });
         } catch (error) {
             console.error('SEO Create error:', error);
@@ -61,7 +64,8 @@ class SeoController {
                 openGraphTags,
                 schemaMarkup,
                 canonicalTag,
-                isActive: isActive === 'true' || isActive === true
+                isActive: isActive === 'true' || isActive === true,
+                updatedBy: req.user?.username || 'SYSTEM'
             };
 
             if (req.file) {
@@ -73,6 +77,7 @@ class SeoController {
                 return res.status(404).json({ success: false, message: 'SEO data not found' });
             }
 
+            await logActivity(req, 'Updated', 'SEO', `Updated SEO meta ID: ${req.params.id}`);
             res.json({ success: true, message: 'SEO data updated successfully', data });
         } catch (error) {
             console.error('SEO Update error:', error);
@@ -86,6 +91,7 @@ class SeoController {
     async deleteSeo(req, res) {
         try {
             await seoService.deleteSeo(req.params.id);
+            await logActivity(req, 'Deleted', 'SEO', `Deleted SEO meta ID: ${req.params.id}`);
             res.json({ success: true, message: 'SEO data deleted successfully' });
         } catch (error) {
             console.error('SEO Delete error:', error);

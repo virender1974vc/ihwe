@@ -1,4 +1,5 @@
 const countersService = require('../services/countersService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Counter requests.
@@ -38,6 +39,7 @@ class CountersController {
             };
 
             const data = await countersService.createCounter(counterData);
+            await logActivity(req, 'Created', 'Counters', `Added new counter: ${label}`);
             res.status(201).json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -56,6 +58,7 @@ class CountersController {
             }
 
             const data = await countersService.updateCounter(req.params.id, updateData);
+            await logActivity(req, 'Updated', 'Counters', `Updated counter: ${label}`);
             res.json({ success: true, data });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message });
@@ -80,6 +83,7 @@ class CountersController {
     async deleteCounter(req, res) {
         try {
             await countersService.deleteCounter(req.params.id);
+            await logActivity(req, 'Deleted', 'Counters', `Deleted counter ID: ${req.params.id}`);
             res.json({ success: true, message: 'Counter deleted successfully' });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message });

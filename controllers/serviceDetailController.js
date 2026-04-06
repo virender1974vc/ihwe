@@ -1,4 +1,5 @@
 const ServiceDetail = require("../models/ServiceDetail");
+const { logActivity } = require("../utils/logger");
 const path = require("path");
 
 // @route  GET /api/service-details
@@ -151,6 +152,8 @@ const saveServiceDetail = async (req, res) => {
       serviceDetailData,
       { new: true, upsert: true }
     );
+    
+    await logActivity(req, service ? 'Updated' : 'Created', 'Service', `Saved service details for: ${serviceName}`);
 
     res.json({ success: true, data: service });
   } catch (err) {
@@ -163,6 +166,7 @@ const deleteServiceDetail = async (req, res) => {
   try {
     const service = await ServiceDetail.findOneAndDelete({ serviceName: req.params.name });
     if (!service) return res.status(404).json({ success: false, message: "Service details not found" });
+    await logActivity(req, 'Deleted', 'Service', `Deleted service details for: ${req.params.name}`);
     res.json({ success: true, message: "Service details deleted" });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

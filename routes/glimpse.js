@@ -4,9 +4,25 @@ const Glimpse = require('../models/Glimpse');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const { logActivity } = require('../utils/logger');
+
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
+    try {
+        req.user = jwt.verify(token, process.env.JWT_SECRET || 'ihwe_secret_2026');
+        next();
+    } catch (err) {
+        return res.status(401).json({ success: false, message: 'Token expired or invalid' });
+    }
+};
 
 // Storage for images
 const storage = multer.diskStorage({
+
   destination: (req, file, cb) => {
     const dir = './uploads/glimpse';
     if (!fs.existsSync(dir)) {
@@ -36,7 +52,7 @@ router.get('/', async (req, res) => {
 });
 
 // Update headings
-router.post('/headings', async (req, res) => {
+router.post('/headings', verifyToken, async (req, res) => {
   try {
     const { subheading, heading, highlightText, description } = req.body;
     let glimpse = await Glimpse.findOne();
@@ -48,31 +64,37 @@ router.post('/headings', async (req, res) => {
       glimpse.highlightText = highlightText;
       glimpse.description = description;
     }
+    glimpse.updatedBy = req.user.username;
     await glimpse.save();
+    await logActivity(req, 'Updated', 'Glimpse Management', 'Updated section headings');
     res.json({ success: true, data: glimpse });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
+
 // Add image card
-router.post('/images', async (req, res) => {
+router.post('/images', verifyToken, async (req, res) => {
   try {
     const { url, title, altText } = req.body;
     let glimpse = await Glimpse.findOne();
     if (!glimpse) {
       glimpse = new Glimpse();
     }
-    glimpse.images.push({ url, title, altText });
+    glimpse.images.push({ url, title, altText, updatedBy: req.user.username, updatedAt: new Date() });
+    glimpse.updatedBy = req.user.username;
     await glimpse.save();
+    await logActivity(req, 'Created', 'Glimpse Management', `Added new glimpse image: ${title}`);
     res.json({ success: true, data: glimpse });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
+
 // Update image card
-router.put('/images/:imageId', async (req, res) => {
+router.put('/images/:imageId', verifyToken, async (req, res) => {
   try {
     const { url, title, altText } = req.body;
     const { imageId } = req.params;
@@ -85,28 +107,36 @@ router.put('/images/:imageId', async (req, res) => {
     image.url = url;
     image.title = title;
     image.altText = altText;
+    image.updatedBy = req.user.username;
+    image.updatedAt = new Date();
+    glimpse.updatedBy = req.user.username;
 
     await glimpse.save();
+    await logActivity(req, 'Updated', 'Glimpse Management', `Updated glimpse image: ${title}`);
     res.json({ success: true, data: glimpse });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
+
 // Delete image card
-router.delete('/images/:imageId', async (req, res) => {
+router.delete('/images/:imageId', verifyToken, async (req, res) => {
   try {
     const { imageId } = req.params;
     let glimpse = await Glimpse.findOne();
     if (!glimpse) return res.status(404).json({ success: false, message: "Glimpse not found" });
 
     glimpse.images = glimpse.images.filter(img => img._id.toString() !== imageId);
+    glimpse.updatedBy = req.user.username;
     await glimpse.save();
+    await logActivity(req, 'Deleted', 'Glimpse Management', `Deleted glimpse image ID: ${imageId}`);
     res.json({ success: true, data: glimpse });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 // Image upload
 router.post('/upload', upload.single('image'), (req, res) => {

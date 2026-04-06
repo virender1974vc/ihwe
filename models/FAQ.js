@@ -5,7 +5,9 @@ const FAQItemSchema = new mongoose.Schema({
     answer: { type: String, default: '' },
     image: { type: String, default: '' },
     imageAlt: { type: String, default: '' },
-    order: { type: Number, default: 0 }
+    order: { type: Number, default: 0 },
+    updatedBy: { type: String, default: 'System' },
+    updatedAt: { type: Date, default: Date.now }
 });
 
 const FAQSchema = new mongoose.Schema({
@@ -16,7 +18,8 @@ const FAQSchema = new mongoose.Schema({
     defaultImage: { type: String, default: '' },
     defaultImageAlt: { type: String, default: '' },
     items: [FAQItemSchema],
-    updatedAt: { type: Date, default: Date.now }
-});
+    updatedBy: { type: String, default: 'System' }
+}, { timestamps: true });
+
 
 module.exports = mongoose.model('FAQ', FAQSchema);

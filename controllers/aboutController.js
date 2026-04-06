@@ -1,4 +1,5 @@
 const aboutService = require('../services/aboutService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle About section requests.
@@ -23,6 +24,7 @@ class AboutController {
     async updateAboutText(req, res) {
         try {
             const data = await aboutService.updateAboutText(req.body);
+            await logActivity(req, 'Updated', 'About Us', 'Updated About Us content');
             res.json({ success: true, data, message: 'About content updated successfully' });
         } catch (error) {
             console.error('Update about error:', error);
@@ -47,6 +49,7 @@ class AboutController {
             }
 
             await aboutService.updateAboutImages(imagePaths);
+            await logActivity(req, 'Updated', 'About Us', 'Updated About Us section images');
             res.json({ success: true, imagePaths, message: 'Images uploaded successfully' });
         } catch (error) {
             console.error('Upload images error:', error);

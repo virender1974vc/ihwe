@@ -1,4 +1,5 @@
 const contactEnquiryService = require('../services/contactEnquiryService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Contact Enquiry requests.
@@ -36,6 +37,7 @@ class ContactEnquiryController {
     async deleteEnquiry(req, res) {
         try {
             await contactEnquiryService.deleteEnquiry(req.params.id);
+            await logActivity(req, 'Deleted', 'Contact Enquiry', `Deleted contact enquiry ID: ${req.params.id}`);
             res.json({ success: true, message: 'Enquiry removed' });
         } catch (error) {
             console.error('Error deleting enquiry:', error);

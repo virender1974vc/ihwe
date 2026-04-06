@@ -1,4 +1,5 @@
 const Career = require("../models/Career");
+const { logActivity } = require("../utils/logger");
 
 // 📤 Fetch All Applications
 exports.getApplications = async (req, res) => {
@@ -60,6 +61,7 @@ exports.updateStatus = async (req, res) => {
       { status },
       { new: true }
     );
+    await logActivity(req, 'Updated', 'Career Applications', `Updated application ID: ${req.params.id} status to ${status}`);
     res.json({ success: true, data: career });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -70,6 +72,7 @@ exports.updateStatus = async (req, res) => {
 exports.deleteApplication = async (req, res) => {
   try {
     await Career.findByIdAndDelete(req.params.id);
+    await logActivity(req, 'Deleted', 'Career Applications', `Deleted application ID: ${req.params.id}`);
     res.json({ success: true, message: "Deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -81,6 +84,7 @@ exports.bulkDelete = async (req, res) => {
   try {
     const { ids } = req.body;
     const result = await Career.deleteMany({ _id: { $in: ids } });
+    await logActivity(req, 'Deleted', 'Career Applications', `Bulk deleted ${result.deletedCount} applications`);
     res.json({ success: true, deletedCount: result.deletedCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

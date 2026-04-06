@@ -26,7 +26,9 @@ const blogSchema = new mongoose.Schema({
     // Social Sharing
     ogTitle: { type: String },
     ogDescription: { type: String },
-    ogImage: { type: String }
+    ogImage: { type: String },
+    updatedBy: { type: String, default: 'System' }
 }, { timestamps: true });
+
 
 module.exports = mongoose.model('Blog', blogSchema);

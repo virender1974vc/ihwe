@@ -10,15 +10,20 @@ const pdfCardSchema = new mongoose.Schema({
     imageAlt: { type: String, default: '' },
     pdf: { type: String, required: true },
     tag: { type: String, required: true },
-    order: { type: Number, default: 0 }
+    order: { type: Number, default: 0 },
+    updatedBy: { type: String, default: 'System' },
+    updatedAt: { type: Date, default: Date.now }
 });
+
 
 const downloadPdfSchema = new mongoose.Schema({
     subheading: { type: String, default: 'Resources' },
     heading: { type: String, default: 'Expand Your Business with Health & Wellness' },
     highlightTitle: { type: String, default: 'Health & Wellness' },
     description: { type: String, default: 'Download our official reports, brochures, and floor plans to stay informed and plan your participation.' },
-    cards: [pdfCardSchema]
+    cards: [pdfCardSchema],
+    updatedBy: { type: String, default: 'System' }
 }, { timestamps: true });
+
 
 module.exports = mongoose.model('DownloadPdf', downloadPdfSchema);

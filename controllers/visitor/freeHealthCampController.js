@@ -1,7 +1,10 @@
 const FreeHealthCamp = require("../../models/visitor/FreeHealthCampModel");
+const emailService = require("../../utils/emailService");
+const whatsapp = require("../../utils/whatsapp");
 const {
   generateRegistrationId,
 } = require("../../utils/generateRegistrationId");
+const { logActivity } = require("../../utils/logger");
 
 // ➤ Get all health camp visitors
 const getAllHealthCampVisitors = async (req, res) => {
@@ -42,6 +45,32 @@ const createHealthCampVisitor = async (req, res) => {
 
     const saved = await visitor.save();
 
+    // Map fields for existing Visitor Email template
+    const visitorData = {
+      fullName: `${saved.firstName} ${saved.lastName}`,
+      email: saved.email,
+      mobile: saved.mobile,
+      city: saved.city || 'N/A',
+      country: saved.country || 'India',
+      visitorType: 'Health Camp Participant',
+      registrationId: saved.registrationId,
+      purposeOfVisit: 'Free Health Checkup',
+      areaOfInterest: 'Healthcare Services'
+    };
+
+    // Send confirmation emails (User & Admin) - Async
+    emailService.sendVisitorRegistrationEmails(visitorData).catch(err => {
+      console.error("Error sending health camp registration emails:", err);
+    });
+
+    // Send WhatsApp confirmation - Async
+    if (saved.mobile) {
+      const whatsappMsg = `Dear ${saved.firstName}, thank you for registering for the Free Health Camp at IHWE 2026. Your Registration ID is: ${saved.registrationId}. Our team will contact you shortly for a scheduled slot. - Namo Gange Trust`;
+      whatsapp.sendWhatsAppMessage(saved.mobile, whatsappMsg, 'Health Camp Registration').catch(err => {
+        console.error("Error sending health camp WhatsApp message:", err);
+      });
+    }
+
     res.status(201).json({ data: saved });
   } catch (err) {
     res.status(500).json({
@@ -61,6 +90,7 @@ const updateHealthCampVisitor = async (req, res) => {
 
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
 
+    await logActivity(req, 'Updated', 'Visitor Registrations', `Updated health camp visitor ID: ${req.params.id}`);
     res.json({ data: updated });
   } catch (err) {
     res.status(500).json({
@@ -76,6 +106,7 @@ const deleteHealthCampVisitor = async (req, res) => {
 
     if (!deleted) return res.status(404).json({ message: "Visitor not found" });
 
+    await logActivity(req, 'Deleted', 'Visitor Registrations', `Deleted health camp visitor ID: ${req.params.id}`);
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({

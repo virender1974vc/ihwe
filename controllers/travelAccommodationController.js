@@ -1,4 +1,5 @@
 const TravelAccommodation = require("../models/TravelAccommodation");
+const { logActivity } = require("../utils/logger");
 
 const getTravelAccommodation = async (req, res) => {
     try {
@@ -26,6 +27,7 @@ const getTravelAccommodation = async (req, res) => {
 const updateHeadings = async (req, res) => {
     try {
         const update = await TravelAccommodation.findOneAndUpdate({}, req.body, { upsert: true, new: true });
+        await logActivity(req, 'Updated', 'Travel & Accommodation', 'Updated Travel & Accommodation headings');
         res.json({ success: true, data: update });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -37,6 +39,7 @@ const addHotel = async (req, res) => {
         const data = await TravelAccommodation.findOne();
         data.hotelOptions.push(req.body);
         await data.save();
+        await logActivity(req, 'Created', 'Travel & Accommodation', `Added new hotel: ${req.body.title || 'Untitled'}`);
         res.json({ success: true, data: data.hotelOptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -48,6 +51,7 @@ const deleteHotel = async (req, res) => {
         const data = await TravelAccommodation.findOne();
         data.hotelOptions = data.hotelOptions.filter(h => h._id.toString() !== req.params.id);
         await data.save();
+        await logActivity(req, 'Deleted', 'Travel & Accommodation', `Deleted hotel ID: ${req.params.id}`);
         res.json({ success: true, data: data.hotelOptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -59,6 +63,7 @@ const addCommute = async (req, res) => {
         const data = await TravelAccommodation.findOne();
         data.commuteOptions.push(req.body);
         await data.save();
+        await logActivity(req, 'Created', 'Travel & Accommodation', `Added new commute option: ${req.body.title || 'Untitled'}`);
         res.json({ success: true, data: data.commuteOptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -70,6 +75,7 @@ const deleteCommute = async (req, res) => {
         const data = await TravelAccommodation.findOne();
         data.commuteOptions = data.commuteOptions.filter(c => c._id.toString() !== req.params.id);
         await data.save();
+        await logActivity(req, 'Deleted', 'Travel & Accommodation', `Deleted commute option ID: ${req.params.id}`);
         res.json({ success: true, data: data.commuteOptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -93,6 +99,7 @@ const updateHotel = async (req, res) => {
         if (index === -1) return res.status(404).json({ success: false, message: 'Hotel not found' });
         data.hotelOptions[index] = { ...data.hotelOptions[index].toObject(), ...req.body };
         await data.save();
+        await logActivity(req, 'Updated', 'Travel & Accommodation', `Updated hotel: ${req.body.title || 'ID: ' + req.params.id}`);
         res.json({ success: true, data: data.hotelOptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -106,6 +113,7 @@ const updateCommute = async (req, res) => {
         if (index === -1) return res.status(404).json({ success: false, message: 'Option not found' });
         data.commuteOptions[index] = { ...data.commuteOptions[index].toObject(), ...req.body };
         await data.save();
+        await logActivity(req, 'Updated', 'Travel & Accommodation', `Updated commute option: ${req.body.title || 'ID: ' + req.params.id}`);
         res.json({ success: true, data: data.commuteOptions });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

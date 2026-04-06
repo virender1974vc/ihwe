@@ -9,7 +9,7 @@ class FAQService {
         return data;
     }
 
-    async updateHeadings(updateData) {
+    async updateHeadings(updateData, adminName) {
         const { subheading, heading, highlightText, description, defaultImage, defaultImageAlt } = updateData;
         let data = await FAQ.findOne();
         if (!data) {
@@ -21,21 +21,31 @@ class FAQService {
             data.description = description;
             if (defaultImage !== undefined) data.defaultImage = defaultImage;
             if (defaultImageAlt !== undefined) data.defaultImageAlt = defaultImageAlt;
-            data.updatedAt = Date.now();
         }
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
 
-    async addItem(itemData) {
+
+    async addItem(itemData, adminName) {
         const { question, answer, image, imageAlt } = itemData;
         let data = await this.getFAQ();
         const order = data.items.length;
-        data.items.push({ question, answer, image, imageAlt, order });
-        data.updatedAt = Date.now();
+        data.items.push({ 
+            question, 
+            answer, 
+            image, 
+            imageAlt, 
+            order, 
+            updatedBy: adminName || 'System',
+            updatedAt: new Date()
+        });
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
 
-    async updateItem(itemId, itemData) {
+
+    async updateItem(itemId, itemData, adminName) {
         const { question, answer, image, imageAlt } = itemData;
         const data = await FAQ.findOne();
         if (!data) throw { status: 404, message: 'Not found' };
@@ -47,18 +57,23 @@ class FAQService {
         if (answer !== undefined) item.answer = answer;
         if (image !== undefined) item.image = image;
         if (imageAlt !== undefined) item.imageAlt = imageAlt;
-
-        data.updatedAt = Date.now();
+        
+        item.updatedBy = adminName || 'System';
+        item.updatedAt = new Date();
+        data.updatedBy = adminName || 'System';
+        
         return await data.save();
     }
 
-    async deleteItem(itemId) {
+
+    async deleteItem(itemId, adminName) {
         const data = await FAQ.findOne();
         if (!data) throw { status: 404, message: 'Not found' };
         data.items = data.items.filter(i => i._id.toString() !== itemId);
-        data.updatedAt = Date.now();
+        data.updatedBy = adminName || 'System';
         return await data.save();
     }
+
 }
 
 module.exports = new FAQService();

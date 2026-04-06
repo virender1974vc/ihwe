@@ -207,6 +207,7 @@ app.use("/api/advisory-members", advisoryRoutes);
 app.use("/api/gallery", galleryRoutes);
 app.use("/api/gallery-category", galleryCategoryRoutes);
 app.use("/api/contact-enquiry", contactEnquiryRoutes);
+app.use("/api/speaker-nomination", require("./routes/speakerRoutes"));
 app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
@@ -268,6 +269,8 @@ app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
 app.use("/api/pdf-manager", require("./routes/pdfManagerRoutes"));
 app.use("/api/portfolio-gallery", require("./routes/portfolioGalleryRoutes"));
+app.use("/api/email-logs", require("./routes/emailLogRoutes"));
+app.use("/api/whatsapp-logs", require("./routes/whatsAppLogRoutes"));
 
 // ----------------------------------------------
 // Start Server

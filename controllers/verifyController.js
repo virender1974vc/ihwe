@@ -9,10 +9,10 @@ class VerifyController {
      */
     async sendEmailOtp(req, res) {
         try {
-            const { email } = req.body;
+            const { email, profile } = req.body;
             if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
 
-            const result = await verifyService.sendEmailOtp(email);
+            const result = await verifyService.sendEmailOtp(email, profile);
             
             if (result.success) {
                 res.json({ success: true, message: 'OTP sent to email' });
@@ -49,10 +49,10 @@ class VerifyController {
      */
     async sendPhoneOtp(req, res) {
         try {
-            const { phone } = req.body;
+            const { phone, profile } = req.body;
             if (!phone) return res.status(400).json({ success: false, message: 'Phone number is required' });
 
-            const result = await verifyService.sendPhoneOtp(phone);
+            const result = await verifyService.sendPhoneOtp(phone, profile);
             
             if (result.success) {
                 res.json({ success: true, message: 'OTP sent to WhatsApp' });
@@ -61,7 +61,10 @@ class VerifyController {
             }
         } catch (err) {
             console.error('Send Phone OTP Error:', err);
-            res.status(500).json({ success: false, message: 'Server Error' });
+            res.status(500).json({ 
+                success: false, 
+                message: err.message || 'Server Error: Failed to process WhatsApp request' 
+            });
         }
     }
 

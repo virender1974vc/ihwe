@@ -1,4 +1,6 @@
 const blogsService = require('../services/blogsService');
+const { logActivity } = require('../utils/logger');
+
 
 /**
  * Controller to handle Blog requests.
@@ -42,12 +44,15 @@ class BlogsController {
                 ...data,
                 featured: data.featured === 'true' || data.featured === true,
                 image: `/uploads/blogs/${req.files['image'][0].filename}`,
-                ogImage: req.files['ogImage'] ? `/uploads/blogs/${req.files['ogImage'][0].filename}` : ''
+                ogImage: req.files['ogImage'] ? `/uploads/blogs/${req.files['ogImage'][0].filename}` : '',
+                updatedBy: req.user?.username || 'System'
             };
 
             const data_res = await blogsService.createBlog(blogData);
+            await logActivity(req, 'Created', 'Blogs', `Published new blog: ${data.title}`);
             res.status(201).json({ success: true, data: data_res });
         } catch (error) {
+
             res.status(500).json({ success: false, message: error.message });
         }
     }
@@ -71,9 +76,13 @@ class BlogsController {
                 updateData.ogImage = `/uploads/blogs/${req.files['ogImage'][0].filename}`;
             }
 
+            updateData.updatedBy = req.user?.username || 'System';
+
             const data_res = await blogsService.updateBlog(req.params.id, updateData);
+            await logActivity(req, 'Updated', 'Blogs', `Updated blog: ${data.title || 'ID: ' + req.params.id}`);
             res.json({ success: true, data: data_res });
         } catch (error) {
+
             res.status(error.status || 500).json({ success: false, message: error.message });
         }
     }
@@ -84,8 +93,10 @@ class BlogsController {
     async deleteBlog(req, res) {
         try {
             await blogsService.deleteBlog(req.params.id);
+            await logActivity(req, 'Deleted', 'Blogs', `Deleted blog ID: ${req.params.id}`);
             res.json({ success: true, message: 'Blog deleted successfully' });
         } catch (error) {
+
             res.status(error.status || 500).json({ success: false, message: error.message });
         }
     }

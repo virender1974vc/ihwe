@@ -1,4 +1,6 @@
 const downloadPdfService = require('../services/downloadPdfService');
+const { logActivity } = require('../utils/logger');
+
 
 /**
  * Controller to handle Download PDF requests.
@@ -22,9 +24,11 @@ class DownloadPdfController {
      */
     async updateHeadings(req, res) {
         try {
-            const data = await downloadPdfService.updateHeadings(req.body);
+            const data = await downloadPdfService.updateHeadings(req.body, req.user?.username);
+            await logActivity(req, 'Updated', 'PDF Resources', 'Updated section headings');
             res.json({ success: true, data, message: 'Headings updated successfully' });
         } catch (error) {
+
             console.error('Update headings error:', error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
@@ -35,9 +39,11 @@ class DownloadPdfController {
      */
     async addCard(req, res) {
         try {
-            const data = await downloadPdfService.addCard(req.body);
+            const data = await downloadPdfService.addCard(req.body, req.user?.username);
+            await logActivity(req, 'Created', 'PDF Resources', `Added new PDF: ${req.body.title}`);
             res.json({ success: true, data, message: 'Card added successfully' });
         } catch (error) {
+
             console.error('Add card error:', error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
@@ -48,9 +54,11 @@ class DownloadPdfController {
      */
     async updateCard(req, res) {
         try {
-            const data = await downloadPdfService.updateCard(req.params.id, req.body);
+            const data = await downloadPdfService.updateCard(req.params.id, req.body, req.user?.username);
+            await logActivity(req, 'Updated', 'PDF Resources', `Updated PDF: ${req.body.title || 'ID: ' + req.params.id}`);
             res.json({ success: true, data, message: 'Card updated successfully' });
         } catch (error) {
+
             console.error('Update card error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
         }
@@ -61,9 +69,11 @@ class DownloadPdfController {
      */
     async deleteCard(req, res) {
         try {
-            await downloadPdfService.deleteCard(req.params.id);
+            await downloadPdfService.deleteCard(req.params.id, req.user?.username);
+            await logActivity(req, 'Deleted', 'PDF Resources', `Deleted PDF card ID: ${req.params.id}`);
             res.json({ success: true, message: 'Card deleted successfully' });
         } catch (error) {
+
             console.error('Delete card error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
         }

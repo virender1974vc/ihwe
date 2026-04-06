@@ -2,6 +2,7 @@ const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
+const whatsapp = require('../utils/whatsapp');
 
 class ExhibitorRegistrationService {
     async getAllRegistrations() {
@@ -54,8 +55,17 @@ class ExhibitorRegistrationService {
         try {
             const pdfPath = await pdfGenerator.generateRegistrationForm(saved);
             await emailService.sendRegistrationConfirmation(saved, pdfPath, rawPassword);
+            
+            // --- WhatsApp Notification ---
+            const userWhatsAppMsg = `Dear ${saved.exhibitorName}, thank you for registering for IHWE 2026! 🎥\n\nYour application for stall ${saved.participation?.stallFor || 'N/A'} is received and is under review. We will contact you shortly. - Team Namo Gange`;
+            const adminWhatsAppMsg = `📢 *NEW EXHIBITOR REGISTRATION* 📢\n\n🏢 *Exhibitor:* ${saved.exhibitorName}\n🎪 *Stall:* ${saved.participation?.stallFor || 'N/A'}\n👤 *Contact:* ${saved.contact1.name} (${saved.contact1.mobile})\n\nPlease review the application in the Admin Panel.`;
+            
+            whatsapp.sendWhatsAppMessage(saved.contact1.mobile, userWhatsAppMsg, 'Exhibitor Registration');
+            if (process.env.ADMIN_WHATSAPP_NUMBER) {
+                whatsapp.sendWhatsAppMessage(process.env.ADMIN_WHATSAPP_NUMBER, adminWhatsAppMsg, 'Exhibitor Lead Alert');
+            }
         } catch (err) {
-            console.error('Registration Email Error:', err);
+            console.error('Registration Email/WhatsApp Error:', err);
         }
 
         return saved;
@@ -98,17 +108,29 @@ class ExhibitorRegistrationService {
 
         // --- APPROVED ---
         if (updated.status === 'approved' && current.status !== 'approved') {
-            try { await emailService.sendApprovalEmail(updated); } catch (err) { console.error('Approval Email Error:', err); }
+            try { 
+                await emailService.sendApprovalEmail(updated); 
+                const msg = `Congratulations ${updated.exhibitorName}! 👋\n\nYour registration for IHWE 2026 has been APPROVED. ✅\n\nPlease login to the Exhibitor Portal to complete the payment and secure your stall ${updated.participation?.stallFor || ''}.\n\n- Team Namo Gange`;
+                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Approved');
+            } catch (err) { console.error('Approval Notification Error:', err); }
         }
 
         // --- CONFIRMED ---
         if (updated.status === 'confirmed' && current.status !== 'confirmed') {
-            try { await emailService.sendConfirmationEmail(updated); } catch (err) { console.error('Confirmation Email Error:', err); }
+            try { 
+                await emailService.sendConfirmationEmail(updated); 
+                const msg = `Booking Confirmed! 🎊\n\nDear ${updated.exhibitorName}, your stall booking for IHWE 2026 is now CONFIRMED. We look forward to seeing you at the expo!\n\n- Team Namo Gange`;
+                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Confirmed');
+            } catch (err) { console.error('Confirmation Notification Error:', err); }
         }
 
         // --- REJECTED ---
         if (updated.status === 'rejected' && current.status !== 'rejected') {
-            try { await emailService.sendRejectionEmail(updated); } catch (err) { console.error('Rejection Email Error:', err); }
+            try { 
+                await emailService.sendRejectionEmail(updated);
+                const msg = `Hello ${updated.exhibitorName}. We regret to inform you that your registration application for IHWE 2026 has not been approved at this time. Please contact our support for more details.`;
+                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Rejected');
+            } catch (err) { console.error('Rejection Notification Error:', err); }
         }
 
         return updated;

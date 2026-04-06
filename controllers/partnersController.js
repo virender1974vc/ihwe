@@ -1,4 +1,5 @@
 const partnersService = require('../services/partnersService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Partner Group and Partner requests.
@@ -23,6 +24,7 @@ class PartnersController {
     async addGroup(req, res) {
         try {
             const data = await partnersService.addGroup(req.body);
+            await logActivity(req, 'Created', 'Partners', `Added new partner group: ${req.body.name}`);
             res.json({ success: true, data, message: 'Partner group added successfully' });
         } catch (error) {
             console.error('Add group error:', error);
@@ -36,6 +38,7 @@ class PartnersController {
     async updateGroup(req, res) {
         try {
             const data = await partnersService.updateGroup(req.params.groupId, req.body);
+            await logActivity(req, 'Updated', 'Partners', `Updated partner group: ${req.body.name || 'ID: ' + req.params.groupId}`);
             res.json({ success: true, data, message: 'Group updated successfully' });
         } catch (error) {
             console.error('Update group error:', error);
@@ -49,6 +52,7 @@ class PartnersController {
     async deleteGroup(req, res) {
         try {
             await partnersService.deleteGroup(req.params.groupId);
+            await logActivity(req, 'Deleted', 'Partners', `Deleted partner group ID: ${req.params.groupId}`);
             res.json({ success: true, message: 'Partner group deleted successfully' });
         } catch (error) {
             console.error('Delete group error:', error);
@@ -62,6 +66,7 @@ class PartnersController {
     async addPartner(req, res) {
         try {
             const data = await partnersService.addPartner(req.params.groupId, req.body);
+            await logActivity(req, 'Created', 'Partners', `Added partner ${req.body.title} to group ${req.params.groupId}`);
             res.json({ success: true, data, message: 'Partner added successfully' });
         } catch (error) {
             console.error('Add partner error:', error);
@@ -75,6 +80,7 @@ class PartnersController {
     async updatePartner(req, res) {
         try {
             const data = await partnersService.updatePartner(req.params.groupId, req.params.partnerId, req.body);
+            await logActivity(req, 'Updated', 'Partners', `Updated partner ${req.body.title || 'ID: ' + req.params.partnerId}`);
             res.json({ success: true, data, message: 'Partner updated successfully' });
         } catch (error) {
             console.error('Update partner error:', error);
@@ -88,6 +94,7 @@ class PartnersController {
     async deletePartner(req, res) {
         try {
             const data = await partnersService.deletePartner(req.params.groupId, req.params.partnerId);
+            await logActivity(req, 'Deleted', 'Partners', `Deleted partner ID: ${req.params.partnerId} from group ${req.params.groupId}`);
             res.json({ success: true, data, message: 'Partner deleted successfully' });
         } catch (error) {
             console.error('Delete partner error:', error);

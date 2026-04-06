@@ -1,4 +1,5 @@
 const globalPlatformService = require('../services/globalPlatformService');
+const { logActivity } = require('../utils/logger');
 
 /**
  * Controller to handle Global Platform section requests.
@@ -23,6 +24,7 @@ class GlobalPlatformController {
     async updateGlobalPlatform(req, res) {
         try {
             const data = await globalPlatformService.updateGlobalPlatform(req.body);
+            await logActivity(req, 'Updated', 'Global Platform', 'Updated Global Platform content');
             res.json({ success: true, data, message: 'Global Platform content updated successfully' });
         } catch (error) {
             console.error('Update global-platform error:', error);

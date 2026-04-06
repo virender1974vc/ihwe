@@ -1,4 +1,6 @@
 const featuredServicesService = require('../services/featuredServicesService');
+const { logActivity } = require('../utils/logger');
+
 
 /**
  * Controller to handle Featured Services section requests.
@@ -22,9 +24,11 @@ class FeaturedServicesController {
      */
     async updateHeadings(req, res) {
         try {
-            const data = await featuredServicesService.updateHeadings(req.body);
+            const data = await featuredServicesService.updateHeadings(req.body, req.user?.username);
+            await logActivity(req, 'Updated', 'Featured Services', 'Updated section headings');
             res.json({ success: true, data, message: 'Headings updated successfully' });
         } catch (error) {
+
             console.error('Update headings error:', error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
@@ -35,9 +39,11 @@ class FeaturedServicesController {
      */
     async addCard(req, res) {
         try {
-            const data = await featuredServicesService.addCard(req.body);
+            const data = await featuredServicesService.addCard(req.body, req.user?.username);
+            await logActivity(req, 'Created', 'Featured Services', `Added new service: ${req.body.title}`);
             res.json({ success: true, data, message: 'Card added successfully' });
         } catch (error) {
+
             console.error('Add card error:', error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
@@ -48,9 +54,11 @@ class FeaturedServicesController {
      */
     async updateCard(req, res) {
         try {
-            const data = await featuredServicesService.updateCard(req.params.cardId, req.body);
+            const data = await featuredServicesService.updateCard(req.params.cardId, req.body, req.user?.username);
+            await logActivity(req, 'Updated', 'Featured Services', `Updated service: ${req.body.title || 'ID: ' + req.params.cardId}`);
             res.json({ success: true, data, message: 'Card updated successfully' });
         } catch (error) {
+
             console.error('Update card error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
         }
@@ -61,9 +69,11 @@ class FeaturedServicesController {
      */
     async deleteCard(req, res) {
         try {
-            await featuredServicesService.deleteCard(req.params.cardId);
+            await featuredServicesService.deleteCard(req.params.cardId, req.user?.username);
+            await logActivity(req, 'Deleted', 'Featured Services', `Deleted service ID: ${req.params.cardId}`);
             res.json({ success: true, message: 'Card deleted successfully' });
         } catch (error) {
+
             console.error('Delete card error:', error);
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
         }
