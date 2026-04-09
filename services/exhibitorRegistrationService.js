@@ -11,6 +11,10 @@ class ExhibitorRegistrationService {
             .sort({ createdAt: -1 });
     }
 
+    async getRegistrationById(id) {
+        return await ExhibitorRegistration.findById(id);
+    }
+
     async addRegistration(data) {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
@@ -51,19 +55,10 @@ class ExhibitorRegistrationService {
             });
         }
 
-        // --- ASYNC PDF & EMAIL ---
+        // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
         try {
             const pdfPath = await pdfGenerator.generateRegistrationForm(saved);
             await emailService.sendRegistrationConfirmation(saved, pdfPath, rawPassword);
-            
-            // --- WhatsApp Notification ---
-            const userWhatsAppMsg = `Dear ${saved.exhibitorName}, thank you for registering for IHWE 2026! 🎥\n\nYour application for stall ${saved.participation?.stallFor || 'N/A'} is received and is under review. We will contact you shortly. - Team Namo Gange`;
-            const adminWhatsAppMsg = `📢 *NEW EXHIBITOR REGISTRATION* 📢\n\n🏢 *Exhibitor:* ${saved.exhibitorName}\n🎪 *Stall:* ${saved.participation?.stallFor || 'N/A'}\n👤 *Contact:* ${saved.contact1.name} (${saved.contact1.mobile})\n\nPlease review the application in the Admin Panel.`;
-            
-            whatsapp.sendWhatsAppMessage(saved.contact1.mobile, userWhatsAppMsg, 'Exhibitor Registration');
-            if (process.env.ADMIN_WHATSAPP_NUMBER) {
-                whatsapp.sendWhatsAppMessage(process.env.ADMIN_WHATSAPP_NUMBER, adminWhatsAppMsg, 'Exhibitor Lead Alert');
-            }
         } catch (err) {
             console.error('Registration Email/WhatsApp Error:', err);
         }

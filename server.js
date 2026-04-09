@@ -271,6 +271,7 @@ app.use("/api/pdf-manager", require("./routes/pdfManagerRoutes"));
 app.use("/api/portfolio-gallery", require("./routes/portfolioGalleryRoutes"));
 app.use("/api/email-logs", require("./routes/emailLogRoutes"));
 app.use("/api/whatsapp-logs", require("./routes/whatsAppLogRoutes"));
+app.use("/api/message-templates", require("./routes/messageTemplateRoutes"));
 
 // ----------------------------------------------
 // Start Server

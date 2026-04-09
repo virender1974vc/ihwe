@@ -99,8 +99,8 @@ class AdminUsersService {
             throw { status: 403, message: 'Unauthorized to delete this user' };
         }
 
-        await User.findByIdAndDelete(id);
-        return userToDelete;
+        const deleted = await User.findByIdAndDelete(id);
+        return deleted;
     }
 }
 

@@ -1,5 +1,6 @@
 const IndividualLead = require("../models/IndividualLead");
 const CorporateLead = require("../models/CorporateLead");
+const { logActivity } = require("../utils/logger");
 
 // 🟢 Get all individual leads
 exports.getIndividualLeads = async (req, res) => {
@@ -32,6 +33,9 @@ exports.createIndividualLead = async (req, res) => {
   try {
     const lead = new IndividualLead(req.body);
     await lead.save();
+    
+    await logActivity(req, "Created", "Client Data", `Added new individual lead: ${req.body.fullName}`);
+
     res.json({ success: true, data: lead });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -46,6 +50,11 @@ exports.updateIndividualLead = async (req, res) => {
       req.body,
       { new: true }
     );
+    
+    if (lead) {
+      await logActivity(req, "Updated", "Client Data", `Updated individual lead: ${lead.fullName}`);
+    }
+
     res.json({ success: true, data: lead });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -55,7 +64,12 @@ exports.updateIndividualLead = async (req, res) => {
 // 🟢 Delete lead
 exports.deleteIndividualLead = async (req, res) => {
   try {
-    await IndividualLead.findByIdAndDelete(req.params.id);
+    const deleted = await IndividualLead.findByIdAndDelete(req.params.id);
+    
+    if (deleted) {
+      await logActivity(req, "Deleted", "Client Data", `Deleted individual lead: ${deleted.fullName}`);
+    }
+
     res.json({ success: true, message: "Deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -88,6 +102,9 @@ exports.createCorporateLead = async (req, res) => {
   try {
     const lead = new CorporateLead(req.body);
     await lead.save();
+    
+    await logActivity(req, "Created", "Client Data", `Added new corporate lead: ${req.body.companyName}`);
+
     res.json({ success: true, data: lead });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -102,6 +119,11 @@ exports.updateCorporateLead = async (req, res) => {
       req.body,
       { new: true }
     );
+    
+    if (lead) {
+      await logActivity(req, "Updated", "Client Data", `Updated corporate lead: ${lead.companyName}`);
+    }
+
     res.json({ success: true, data: lead });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -111,7 +133,12 @@ exports.updateCorporateLead = async (req, res) => {
 // 🔵 Delete corporate lead
 exports.deleteCorporateLead = async (req, res) => {
   try {
-    await CorporateLead.findByIdAndDelete(req.params.id);
+    const deleted = await CorporateLead.findByIdAndDelete(req.params.id);
+
+    if (deleted) {
+      await logActivity(req, "Deleted", "Client Data", `Deleted corporate lead: ${deleted.companyName}`);
+    }
+
     res.json({ success: true, message: "Deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

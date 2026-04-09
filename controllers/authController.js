@@ -39,7 +39,7 @@ class AuthController {
             // Log the login activity
             // Since req.user isn't set yet by the middleware, we manually pass a dummy req or ensure logActivity handles it.
             // Actually logActivity uses req.user, so we might need a modified version or set req.user temporarily.
-            req.user = { id: data.user.id, username: data.user.username }; 
+            req.user = { id: data.admin._id, username: data.admin.username }; 
             await logActivity(req, 'Logged In', 'Auth', `Admin logged in: ${username}`);
             
             res.json({

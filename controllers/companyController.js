@@ -1,10 +1,13 @@
 const Company = require("../models/Company.js");
+const { logActivity } = require("../utils/logger");
 
 // ➤ Add new company
 const addCompany = async (req, res) => {
   try {
     const newCompany = new Company(req.body);
     await newCompany.save();
+    
+    await logActivity(req, "Created", "Client Data", `Added new company: ${req.body.companyName}`);
 
     res.status(201).json({
       message: "Company added successfully",
@@ -53,6 +56,8 @@ const updateCompany = async (req, res) => {
     });
     if (!updated) return res.status(404).json({ message: "Company not found" });
 
+    await logActivity(req, "Updated", "Client Data", `Updated company: ${updated.companyName}`);
+
     res.status(200).json({
       message: "Company updated successfully",
       data: updated,
@@ -70,6 +75,8 @@ const deleteCompany = async (req, res) => {
   try {
     const deleted = await Company.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Company not found" });
+
+    await logActivity(req, "Deleted", "Client Data", `Deleted company: ${deleted.companyName}`);
 
     res.status(200).json({
       message: "Company deleted successfully",

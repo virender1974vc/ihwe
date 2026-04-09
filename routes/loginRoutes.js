@@ -8,7 +8,7 @@ const {
 
 const router = express.Router();
 
-router.post("/login", loginWithPassword);
+router.post("/crm-login", loginWithPassword);
 router.post("/resend-otp", resendOtp);
 router.post("/verify-otp", verifyOtpLogin);
 router.post("/logout", logoutUser);

@@ -1,4 +1,5 @@
 const BuyerRegistration = require('../models/BuyerRegistration');
+const emailService = require('../utils/emailService');
 
 /**
  * Service to handle Buyer Registration operations.
@@ -17,7 +18,16 @@ class BuyerRegistrationService {
             }
         }
         const newRegistration = new BuyerRegistration(data);
-        return await newRegistration.save();
+        const saved = await newRegistration.save();
+
+        // Send confirmation email (User) and lead notification (Admin)
+        if (saved.email) {
+            emailService.sendBuyerRegistrationEmails(saved).catch(err => {
+                console.error("Error sending buyer registration emails:", err);
+            });
+        }
+
+        return saved;
     }
 
     /**

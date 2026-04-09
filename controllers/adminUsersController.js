@@ -63,8 +63,8 @@ class AdminUsersController {
                 return res.status(403).json({ success: false, message: 'You cannot delete your own account' });
             }
 
-            await adminUsersService.deleteAdmin(adminId, req.user);
-            await logActivity(req, 'Deleted', 'Admin Management', `Deleted admin user ID: ${adminId}`);
+            const deletedUser = await adminUsersService.deleteAdmin(adminId, req.user);
+            await logActivity(req, 'Deleted', 'Admin Management', `Deleted admin user: ${deletedUser.username}`);
             res.json({ success: true, message: 'User deleted successfully' });
         } catch (error) {
             console.error('Delete admin error:', error);

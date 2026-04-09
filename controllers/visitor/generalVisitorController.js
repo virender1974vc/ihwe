@@ -51,18 +51,12 @@ exports.createGeneralVisitor = async (req, res) => {
       registrationId: saved.registrationId,
     };
 
-    // Send confirmation emails (User & Admin) - Async
+    // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
     emailService.sendVisitorRegistrationEmails(emailData).catch(err => {
-      console.error("Error sending visitor registration emails:", err);
+      console.error("Error sending visitor registration notifications:", err);
     });
 
-    // Send WhatsApp confirmation - Async
-    if (saved.mobile) {
-      const whatsappMsg = `Dear ${saved.firstName}, thank you for registering as a ${emailData.visitorType} for the 9th IHWE 2026. Your Registration ID is: ${saved.registrationId}. We look forward to seeing you! - Namo Gange Trust`;
-      whatsapp.sendWhatsAppMessage(saved.mobile, whatsappMsg, 'Visitor Registration').catch(err => {
-        console.error("Error sending visitor WhatsApp message:", err);
-      });
-    }
+    await logActivity(req, 'Created', 'Visitor Registrations', `Added new general visitor: ${saved.firstName} ${saved.lastName} (${saved.registrationId})`);
 
     res.status(201).json({ data: saved });
   } catch (err) {

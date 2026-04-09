@@ -58,18 +58,12 @@ const createHealthCampVisitor = async (req, res) => {
       areaOfInterest: 'Healthcare Services'
     };
 
-    // Send confirmation emails (User & Admin) - Async
+    // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
     emailService.sendVisitorRegistrationEmails(visitorData).catch(err => {
-      console.error("Error sending health camp registration emails:", err);
+      console.error("Error sending health camp registration notifications:", err);
     });
 
-    // Send WhatsApp confirmation - Async
-    if (saved.mobile) {
-      const whatsappMsg = `Dear ${saved.firstName}, thank you for registering for the Free Health Camp at IHWE 2026. Your Registration ID is: ${saved.registrationId}. Our team will contact you shortly for a scheduled slot. - Namo Gange Trust`;
-      whatsapp.sendWhatsAppMessage(saved.mobile, whatsappMsg, 'Health Camp Registration').catch(err => {
-        console.error("Error sending health camp WhatsApp message:", err);
-      });
-    }
+    await logActivity(req, 'Created', 'Visitor Registrations', `Added new health camp visitor: ${saved.firstName} ${saved.lastName} (${saved.registrationId})`);
 
     res.status(201).json({ data: saved });
   } catch (err) {
