@@ -3,7 +3,9 @@ const CrmState = require("../models/CrmState");
 // GET all states
 const getAllStates = async (req, res) => {
   try {
-    const states = await CrmState.find();
+    const { countryCode } = req.query;
+    const filter = countryCode ? { countryCode: Number(countryCode) } : {};
+    const states = await CrmState.find(filter);
     res.status(200).json({
       message: "States fetched successfully",
       data: states,

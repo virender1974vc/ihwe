@@ -4,6 +4,8 @@ const buyerRegistrationSchema = new mongoose.Schema(
   {
     companyName: { type: String, required: true, trim: true },
     country: { type: String, required: true, trim: true },
+    state: { type: String, trim: true },
+    city: { type: String, trim: true },
     companyWebsite: { type: String, trim: true },
     yearsInBusiness: { type: String, trim: true },
     annualImportVolume: { type: String, trim: true },

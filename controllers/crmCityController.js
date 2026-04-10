@@ -3,7 +3,9 @@ const CrmCity = require("../models/CrmCity.js");
 // ➤ GET all cities
 const getAllCities = async (req, res) => {
   try {
-    const cities = await CrmCity.find();
+    const { stateCode } = req.query;
+    const filter = stateCode ? { stateCode: Number(stateCode) } : {};
+    const cities = await CrmCity.find(filter);
     res
       .status(200)
       .json({ message: "Cities fetched successfully", data: cities });

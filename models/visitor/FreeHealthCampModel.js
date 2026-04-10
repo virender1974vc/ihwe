@@ -3,6 +3,7 @@ const { secondaryDB } = require("../../config/secondaryDb");
 const FreeHealthCampSchema = new mongoose.Schema(
   {
     registrationId: { type: String, unique: true },
+    registrationFor: { type: String, required: true },
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     email: { type: String, required: true },

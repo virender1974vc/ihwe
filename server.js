@@ -86,6 +86,7 @@ const vacancyRoutes = require("./routes/vacancyRoutes");
 const careerRoutes = require("./routes/careerRoutes");
 const facilityRoutes = require("./routes/facilityRoutes");
 const leadRoutes = require("./routes/leadRoutes");
+const visitorAuthRoutes = require("./routes/visitor/visitorAuthRoutes");
 
 // ----------------------------------------------
 // MongoDB Connections
@@ -264,6 +265,7 @@ app.use("/api/career", careerRoutes);
 app.use("/api/facilities", facilityRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/visitor-reviews", visitorReviewRoutes);
+app.use("/api/visitor-auth", visitorAuthRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
