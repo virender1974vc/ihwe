@@ -54,7 +54,15 @@ const settingsSchema = new mongoose.Schema({
     manualAdvancePercentage: {
         type: Number,
         default: 50
-    }
+    },
+    quickLinks: [{
+        label: String,
+        href: String
+    }],
+    exhibitionLinks: [{
+        label: String,
+        href: String
+    }]
 }, { timestamps: true });
 
 

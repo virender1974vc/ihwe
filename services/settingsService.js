@@ -22,12 +22,14 @@ class SettingsService {
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings({});
 
-        const { logo, emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage } = updateData;
+        const { logo, emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, quickLinks, exhibitionLinks } = updateData;
 
         if (logo) settings.logo = logo;
         if (emails) settings.emails = emails;
         if (phones) settings.phones = phones;
         if (addresses) settings.addresses = addresses;
+        if (quickLinks) settings.quickLinks = quickLinks;
+        if (exhibitionLinks) settings.exhibitionLinks = exhibitionLinks;
         if (mapIframe !== undefined) settings.mapIframe = mapIframe;
         if (marqueeText !== undefined) settings.marqueeText = marqueeText;
         if (topbarDate !== undefined) settings.topbarDate = topbarDate;

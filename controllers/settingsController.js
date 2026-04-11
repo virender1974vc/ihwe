@@ -22,12 +22,14 @@ class SettingsController {
      */
     async updateSettings(req, res) {
         try {
-            const { emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage } = req.body;
+            const { emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, quickLinks, exhibitionLinks } = req.body;
             
             const updateData = {
                 emails: emails ? JSON.parse(emails) : undefined,
                 phones: phones ? JSON.parse(phones) : undefined,
                 addresses: addresses ? JSON.parse(addresses) : undefined,
+                quickLinks: quickLinks ? JSON.parse(quickLinks) : undefined,
+                exhibitionLinks: exhibitionLinks ? JSON.parse(exhibitionLinks) : undefined,
                 mapIframe,
                 marqueeText,
                 topbarDate,

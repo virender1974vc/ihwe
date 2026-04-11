@@ -224,6 +224,7 @@ app.use('/api/stall-rates', stallRateRoutes);
 app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
 app.use('/api/public', require('./routes/publicRoutes'));
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/policies', require('./routes/policyRoutes'));
 // ----------------------------------------------
 // New CRM routes (some may need secondary DB)
 // Note: If any of these routes should use the secondary database,
