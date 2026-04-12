@@ -25,6 +25,9 @@ class BuyerRegistrationConfigController {
                     buyingFrequencies: ["One-time", "Monthly", "Quarterly", "Long-term"],
                     annualPurchaseValueRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
                     primaryProductInterests: ["Ayurveda", "Organic", "Wellness", "Pharma", "Cosmetics"],
+                    budgetRanges: ["< 5 Lakhs", "5 - 10 Lakhs", "10 - 25 Lakhs", "25 - 50 Lakhs", "> 50 Lakhs"],
+                    companySizes: ["Small", "Medium", "Large"],
+                    certificationOptions: ["ISO", "GMP", "FDA", "AYUSH", "Organic", "Others"],
                     packages: [
                         {
                             name: "Standard Buyer Pass",
@@ -59,6 +62,18 @@ class BuyerRegistrationConfigController {
                     config.annualPurchaseValueRanges = ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"];
                     updated = true;
                 }
+                if (!config.budgetRanges || config.budgetRanges.length === 0) {
+                    config.budgetRanges = ["< 5 Lakhs", "5 - 10 Lakhs", "10 - 25 Lakhs", "25 - 50 Lakhs", "> 50 Lakhs"];
+                    updated = true;
+                }
+                if (!config.companySizes || config.companySizes.length === 0) {
+                    config.companySizes = ["Small", "Medium", "Large"];
+                    updated = true;
+                }
+                if (!config.certificationOptions || config.certificationOptions.length === 0) {
+                    config.certificationOptions = ["ISO", "GMP", "FDA", "AYUSH", "Organic", "Others"];
+                    updated = true;
+                }
                 if (updated) await config.save();
             }
 
@@ -79,7 +94,7 @@ class BuyerRegistrationConfigController {
                 config = new BuyerRegistrationConfig(req.body);
             } else {
                 // Update fields
-                const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, packages, lastUpdatedBy } = req.body;
+                const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, budgetRanges, companySizes, certificationOptions, packages, lastUpdatedBy } = req.body;
                 if (companyTypes) config.companyTypes = companyTypes;
                 if (annualTurnoverRanges) config.annualTurnoverRanges = annualTurnoverRanges;
                 if (regions) config.regions = regions;
@@ -90,6 +105,9 @@ class BuyerRegistrationConfigController {
                 if (buyingFrequencies) config.buyingFrequencies = buyingFrequencies;
                 if (annualPurchaseValueRanges) config.annualPurchaseValueRanges = annualPurchaseValueRanges;
                 if (primaryProductInterests) config.primaryProductInterests = primaryProductInterests;
+                if (budgetRanges) config.budgetRanges = budgetRanges;
+                if (companySizes) config.companySizes = companySizes;
+                if (certificationOptions) config.certificationOptions = certificationOptions;
                 if (packages) config.packages = packages;
                 config.lastUpdatedBy = lastUpdatedBy || null;
             }

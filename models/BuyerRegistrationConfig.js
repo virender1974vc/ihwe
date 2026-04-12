@@ -17,6 +17,9 @@ const BuyerRegistrationConfigSchema = new mongoose.Schema({
     buyingFrequencies: [{ type: String }],
     annualPurchaseValueRanges: [{ type: String }],
     primaryProductInterests: [{ type: String }],
+    budgetRanges: [{ type: String }],
+    companySizes: [{ type: String }],
+    certificationOptions: [{ type: String }],
     packages: [PackageBenefitSchema],
     lastUpdatedBy: { type: String, default: null }
 }, { timestamps: true });

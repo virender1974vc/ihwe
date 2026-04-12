@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const buyerRegistrationController = require('../controllers/buyerRegistrationController');
 const buyerRegistrationConfigController = require('../controllers/buyerRegistrationConfigController');
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/payments'),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
+});
+const upload = multer({ storage });
 
 // Configuration Routes
 router.get('/config', (req, res) => buyerRegistrationConfigController.getConfig(req, res));
@@ -10,7 +18,7 @@ router.put('/config', (req, res) => buyerRegistrationConfigController.updateConf
 // @route   POST /api/buyer-registration
 // @desc    Submit a buyer registration
 // @access  Public
-router.post('/', (req, res) => buyerRegistrationController.createRegistration(req, res));
+router.post('/', upload.single('paymentProof'), (req, res) => buyerRegistrationController.createRegistration(req, res));
 
 // @route   GET /api/buyer-registration
 // @desc    Get all buyer registrations

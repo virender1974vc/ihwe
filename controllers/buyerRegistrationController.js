@@ -10,7 +10,11 @@ class BuyerRegistrationController {
      */
     async createRegistration(req, res) {
         try {
-            const data = await buyerRegistrationService.createRegistration(req.body);
+            const registrationData = {
+                ...req.body,
+                paymentProof: req.file ? `/uploads/payments/${req.file.filename}` : undefined
+            };
+            const data = await buyerRegistrationService.createRegistration(registrationData);
             res.status(201).json({ success: true, message: 'Registration submitted successfully', data });
         } catch (err) {
             console.error('Error submitting buyer registration:', err);
@@ -85,6 +89,7 @@ class BuyerRegistrationController {
             res.status(500).json({ success: false, message: 'Failed to create payment order' });
         }
     }
+
 
     /**
      * Verify Payment

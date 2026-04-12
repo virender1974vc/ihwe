@@ -58,8 +58,14 @@ class BuyerRegistrationService {
         else if (priority.includes('Medium')) score += 2;
         else if (priority.includes('General')) score += 1;
 
-        if (score >= 5) return 'Hot';
-        if (score >= 3) return 'Warm';
+        // Budget Score
+        const budget = data.budgetRange || '';
+        if (budget.includes('> 50') || budget.includes('1 - 5') || budget.includes('Core')) score += 3;
+        else if (budget.includes('10 - 25') || budget.includes('25 - 50')) score += 2;
+        else score += 1;
+
+        if (score >= 7) return 'Hot';
+        if (score >= 4) return 'Warm';
         return 'Cold';
     }
 
