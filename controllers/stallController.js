@@ -11,7 +11,7 @@ class StallController {
     }
     async getAvailableStalls(req, res) {
         try {
-            const data = await stallService.getAvailableStalls();
+            const data = await stallService.getAvailableStalls(req.query);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

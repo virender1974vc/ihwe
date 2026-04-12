@@ -393,11 +393,13 @@ class EmailService {
             formType: 'exhibitor-registration',
             data: {
                 exhibitor_name: registration.exhibitorName,
-                stall_no: registration.stallNo,
-                event_name: registration.eventName,
+                stall_no: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
+                event_name: registration.eventName || 'IHWE 2026',
                 login_url: 'https://ihwe.in/exhibitor-login',
+                username: registration.contact1.email,
+                email: registration.contact1.email,
                 password: rawPassword,
-                phone: registration.contact1.whatsapp || registration.contact1.phone
+                phone: registration.contact1.mobile || registration.contact1.alternateNo
             },
             profile: 'EXHIBITOR'
         });

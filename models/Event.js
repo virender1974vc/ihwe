@@ -22,6 +22,26 @@ const eventSchema = new mongoose.Schema({
         type: String, 
         enum: ['active', 'inactive'], 
         default: 'active' 
+    },
+    ticketsStatus: {
+        type: String,
+        default: 'Few Remaining'
+    },
+    speakersCount: {
+        type: String,
+        default: '100+'
+    },
+    description: {
+        type: String,
+        default: ''
+    },
+    contactPhone: {
+        type: String,
+        default: ''
+    },
+    order: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 

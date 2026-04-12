@@ -20,7 +20,12 @@ router.post('/create-order', async (req, res) => {
         res.json({ success: true, order });
     } catch (error) {
         console.error("Razorpay Order Error:", error);
-        res.status(500).json({ success: false, message: 'Failed to create payment order' });
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to create payment order',
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 router.post('/verify-payment', async (req, res) => {

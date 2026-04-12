@@ -19,14 +19,16 @@ class ExhibitorRegistrationService {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
 
-        // --- REUSE PASSWORD if same email already registered ---
+        // --- AUTO-GENERATE registrationId ---
+        const year = new Date().getFullYear();
+        const rand = Math.floor(10000 + Math.random() * 90000);
+        data.registrationId = `IHWE-EXH-${year}-${rand}`;
         let rawPassword;
         const existing = await ExhibitorRegistration.findOne({ 'contact1.email': data.contact1?.email })
             .select('+password').sort({ createdAt: -1 });
         if (existing && existing.password) {
-            // Keep same hashed password, generate new raw for email display
-            rawPassword = null; // won't resend password in email
-            data.password = existing.password;
+            rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
+            data.password = await bcrypt.hash(rawPassword, 10);
         } else {
             rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
             data.password = await bcrypt.hash(rawPassword, 10);

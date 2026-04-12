@@ -2,10 +2,10 @@ const Event = require('../models/Event');
 
 class EventService {
     async getAllEvents() {
-        return await Event.find().sort({ startDate: -1 });
+        return await Event.find().sort({ order: 1, startDate: -1 });
     }
     async getActiveEvents() {
-        return await Event.find({ status: 'active' }).sort({ startDate: -1 });
+        return await Event.find({ status: 'active' }).sort({ order: 1, startDate: -1 });
     }
     async addEvent(data) {
         const event = new Event(data);
