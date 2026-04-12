@@ -1,6 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const buyerRegistrationController = require('../controllers/buyerRegistrationController');
+const buyerRegistrationConfigController = require('../controllers/buyerRegistrationConfigController');
+
+// Configuration Routes
+router.get('/config', (req, res) => buyerRegistrationConfigController.getConfig(req, res));
+router.put('/config', (req, res) => buyerRegistrationConfigController.updateConfig(req, res));
 
 // @route   POST /api/buyer-registration
 // @desc    Submit a buyer registration
@@ -26,5 +31,11 @@ router.put('/:id', (req, res) => buyerRegistrationController.updateRegistration(
 // @desc    Delete a buyer registration
 // @access  Public (Should be protected)
 router.delete('/:id', (req, res) => buyerRegistrationController.deleteRegistration(req, res));
+
+// @route   POST /api/buyer-registration/create-order
+router.post('/create-order', (req, res) => buyerRegistrationController.createOrder(req, res));
+
+// @route   POST /api/buyer-registration/verify-payment
+router.post('/verify-payment', (req, res) => buyerRegistrationController.verifyPayment(req, res));
 
 module.exports = router;

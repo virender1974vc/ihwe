@@ -71,6 +71,34 @@ class BuyerRegistrationController {
             res.status(err.status || 500).json({ success: false, message: err.message || 'Server Error' });
         }
     }
+
+    /**
+     * Create Razorpay Order
+     */
+    async createOrder(req, res) {
+        try {
+            const { amount } = req.body;
+            const order = await buyerRegistrationService.createOrder(amount);
+            res.json({ success: true, order });
+        } catch (err) {
+            console.error('Error creating Razorpay order:', err);
+            res.status(500).json({ success: false, message: 'Failed to create payment order' });
+        }
+    }
+
+    /**
+     * Verify Payment
+     */
+    async verifyPayment(req, res) {
+        try {
+            const { regId, paymentDetails } = req.body;
+            const data = await buyerRegistrationService.verifyPayment(regId, paymentDetails);
+            res.json({ success: true, message: 'Payment verified', data });
+        } catch (err) {
+            console.error('Error verifying payment:', err);
+            res.status(500).json({ success: false, message: 'Payment verification failed' });
+        }
+    }
 }
 
 module.exports = new BuyerRegistrationController();
