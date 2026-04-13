@@ -8,5 +8,6 @@ router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobile
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
+router.put('/update-profile', protectExhibitor, (req, res) => exhibitorAuthController.updateProfile(req, res));
 
 module.exports = router;

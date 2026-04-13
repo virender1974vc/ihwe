@@ -186,6 +186,24 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async updateProfile(req, res) {
+        try {
+            if (req.user.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const update = {};
+            allowed.forEach(key => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
+
+            const updated = await ExhibitorRegistration.findByIdAndUpdate(req.user.id, { $set: update }, { new: true });
+            if (!updated)
+                return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+
+            res.status(200).json({ success: true, message: 'Profile updated successfully', data: updated });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new ExhibitorAuthController();
