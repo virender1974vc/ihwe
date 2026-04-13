@@ -10,7 +10,11 @@ class BuyerRegistrationController {
      */
     async createRegistration(req, res) {
         try {
-            const data = await buyerRegistrationService.createRegistration(req.body);
+            const registrationData = {
+                ...req.body,
+                paymentProof: req.file ? `/uploads/payments/${req.file.filename}` : undefined
+            };
+            const data = await buyerRegistrationService.createRegistration(registrationData);
             res.status(201).json({ success: true, message: 'Registration submitted successfully', data });
         } catch (err) {
             console.error('Error submitting buyer registration:', err);
@@ -69,6 +73,35 @@ class BuyerRegistrationController {
         } catch (err) {
             console.error('Error deleting buyer registration:', err);
             res.status(err.status || 500).json({ success: false, message: err.message || 'Server Error' });
+        }
+    }
+
+    /**
+     * Create Razorpay Order
+     */
+    async createOrder(req, res) {
+        try {
+            const { amount } = req.body;
+            const order = await buyerRegistrationService.createOrder(amount);
+            res.json({ success: true, order });
+        } catch (err) {
+            console.error('Error creating Razorpay order:', err);
+            res.status(500).json({ success: false, message: 'Failed to create payment order' });
+        }
+    }
+
+
+    /**
+     * Verify Payment
+     */
+    async verifyPayment(req, res) {
+        try {
+            const { regId, paymentDetails } = req.body;
+            const data = await buyerRegistrationService.verifyPayment(regId, paymentDetails);
+            res.json({ success: true, message: 'Payment verified', data });
+        } catch (err) {
+            console.error('Error verifying payment:', err);
+            res.status(500).json({ success: false, message: 'Payment verification failed' });
         }
     }
 }

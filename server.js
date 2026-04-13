@@ -7,9 +7,7 @@ const path = require("path");
 const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
-// ----------------------------------------------
-// Existing routes (CommonJS)
-// ----------------------------------------------
+
 const sidebarRoutes = require("./routes/sidebar");
 const rolesRoutes = require("./routes/roles");
 const heroRoutes = require("./routes/hero");
@@ -50,7 +48,7 @@ const stallRateRoutes = require('./routes/stallRates');
 const termsAndConditionsRoutes = require('./routes/termsAndConditions');
 const dashboardRoutes = require('./routes/dashboard');
 
-// New CRM routes (converted to CommonJS)
+
 const bankListRoutes = require("./routes/bankListRoutes");
 const bankOptionRoutes = require("./routes/bankOptionRoutes");
 const commonWhatsappRoutes = require("./routes/commonWhatsappRoutes");
@@ -93,12 +91,6 @@ const meetingPriorityLevelRoutes = require("./routes/add_by_admin/MeetingPriorit
 const primaryProductInterestsRoutes = require("./routes/add_by_admin/primaryProductInterestsRoutes");
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 
-
-// ----------------------------------------------
-// MongoDB Connections
-// ----------------------------------------------
-// 1. Main Database – used as default connection
-//    All existing models (which use `mongoose.model`) will connect here.
 mongoose
   .connect(process.env.MONGO_URI_MAIN, {
     // optional options (remove if not needed)
@@ -151,7 +143,7 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Root routes
+
 app.get("/", (req, res) => {
   res.send("IHWE Backend is running...");
 });
@@ -171,9 +163,7 @@ app.get("/api/test", (req, res) => {
   });
 });
 
-// ----------------------------------------------
-// Existing API routes (all use default/main DB)
-// ----------------------------------------------
+
 const authRoutes = require("./routes/auth");
 app.use("/api", authRoutes);
 app.use("/api/sidebar", sidebarRoutes);
@@ -220,6 +210,7 @@ app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
 app.use("/api/verify", require("./routes/verify"));
 app.use("/api/analytics", require("./routes/analytics"));
+app.use("/api/otp", require("./routes/otpRoutes"));
 app.use('/api/exhibitor-registration', exhibitorRegistrationRoutes);
 app.use('/api/exhibitor-auth', require('./routes/exhibitorAuth'));
 app.use('/api/stalls', stallRoutes);
@@ -231,12 +222,7 @@ app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
 app.use('/api/public', require('./routes/publicRoutes'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/policies', require('./routes/policyRoutes'));
-// ----------------------------------------------
-// New CRM routes (some may need secondary DB)
-// Note: If any of these routes should use the secondary database,
-//       you must ensure their models are defined using `secondaryDB`.
-//       For now, they are using the default connection.
-// ----------------------------------------------
+
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
 app.use("/api/bank-options", bankOptionRoutes);
@@ -287,9 +273,7 @@ app.use("/api/meeting-priority-levels", meetingPriorityLevelRoutes);
 app.use("/api/primary-product-interests", primaryProductInterestsRoutes);
 app.use("/api/secondary-products", secondaryProductRoutes);
 
-// ----------------------------------------------
-// Start Server
-// ----------------------------------------------
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
