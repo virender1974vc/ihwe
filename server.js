@@ -87,6 +87,12 @@ const careerRoutes = require("./routes/careerRoutes");
 const facilityRoutes = require("./routes/facilityRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const visitorAuthRoutes = require("./routes/visitor/visitorAuthRoutes");
+const annualTurnoverRoutes = require("./routes/add_by_admin/AnnualTurnoverRoutes");
+const businessTypeRoutes = require("./routes/add_by_admin/BusinessType");
+const meetingPriorityLevelRoutes = require("./routes/add_by_admin/MeetingPriorityLevelRoutes");
+const primaryProductInterestsRoutes = require("./routes/add_by_admin/primaryProductInterestsRoutes");
+const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
+
 
 // ----------------------------------------------
 // MongoDB Connections
@@ -275,6 +281,11 @@ app.use("/api/portfolio-gallery", require("./routes/portfolioGalleryRoutes"));
 app.use("/api/email-logs", require("./routes/emailLogRoutes"));
 app.use("/api/whatsapp-logs", require("./routes/whatsAppLogRoutes"));
 app.use("/api/message-templates", require("./routes/messageTemplateRoutes"));
+app.use("/api/business-types", businessTypeRoutes);
+app.use("/api/annual-turnovers", annualTurnoverRoutes);
+app.use("/api/meeting-priority-levels", meetingPriorityLevelRoutes);
+app.use("/api/primary-product-interests", primaryProductInterestsRoutes);
+app.use("/api/secondary-products", secondaryProductRoutes);
 
 // ----------------------------------------------
 // Start Server
