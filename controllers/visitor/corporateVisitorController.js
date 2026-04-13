@@ -45,10 +45,6 @@ const createCorporateVisitor = async (req, res) => {
 
     const saved = await visitor.save();
 
-    // Normalize data to match email template expectations
-    const purposeKeys = saved.purposeOfVisit ? Object.entries(saved.purposeOfVisit).filter(([,v]) => v).map(([k]) => k.replace(/([A-Z])/g, ' $1').trim()) : [];
-    const interestKeys = saved.areaOfInterest ? Object.entries(saved.areaOfInterest).filter(([,v]) => v).map(([k]) => k.replace(/([A-Z])/g, ' $1').trim()) : [];
-
     const emailData = {
       firstName: saved.firstName,
       lastName: saved.lastName,
@@ -56,8 +52,8 @@ const createCorporateVisitor = async (req, res) => {
       mobileNo: saved.mobile,
       mobile: saved.mobile,
       visitorType: 'Corporate Visitor',
-      purposeOfVisit: purposeKeys.length ? purposeKeys : 'Business Networking',
-      areaOfInterest: interestKeys.length ? interestKeys : 'Healthcare',
+      purposeOfVisit: saved.purposeOfVisit?.length ? saved.purposeOfVisit : ['Business Networking'],
+      areaOfInterest: saved.areaOfInterest?.length ? saved.areaOfInterest : ['Healthcare'],
       city: saved.city || 'N/A',
       country: saved.country || 'India',
       registrationId: saved.registrationId,
