@@ -3,6 +3,13 @@ const mongoose = require('mongoose');
 const PackageBenefitSchema = new mongoose.Schema({
     name: { type: String, required: true },
     price: { type: Number, required: true },
+    category: { type: String, default: 'Pass' }, // 'Pass' or 'Membership'
+    targetAudience: { type: String }, // e.g., "For Serious Buyers & Decision Makers"
+    description: { type: String },
+    whyChoose: { type: String },
+    isRecommended: { type: Boolean, default: false },
+    badge: { type: String }, // e.g., "Best Value", "Recommended"
+    cta: { type: String, default: "Select" }, // e.g., "Become a Member", "Get Membership"
     benefits: [{ type: String }]
 });
 

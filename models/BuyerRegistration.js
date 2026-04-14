@@ -42,6 +42,10 @@ const buyerRegistrationSchema = new mongoose.Schema(
     estimatedAnnualPurchaseValue: { type: String, required: true },
     purchaseTimeline: { type: String, required: true }, // Immediate / 1–3 Months / 3–6 Months / Exploring
     roleInPurchaseDecision: { type: String, required: true }, // Final Decision Maker / Influencer / Research Only
+    experienceWithIndianSuppliers: { type: String }, // First time / Regular / Limited / None
+
+    // 7. Matchmaking Interest
+    matchmakingInterest: { type: String, default: "Yes" }, // Yes/No
 
     // 8. Certification & Compliance Requirements
     requiredCertifications: { type: [String], default: [] }, // ISO / GMP / FDA / AYUSH / Organic / Others
@@ -55,17 +59,29 @@ const buyerRegistrationSchema = new mongoose.Schema(
     requirePreScheduledB2B: { type: String, required: true }, // Yes/No
     meetingPriorityLevel: { type: String, required: true }, // High / Medium / General
 
+    // 11. Logistics & Shipping
+    logisticsRequirements: { type: String },
+
+    // 12. Preferred Payment Methods
+    preferredPaymentMethods: { type: [String], default: [] },
+
+    // 13. Source of Information
+    sourceOfInformation: { type: String },
+
+    // 14. Company Profile
+    companyProfile: { type: String }, // File path
+
     // 12/14. Additional Information
     remarks: { type: String },
 
-    // 13. Paid Registration Details
+    // 15. Paid Registration Details
     registrationCategory: { type: String, required: true }, // Standard / VIP / Hosted
-    registrationFee: { type: String, required: true },
+    registrationFee: { type: String, required: false, default: "0" }, // Made optional to avoid validation errors
     paymentMode: { type: String, required: true }, // UPI / Card / Net Banking
     transactionId: { type: String },
     paymentProof: { type: String }, // File path for screenshot
 
-    // 15. Consent & Declaration
+    // 16. Consent & Declaration
     consentTerms: { type: Boolean, default: false },
     consentPaymentValid: { type: Boolean, default: false },
     consentMatchedExhibitors: { type: Boolean, default: false },

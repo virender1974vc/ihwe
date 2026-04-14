@@ -4,16 +4,102 @@ const BuyerRegistrationConfig = require('../models/BuyerRegistrationConfig');
  * Controller to handle Buyer Registration Configuration.
  */
 class BuyerRegistrationConfigController {
-    /**
-     * Get the current configuration.
-     * Seeds default values if nothing exists.
-     */
+
     async getConfig(req, res) {
         try {
             let config = await BuyerRegistrationConfig.findOne();
 
-            if (!config) {
+            const defaultPackages = [
+                {
+                    name: "Standard Buyer Pass",
+                    price: 999,
+                    category: "Pass",
+                    cta: "Register Now",
+                    targetAudience: "For Emerging Buyers & Business Explorers",
+                    description: "Designed for professionals who want to explore new products, suppliers, and market opportunities through structured Buyer–Seller interactions.",
+                    whyChoose: "A great starting point to explore opportunities and build initial business connections.",
+                    isRecommended: false,
+                    benefits: [
+                        "Opportunity to participate in Buyer–Seller Meet interactions (subject to availability)",
+                        "Initiate self-managed B2B meetings",
+                        "Basic support for connecting with relevant exhibitors",
+                        "Access to a wide range of products & innovations",
+                        "Lunch Coupon (Standard Meal)"
+                    ]
+                },
+                {
+                    name: "VIP Buyer Pass",
+                    price: 4999,
+                    category: "Pass",
+                    cta: "Register Now",
+                    badge: "Recommended",
+                    targetAudience: "For Serious Buyers & Decision Makers",
+                    description: "Crafted for high-intent buyers who are looking for structured, result-oriented meetings and premium networking.",
+                    whyChoose: "Perfect for buyers who want focused meetings, comfort, and faster business outcomes.",
+                    isRecommended: true,
+                    benefits: [
+                        "Pre-scheduled & curated B2B meetings",
+                        "Dedicated assistance for meeting coordination",
+                        "Access to VIP Lounge & premium networking areas",
+                        "Priority support & faster entry experience",
+                        "Enhanced visibility among exhibitors",
+                        "Complimentary Lunch (VIP Lounge / Premium Service)"
+                    ]
+                },
+                {
+                    name: "ICOA Standard Buyer Membership",
+                    price: 1999,
+                    category: "Membership",
+                    cta: "Become a Member",
+                    targetAudience: "For Active Buyers & Market Explorers",
+                    description: "The Buyer–Seller Meet at IHWE 2026 is being conducted in association with the International Council of AYUSH (ICOA), bringing you access to a trusted network of verified suppliers and brands.",
+                    whyChoose: "Ideal for buyers who want to explore the AYUSH and wellness ecosystem and build reliable connections.",
+                    benefits: [
+                        "Access to Buyer–Seller Meet opportunities curated by ICOA at IHWE & associated events",
+                        "Opportunity to participate in B2B meetings (subject to availability)",
+                        "Basic support for connecting with relevant suppliers from the ICOA network",
+                        "Regular updates on new products, innovations, and sourcing opportunities",
+                        "General access to ICOA-associated events"
+                    ]
+                },
+                {
+                    name: "ICOA VIP Buyer Membership",
+                    price: 9999,
+                    category: "Membership",
+                    badge: "Recommended",
+                    cta: "Upgrade to VIP Membership",
+                    targetAudience: "For Serious Buyers & Decision Makers",
+                    description: "Experience structured and high-value business networking through ICOA-curated Buyer–Seller Meets at IHWE and beyond.",
+                    whyChoose: "Best suited for buyers who want focused meetings, verified suppliers, and faster business outcomes.",
+                    benefits: [
+                        "Priority access to ICOA-curated Buyer–Seller Meets",
+                        "Pre-scheduled & curated B2B meetings based on your requirements",
+                        "Dedicated assistance for supplier matchmaking",
+                        "Access to VIP networking lounges at IHWE",
+                        "Priority entry & premium on-ground support",
+                        "Year-round supplier sourcing support via ICOA network"
+                    ]
+                },
+                {
+                    name: "ICOA Elite Buyer Membership",
+                    price: 25000,
+                    category: "Membership",
+                    cta: "Get Elite Membership",
+                    targetAudience: "For High-Value & Institutional Buyers",
+                    description: "An exclusive membership offering a fully managed sourcing experience through ICOA’s curated network and IHWE platform.",
+                    whyChoose: "Designed for buyers who want a complete sourcing ecosystem with strategic business support.",
+                    benefits: [
+                        "Fully curated B2B meetings conducted by ICOA across IHWE and associated platforms",
+                        "Dedicated Relationship Manager for end-to-end coordination",
+                        "Priority access to all business networking opportunities",
+                        "Personalized supplier discovery & sourcing support (year-round)",
+                        "Invitations to exclusive business networking sessions",
+                        "Premium hospitality & priority services at IHWE"
+                    ]
+                }
+            ];
 
+            if (!config) {
                 config = new BuyerRegistrationConfig({
                     companyTypes: ["Importer", "Distributor", "Retailer", "Wholesaler", "Hospital", "Wellness Center", "Others"],
                     annualTurnoverRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
@@ -28,53 +114,32 @@ class BuyerRegistrationConfigController {
                     budgetRanges: ["< 5 Lakhs", "5 - 10 Lakhs", "10 - 25 Lakhs", "25 - 50 Lakhs", "> 50 Lakhs"],
                     companySizes: ["Small", "Medium", "Large"],
                     certificationOptions: ["ISO", "GMP", "FDA", "AYUSH", "Organic", "Others"],
-                    packages: [
-                        {
-                            name: "Standard Buyer Pass",
-                            price: 999,
-                            benefits: ["Access to Expo Floor", "Standard B2B Meeting Lounge", "Digital Directory", "Certificate of Participation"]
-                        },
-                        {
-                            name: "VIP Buyer Pass",
-                            price: 2499,
-                            benefits: ["Everything in Standard", "Priority Access to B2B Matching", "VIP Networking Lounge Access", "Lunch Inclusive (2 Days)", "Exclusive Networking Dinner"]
-                        },
-                        {
-                            name: "Hosted Buyer",
-                            price: 4999,
-                            benefits: ["Subject to Selection", "Domestic Airfare Included", "2 Nights 5-Star Stay", "Premium B2B Matchmaking", "Dedicated Relationship Manager"]
-                        }
-                    ]
+                    packages: defaultPackages
                 });
                 await config.save();
             } else {
-                // Lazy seed primaryProductInterests if missing
-                let updated = false;
+                // Migration: Force update packages to include new full data
+                config.packages = defaultPackages;
+                
                 if (!config.primaryProductInterests || config.primaryProductInterests.length === 0) {
                     config.primaryProductInterests = ["Ayurveda", "Organic", "Wellness", "Pharma", "Cosmetics"];
-                    updated = true;
                 }
                 if (!config.buyingFrequencies || config.buyingFrequencies.length === 0) {
                     config.buyingFrequencies = ["One-time", "Monthly", "Quarterly", "Long-term"];
-                    updated = true;
                 }
                 if (!config.annualPurchaseValueRanges || config.annualPurchaseValueRanges.length === 0) {
                     config.annualPurchaseValueRanges = ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"];
-                    updated = true;
                 }
                 if (!config.budgetRanges || config.budgetRanges.length === 0) {
                     config.budgetRanges = ["< 5 Lakhs", "5 - 10 Lakhs", "10 - 25 Lakhs", "25 - 50 Lakhs", "> 50 Lakhs"];
-                    updated = true;
                 }
                 if (!config.companySizes || config.companySizes.length === 0) {
                     config.companySizes = ["Small", "Medium", "Large"];
-                    updated = true;
                 }
                 if (!config.certificationOptions || config.certificationOptions.length === 0) {
                     config.certificationOptions = ["ISO", "GMP", "FDA", "AYUSH", "Organic", "Others"];
-                    updated = true;
                 }
-                if (updated) await config.save();
+                await config.save();
             }
 
             res.json({ success: true, data: config });
