@@ -3,7 +3,7 @@ const AnnualTurnover = require("../../models/add_by_admin/AnnualTurnover.js");
 // GET all
 const getAllAnnualTurnovers = async (req, res) => {
     try {
-        const records = await AnnualTurnover.find();
+        const records = await AnnualTurnover.find({ status: 'Active' });
         res.json(records);
     } catch (err) {
         res.status(500).json({

@@ -3,7 +3,7 @@ const SecondaryProduct = require("../../models/add_by_admin/SecondaryProduct.js"
 // GET all
 const getAllSecondaryProducts = async (req, res) => {
     try {
-        const records = await SecondaryProduct.find();
+        const records = await SecondaryProduct.find({ status: 'Active' });
         res.json(records);
     } catch (err) {
         res.status(500).json({
