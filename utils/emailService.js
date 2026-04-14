@@ -168,7 +168,13 @@ class EmailService {
             'SERVICE': data.service || data.proposedTopic || data.topic || 'IHWE Services',
             'COMPANY': data.companyName || data.organization || data.organizationName || 'N/A',
             'EMAIL': data.email || data.officialEmail || 'N/A',
-            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A'
+            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A',
+            'EXHIBITOR_NAME': data.exhibitor_name || data.exhibitorName || data.name || 'N/A',
+            'STALL_NO': data.stall_no || data.stallNo || data.stallFor || 'N/A',
+            'LOGIN_URL': data.login_url || 'https://ihwe.in/exhibitor-login',
+            'USERNAME': data.username || data.email || data.officialEmail || 'N/A',
+            'PASSWORD': data.password || 'N/A',
+            'EVENT_NAME': data.event_name || data.eventName || 'IHWE 2026',
         };
 
         // Apply Aliases first
