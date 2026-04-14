@@ -5,9 +5,9 @@ const LegalPolicy = require('./models/LegalPolicy');
 const policies = [
     {
         page: 'terms-of-service',
-        title: 'Terms & Conditions – IH&WE 2026',
+        title: 'Terms & Conditions – IHWE 2026',
         content: `
-<h2>9th Edition of International Health &amp; Wellness Expo 2026 (IH&WE – Global Edition) &amp; Associated Programs</h2>
+<h2>9th Edition of International Health &amp; Wellness Expo 2026 (IHWE – Global Edition) &amp; Associated Programs</h2>
 <p><strong>Organised by:</strong> Namo Gange Wellness Pvt. Ltd.<br/>
 <strong>In Association With:</strong><br/>
 International Council of AYUSH (ICOA) – (Buyer-Seller Meet)<br/>
@@ -100,11 +100,11 @@ Namo Gange Trust – (Arogya Sanghosthi / Conferences)</p>
     },
     {
         page: 'privacy-policy',
-        title: 'Privacy Policy – IH&WE 2026',
+        title: 'Privacy Policy – IHWE 2026',
         content: `
 <h2>🔐 Privacy Policy</h2>
 <p><em>(In accordance with applicable Indian laws including the Information Technology Act, 2000)</em></p>
-<h2>9th Edition of International Health &amp; Wellness Expo 2026 (IH&WE – Global Edition) &amp; Associated Programs</h2>
+<h2>9th Edition of International Health &amp; Wellness Expo 2026 (IHWE – Global Edition) &amp; Associated Programs</h2>
 <p><strong>Organised by:</strong> Namo Gange Wellness Pvt. Ltd.<br/>
 <strong>In Association With:</strong><br/>
 International Council of AYUSH (ICOA) – (Buyer-Seller Meet)<br/>
@@ -182,10 +182,10 @@ Namo Gange Trust – (Arogya Sanghosthi / Conferences)</p>
     },
     {
         page: 'refund-policy',
-        title: 'Refund & Cancellation Policy – IH&WE 2026',
+        title: 'Refund & Cancellation Policy – IHWE 2026',
         content: `
 <h2>Refund &amp; Cancellation Policy</h2>
-<h2>9th Edition of International Health &amp; Wellness Expo 2026 (IH&WE – Global Edition) &amp; Associated Programs</h2>
+<h2>9th Edition of International Health &amp; Wellness Expo 2026 (IHWE – Global Edition) &amp; Associated Programs</h2>
 <p><strong>Organised by:</strong> Namo Gange Wellness Pvt. Ltd.<br/>
 <strong>In Association With:</strong><br/>
 International Council of AYUSH (ICOA) – (Buyer-Seller Meet)<br/>
