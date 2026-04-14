@@ -6,8 +6,8 @@ const ContactPersonSchema = new mongoose.Schema({
     lastName: String,
     email: String,
     designation: String,
-    mobile: { type: String, required: true },
-    alternateNo: { type: String, required: true }
+    mobile: String,
+    alternateNo: String
 });
 
 const ParticipationSchema = new mongoose.Schema({
