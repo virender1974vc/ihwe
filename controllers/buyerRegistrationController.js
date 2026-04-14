@@ -10,9 +10,11 @@ class BuyerRegistrationController {
      */
     async createRegistration(req, res) {
         try {
+            const files = req.files || {};
             const registrationData = {
                 ...req.body,
-                paymentProof: req.file ? `/uploads/payments/${req.file.filename}` : undefined
+                paymentProof: files['paymentProof'] ? `/uploads/payments/${files['paymentProof'][0].filename}` : undefined,
+                companyProfile: files['companyProfile'] ? `/uploads/profiles/${files['companyProfile'][0].filename}` : undefined
             };
             const data = await buyerRegistrationService.createRegistration(registrationData);
             res.status(201).json({ success: true, message: 'Registration submitted successfully', data });

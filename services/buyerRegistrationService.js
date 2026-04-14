@@ -26,8 +26,26 @@ class BuyerRegistrationService {
             if (!data[field]) throw { status: 400, message: `${field} is required` };
         }
 
+        // Handle Array fields from FormData (parsing JSON strings if needed)
+        const arrayFields = ['secondaryProductCategories', 'preferredSupplierRegion', 'preferredState', 'preferredSupplierType', 'requiredCertifications', 'preferredPaymentMethods'];
+        arrayFields.forEach(field => {
+            if (data[field] && typeof data[field] === 'string') {
+                try {
+                    data[field] = JSON.parse(data[field]);
+                } catch (e) {
+                    // If not valid JSON, treat as comma-separated or keep as is if it fails
+                    if (data[field].includes(',')) data[field] = data[field].split(',').map(s => s.trim());
+                }
+            }
+        });
+
         // 1. Calculate Buyer Tag (CRM Logic)
         data.buyerTag = this.calculateBuyerTag(data);
+
+        // 2. Ensure registrationFee is set (or default to 0)
+        if (!data.registrationFee) {
+            data.registrationFee = "0"; // Default or lookup based on category
+        }
 
         const newRegistration = new BuyerRegistration(data);
         const saved = await newRegistration.save();

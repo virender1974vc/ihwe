@@ -6,7 +6,10 @@ const multer = require('multer');
 const path = require('path');
 
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/payments'),
+    destination: (req, file, cb) => {
+        const folder = file.fieldname === 'companyProfile' ? 'uploads/profiles' : 'uploads/payments';
+        cb(null, folder);
+    },
     filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 const upload = multer({ storage });
@@ -18,7 +21,10 @@ router.put('/config', (req, res) => buyerRegistrationConfigController.updateConf
 // @route   POST /api/buyer-registration
 // @desc    Submit a buyer registration
 // @access  Public
-router.post('/', upload.single('paymentProof'), (req, res) => buyerRegistrationController.createRegistration(req, res));
+router.post('/', upload.fields([
+    { name: 'paymentProof', maxCount: 1 },
+    { name: 'companyProfile', maxCount: 1 }
+]), (req, res) => buyerRegistrationController.createRegistration(req, res));
 
 // @route   GET /api/buyer-registration
 // @desc    Get all buyer registrations
