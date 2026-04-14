@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 const { secondaryDB } = require("../../config/secondaryDb");
 const MeetingPriorityLevelSchema = new mongoose.Schema(
   {
-    nature_id: { type: String, required: true },
     meeting_priority_level: { type: String, required: true },
     status: { type: String, default: "Active" },
     added_by: { type: String, required: true },

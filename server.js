@@ -269,8 +269,8 @@ app.use("/api/whatsapp-logs", require("./routes/whatsAppLogRoutes"));
 app.use("/api/message-templates", require("./routes/messageTemplateRoutes"));
 app.use("/api/business-types", businessTypeRoutes);
 app.use("/api/annual-turnovers", annualTurnoverRoutes);
-app.use("/api/meeting-priority-levels", meetingPriorityLevelRoutes);
-app.use("/api/primary-product-interests", primaryProductInterestsRoutes);
+app.use("/api/meeting-priorities", meetingPriorityLevelRoutes);
+app.use("/api/primary-products", primaryProductInterestsRoutes);
 app.use("/api/secondary-products", secondaryProductRoutes);
 
 

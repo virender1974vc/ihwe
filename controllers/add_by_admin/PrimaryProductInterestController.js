@@ -1,68 +1,87 @@
 const PrimaryProductInterest = require("../../models/add_by_admin/PrimaryProductInterest");
 
-// Get All
-exports.getAllPrimaryProductInterests = async (req, res) => {
+// GET all
+const getAllPrimaryProductInterests = async (req, res) => {
     try {
-        const primaryProductInterests = await PrimaryProductInterest.find();
-        res.status(200).json({ success: true, data: primaryProductInterests });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal server error" });
-    }
-};
-
-// Get By Id
-exports.getPrimaryProductInterestById = async (req, res) => {
-    try {
-        const primaryProductInterest = await PrimaryProductInterest.findById(req.params.id);
-        if (!primaryProductInterest) {
-            return res.status(404).json({ success: false, message: "Primary product interest not found" });
-        }
-        res.status(200).json({ success: true, data: primaryProductInterest });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal server error" });
-    }
-};
-
-// Create
-exports.createPrimaryProductInterest = async (req, res) => {
-    try {
-        const { nature_id, primary_product_interest, status, added_by } = req.body;
-        const primaryProductInterest = new PrimaryProductInterest({
-            nature_id,
-            primary_product_interest,
-            status,
-            added_by,
+        const records = await PrimaryProductInterest.find();
+        res.json(records);
+    } catch (err) {
+        res.status(500).json({
+            message: "Error fetching records",
+            error: err.message,
         });
-        await primaryProductInterest.save();
-        res.status(201).json({ success: true, data: primaryProductInterest });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
 
-// Update
-exports.updatePrimaryProductInterest = async (req, res) => {
+// GET by ID
+const getPrimaryProductInterestById = async (req, res) => {
     try {
-        const { nature_id, primary_product_interest, status, added_by } = req.body;
-        const primaryProductInterest = await PrimaryProductInterest.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!primaryProductInterest) {
-            return res.status(404).json({ success: false, message: "Primary product interest not found" });
-        }
-        res.status(200).json({ success: true, data: primaryProductInterest });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal server error" });
+        const record = await PrimaryProductInterest.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: "Record not found" });
+        res.json(record);
+    } catch (err) {
+        res.status(500).json({
+            message: "Error fetching record",
+            error: err.message,
+        });
     }
 };
 
-// Delete
-exports.deletePrimaryProductInterest = async (req, res) => {
+// CREATE
+const createPrimaryProductInterest = async (req, res) => {
     try {
-        const primaryProductInterest = await PrimaryProductInterest.findByIdAndDelete(req.params.id);
-        if (!primaryProductInterest) {
-            return res.status(404).json({ success: false, message: "Primary product interest not found" });
-        }
-        res.status(200).json({ success: true, data: primaryProductInterest });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Internal server error" });
+        const newRecord = new PrimaryProductInterest(req.body);
+        const savedRecord = await newRecord.save();
+        res.status(201).json(savedRecord);
+    } catch (err) {
+        res.status(500).json({
+            message: "Error creating record",
+            error: err.message,
+        });
     }
+};
+
+// UPDATE
+const updatePrimaryProductInterest = async (req, res) => {
+    try {
+        const updates = req.body || {};
+        const record = await PrimaryProductInterest.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: "Record not found" });
+        
+        Object.keys(updates).forEach((key) => {
+            if (updates[key] !== undefined) record[key] = updates[key];
+        });
+        
+        record.updated = new Date();
+        const savedRecord = await record.save();
+        res.json(savedRecord);
+    } catch (err) {
+        res.status(500).json({
+            message: "Error updating record",
+            error: err.message,
+        });
+    }
+};
+
+// DELETE
+const deletePrimaryProductInterest = async (req, res) => {
+    try {
+        const record = await PrimaryProductInterest.findByIdAndDelete(req.params.id);
+        if (!record) return res.status(404).json({ message: "Record not found" });
+        res.json({ message: "Record deleted successfully" });
+    } catch (err) {
+        res.status(500).json({
+            message: "Error deleting record",
+            error: err.message,
+        });
+    }
+};
+
+// EXPORT
+module.exports = {
+    getAllPrimaryProductInterests,
+    getPrimaryProductInterestById,
+    createPrimaryProductInterest,
+    updatePrimaryProductInterest,
+    deletePrimaryProductInterest,
 };
