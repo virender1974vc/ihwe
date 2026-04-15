@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const QRCode = require('qrcode');
 const EmailLog = require('../models/EmailLog');
 const whatsapp = require('./whatsapp');
 
@@ -60,36 +61,66 @@ class EmailService {
             auth: { user: exhibitorUser, pass: exhibitorPass }
         });
 
-        this.emailShell = (body) => `
+        this.emailShell = (body, options = {}) => {
+            const { headerCid, footerCid, headerImage, footerImage } = options;
+
+            // Use CID if available, else try base64 embed, else fallback to default
+            const toBase64 = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) { console.error('[emailShell] Image not found:', absPath); return null; }
+                    const ext = imgPath.split('.').pop().toLowerCase();
+                    const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', webp: 'webp' };
+                    const mime = mimeMap[ext] || 'jpeg';
+                    const data = fs.readFileSync(absPath).toString('base64');
+                    return `data:image/${mime};base64,${data}`;
+                } catch (e) {
+                    console.error('[emailShell] toBase64 error:', e.message);
+                    return null;
+                }
+            };
+
+            const headerSrc = headerCid ? `cid:${headerCid}` : toBase64(headerImage);
+            const footerSrc = footerCid ? `cid:${footerCid}` : toBase64(footerImage);
+
+            const headerSection = headerSrc
+                ? `<div style="line-height:0;"><img src="${headerSrc}" alt="Header" style="width:100%;display:block;" /></div>`
+                : `<div class="header"><h1 style="margin:0; font-size: 22px;">9th International Health & Wellness Expo</h1><p style="margin:5px 0 0; opacity: 0.8; font-size: 14px;">Global Health Connect | IHWE 2026</p></div>`;
+
+            const footerSection = footerSrc
+                ? `<div style="line-height:0;"><img src="${footerSrc}" alt="Footer" style="width:100%;display:block;" /></div>`
+                : `<div class="footer"><p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p><p>Namo Gange Trust Foundation</p></div>`;
+
+            return `
         <!DOCTYPE html>
         <html>
         <head>
             <style>
                 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 20px auto; border: 1px solid #e1e1e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+                .container { max-width: 800px; margin: 20px auto; border: 1px solid #e1e1e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
                 .header { background: linear-gradient(135deg, #23471d 0%, #3d6b33 100%); padding: 30px; text-align: center; color: white; }
+                .header-img { line-height: 0; }
                 .content { padding: 40px; background: #ffffff; }
                 .footer { background: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #f3f4f6; }
+                .footer-img { line-height: 0; }
                 .btn { display: inline-block; padding: 12px 24px; background-color: #23471d; color: white !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 20px; transition: background 0.3s ease; }
+                .qr-section { text-align: center; margin: 24px 0; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db; }
+                .qr-section img { display: inline-block; }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <h1 style="margin:0; font-size: 22px;">9th International Health & Wellness Expo</h1>
-                    <p style="margin:5px 0 0; opacity: 0.8; font-size: 14px;">Global Health Connect | IHWE 2026</p>
-                </div>
+                ${headerSection}
                 <div class="content">
                     ${body}
                 </div>
-                <div class="footer">
-                    <p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p>
-                    <p>Namo Gange Trust Foundation</p>
-                </div>
+                ${footerSection}
             </div>
         </body>
         </html>
         `;
+        };
 
         this.adminLeadShell = (formType, data) => {
             const fullName = data.name || data.firstName || data.fullName || 'New Lead';
@@ -199,21 +230,93 @@ class EmailService {
             const template = await this.getTemplate(formType);
             if (!template) {
                 console.warn('No dynamic template found for ' + formType + '. Falling back to logic-based default.');
-                // We'll still send a basic notification if template is missing but the logic triggered it
                 return false;
             }
 
             const subject = this.applyPlaceholders(template.emailSubject, data);
-            const bodyContent = this.applyPlaceholders(template.emailBody, data);
-            const html = this.emailShell(bodyContent);
+
+            // Protect [[QR_CODE]] from being wiped by applyPlaceholders
+            const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
+            let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
+            let bodyContent = this.applyPlaceholders(rawBody, data);
+
+            // For corporate-visitor: generate QR code as CID attachment
+            if (formType === 'corporate-visitor' && data.registrationId) {
+                try {
+                    const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+                    const scanUrl = `${frontendUrl}/visitor?id=${encodeURIComponent(data.registrationId)}`;
+                    const qrBuffer = await QRCode.toBuffer(scanUrl, {
+                        width: 280,
+                        margin: 2,
+                        color: { dark: '#000000', light: '#ffffff' }
+                    });
+                    const qrBlock = `
+                        <div class="qr-section">
+                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="240" height="240" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
+                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                        </div>
+                    `;
+                    if (bodyContent.includes(QR_TOKEN)) {
+                        bodyContent = bodyContent.replace(QR_TOKEN, qrBlock);
+                    } else {
+                        bodyContent += qrBlock;
+                    }
+                    // Store QR buffer as attachment for CID embedding
+                    data.__qrBuffer = qrBuffer;
+                } catch (qrErr) {
+                    console.error('[QR] Failed to generate QR code:', qrErr.message);
+                    bodyContent = bodyContent.replace(QR_TOKEN, '');
+                }
+            } else {
+                bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+            }
+
+            // Build CID attachments for header/footer images
+            const getImageBuffer = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) { console.error('[getImageBuffer] Not found:', absPath); return null; }
+                    return fs.readFileSync(absPath);
+                } catch (e) { console.error('[getImageBuffer] error:', e.message); return null; }
+            };
+
+            const headerBuf = getImageBuffer(template.headerImage);
+            const footerBuf = getImageBuffer(template.footerImage);
+
+            const html = this.emailShell(bodyContent, {
+                headerCid: headerBuf ? 'email_header_img' : null,
+                footerCid: footerBuf ? 'email_footer_img' : null,
+                headerImage: template.headerImage || null,
+                footerImage: template.footerImage || null,
+            });
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
 
             // 1. Send Email to USER
+            const emailAttachments = [];
+            if (data.__qrBuffer) {
+                emailAttachments.push({
+                    filename: 'entry-qr.png',
+                    content: data.__qrBuffer,
+                    cid: 'qrcode_entry'
+                });
+            }
+            if (headerBuf) {
+                const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
+                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });
+            }
+            if (footerBuf) {
+                const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
+                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
+            }
             const sentToUser = await this.sendEmail({
                 to,
                 subject,
                 html,
+                attachments: emailAttachments,
                 profile,
                 logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Dynamic Confirmation (${formType})` }
             });
@@ -226,7 +329,7 @@ class EmailService {
                 });
             }
 
-            // 3. Notify ADMIN (Leads) - Send to both Department Admin and Global Admin
+            // 3. Notify ADMIN (Leads)
             await this.notifyAdmin(formType, data, subject, profile).catch(err => {
                 console.error(`[AdminNotification] Failed for ${formType}:`, err.message);
             });
@@ -340,7 +443,10 @@ class EmailService {
         return await this.sendDynamicConfirmation({
             to: data.email,
             formType: type,
-            data,
+            data: {
+                ...data,
+                name: `${data.firstName} ${data.lastName || ''}`.trim(),
+            },
             profile: 'VISITOR'
         });
     }

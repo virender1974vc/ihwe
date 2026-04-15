@@ -1,5 +1,7 @@
 const MessageTemplate = require('../models/MessageTemplate');
 const { logActivity } = require('../utils/logger');
+const path = require('path');
+const fs = require('fs');
 
 // ➤ Get all templates
 const getAllTemplates = async (req, res) => {
@@ -22,19 +24,34 @@ const getTemplateByType = async (req, res) => {
     }
 };
 
-// ➤ Update or Create template
+// ➤ Update or Create template (supports multipart/form-data for images)
 const upsertTemplate = async (req, res) => {
     try {
         const { formType, emailSubject, emailBody, whatsappBody } = req.body;
-        
+
+        const updateData = {
+            emailSubject,
+            emailBody,
+            whatsappBody,
+            lastUpdatedBy: req.user?._id
+        };
+
+        // Handle header image upload
+        if (req.files?.headerImage?.[0]) {
+            updateData.headerImage = `/uploads/email-templates/${req.files.headerImage[0].filename}`;
+        }
+        // Handle footer image upload
+        if (req.files?.footerImage?.[0]) {
+            updateData.footerImage = `/uploads/email-templates/${req.files.footerImage[0].filename}`;
+        }
+
+        // If removeHeaderImage flag is set, clear it
+        if (req.body.removeHeaderImage === 'true') updateData.headerImage = null;
+        if (req.body.removeFooterImage === 'true') updateData.footerImage = null;
+
         const template = await MessageTemplate.findOneAndUpdate(
             { formType },
-            { 
-                emailSubject, 
-                emailBody, 
-                whatsappBody, 
-                lastUpdatedBy: req.user?._id // Assuming auth middleware provides req.user
-            },
+            updateData,
             { new: true, upsert: true }
         );
 
@@ -51,7 +68,7 @@ const deleteTemplate = async (req, res) => {
     try {
         const result = await MessageTemplate.findOneAndDelete({ formType: req.params.type });
         if (!result) return res.status(404).json({ success: false, message: 'Template not found' });
-        
+
         await logActivity(req, 'Deleted', 'Message Templates', `Deleted response template for: ${req.params.type}`);
         res.json({ success: true, message: 'Template deleted successfully' });
     } catch (err) {

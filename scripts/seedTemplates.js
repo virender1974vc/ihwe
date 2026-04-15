@@ -24,17 +24,38 @@ const defaultTemplates = [
     },
     {
         formType: 'corporate-visitor',
-        emailSubject: 'Corporate Visitor Pass - 9th IHWE 2026',
+        emailSubject: 'CORPORATE VISITOR REGISTRATION CONFIRMED | 9TH IHWE 2026',
         emailBody: `
             <p>Dear [[NAME]],</p>
-            <p>Thank you for registering as a <strong>Corporate Visitor</strong> for the 9th International Health & Wellness Expo.</p>
-            <p>This registration entitles you to exclusive networking sessions and B2B meetings.</p>
-            <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <p><strong>Registration ID:</strong> [[REG_ID]]</p>
+            <p>Greetings from the <strong>9th Edition of International Health &amp; Wellness Expo 2026 (IHWE – Global Edition)</strong>.</p>
+            <p>We are pleased to confirm your registration as a <strong>Corporate Visitor</strong> for this prestigious international platform, bringing together global leaders, innovators, and stakeholders from the health, wellness, and sustainability ecosystem.</p>
+
+            <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #23471d;">
+                <p style="margin:0 0 8px;"><strong>Registration ID:</strong> [[REG_ID]]</p>
+                <p style="margin:0 0 8px;"><strong>Event Date:</strong> 21st August to 23rd August 2026</p>
+                <p style="margin:0 0 8px;"><strong>Venue:</strong> Hall No. 8, 9 &amp; 10, Pragati Maidan, New Delhi, Bharat</p>
+                <p style="margin:0;"><strong>Timings:</strong> 09:30 AM to 6:30 PM (Open for Visitors)</p>
             </div>
-            <p>Regards,<br>Team IHWE</p>
+
+            [[QR_CODE]]
+
+            <p style="font-size:13px;color:#374151;"><strong>📸 Important Note:</strong></p>
+            <ul style="font-size:13px;color:#374151;">
+                <li>This QR Code is valid for exhibition area access only.</li>
+                <li>To attend the Arogya Sangosthi Seminar, please register separately.</li>
+                <li>To attend the Buyer Seller Meet, please register separately.</li>
+            </ul>
+
+            <div style="background:#f0fdf4;padding:16px;border-radius:8px;margin:20px 0;border:1px solid #bbf7d0;">
+                <p style="margin:0 0 6px;font-weight:700;color:#15803d;">BUYER REGISTRATION (RECOMMENDED)</p>
+                <p style="margin:0;font-size:13px;color:#374151;">To maximize your business engagement and unlock exclusive B2B opportunities, we strongly recommend registering as a Buyer.</p>
+            </div>
+
+            <p>We look forward to welcoming you to the <strong>9th Edition of International Health &amp; Wellness Expo 2026</strong>.</p>
+            <p>May Mother Ganga bless you with health, prosperity, and well-being.</p>
+            <p>With warm regards,<br/><strong>Team IHWE | Namo Gange Trust®</strong></p>
         `,
-        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Corporate Visitor registration for IHWE 2026 is confirmed. \n\nRegistration ID: [[REG_ID]]\n\nWe look forward to networking with you!\n\nBest Regards,\nTeam IHWE'
+        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Corporate Visitor registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 8, 9 & 10, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email. Please present it at the entrance.\n\nWe look forward to welcoming you!\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
     },
     {
         formType: 'health-camp-visitor',

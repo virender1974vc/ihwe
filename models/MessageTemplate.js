@@ -29,6 +29,14 @@ const messageTemplateSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    headerImage: {
+        type: String,
+        default: null
+    },
+    footerImage: {
+        type: String,
+        default: null
+    },
     lastUpdatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
