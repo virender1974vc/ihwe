@@ -240,11 +240,12 @@ class EmailService {
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
 
-            // For corporate-visitor: generate QR code as CID attachment
-            if (formType === 'corporate-visitor' && data.registrationId) {
+            // For corporate/general visitor: generate QR code as CID attachment
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
-                    const scanUrl = `${frontendUrl}/visitor?id=${encodeURIComponent(data.registrationId)}`;
+                    const routePrefix = formType === 'corporate-visitor' ? 'visitor' : 'visitor';
+                    const scanUrl = `${frontendUrl}/${routePrefix}?id=${encodeURIComponent(data.registrationId)}`;
                     const qrBuffer = await QRCode.toBuffer(scanUrl, {
                         width: 280,
                         margin: 2,
