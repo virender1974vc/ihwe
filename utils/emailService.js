@@ -445,12 +445,6 @@ class EmailService {
         const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' : 
                      data.visitorType.toLowerCase().includes('health') ? 'health-camp-visitor' : 'general-visitor';
         
-        // For corporate visitors, only send to user (not admin - admin gets new template separately)
-        if (data.visitorType.toLowerCase().includes('corporate')) {
-            return await this.sendVisitorConfirmationOnly(data, type);
-        }
-        
-        // For other visitors, use normal flow with admin notification
         return await this.sendDynamicConfirmation({
             to: data.email,
             formType: type,
