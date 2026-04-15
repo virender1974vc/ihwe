@@ -5,6 +5,9 @@ const {
   generateRegistrationId,
 } = require("../../utils/generateRegistrationId");
 const { logActivity } = require("../../utils/logger");
+const {
+  normalizeVisitorMultiSelectFields,
+} = require("../../utils/visitorSelectionNormalizer");
 
 // ➤ Get all corporate visitors
 const getAllCorporateVisitors = async (req, res) => {
@@ -37,9 +40,10 @@ const getCorporateVisitorById = async (req, res) => {
 const createCorporateVisitor = async (req, res) => {
   try {
     const registrationId = await generateRegistrationId("corporate");
+    const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
     const visitor = new CorporateVisitor({
-      ...req.body,
+      ...normalizedBody,
       registrationId,
     });
 
@@ -77,9 +81,10 @@ const createCorporateVisitor = async (req, res) => {
 // ➤ Update visitor
 const updateCorporateVisitor = async (req, res) => {
   try {
+    const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
     const updated = await CorporateVisitor.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      normalizedBody,
       { new: true },
     );
 
