@@ -5,6 +5,9 @@ const {
   generateRegistrationId,
 } = require("../../utils/generateRegistrationId");
 const { logActivity } = require("../../utils/logger");
+const {
+  normalizeVisitorMultiSelectFields,
+} = require("../../utils/visitorSelectionNormalizer");
 
 exports.getAllGeneralVisitors = async (req, res) => {
   try {
@@ -28,9 +31,9 @@ exports.getGeneralVisitorById = async (req, res) => {
 exports.createGeneralVisitor = async (req, res) => {
   try {
     const registrationId = await generateRegistrationId("general");
+    const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
-    req.body.registrationId = registrationId;
-    const visitor = new GeneralVisitor({ ...req.body, registrationId });
+    const visitor = new GeneralVisitor({ ...normalizedBody, registrationId });
     const saved = await visitor.save();
 
     const emailData = {
@@ -62,9 +65,10 @@ exports.createGeneralVisitor = async (req, res) => {
 
 exports.updateGeneralVisitor = async (req, res) => {
   try {
+    const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
     const updated = await GeneralVisitor.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      normalizedBody,
       { new: true },
     );
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
