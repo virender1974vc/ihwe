@@ -466,8 +466,57 @@ class EmailService {
             }
 
             const subject = this.applyPlaceholders(template.emailSubject, data);
-            const bodyContent = this.applyPlaceholders(template.emailBody, data);
-            const html = this.emailShell(bodyContent);
+            const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
+            let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
+            let bodyContent = this.applyPlaceholders(rawBody, data);
+            const emailAttachments = [];
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor') && data.registrationId) {
+                try {
+                    const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+                    const scanUrl = `${frontendUrl}/visitor?id=${encodeURIComponent(data.registrationId)}`;
+                    const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 280, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+                    const qrBlock = `
+                        <div class="qr-section">
+                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="240" height="240" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
+                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                        </div>`;
+                    bodyContent = bodyContent.includes(QR_TOKEN) ? bodyContent.replace(QR_TOKEN, qrBlock) : bodyContent + qrBlock;
+                    emailAttachments.push({ filename: 'entry-qr.png', content: qrBuffer, cid: 'qrcode_entry' });
+                } catch (qrErr) {
+                    console.error('[QR] Failed to generate QR code:', qrErr.message);
+                    bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+                }
+            } else {
+                bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+            }
+            const getImageBuffer = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) return null;
+                    return fs.readFileSync(absPath);
+                } catch (e) { return null; }
+            };
+            const headerBuf = getImageBuffer(template.headerImage);
+            const footerBuf = getImageBuffer(template.footerImage);
+            if (headerBuf) {
+                const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
+                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });
+            }
+            if (footerBuf) {
+                const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
+                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
+            }
+
+            const html = this.emailShell(bodyContent, {
+                headerCid: headerBuf ? 'email_header_img' : null,
+                footerCid: footerBuf ? 'email_footer_img' : null,
+                headerImage: template.headerImage || null,
+                footerImage: template.footerImage || null,
+            });
+
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
 
             // 1. Send Email to USER only (no admin notification)
@@ -475,6 +524,7 @@ class EmailService {
                 to: data.email,
                 subject,
                 html,
+                attachments: emailAttachments,
                 profile: 'VISITOR',
                 logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
             });
