@@ -5,6 +5,7 @@ const EmailLog = require('../models/EmailLog');
 const whatsapp = require('./whatsapp');
 const { getResponsiveVisitorAlertTemplate } = require('./emailTemplates/responsiveVisitorAlert');
 const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInterestAlert');
+const { getSimpleVisitorAlertTemplate } = require('./emailTemplates/simpleVisitorAlert');
 
 class EmailService {
     constructor() {
@@ -653,13 +654,13 @@ class EmailService {
             let logMessage;
             
             if (recipientType === 'b2b') {
-                // B2B Coordinator gets Buyer Interest template
+                // B2B Coordinator gets Buyer Interest template (RED theme, high priority)
                 subject = `Buyer Registration Interest Received | IHWE 2026 | Reg ID: ${data.registrationId}`;
                 html = getBuyerInterestAlertTemplate(data);
                 recipientEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
                 logMessage = 'B2B Coordinator Notification';
             } else {
-                // Admin gets standard visitor alert template
+                // Admin gets responsive visitor alert template (GREEN theme, same design as B2B but green)
                 subject = `New Visitor Registration Alert | IHWE 2026 | Reg ID: ${data.registrationId}`;
                 html = getResponsiveVisitorAlertTemplate(data);
                 recipientEmail = process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';

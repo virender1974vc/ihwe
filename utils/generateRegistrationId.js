@@ -2,9 +2,9 @@ const Counter = require("../models/visitor/CounterModel.js");
 
 const generateRegistrationId = async (type) => {
   const prefixMap = {
-    corporate: "NGT/IH&WE/CV",
-    general: "NGT/IH&WE/GV",
-    healthCamp: "NGT/IH&WE/HV",
+    corporate: "NGT/IHWE/CV",
+    general: "NGT/IHWE/GV",
+    healthCamp: "NGT/IHWE/HV",
   };
 
   const prefix = prefixMap[type];

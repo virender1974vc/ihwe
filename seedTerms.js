@@ -19,7 +19,7 @@ const seedTerms = async () => {
             {
                 pageName: 'exhibitor-registration',
                 title: 'Exhibitor Terms and Conditions',
-                content: '<p>1. <strong>Compliance:</strong> The exhibitor agrees to abide by all the rules and regulations set forth by the IH&WE organizers.</p><p>2. <strong>Payment Schedule:</strong> Payment must be made as per the recommended schedule. Stalls are only confirmed upon receiving the required payment.</p><p>3. <strong>Usage of Space:</strong> Stalls cannot be sublet, assigned, or shared with any third party without prior written consent from the organizers.</p><p>4. <strong>Modifications:</strong> The organizer reserves the right to alter the floor plan or change the stall allocations if deemed necessary for the overall benefit of the exhibition.</p><p>5. <strong>Security:</strong> While general security is provided, exhibitors are solely responsible for their goods and belongings within their stall area.</p>',
+                content: '<p>1. <strong>Compliance:</strong> The exhibitor agrees to abide by all the rules and regulations set forth by the IHWE organizers.</p><p>2. <strong>Payment Schedule:</strong> Payment must be made as per the recommended schedule. Stalls are only confirmed upon receiving the required payment.</p><p>3. <strong>Usage of Space:</strong> Stalls cannot be sublet, assigned, or shared with any third party without prior written consent from the organizers.</p><p>4. <strong>Modifications:</strong> The organizer reserves the right to alter the floor plan or change the stall allocations if deemed necessary for the overall benefit of the exhibition.</p><p>5. <strong>Security:</strong> While general security is provided, exhibitors are solely responsible for their goods and belongings within their stall area.</p>',
                 status: 'Active'
             },
             {
@@ -31,7 +31,7 @@ const seedTerms = async () => {
             {
                 pageName: 'terms-of-service',
                 title: 'Terms of Service',
-                content: '<p>Welcome to the International Health and Wellness Expo (IH&WE) platform. By using this website, you agree to comply with our general Terms of Service.</p>',
+                content: '<p>Welcome to the International Health and Wellness Expo (IHWE) platform. By using this website, you agree to comply with our general Terms of Service.</p>',
                 status: 'Active'
             }
         ];

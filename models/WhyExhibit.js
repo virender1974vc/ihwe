@@ -15,7 +15,7 @@ const WhyExhibitSchema = new mongoose.Schema({
     subheading: { type: String, default: 'Empower Your Business' },
     heading: { type: String, default: 'Drive Growth & Innovation' },
     highlightText: { type: String, default: 'Growth & Innovation' },
-    shortDescription: { type: String, default: 'Join IH&WE 2026 to connect with global innovators and access new market opportunities through our specialized exhibitor platforms and elite networking events.' },
+    shortDescription: { type: String, default: 'Join IHWE 2026 to connect with global innovators and access new market opportunities through our specialized exhibitor platforms and elite networking events.' },
     benefits: [BenefitCardSchema],
     // CTA Section
     ctaTitle: { type: String, default: 'Ready to Scale Your Brand?' },
@@ -26,7 +26,7 @@ const WhyExhibitSchema = new mongoose.Schema({
     ctaButton2Name: { type: String, default: 'Register as Visitor' },
     ctaButton2Link: { type: String, default: '/visitor-registration' },
     ctaImage: { type: String, default: '' },
-    ctaImageAlt: { type: String, default: 'Success at IH&WE' },
+    ctaImageAlt: { type: String, default: 'Success at IHWE' },
     lastUpdated: { type: Date, default: Date.now }
 });
 

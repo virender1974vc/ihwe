@@ -4,8 +4,6 @@ const getResponsiveVisitorAlertTemplate = (data) => {
     const registrationDate = new Date().toLocaleDateString('en-GB');
     const registrationTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const interestedSegments = data.areaOfInterest?.join(', ') || 'N/A';
-    const purposeOfVisit = data.purposeOfVisit?.join(', ') || 'N/A';
-    const b2bStatus = data.b2bMeeting ? data.b2bMeeting.charAt(0).toUpperCase() + data.b2bMeeting.slice(1) : 'No';
 
     return `
 <!DOCTYPE html>
@@ -153,8 +151,8 @@ const getResponsiveVisitorAlertTemplate = (data) => {
                 border-bottom: none;
             }
             .details-label { 
-                min-width: 200px;
-                max-width: 200px;
+                min-width: 220px;
+                max-width: 220px;
                 font-size: 13px;
                 display: inline-block;
                 margin-bottom: 0;
@@ -230,14 +228,6 @@ const getResponsiveVisitorAlertTemplate = (data) => {
                 <div class="details-row">
                     <span class="details-label">Interested Segments</span>
                     <span class="details-value">${interestedSegments}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">Purpose of Visit</span>
-                    <span class="details-value">${purposeOfVisit}</span>
-                </div>
-                <div class="details-row">
-                    <span class="details-label">B2B Meeting Request</span>
-                    <span class="details-value"><strong>${b2bStatus}</strong></span>
                 </div>
             </div>
             

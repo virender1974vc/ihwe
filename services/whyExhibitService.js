@@ -14,7 +14,7 @@ class WhyExhibitService {
                 subheading: 'Empower Your Business',
                 heading: 'Drive Growth & Innovation',
                 highlightText: 'Growth & Innovation',
-                shortDescription: 'Join IH&WE 2026 to connect with global innovators and access new market opportunities through our specialized exhibitor platforms and elite networking events.',
+                shortDescription: 'Join IHWE 2026 to connect with global innovators and access new market opportunities through our specialized exhibitor platforms and elite networking events.',
                 benefits: []
             });
         }
