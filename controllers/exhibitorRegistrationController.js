@@ -17,6 +17,16 @@ class ExhibitorRegistrationController {
         }
     }
 
+    async getRegistrationById(req, res) {
+        try {
+            const registration = await exhibitorRegistrationService.getRegistrationById(req.params.id);
+            if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
+            res.status(200).json({ success: true, data: registration });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     /**
      * Add a new registration.
      */

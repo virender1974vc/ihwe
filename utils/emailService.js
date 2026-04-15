@@ -1,7 +1,10 @@
 const nodemailer = require('nodemailer');
 const fs = require('fs');
+const QRCode = require('qrcode');
 const EmailLog = require('../models/EmailLog');
 const whatsapp = require('./whatsapp');
+const { getResponsiveVisitorAlertTemplate } = require('./emailTemplates/responsiveVisitorAlert');
+const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInterestAlert');
 
 class EmailService {
     constructor() {
@@ -60,36 +63,66 @@ class EmailService {
             auth: { user: exhibitorUser, pass: exhibitorPass }
         });
 
-        this.emailShell = (body) => `
+        this.emailShell = (body, options = {}) => {
+            const { headerCid, footerCid, headerImage, footerImage } = options;
+
+            // Use CID if available, else try base64 embed, else fallback to default
+            const toBase64 = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) { console.error('[emailShell] Image not found:', absPath); return null; }
+                    const ext = imgPath.split('.').pop().toLowerCase();
+                    const mimeMap = { jpg: 'jpeg', jpeg: 'jpeg', png: 'png', gif: 'gif', webp: 'webp' };
+                    const mime = mimeMap[ext] || 'jpeg';
+                    const data = fs.readFileSync(absPath).toString('base64');
+                    return `data:image/${mime};base64,${data}`;
+                } catch (e) {
+                    console.error('[emailShell] toBase64 error:', e.message);
+                    return null;
+                }
+            };
+
+            const headerSrc = headerCid ? `cid:${headerCid}` : toBase64(headerImage);
+            const footerSrc = footerCid ? `cid:${footerCid}` : toBase64(footerImage);
+
+            const headerSection = headerSrc
+                ? `<div style="line-height:0;"><img src="${headerSrc}" alt="Header" style="width:100%;display:block;" /></div>`
+                : `<div class="header"><h1 style="margin:0; font-size: 22px;">9th International Health & Wellness Expo</h1><p style="margin:5px 0 0; opacity: 0.8; font-size: 14px;">Global Health Connect | IHWE 2026</p></div>`;
+
+            const footerSection = footerSrc
+                ? `<div style="line-height:0;"><img src="${footerSrc}" alt="Footer" style="width:100%;display:block;" /></div>`
+                : `<div class="footer"><p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p><p>Namo Gange Trust Foundation</p></div>`;
+
+            return `
         <!DOCTYPE html>
         <html>
         <head>
             <style>
                 body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 600px; margin: 20px auto; border: 1px solid #e1e1e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+                .container { max-width: 800px; margin: 20px auto; border: 1px solid #e1e1e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
                 .header { background: linear-gradient(135deg, #23471d 0%, #3d6b33 100%); padding: 30px; text-align: center; color: white; }
+                .header-img { line-height: 0; }
                 .content { padding: 40px; background: #ffffff; }
                 .footer { background: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #f3f4f6; }
+                .footer-img { line-height: 0; }
                 .btn { display: inline-block; padding: 12px 24px; background-color: #23471d; color: white !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 20px; transition: background 0.3s ease; }
+                .qr-section { text-align: center; margin: 24px 0; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db; }
+                .qr-section img { display: inline-block; }
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="header">
-                    <h1 style="margin:0; font-size: 22px;">9th International Health & Wellness Expo</h1>
-                    <p style="margin:5px 0 0; opacity: 0.8; font-size: 14px;">Global Health Connect | IHWE 2026</p>
-                </div>
+                ${headerSection}
                 <div class="content">
                     ${body}
                 </div>
-                <div class="footer">
-                    <p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p>
-                    <p>Namo Gange Trust Foundation</p>
-                </div>
+                ${footerSection}
             </div>
         </body>
         </html>
         `;
+        };
 
         this.adminLeadShell = (formType, data) => {
             const fullName = data.name || data.firstName || data.fullName || 'New Lead';
@@ -166,9 +199,16 @@ class EmailService {
             'NAME': data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : ''),
             'REG_ID': data.registrationId || data.regId || data.REG_ID || 'N/A',
             'SERVICE': data.service || data.proposedTopic || data.topic || 'IHWE Services',
-            'COMPANY': data.companyName || data.organization || data.organizationName || 'N/A',
+            'COMPANY': data.companyName || data.company || data.organization || data.organizationName || 'N/A',
+            'CATEGORY': data.category || data.registrationCategory || 'N/A',
             'EMAIL': data.email || data.officialEmail || 'N/A',
-            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A'
+            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A',
+            'EXHIBITOR_NAME': data.exhibitor_name || data.exhibitorName || data.name || 'N/A',
+            'STALL_NO': data.stall_no || data.stallNo || data.stallFor || 'N/A',
+            'LOGIN_URL': data.login_url || 'https://ihwe.in/exhibitor-login',
+            'USERNAME': data.username || data.email || data.officialEmail || 'N/A',
+            'PASSWORD': data.password || 'N/A',
+            'EVENT_NAME': data.event_name || data.eventName || 'IHWE 2026',
         };
 
         // Apply Aliases first
@@ -193,21 +233,94 @@ class EmailService {
             const template = await this.getTemplate(formType);
             if (!template) {
                 console.warn('No dynamic template found for ' + formType + '. Falling back to logic-based default.');
-                // We'll still send a basic notification if template is missing but the logic triggered it
                 return false;
             }
 
             const subject = this.applyPlaceholders(template.emailSubject, data);
-            const bodyContent = this.applyPlaceholders(template.emailBody, data);
-            const html = this.emailShell(bodyContent);
+
+            // Protect [[QR_CODE]] from being wiped by applyPlaceholders
+            const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
+            let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
+            let bodyContent = this.applyPlaceholders(rawBody, data);
+
+            // For corporate/general visitor + buyer: generate QR code as CID attachment
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
+                try {
+                    const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+                    const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
+                    const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
+                    const qrBuffer = await QRCode.toBuffer(scanUrl, {
+                        width: 280,
+                        margin: 2,
+                        color: { dark: '#000000', light: '#ffffff' }
+                    });
+                    const qrBlock = `
+                        <div class="qr-section">
+                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="240" height="240" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
+                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                        </div>
+                    `;
+                    if (bodyContent.includes(QR_TOKEN)) {
+                        bodyContent = bodyContent.replace(QR_TOKEN, qrBlock);
+                    } else {
+                        bodyContent += qrBlock;
+                    }
+                    // Store QR buffer as attachment for CID embedding
+                    data.__qrBuffer = qrBuffer;
+                } catch (qrErr) {
+                    console.error('[QR] Failed to generate QR code:', qrErr.message);
+                    bodyContent = bodyContent.replace(QR_TOKEN, '');
+                }
+            } else {
+                bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+            }
+
+            // Build CID attachments for header/footer images
+            const getImageBuffer = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) { console.error('[getImageBuffer] Not found:', absPath); return null; }
+                    return fs.readFileSync(absPath);
+                } catch (e) { console.error('[getImageBuffer] error:', e.message); return null; }
+            };
+
+            const headerBuf = getImageBuffer(template.headerImage);
+            const footerBuf = getImageBuffer(template.footerImage);
+
+            const html = this.emailShell(bodyContent, {
+                headerCid: headerBuf ? 'email_header_img' : null,
+                footerCid: footerBuf ? 'email_footer_img' : null,
+                headerImage: template.headerImage || null,
+                footerImage: template.footerImage || null,
+            });
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
 
             // 1. Send Email to USER
+            const emailAttachments = [];
+            if (data.__qrBuffer) {
+                emailAttachments.push({
+                    filename: 'entry-qr.png',
+                    content: data.__qrBuffer,
+                    cid: 'qrcode_entry'
+                });
+            }
+            if (headerBuf) {
+                const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
+                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });
+            }
+            if (footerBuf) {
+                const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
+                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
+            }
             const sentToUser = await this.sendEmail({
                 to,
                 subject,
                 html,
+                attachments: emailAttachments,
                 profile,
                 logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Dynamic Confirmation (${formType})` }
             });
@@ -220,7 +333,7 @@ class EmailService {
                 });
             }
 
-            // 3. Notify ADMIN (Leads) - Send to both Department Admin and Global Admin
+            // 3. Notify ADMIN (Leads)
             await this.notifyAdmin(formType, data, subject, profile).catch(err => {
                 console.error(`[AdminNotification] Failed for ${formType}:`, err.message);
             });
@@ -331,12 +444,246 @@ class EmailService {
     async sendVisitorRegistrationEmails(data) {
         const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' : 
                      data.visitorType.toLowerCase().includes('health') ? 'health-camp-visitor' : 'general-visitor';
+        
         return await this.sendDynamicConfirmation({
             to: data.email,
             formType: type,
-            data,
+            data: {
+                ...data,
+                name: `${data.firstName} ${data.lastName || ''}`.trim(),
+            },
             profile: 'VISITOR'
         });
+    }
+
+    async sendVisitorConfirmationOnly(data, formType) {
+        try {
+            const template = await this.getTemplate(formType);
+            if (!template) {
+                console.warn('No dynamic template found for ' + formType);
+                return false;
+            }
+
+            const subject = this.applyPlaceholders(template.emailSubject, data);
+            const bodyContent = this.applyPlaceholders(template.emailBody, data);
+            const html = this.emailShell(bodyContent);
+            const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
+
+            // 1. Send Email to USER only (no admin notification)
+            const sentToUser = await this.sendEmail({
+                to: data.email,
+                subject,
+                html,
+                profile: 'VISITOR',
+                logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
+            });
+
+            // 2. Send WhatsApp to USER (if available)
+            const mobile = data.mobile || data.phone || data.whatsapp;
+            if (mobile && whatsappContent) {
+                whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Visitor: ${formType}`).catch(err => {
+                    console.error(`[WhatsApp] Failed to send msg for ${formType}:`, err.message);
+                });
+            }
+
+            return sentToUser;
+        } catch (error) {
+            console.error('Error sending visitor confirmation for ' + formType + ':', error);
+            return false;
+        }
+    }
+
+    async sendB2BMeetingNotification(data) {
+        try {
+            const registrationDate = new Date().toLocaleDateString('en-GB');
+            const registrationTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            
+            const interestedSegments = data.areaOfInterest?.join(', ') || 'N/A';
+            const purposeOfVisit = data.purposeOfVisit?.join(', ') || 'N/A';
+
+            const subject = `New Visitor Registration Alert | IHWE 2026 | Reg ID: ${data.registrationId}`;
+            
+            const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body { font-family: 'Arial', sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px; }
+                    .container { max-width: 700px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+                    .header { background-color: #065f46; padding: 25px; text-align: center; color: #ffffff; }
+                    .header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+                    .content { padding: 30px; color: #333333; line-height: 1.6; }
+                    .content p { margin: 10px 0; }
+                    .divider { border-top: 2px solid #e5e7eb; margin: 20px 0; }
+                    .details-section { background-color: #f9fafb; padding: 20px; border-radius: 6px; margin: 20px 0; }
+                    .details-section h3 { color: #065f46; margin-top: 0; font-size: 16px; }
+                    .details-row { display: flex; margin: 8px 0; }
+                    .details-label { font-weight: 600; color: #4b5563; min-width: 200px; }
+                    .details-value { color: #1f2937; }
+                    .action-section { background-color: #fef3c7; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+                    .action-section h3 { color: #92400e; margin-top: 0; font-size: 16px; }
+                    .action-section ul { margin: 10px 0; padding-left: 20px; }
+                    .action-section li { margin: 5px 0; color: #78350f; }
+                    .footer { background-color: #111827; padding: 20px; text-align: center; color: #9ca3af; font-size: 12px; }
+                    .footer p { margin: 5px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <h1>New Visitor Registration Alert | IHWE 2026</h1>
+                        <p style="margin: 5px 0 0; font-size: 14px;">Reg ID: ${data.registrationId}</p>
+                    </div>
+                    <div class="content">
+                        <p><strong>Dear Team,</strong></p>
+                        <p>This is to inform you that a new Visitor Registration has been successfully received for the <strong>9th International Health & Wellness Expo 2026 (IHWE – Global Edition)</strong>.</p>
+                        <p>Please find the registration details below for your reference and necessary follow-up:</p>
+                        
+                        <div class="divider"></div>
+                        
+                        <div class="details-section">
+                            <h3>🔹 Visitor Details</h3>
+                            <div class="details-row">
+                                <span class="details-label">Registration ID:</span>
+                                <span class="details-value">${data.registrationId}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Registration Date:</span>
+                                <span class="details-value">${registrationDate}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Registration Time:</span>
+                                <span class="details-value">${registrationTime}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Name:</span>
+                                <span class="details-value">${data.firstName} ${data.lastName}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Category:</span>
+                                <span class="details-value">${data.visitorType}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Company Name:</span>
+                                <span class="details-value">${data.companyName}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Designation:</span>
+                                <span class="details-value">${data.designation}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Email ID:</span>
+                                <span class="details-value">${data.email}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Mobile Number:</span>
+                                <span class="details-value">${data.mobile}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">City:</span>
+                                <span class="details-value">${data.city}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Interested Segments:</span>
+                                <span class="details-value">${interestedSegments}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">Purpose of Visit:</span>
+                                <span class="details-value">${purposeOfVisit}</span>
+                            </div>
+                            <div class="details-row">
+                                <span class="details-label">B2B Meeting Request:</span>
+                                <span class="details-value"><strong>${data.b2bMeeting ? data.b2bMeeting.charAt(0).toUpperCase() + data.b2bMeeting.slice(1) : 'No'}</strong></span>
+                            </div>
+                        </div>
+                        
+                        <div class="action-section">
+                            <h3>📌 Action Required</h3>
+                            <ul>
+                                <li>Verify the registration details</li>
+                                <li>Ensure confirmation email & QR code has been sent</li>
+                                <li>Update the central registration database</li>
+                                <li>Assign follow-up (if Corporate Visitor / Buyer)</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="divider"></div>
+                        
+                        <p>Please ensure timely action and coordination to maintain seamless visitor management.</p>
+                        <p><strong>Best Regards,</strong><br>
+                        Team IHWE 2026<br>
+                        Namo Gange Wellness Pvt. Ltd.</p>
+                    </div>
+                    <div class="footer">
+                        <p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p>
+                        <p>Namo Gange Wellness Pvt. Ltd.</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            `;
+
+            // Send to B2B coordinator
+            const b2bCoordinatorEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
+            
+            await this.sendEmail({
+                to: b2bCoordinatorEmail,
+                subject,
+                html,
+                profile: 'DEFAULT',
+                logData: { 
+                    name: `${data.firstName} ${data.lastName}`, 
+                    phone: data.mobile, 
+                    message: 'B2B Meeting Request Notification' 
+                }
+            });
+
+            console.log(`[B2B Notification] Sent to ${b2bCoordinatorEmail} for ${data.registrationId}`);
+            return true;
+        } catch (error) {
+            console.error('Error sending B2B meeting notification:', error);
+            return false;
+        }
+    }
+
+    async sendDetailedVisitorNotification(data, recipientType = 'admin') {
+        try {
+            let subject, html;
+            let recipientEmail;
+            let logMessage;
+            
+            if (recipientType === 'b2b') {
+                // B2B Coordinator gets Buyer Interest template
+                subject = `Buyer Registration Interest Received | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                html = getBuyerInterestAlertTemplate(data);
+                recipientEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
+                logMessage = 'B2B Coordinator Notification';
+            } else {
+                // Admin gets standard visitor alert template
+                subject = `New Visitor Registration Alert | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                html = getResponsiveVisitorAlertTemplate(data);
+                recipientEmail = process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
+                logMessage = 'Admin Notification';
+            }
+            
+            await this.sendEmail({
+                to: recipientEmail,
+                subject,
+                html,
+                profile: 'DEFAULT',
+                logData: { 
+                    name: `${data.firstName} ${data.lastName}`, 
+                    phone: data.mobile, 
+                    message: logMessage
+                }
+            });
+
+            console.log(`[${logMessage}] Sent to ${recipientEmail} for ${data.registrationId}`);
+            return true;
+        } catch (error) {
+            console.error(`Error sending detailed visitor notification (${recipientType}):`, error);
+            return false;
+        }
     }
 
     async sendSpeakerNominationEmails(nomination) {
@@ -388,14 +735,25 @@ class EmailService {
     }
 
     async sendRegistrationConfirmation(registration, pdfPath, rawPassword) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        let eventName = '9th Edition of International Health & Wellness Expo 2026 (IHWE Global Edition)';
+        try {
+            if (registration.eventId) {
+                const Event = require('../models/Event');
+                const event = await Event.findById(registration.eventId).select('name');
+                if (event?.name) eventName = event.name;
+            }
+        } catch (_) {}
+
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
             formType: 'exhibitor-registration',
             data: {
                 exhibitor_name: registration.exhibitorName,
                 stall_no: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
-                event_name: registration.eventName || 'IHWE 2026',
-                login_url: 'https://ihwe.in/exhibitor-login',
+                event_name: eventName,
+                registrationId: registration.registrationId,
+                login_url: loginUrl,
                 username: registration.contact1.email,
                 email: registration.contact1.email,
                 password: rawPassword,

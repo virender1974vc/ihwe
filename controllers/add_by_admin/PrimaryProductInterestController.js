@@ -3,7 +3,7 @@ const PrimaryProductInterest = require("../../models/add_by_admin/PrimaryProduct
 // GET all
 const getAllPrimaryProductInterests = async (req, res) => {
     try {
-        const records = await PrimaryProductInterest.find();
+        const records = await PrimaryProductInterest.find({ status: 'Active' });
         res.json(records);
     } catch (err) {
         res.status(500).json({

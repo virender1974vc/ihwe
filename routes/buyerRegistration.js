@@ -14,9 +14,24 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+const BuyerRegistration = require('../models/BuyerRegistration');
+
 // Configuration Routes
 router.get('/config', (req, res) => buyerRegistrationConfigController.getConfig(req, res));
 router.put('/config', (req, res) => buyerRegistrationConfigController.updateConfig(req, res));
+
+// ➤ Public: lookup buyer by registrationId (for QR scan) — before /:id
+router.get('/scan/:registrationId', async (req, res) => {
+    try {
+        const buyer = await BuyerRegistration.findOne({
+            registrationId: req.params.registrationId
+        }).select('-__v -companyProfile -paymentProof');
+        if (!buyer) return res.status(404).json({ success: false, message: 'Buyer not found' });
+        res.json({ success: true, data: buyer });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // @route   POST /api/buyer-registration
 // @desc    Submit a buyer registration

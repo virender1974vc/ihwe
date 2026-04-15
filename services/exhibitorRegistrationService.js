@@ -12,7 +12,7 @@ class ExhibitorRegistrationService {
     }
 
     async getRegistrationById(id) {
-        return await ExhibitorRegistration.findById(id);
+        return await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate');
     }
 
     async addRegistration(data) {

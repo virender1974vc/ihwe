@@ -23,7 +23,7 @@ class HeroController {
      */
     async createSlide(req, res) {
         try {
-            const { subtitle, title, description, altText, button1Name, button1Url, button2Name, button2Url, isActive, schedule } = req.body;
+            const { subtitle, title, titleFontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, isActive, schedule } = req.body;
 
             if (!req.file) {
                 return res.status(400).json({ success: false, message: 'Please upload an image' });
@@ -33,7 +33,9 @@ class HeroController {
                 image: `/uploads/hero/${req.file.filename}`,
                 subtitle,
                 title,
+                titleFontSize,
                 description,
+                descriptionFontSize,
                 altText,
                 button1Name,
                 button1Url,
@@ -57,12 +59,14 @@ class HeroController {
      */
     async updateSlide(req, res) {
         try {
-            const { subtitle, title, description, altText, button1Name, button1Url, button2Name, button2Url, isActive, schedule } = req.body;
+            const { subtitle, title, titleFontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, isActive, schedule } = req.body;
 
             let updateData = {
                 subtitle,
                 title,
+                titleFontSize,
                 description,
+                descriptionFontSize,
                 altText,
                 button1Name,
                 button1Url,

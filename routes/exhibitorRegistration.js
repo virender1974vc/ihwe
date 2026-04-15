@@ -40,6 +40,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 router.get('/', (req, res) => exhibitorRegistrationController.getAllRegistrations(req, res));
+router.get('/:id', (req, res) => exhibitorRegistrationController.getRegistrationById(req, res));
 router.post('/', (req, res) => exhibitorRegistrationController.addRegistration(req, res));
 router.put('/:id', (req, res) => exhibitorRegistrationController.updateRegistration(req, res));
 router.delete('/:id', (req, res) => exhibitorRegistrationController.deleteRegistration(req, res));

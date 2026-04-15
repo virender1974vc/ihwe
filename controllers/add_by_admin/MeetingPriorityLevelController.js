@@ -3,7 +3,7 @@ const MeetingPriorityLevel = require("../../models/add_by_admin/MeetingPriorityL
 // GET all
 const getAllMeetingPriorityLevels = async (req, res) => {
   try {
-    const records = await MeetingPriorityLevel.find();
+    const records = await MeetingPriorityLevel.find({ status: 'Active' });
     res.json(records);
   } catch (err) {
     res.status(500).json({

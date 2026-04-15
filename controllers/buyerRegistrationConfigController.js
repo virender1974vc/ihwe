@@ -9,6 +9,21 @@ class BuyerRegistrationConfigController {
         try {
             let config = await BuyerRegistrationConfig.findOne();
 
+            // Dynamically load Active records from admin-managed collections
+            const BusinessType = require('../models/add_by_admin/BusinessType');
+            const AnnualTurnover = require('../models/add_by_admin/AnnualTurnover');
+            const PrimaryProductInterest = require('../models/add_by_admin/PrimaryProductInterest');
+            const SecondaryProduct = require('../models/add_by_admin/SecondaryProduct');
+            const MeetingPriorityLevel = require('../models/add_by_admin/MeetingPriorityLevel');
+
+            const [bizTypes, annualTurnovers, primaryProducts, secondaryProducts, meetingPriorities] = await Promise.all([
+                BusinessType.find({ status: 'Active' }),
+                AnnualTurnover.find({ status: 'Active' }),
+                PrimaryProductInterest.find({ status: 'Active' }),
+                SecondaryProduct.find({ status: 'Active' }),
+                MeetingPriorityLevel.find({ status: 'Active' })
+            ]);
+
             const defaultPackages = [
                 {
                     name: "Standard Buyer Pass",
@@ -142,7 +157,14 @@ class BuyerRegistrationConfigController {
                 await config.save();
             }
 
-            res.json({ success: true, data: config });
+            res.json({ success: true, data: {
+                ...config.toObject(),
+                companyTypes: bizTypes.length > 0 ? bizTypes.map(b => b.business_type) : config.companyTypes,
+                annualTurnoverRanges: annualTurnovers.length > 0 ? annualTurnovers.map(a => a.annual_turnover) : config.annualTurnoverRanges,
+                primaryProductInterests: primaryProducts.length > 0 ? primaryProducts.map(p => p.primary_product_interest) : config.primaryProductInterests,
+                secondaryProductCategories: secondaryProducts.length > 0 ? secondaryProducts.map(s => s.secondary_product_categories) : config.secondaryProductCategories,
+                meetingPriorityLevels: meetingPriorities.length > 0 ? meetingPriorities.map(m => m.meeting_priority_level) : ['Low', 'Medium', 'High']
+            } });
         } catch (err) {
             console.error('Error fetching buyer registration config:', err);
             res.status(500).json({ success: false, message: 'Server Error' });
