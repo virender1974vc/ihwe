@@ -501,14 +501,25 @@ class EmailService {
     }
 
     async sendRegistrationConfirmation(registration, pdfPath, rawPassword) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        let eventName = '9th Edition of International Health & Wellness Expo 2026 (IHWE Global Edition)';
+        try {
+            if (registration.eventId) {
+                const Event = require('../models/Event');
+                const event = await Event.findById(registration.eventId).select('name');
+                if (event?.name) eventName = event.name;
+            }
+        } catch (_) {}
+
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
             formType: 'exhibitor-registration',
             data: {
                 exhibitor_name: registration.exhibitorName,
                 stall_no: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
-                event_name: registration.eventName || 'IHWE 2026',
-                login_url: 'https://ihwe.in/exhibitor-login',
+                event_name: eventName,
+                registrationId: registration.registrationId,
+                login_url: loginUrl,
                 username: registration.contact1.email,
                 email: registration.contact1.email,
                 password: rawPassword,
