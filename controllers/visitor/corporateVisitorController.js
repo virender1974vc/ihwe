@@ -57,12 +57,33 @@ const createCorporateVisitor = async (req, res) => {
       city: saved.city || 'N/A',
       country: saved.country || 'India',
       registrationId: saved.registrationId,
+      b2bMeeting: saved.b2bMeeting,
+      designation: saved.designation || 'N/A',
+      companyName: saved.companyName || 'N/A',
     };
 
-    // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
+    // Send confirmation email to User (old template)
     emailService.sendVisitorRegistrationEmails(emailData).catch(err => {
       console.error("Error sending visitor registration notifications:", err);
     });
+
+    // Send NEW detailed template to Admin (always)
+    emailService.sendDetailedVisitorNotification(emailData, 'admin').catch(err => {
+      console.error("Error sending admin notification:", err);
+    });
+
+    // Debug: Check B2B Meeting value
+    console.log(`[DEBUG] B2B Meeting value: "${saved.b2bMeeting}" (Type: ${typeof saved.b2bMeeting})`);
+
+    // If B2B Meeting is "Yes" or "yes", send NEW detailed template to B2B Coordinator
+    if (saved.b2bMeeting && saved.b2bMeeting.toLowerCase() === 'yes') {
+      console.log('[DEBUG] B2B Meeting is Yes - sending to coordinator');
+      emailService.sendDetailedVisitorNotification(emailData, 'b2b').catch(err => {
+        console.error("Error sending B2B coordinator notification:", err);
+      });
+    } else {
+      console.log(`[DEBUG] B2B Meeting is NOT Yes - value is: "${saved.b2bMeeting}"`);
+    }
 
     await logActivity(req, 'Created', 'Visitor Registrations', `Added new corporate visitor: ${saved.firstName} ${saved.lastName} (${saved.registrationId})`);
 
