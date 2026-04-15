@@ -42,7 +42,12 @@ class BuyerRegistrationService {
         // 1. Calculate Buyer Tag (CRM Logic)
         data.buyerTag = this.calculateBuyerTag(data);
 
-        // 2. Ensure registrationFee is set (or default to 0)
+        // 2. Generate registrationId
+        const year = new Date().getFullYear();
+        const rand = Math.floor(100000 + Math.random() * 900000);
+        data.registrationId = `IHWE-BYR-${year}-${rand}`;
+
+        // 3. Ensure registrationFee is set (or default to 0)
         if (!data.registrationFee) {
             data.registrationFee = "0"; // Default or lookup based on category
         }
@@ -99,7 +104,8 @@ class BuyerRegistrationService {
             city: saved.city,
             country: saved.country,
             category: saved.registrationCategory,
-            tag: saved.buyerTag
+            tag: saved.buyerTag,
+            registrationId: saved.registrationId,
         };
 
         // User Email

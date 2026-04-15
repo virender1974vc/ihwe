@@ -197,7 +197,8 @@ class EmailService {
             'NAME': data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : ''),
             'REG_ID': data.registrationId || data.regId || data.REG_ID || 'N/A',
             'SERVICE': data.service || data.proposedTopic || data.topic || 'IHWE Services',
-            'COMPANY': data.companyName || data.organization || data.organizationName || 'N/A',
+            'COMPANY': data.companyName || data.company || data.organization || data.organizationName || 'N/A',
+            'CATEGORY': data.category || data.registrationCategory || 'N/A',
             'EMAIL': data.email || data.officialEmail || 'N/A',
             'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A',
             'EXHIBITOR_NAME': data.exhibitor_name || data.exhibitorName || data.name || 'N/A',
@@ -240,12 +241,12 @@ class EmailService {
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
 
-            // For corporate/general visitor: generate QR code as CID attachment
-            if ((formType === 'corporate-visitor' || formType === 'general-visitor') && data.registrationId) {
+            // For corporate/general visitor + buyer: generate QR code as CID attachment
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
-                    const routePrefix = formType === 'corporate-visitor' ? 'visitor' : 'visitor';
-                    const scanUrl = `${frontendUrl}/${routePrefix}?id=${encodeURIComponent(data.registrationId)}`;
+                    const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
+                    const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
                     const qrBuffer = await QRCode.toBuffer(scanUrl, {
                         width: 280,
                         margin: 2,

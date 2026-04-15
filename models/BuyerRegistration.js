@@ -87,6 +87,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     consentMatchedExhibitors: { type: Boolean, default: false },
 
     // CRM / System Internal Fields
+    registrationId: { type: String, unique: true, sparse: true },
     buyerTag: { type: String, enum: ['Hot', 'Warm', 'Cold'], default: 'Cold' },
     otpVerifiedEmail: { type: Boolean, default: false },
     otpVerifiedMobile: { type: Boolean, default: false },

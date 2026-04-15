@@ -102,14 +102,39 @@ const defaultTemplates = [
     },
     {
         formType: 'buyer-registration',
-        emailSubject: 'Hosted Buyer Application Received - IHWE 2026',
+        emailSubject: 'BUYER REGISTRATION CONFIRMED | 9TH IHWE 2026',
         emailBody: `
             <p>Dear [[NAME]],</p>
-            <p>We have received your application for the <strong>Hosted Buyer Program</strong> at IHWE 2026.</p>
-            <p>Our team will review your company profile (<strong>[[COMPANY]]</strong>) and contact you shortly regarding the approval status.</p>
-            <p>Best Regards,<br>Buyer Relations Team, IHWE</p>
+            <p>Greetings from the <strong>9th Edition of International Health &amp; Wellness Expo 2026 (IHWE – Global Edition)</strong>.</p>
+            <p>We are pleased to confirm your registration for the <strong>Buyer-Seller Meet</strong> at this prestigious international platform. Your application has been successfully received.</p>
+
+            <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #23471d;">
+                <p style="margin:0 0 8px;"><strong>Registration ID:</strong> [[REG_ID]]</p>
+                <p style="margin:0 0 8px;"><strong>Company:</strong> [[COMPANY]]</p>
+                <p style="margin:0 0 8px;"><strong>Registration Category:</strong> [[CATEGORY]]</p>
+                <p style="margin:0 0 8px;"><strong>Event Date:</strong> 21st August to 23rd August 2026</p>
+                <p style="margin:0;"><strong>Venue:</strong> Hall No. 8, 9 &amp; 10, Pragati Maidan, New Delhi, Bharat</p>
+            </div>
+
+            [[QR_CODE]]
+
+            <p style="font-size:13px;color:#374151;"><strong>📸 Important Note:</strong></p>
+            <ul style="font-size:13px;color:#374151;">
+                <li>This QR Code is valid for Buyer-Seller Meet access.</li>
+                <li>Our team will review your profile and contact you for meeting scheduling.</li>
+                <li>Please carry a digital or printed copy of this email to the venue.</li>
+            </ul>
+
+            <div style="background:#f0fdf4;padding:16px;border-radius:8px;margin:20px 0;border:1px solid #bbf7d0;">
+                <p style="margin:0 0 6px;font-weight:700;color:#15803d;">SUPPORT TEAM</p>
+                <p style="margin:0;font-size:13px;color:#374151;">📞 Dharmendra: 9220448101 &nbsp;|&nbsp; 📞 Swati: 9311301071 &nbsp;|&nbsp; 📞 Gaurav: 7042466330</p>
+            </div>
+
+            <p>We look forward to welcoming you to the <strong>9th Edition of International Health &amp; Wellness Expo 2026</strong>.</p>
+            <p>May Mother Ganga bless you with health, prosperity, and well-being.</p>
+            <p>With warm regards,<br/><strong>Team IHWE | Namo Gange Trust®</strong></p>
         `,
-        whatsappBody: 'Hello [[NAME]]! 👋\n\nThank you for applying for the Hosted Buyer Program at IHWE 2026. We have received your details for "[[COMPANY]]".\n\nOur team will review your profile and contact you soon regarding the approval status.\n\nBest Regards,\nTeam IHWE'
+        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Buyer registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\nCompany: [[COMPANY]]\nCategory: [[CATEGORY]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 8, 9 & 10, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email.\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
     },
     {
         formType: 'exhibitor-registration',
