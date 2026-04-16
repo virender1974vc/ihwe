@@ -13,6 +13,7 @@ const heroSchema = new mongoose.Schema({
     button2Name: { type: String, default: 'Get Free Consultation' },
     button2Url: { type: String, default: '/contact-list' },
     isActive: { type: Boolean, default: true },
+    order: { type: Number, default: 0 },
     schedule: {
         startDate: String,
         startTime: String,

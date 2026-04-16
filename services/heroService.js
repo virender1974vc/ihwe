@@ -8,7 +8,7 @@ class HeroService {
      * Get all hero slides.
      */
     async getAllSlides() {
-        return await Hero.find().sort({ createdAt: 1 });
+        return await Hero.find().sort({ order: 1, createdAt: 1 });
     }
 
     /**
