@@ -183,6 +183,37 @@ class BuyerRegistrationService {
         if (!registration) throw { status: 404, message: 'Registration not found' };
         await registration.deleteOne();
     }
+
+    /**
+     * Login for Buyer Dashboard
+     * @param {string} emailAddress 
+     * @param {string} registrationId 
+     */
+    async login(emailAddress, registrationId) {
+        if (!emailAddress || !registrationId) {
+            throw { status: 400, message: 'Email and Registration ID are required' };
+        }
+
+        const buyer = await BuyerRegistration.findOne({ 
+            emailAddress: emailAddress.trim().toLowerCase(), 
+            registrationId: registrationId.trim() 
+        });
+
+        if (!buyer) {
+            throw { status: 404, message: 'Invalid credentials or registration not found' };
+        }
+
+        return buyer;
+    }
+
+    /**
+     * Get global registration stats
+     */
+    async getStats() {
+        const totalBuyers = await BuyerRegistration.countDocuments();
+        const completedPayments = await BuyerRegistration.countDocuments({ paymentStatus: 'Completed' });
+        return { totalBuyers, completedPayments };
+    }
 }
 
 module.exports = new BuyerRegistrationService();
