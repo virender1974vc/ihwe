@@ -46,6 +46,9 @@ router.post('/', upload.fields([
 // @access  Public (Should be protected)
 router.get('/', (req, res) => buyerRegistrationController.getAllRegistrations(req, res));
 
+// @route   GET /api/buyer-registration/stats
+router.get('/stats', (req, res) => buyerRegistrationController.getStats(req, res));
+
 // @route   GET /api/buyer-registration/:id
 // @desc    Get a single buyer registration
 // @access  Public (Should be protected)
@@ -66,5 +69,8 @@ router.post('/create-order', (req, res) => buyerRegistrationController.createOrd
 
 // @route   POST /api/buyer-registration/verify-payment
 router.post('/verify-payment', (req, res) => buyerRegistrationController.verifyPayment(req, res));
+
+// @route   POST /api/buyer-registration/login
+router.post('/login', (req, res) => buyerRegistrationController.login(req, res));
 
 module.exports = router;

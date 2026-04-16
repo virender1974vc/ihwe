@@ -106,6 +106,36 @@ class BuyerRegistrationController {
             res.status(500).json({ success: false, message: 'Payment verification failed' });
         }
     }
+
+    /**
+     * Buyer Login
+     */
+    async login(req, res) {
+        try {
+            const { emailAddress, registrationId } = req.body;
+            const data = await buyerRegistrationService.login(emailAddress, registrationId);
+            res.json({ success: true, message: 'Login successful', data });
+        } catch (err) {
+            console.error('Error buyer login:', err);
+            res.status(err.status || 500).json({ 
+                success: false, 
+                message: err.message || 'Login failed. Please check your credentials.' 
+            });
+        }
+    }
+
+    /**
+     * Get Stats
+     */
+    async getStats(req, res) {
+        try {
+            const stats = await buyerRegistrationService.getStats();
+            res.json({ success: true, stats });
+        } catch (err) {
+            console.error('Error fetching stats:', err);
+            res.status(500).json({ success: false, message: 'Failed to fetch stats' });
+        }
+    }
 }
 
 module.exports = new BuyerRegistrationController();
