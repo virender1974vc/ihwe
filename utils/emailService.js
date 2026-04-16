@@ -7,6 +7,7 @@ const { getResponsiveVisitorAlertTemplate } = require('./emailTemplates/responsi
 const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInterestAlert');
 const { getSimpleVisitorAlertTemplate } = require('./emailTemplates/simpleVisitorAlert');
 const { getExhibitorAdminAlertTemplate } = require('./emailTemplates/exhibitorAdminAlert');
+const { getBuyerRegistrationAlertTemplate } = require('./emailTemplates/buyerRegistrationAlert');
 
 class EmailService {
     constructor() {
@@ -195,7 +196,7 @@ class EmailService {
     applyPlaceholders(text, data) {
         if (!text) return '';
         let result = text;
-        
+
         // Create an alias map for common placeholders
         const aliases = {
             'NAME': data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : ''),
@@ -226,7 +227,7 @@ class EmailService {
                 result = result.split(placeholder).join(value || '');
             }
         });
-        
+
         return result;
     }
 
@@ -351,7 +352,7 @@ class EmailService {
         // Find the designated admin for this PARTICULAR form
         const deptAdmin = (this.getAdminEmailForProfile(profile) || '').trim();
         const globalAdmin = (process.env.ADMIN_EMAIL || '').trim();
-        
+
         // If a department-specific admin exists, they get the lead. 
         // Otherwise, it falls back to the global admin.
         const targetAdmin = deptAdmin || globalAdmin;
@@ -370,7 +371,7 @@ class EmailService {
             to: targetAdmin,
             subject: `NEW LEAD ALERT: ${originalSubject}`,
             html: adminHtml,
-            profile: 'DEFAULT', 
+            profile: 'DEFAULT',
             logData: { name: "System Admin Notification", message: `Lead alert for ${formType}` }
         });
     }
@@ -444,9 +445,9 @@ class EmailService {
     }
 
     async sendVisitorRegistrationEmails(data) {
-        const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' : 
-                     data.visitorType.toLowerCase().includes('health') ? 'health-camp-visitor' : 'general-visitor';
-        
+        const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' :
+            data.visitorType.toLowerCase().includes('health') ? 'health-camp-visitor' : 'general-visitor';
+
         return await this.sendDynamicConfirmation({
             to: data.email,
             formType: type,
@@ -471,10 +472,11 @@ class EmailService {
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
             const emailAttachments = [];
-            if ((formType === 'corporate-visitor' || formType === 'general-visitor') && data.registrationId) {
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
-                    const scanUrl = `${frontendUrl}/visitor?id=${encodeURIComponent(data.registrationId)}`;
+                    const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
+                    const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
                     const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 280, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
                     const qrBlock = `
                         <div class="qr-section">
@@ -522,12 +524,12 @@ class EmailService {
 
             // 1. Send Email to USER only (no admin notification)
             const sentToUser = await this.sendEmail({
-                to: data.email,
+                to: data.emailAddress || data.email,
                 subject,
                 html,
                 attachments: emailAttachments,
                 profile: 'VISITOR',
-                logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
+                logData: { name: data.fullName || data.firstName || data.name, phone: data.mobileNumber || data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
             });
 
             // 2. Send WhatsApp to USER (if available)
@@ -549,12 +551,12 @@ class EmailService {
         try {
             const registrationDate = new Date().toLocaleDateString('en-GB');
             const registrationTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-            
+
             const interestedSegments = data.areaOfInterest?.join(', ') || 'N/A';
             const purposeOfVisit = data.purposeOfVisit?.join(', ') || 'N/A';
 
             const subject = `New Visitor Registration Alert | IHWE 2026 | Reg ID: ${data.registrationId}`;
-            
+
             const html = `
             <!DOCTYPE html>
             <html>
@@ -677,16 +679,16 @@ class EmailService {
 
             // Send to B2B coordinator
             const b2bCoordinatorEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
-            
+
             await this.sendEmail({
                 to: b2bCoordinatorEmail,
                 subject,
                 html,
                 profile: 'DEFAULT',
-                logData: { 
-                    name: `${data.firstName} ${data.lastName}`, 
-                    phone: data.mobile, 
-                    message: 'B2B Meeting Request Notification' 
+                logData: {
+                    name: `${data.firstName} ${data.lastName}`,
+                    phone: data.mobile,
+                    message: 'B2B Meeting Request Notification'
                 }
             });
 
@@ -769,7 +771,7 @@ class EmailService {
             let subject, html;
             let recipientEmail;
             let logMessage;
-            
+
             if (recipientType === 'b2b') {
                 // B2B Coordinator gets Buyer Interest template (RED theme, high priority)
                 subject = `Buyer Registration Interest Received | IHWE 2026 | Reg ID: ${data.registrationId}`;
@@ -783,15 +785,15 @@ class EmailService {
                 recipientEmail = process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
                 logMessage = 'Admin Notification';
             }
-            
+
             await this.sendEmail({
                 to: recipientEmail,
                 subject,
                 html,
                 profile: 'DEFAULT',
-                logData: { 
-                    name: `${data.firstName} ${data.lastName}`, 
-                    phone: data.mobile, 
+                logData: {
+                    name: `${data.firstName} ${data.lastName}`,
+                    phone: data.mobile,
                     message: logMessage
                 }
             });
@@ -800,6 +802,32 @@ class EmailService {
             return true;
         } catch (error) {
             console.error(`Error sending detailed visitor notification (${recipientType}):`, error);
+            return false;
+        }
+    }
+
+    async sendDetailedBuyerNotification(data) {
+        try {
+            const subject = `NEW BUYER REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId}`;
+            const html = getBuyerRegistrationAlertTemplate(data);
+            const recipientEmail = process.env.VISITOR_ADMIN_EMAIL || process.env.BUYER_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
+
+            await this.sendEmail({
+                to: recipientEmail,
+                subject,
+                html,
+                profile: 'DEFAULT',
+                logData: {
+                    name: data.fullName,
+                    phone: data.mobileNumber,
+                    message: 'Admin Buyer Alert'
+                }
+            });
+
+            console.log(`[AdminBuyerAlert] Sent to ${recipientEmail} for ${data.registrationId}`);
+            return true;
+        } catch (error) {
+            console.error('Error sending detailed buyer notification:', error);
             return false;
         }
     }
@@ -861,7 +889,7 @@ class EmailService {
                 const event = await Event.findById(registration.eventId).select('name');
                 if (event?.name) eventName = event.name;
             }
-        } catch (_) {}
+        } catch (_) { }
 
         const data = {
             exhibitor_name: registration.exhibitorName,

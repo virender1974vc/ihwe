@@ -1,9 +1,7 @@
 const aboutService = require('../services/aboutService');
 const { logActivity } = require('../utils/logger');
 
-/**
- * Controller to handle About section requests.
- */
+
 class AboutController {
     /**
      * Get about data.
@@ -38,12 +36,12 @@ class AboutController {
     async updateAboutImages(req, res) {
         try {
             if (!req.files) return res.status(400).json({ success: false, message: 'Please upload image files' });
-            
+
             const imagePaths = {};
             if (req.files.image1) imagePaths.image1 = `/uploads/about/${req.files.image1[0].filename}`;
             if (req.files.image2) imagePaths.image2 = `/uploads/about/${req.files.image2[0].filename}`;
             if (req.files.image3) imagePaths.image3 = `/uploads/about/${req.files.image3[0].filename}`;
-            
+
             if (Object.keys(imagePaths).length === 0) {
                 return res.status(400).json({ success: false, message: 'No images were uploaded' });
             }
