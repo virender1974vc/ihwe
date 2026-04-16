@@ -10,25 +10,13 @@ const generateRegistrationId = async (type) => {
   const prefix = prefixMap[type];
   if (!prefix) throw new Error(`Unknown visitor type: ${type}`);
 
-  // ✅ Counter atomically increment karo
+  // Atomically increment counter
   const counter = await Counter.findOneAndUpdate(
     { type },
     { $inc: { seq: 1 } },
     { new: true, upsert: true },
   );
-
-  // ✅ Ensure counter starts at 100001 if it's currently low
-  if (counter.seq < 100001) {
-    const updatedCounter = await Counter.findOneAndUpdate(
-      { type },
-      { $set: { seq: 100001 } },
-      { new: true }
-    );
-    counter.seq = updatedCounter.seq;
-  }
-
-  // ✅ 100001, 100002... format
-  const paddedSeq = String(counter.seq);
+  const paddedSeq = String(counter.seq).padStart(6, '0');
   return `${prefix}/${paddedSeq}`;
 };
 

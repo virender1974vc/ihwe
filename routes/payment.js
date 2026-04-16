@@ -11,8 +11,14 @@ router.post('/create-order', async (req, res) => {
     try {
         const { amount, currency = "INR" } = req.body;
         if (!amount) return res.status(400).json({ success: false, message: 'Amount is required' });
+        
+        const amountInPaise = Math.round(Number(amount) * 100);
+        if (amountInPaise < 100) {
+            return res.status(400).json({ success: false, message: `Amount too low. Minimum is ₹1 (got ₹${amount})` });
+        }
+
         const options = {
-            amount: Math.round(Number(amount) * 100),
+            amount: amountInPaise,
             currency,
             receipt: `rcpt_${Date.now()}`
         };
@@ -23,8 +29,7 @@ router.post('/create-order', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: 'Failed to create payment order',
-            error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: error?.error?.description || error?.message || 'Unknown Razorpay error'
         });
     }
 });

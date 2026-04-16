@@ -816,17 +816,86 @@ class EmailService {
 
     // Static content methods still use emailShell but without double escaping
     async sendPaymentReceipt(registration, pdfPath) {
-        const subject = 'Payment Receipt - ' + registration.exhibitorName;
-        const html = this.emailShell(`<p>Dear ${registration.exhibitorName}, your payment has been received successfully. Please find the receipt attached.</p>`);
-        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR' });
+        const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
+        const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+        const subject = `Payment Receipt - ${registration.exhibitorName} | ${registration.registrationId || ''}`;
+        const html = this.emailShell(`
+            <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
+            <p>Your payment has been received successfully. Here are your payment details:</p>
+            <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Registration ID</td><td style="padding:10px;">${registration.registrationId || 'N/A'}</td></tr>
+                <tr><td style="padding:10px;font-weight:700;color:#166534;">Stall No.</td><td style="padding:10px;">${registration.participation?.stallFor || 'N/A'}</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Stall Type</td><td style="padding:10px;">${registration.participation?.stallType || 'N/A'}</td></tr>
+                <tr><td style="padding:10px;font-weight:700;color:#166534;">Total Amount</td><td style="padding:10px;">${fmt(registration.participation?.total)}</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#23471d;">Amount Paid</td><td style="padding:10px;font-weight:700;color:#23471d;">${fmt(registration.amountPaid)}</td></tr>
+                <tr><td style="padding:10px;font-weight:700;color:${registration.balanceAmount > 0 ? '#dc2626' : '#166534'};">Balance Due</td><td style="padding:10px;font-weight:700;color:${registration.balanceAmount > 0 ? '#dc2626' : '#166534'};">${fmt(registration.balanceAmount)}</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Payment Mode</td><td style="padding:10px;">${registration.paymentMode || 'N/A'}</td></tr>
+                ${registration.paymentId ? `<tr><td style="padding:10px;font-weight:700;color:#166534;">Transaction ID</td><td style="padding:10px;">${registration.paymentId}</td></tr>` : ''}
+            </table>
+            ${registration.balanceAmount > 0 ? `<p style="color:#dc2626;font-weight:700;">⚠️ Balance amount of <strong>${fmt(registration.balanceAmount)}</strong> is pending. Please complete the payment at the earliest.</p>` : '<p style="color:#166534;font-weight:700;">✅ Your payment is fully settled. Thank you!</p>'}
+            <p>For any queries, please contact us.</p>
+        `);
+        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR',
+            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Payment Receipt' }
+        });
     }
 
     async sendApprovalEmail(registration) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
             formType: 'exhibitor-registration',
-            data: { exhibitor_name: registration.exhibitorName, status: 'Approved' },
+            data: {
+                exhibitor_name: registration.exhibitorName,
+                stall_no: registration.participation?.stallFor || 'N/A',
+                event_name: registration.eventId?.name || 'IHWE 2026',
+                registrationId: registration.registrationId,
+                login_url: loginUrl,
+                username: registration.contact1.email,
+                email: registration.contact1.email,
+                status: 'Approved',
+                phone: registration.contact1.mobile
+            },
             profile: 'EXHIBITOR'
+        });
+    }
+
+    async sendConfirmationEmail(registration) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
+        const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+        const subject = `Booking Confirmed! 🎊 - ${registration.exhibitorName} | ${registration.registrationId || ''}`;
+        const html = this.emailShell(`
+            <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
+            <p>🎊 Congratulations! Your stall booking for <strong>IHWE 2026</strong> is now <strong style="color:#23471d;">CONFIRMED</strong>.</p>
+            <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Registration ID</td><td style="padding:10px;">${registration.registrationId || 'N/A'}</td></tr>
+                <tr><td style="padding:10px;font-weight:700;color:#166534;">Stall No.</td><td style="padding:10px;font-weight:700;color:#d26019;">${registration.participation?.stallFor || 'N/A'}</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Stall Type</td><td style="padding:10px;">${registration.participation?.stallType || 'N/A'}</td></tr>
+                <tr><td style="padding:10px;font-weight:700;color:#166534;">Event</td><td style="padding:10px;">${registration.eventId?.name || 'IHWE 2026'}</td></tr>
+                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Amount Paid</td><td style="padding:10px;font-weight:700;color:#23471d;">${fmt(registration.amountPaid)}</td></tr>
+                ${registration.balanceAmount > 0 ? `<tr><td style="padding:10px;font-weight:700;color:#dc2626;">Balance Due</td><td style="padding:10px;font-weight:700;color:#dc2626;">${fmt(registration.balanceAmount)}</td></tr>` : ''}
+            </table>
+            <p>Login to your exhibitor portal: <a href="${loginUrl}" style="color:#23471d;font-weight:700;">${loginUrl}</a></p>
+            <p>Username: <strong>${registration.contact1.email}</strong></p>
+            <p>We look forward to seeing you at the expo!</p>
+        `);
+        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR',
+            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Booking Confirmed' }
+        });
+    }
+
+    async sendRejectionEmail(registration) {
+        const subject = `Registration Update - ${registration.exhibitorName} | IHWE 2026`;
+        const html = this.emailShell(`
+            <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
+            <p>We regret to inform you that your registration application for <strong>IHWE 2026</strong> (Registration ID: <strong>${registration.registrationId || 'N/A'}</strong>) has not been approved at this time.</p>
+            <p>This could be due to stall unavailability or incomplete documentation. Please contact our support team for more details.</p>
+            <p>We hope to have you with us in future editions of IHWE.</p>
+            <p>Thank you for your interest.</p>
+        `);
+        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR',
+            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Registration Rejected' }
         });
     }
 
