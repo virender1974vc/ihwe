@@ -47,6 +47,20 @@ class ExhibitorRegistrationService {
         const amountPaid = data.amountPaid || 0;
         data.balanceAmount = Math.max(0, total - amountPaid);
 
+        // --- INITIAL PAYMENT HISTORY ---
+        if (amountPaid > 0) {
+            data.paymentHistory = [{
+                amount: amountPaid,
+                paymentType: data.paymentType || 'full',
+                paymentMode: data.paymentMode || 'online',
+                method: data.paymentMode === 'online' ? 'Razorpay' : (data.manualPaymentDetails?.method || 'Manual'),
+                transactionId: data.paymentId || data.manualPaymentDetails?.transactionId || '',
+                razorpayPaymentId: data.paymentId || '',
+                notes: '',
+                paidAt: new Date()
+            }];
+        }
+
         const newRegistration = new ExhibitorRegistration(data);
         const saved = await newRegistration.save();
 
@@ -114,11 +128,32 @@ class ExhibitorRegistrationService {
         const amountPaid = data.amountPaid ?? current.amountPaid ?? 0;
         data.balanceAmount = Math.max(0, total - amountPaid);
 
+        // --- PUSH PAYMENT HISTORY if new payment is being recorded ---
+        const paymentStatuses = ['paid', 'advance-paid'];
+        const wasAlreadyPaid = paymentStatuses.includes(current.status);
+        const isNowPaid = paymentStatuses.includes(data.status);
+        if (isNowPaid && data.amountPaid != null) {
+            const prevPaid = current.amountPaid || 0;
+            const newlyPaid = data.amountPaid - prevPaid;
+            if (newlyPaid > 0) {
+                const historyEntry = {
+                    amount: newlyPaid,
+                    paymentType: data.paymentType || (wasAlreadyPaid ? 'balance' : 'advance'),
+                    paymentMode: data.paymentMode || current.paymentMode || 'manual',
+                    method: data.manualPaymentDetails?.method || (data.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
+                    transactionId: data.manualPaymentDetails?.transactionId || data.paymentId || '',
+                    razorpayPaymentId: data.paymentId || '',
+                    notes: data.manualPaymentDetails?.notes || '',
+                    paidAt: new Date()
+                };
+                data.$push = { paymentHistory: historyEntry };
+            }
+        }
+
         const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { new: true });
 
         // --- PAYMENT RECEIPT ---
-        const paymentStatuses = ['paid', 'advance-paid'];
-        if (paymentStatuses.includes(updated.status) && !paymentStatuses.includes(current.status)) {
+        if (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status)) {
             try {
                 const receiptPdf = await pdfGenerator.generatePaymentSlip(updated);
                 const receiptPath = receiptPdf?.filePath || receiptPdf;

@@ -77,6 +77,16 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     receiptUrl: String,
     registrationPdfUrl: String,
     receiptPdfUrl: String,
+    paymentHistory: [{
+        amount: Number,
+        paymentType: String,
+        paymentMode: String,
+        method: String,
+        transactionId: String,
+        razorpayPaymentId: String,
+        notes: String,
+        paidAt: { type: Date, default: Date.now }
+    }],
     manualPaymentDetails: {
         method: { type: String, enum: ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'DD', 'Other', 'Online'], default: 'Online' },
         transactionId: String,
