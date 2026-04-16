@@ -6,6 +6,7 @@ router.get('/', stallRateController.getAllRates);
 router.get('/event/:eventId', stallRateController.getStoreRates);
 router.get('/find', stallRateController.getRate);
 router.post('/', stallRateController.addRate);
+router.put('/:id', stallRateController.updateRate);
 router.delete('/:id', stallRateController.deleteRate);
 
 module.exports = router;

@@ -37,6 +37,15 @@ class StallRateController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async updateRate(req, res) {
+        try {
+            const data = await stallRateService.updateRate(req.params.id, req.body);
+            await logActivity(req, 'Updated', 'Stall Rates', `Updated rate ID: ${req.params.id}`);
+            res.json({ success: true, message: 'Rate updated successfully', data });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
     async deleteRate(req, res) {
         try {
             await stallRateService.deleteRate(req.params.id);
