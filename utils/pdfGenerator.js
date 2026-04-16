@@ -8,8 +8,8 @@ if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 // Get public URL for a temp PDF - served via /temp static route in server.js
 function getTempPdfUrl(filePath) {
     const fileName = path.basename(filePath);
-    const siteUrl = (process.env.SITE_URL || 'http://localhost:5000').replace(/\/$/, '');
-    return `${siteUrl}/temp/${fileName}`;
+    const backendUrl = (process.env.BACKEND_URL || process.env.SITE_URL || 'http://localhost:5000').replace(/\/$/, '');
+    return `${backendUrl}/temp/${fileName}`;
 }
 
 const HEADER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '1776243243412-WhatsApp-Image-2026-04-15-at-12.00.08-PM.jpeg');

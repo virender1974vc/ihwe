@@ -114,7 +114,14 @@ app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static("uploads"));
-app.use('/temp', express.static('temp'));
+app.use('/temp', express.static('temp', {
+    setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.pdf')) {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'inline');
+        }
+    }
+}));
 
 // SEO file serving middleware
 app.use("/sitemap.xml", sitemapRoutes);
