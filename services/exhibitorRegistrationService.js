@@ -50,19 +50,22 @@ class ExhibitorRegistrationService {
         const newRegistration = new ExhibitorRegistration(data);
         const saved = await newRegistration.save();
 
-        if (data.participation?.stallNo) {
-            await Stall.findByIdAndUpdate(data.participation.stallNo, {
-                status: 'booked',
-                bookedBy: saved._id
-            });
-        }
+        // Only book stall and send emails if payment is NOT failed
+        if (data.status !== 'payment-failed') {
+            if (data.participation?.stallNo) {
+                await Stall.findByIdAndUpdate(data.participation.stallNo, {
+                    status: 'booked',
+                    bookedBy: saved._id
+                });
+            }
 
-        // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
-        try {
-            const pdfPath = await pdfGenerator.generateRegistrationForm(saved);
-            await emailService.sendRegistrationConfirmation(saved, pdfPath, rawPassword);
-        } catch (err) {
-            console.error('Registration Email/WhatsApp Error:', err);
+            // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
+            try {
+                const pdfPath = await pdfGenerator.generateRegistrationForm(saved);
+                await emailService.sendRegistrationConfirmation(saved, pdfPath, rawPassword);
+            } catch (err) {
+                console.error('Registration Email/WhatsApp Error:', err);
+            }
         }
 
         return saved;
@@ -137,8 +140,8 @@ class ExhibitorRegistrationService {
         const reg = await ExhibitorRegistration.findById(id);
         if (!reg) throw new Error('Registration not found');
 
-        // Free stall
-        if (reg.participation?.stallNo) {
+        // Only free stall if payment was not failed (failed entries never booked a stall)
+        if (reg.status !== 'payment-failed' && reg.participation?.stallNo) {
             await Stall.findByIdAndUpdate(reg.participation.stallNo, { status: 'available', bookedBy: null });
         }
 
