@@ -6,6 +6,7 @@ const whatsapp = require('./whatsapp');
 const { getResponsiveVisitorAlertTemplate } = require('./emailTemplates/responsiveVisitorAlert');
 const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInterestAlert');
 const { getSimpleVisitorAlertTemplate } = require('./emailTemplates/simpleVisitorAlert');
+const { getExhibitorAdminAlertTemplate } = require('./emailTemplates/exhibitorAdminAlert');
 
 class EmailService {
     constructor() {
@@ -333,11 +334,11 @@ class EmailService {
                     console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
                 });
             }
-
-            // 3. Notify ADMIN (Leads)
-            await this.notifyAdmin(formType, data, subject, profile).catch(err => {
-                console.error(`[AdminNotification] Failed for ${formType}:`, err.message);
-            });
+            if (formType !== 'exhibitor-registration') {
+                await this.notifyAdmin(formType, data, subject, profile).catch(err => {
+                    console.error(`[AdminNotification] Failed for ${formType}:`, err.message);
+                });
+            }
 
             return sentToUser;
         } catch (error) {
@@ -697,6 +698,72 @@ class EmailService {
         }
     }
 
+    async sendExhibitorAdminAlert(registration) {
+        try {
+            const adminEmail = process.env.EXHIBITOR_ADMIN_EMAIL || process.env.ADMIN_EMAIL;
+            if (!adminEmail) {
+                console.warn('[ExhibitorAdminAlert] No EXHIBITOR_ADMIN_EMAIL set in env');
+                return false;
+            }
+
+            const data = {
+                registrationId: registration.registrationId,
+                exhibitorName: registration.exhibitorName,
+                typeOfBusiness: registration.typeOfBusiness,
+                industrySector: registration.industrySector,
+                website: registration.website,
+                address: registration.address,
+                city: registration.city,
+                state: registration.state,
+                country: registration.country,
+                pincode: registration.pincode,
+                gstNo: registration.gstNo,
+                panNo: registration.panNo,
+                contact1Title: registration.contact1?.title,
+                contact1FirstName: registration.contact1?.firstName,
+                contact1LastName: registration.contact1?.lastName,
+                contact1Designation: registration.contact1?.designation,
+                contact1Email: registration.contact1?.email,
+                contact1Mobile: registration.contact1?.mobile,
+                stallFor: registration.participation?.stallFor,
+                stallType: registration.participation?.stallType,
+                stallSize: registration.participation?.stallSize,
+                dimension: registration.participation?.dimension,
+                currency: registration.participation?.currency,
+                totalAmount: registration.participation?.total,
+                amountPaid: registration.amountPaid,
+                balanceAmount: registration.balanceAmount,
+                paymentMode: registration.paymentMode,
+                eventName: registration.eventId?.name || 'IHWE 2026',
+                referredBy: registration.referredBy,
+                spokenWith: registration.spokenWith,
+                filledBy: registration.filledBy,
+                status: registration.status,
+            };
+
+            const html = getExhibitorAdminAlertTemplate(data);
+            const subject = `New Exhibitor Booking | ${registration.exhibitorName} | Stall: ${registration.participation?.stallFor || 'N/A'} | ${registration.registrationId || ''}`;
+
+            await this.sendEmail({
+                to: adminEmail,
+                subject,
+                html,
+                profile: 'DEFAULT',
+                logData: {
+                    name: registration.exhibitorName,
+                    phone: registration.contact1?.mobile,
+                    message: 'Exhibitor Admin Alert'
+                }
+            });
+
+            console.log(`[ExhibitorAdminAlert] Sent to ${adminEmail} for ${registration.registrationId}`);
+            return true;
+        } catch (error) {
+            console.error('[ExhibitorAdminAlert] Error:', error);
+            return false;
+        }
+    }
+
     async sendDetailedVisitorNotification(data, recipientType = 'admin') {
         try {
             let subject, html;
@@ -796,22 +863,89 @@ class EmailService {
             }
         } catch (_) {}
 
-        return await this.sendDynamicConfirmation({
-            to: registration.contact1.email,
-            formType: 'exhibitor-registration',
-            data: {
-                exhibitor_name: registration.exhibitorName,
-                stall_no: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
-                event_name: eventName,
-                registrationId: registration.registrationId,
-                login_url: loginUrl,
-                username: registration.contact1.email,
-                email: registration.contact1.email,
-                password: rawPassword,
-                phone: registration.contact1.mobile || registration.contact1.alternateNo
-            },
-            profile: 'EXHIBITOR'
-        });
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            stall_no: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
+            event_name: eventName,
+            registrationId: registration.registrationId,
+            login_url: loginUrl,
+            username: registration.contact1.email,
+            email: registration.contact1.email,
+            password: rawPassword,
+            phone: registration.contact1.mobile || registration.contact1.alternateNo
+        };
+
+        try {
+            const template = await this.getTemplate('exhibitor-registration');
+            if (!template) {
+                console.warn('No dynamic template found for exhibitor-registration.');
+                return false;
+            }
+
+            const subject = this.applyPlaceholders(template.emailSubject, data);
+            const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
+            let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
+            let bodyContent = this.applyPlaceholders(rawBody, data);
+            bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+
+            const getImageBuffer = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!require('fs').existsSync(absPath)) return null;
+                    return require('fs').readFileSync(absPath);
+                } catch (e) { return null; }
+            };
+
+            const headerBuf = getImageBuffer(template.headerImage);
+            const footerBuf = getImageBuffer(template.footerImage);
+            const html = this.emailShell(bodyContent, {
+                headerCid: headerBuf ? 'email_header_img' : null,
+                footerCid: footerBuf ? 'email_footer_img' : null,
+                headerImage: template.headerImage || null,
+                footerImage: template.footerImage || null,
+            });
+
+            const attachments = [];
+            // Attach registration PDF
+            if (pdfPath && require('fs').existsSync(pdfPath)) {
+                attachments.push({
+                    filename: `Registration_${registration.registrationId || registration._id}.pdf`,
+                    path: pdfPath,
+                    contentType: 'application/pdf'
+                });
+            }
+            if (headerBuf) {
+                const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
+                attachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });
+            }
+            if (footerBuf) {
+                const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
+                attachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
+            }
+
+            const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
+            const sentToUser = await this.sendEmail({
+                to: registration.contact1.email,
+                subject,
+                html,
+                attachments,
+                profile: 'EXHIBITOR',
+                logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Registration Confirmation + PDF' }
+            });
+
+            const mobile = data.phone;
+            if (mobile && whatsappContent) {
+                whatsapp.sendWhatsAppMessage(mobile, whatsappContent, 'Exhibitor Registration').catch(err => {
+                    console.error('[WhatsApp] Exhibitor registration msg failed:', err.message);
+                });
+            }
+
+            return sentToUser;
+        } catch (error) {
+            console.error('sendRegistrationConfirmation error:', error);
+            return false;
+        }
     }
 
     // Static content methods still use emailShell but without double escaping
@@ -833,10 +967,26 @@ class EmailService {
                 ${registration.paymentId ? `<tr><td style="padding:10px;font-weight:700;color:#166534;">Transaction ID</td><td style="padding:10px;">${registration.paymentId}</td></tr>` : ''}
             </table>
             ${registration.balanceAmount > 0 ? `<p style="color:#dc2626;font-weight:700;">⚠️ Balance amount of <strong>${fmt(registration.balanceAmount)}</strong> is pending. Please complete the payment at the earliest.</p>` : '<p style="color:#166534;font-weight:700;">✅ Your payment is fully settled. Thank you!</p>'}
+            <p>Please find your payment receipt attached as a PDF.</p>
             <p>For any queries, please contact us.</p>
         `);
-        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR',
-            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Payment Receipt' }
+
+        const attachments = [];
+        if (pdfPath && require('fs').existsSync(pdfPath)) {
+            attachments.push({
+                filename: `PaymentReceipt_${registration.registrationId || registration._id}.pdf`,
+                path: pdfPath,
+                contentType: 'application/pdf'
+            });
+        }
+
+        return await this.sendEmail({
+            to: registration.contact1.email,
+            subject,
+            html,
+            attachments,
+            profile: 'EXHIBITOR',
+            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Payment Receipt + PDF' }
         });
     }
 

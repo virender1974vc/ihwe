@@ -66,6 +66,11 @@ class ExhibitorRegistrationService {
             } catch (err) {
                 console.error('Registration Email/WhatsApp Error:', err);
             }
+
+            // --- ADMIN ALERT ---
+            emailService.sendExhibitorAdminAlert(saved).catch(err => {
+                console.error('Exhibitor Admin Alert Error:', err);
+            });
         }
 
         return saved;
