@@ -5,7 +5,13 @@ const path = require('path');
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
 
-// Email template header/footer images
+// Get public URL for a temp PDF - served via /temp static route in server.js
+function getTempPdfUrl(filePath) {
+    const fileName = path.basename(filePath);
+    const siteUrl = (process.env.SITE_URL || 'http://localhost:5000').replace(/\/$/, '');
+    return `${siteUrl}/temp/${fileName}`;
+}
+
 const HEADER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '1776243243412-WhatsApp-Image-2026-04-15-at-12.00.08-PM.jpeg');
 const FOOTER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '1776243243418-WhatsApp-Image-2026-04-15-at-12.00.27-PM.jpeg');
 
@@ -86,7 +92,7 @@ class PDFGenerator {
                 const pageW = doc.page.width;
                 const p   = registration.participation || {};
                 const c1  = registration.contact1 || {};
-                const cur = p.currency === 'USD' ? 'USD' : 'INR';
+                const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
 
                 // ── Header image ──
@@ -231,7 +237,10 @@ class PDFGenerator {
                 this._footerImg(doc);
 
                 doc.end();
-                stream.on('finish', () => resolve(filePath));
+                stream.on('finish', () => {
+                    const publicUrl = getTempPdfUrl(filePath);
+                    resolve({ filePath, cloudUrl: publicUrl });
+                });
                 stream.on('error', reject);
             } catch (err) { reject(err); }
         });
@@ -250,7 +259,7 @@ class PDFGenerator {
                 const pageW = doc.page.width;
                 const p   = registration.participation || {};
                 const m   = registration.manualPaymentDetails || {};
-                const cur = p.currency === 'USD' ? 'USD' : 'INR';
+                const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
                 const receiptNo = `REC-${registration._id.toString().slice(-8).toUpperCase()}`;
 
@@ -352,11 +361,10 @@ class PDFGenerator {
                 const txId = m.transactionId || registration.paymentId || 'N/A';
                 const orderId = registration.razorpayOrderId || 'N/A';
                 const payDetails = [
-                    { label: 'Payment Mode',       value: (registration.paymentMode || 'N/A').toUpperCase() },
-                    { label: 'Payment Type',       value: (registration.paymentType || 'full').toUpperCase() },
+                    { label: 'Payment Mode',         value: (registration.paymentMode || 'N/A').toUpperCase() },
+                    { label: 'Payment Type',         value: (registration.paymentType || 'full').toUpperCase() },
                     { label: 'Transaction / Ref ID', value: txId },
-                    { label: 'Razorpay Order ID',  value: orderId },
-                    { label: 'Method',             value: m.method || (registration.paymentMode === 'online' ? 'Razorpay (Online)' : 'Manual') },
+                    { label: 'Method',               value: m.method || (registration.paymentMode === 'online' ? 'Razorpay (Online)' : 'Manual') },
                 ];
                 let pdy = sectionStartY + 14;
                 payDetails.forEach(pd => {
@@ -403,8 +411,6 @@ class PDFGenerator {
                 sy += 21;
 
                 y = Math.max(pdy, sy) + 10;
-
-                // ── Status / Verified stamp ──
                 y += 8;
                 this._line(doc, 40, y, pageW - 40);
                 y += 10;
@@ -422,7 +428,10 @@ class PDFGenerator {
                 // ── Footer image ──
                 this._footerImg(doc);
 
-                stream.on('finish', () => resolve(filePath));
+                stream.on('finish', () => {
+                    const publicUrl = getTempPdfUrl(filePath);
+                    resolve({ filePath, cloudUrl: publicUrl });
+                });
                 stream.on('error', reject);
                 doc.end();
             } catch (err) { reject(err); }

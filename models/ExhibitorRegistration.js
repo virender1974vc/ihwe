@@ -75,6 +75,8 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     razorpayOrderId: String,
     razorpaySignature: String,
     receiptUrl: String,
+    registrationPdfUrl: String,
+    receiptPdfUrl: String,
     manualPaymentDetails: {
         method: { type: String, enum: ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'DD', 'Other', 'Online'], default: 'Online' },
         transactionId: String,

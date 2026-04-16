@@ -907,14 +907,6 @@ class EmailService {
             });
 
             const attachments = [];
-            // Attach registration PDF
-            if (pdfPath && require('fs').existsSync(pdfPath)) {
-                attachments.push({
-                    filename: `Registration_${registration.registrationId || registration._id}.pdf`,
-                    path: pdfPath,
-                    contentType: 'application/pdf'
-                });
-            }
             if (headerBuf) {
                 const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
                 attachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });

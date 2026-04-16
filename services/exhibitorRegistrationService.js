@@ -61,10 +61,26 @@ class ExhibitorRegistrationService {
 
             // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
             try {
-                const pdfPath = await pdfGenerator.generateRegistrationForm(saved);
+                const regPdf = await pdfGenerator.generateRegistrationForm(saved);
+                const pdfPath = regPdf?.filePath || regPdf;
+                if (regPdf?.cloudUrl) {
+                    await ExhibitorRegistration.findByIdAndUpdate(saved._id, { registrationPdfUrl: regPdf.cloudUrl });
+                }
                 await emailService.sendRegistrationConfirmation(saved, pdfPath, rawPassword);
             } catch (err) {
                 console.error('Registration Email/WhatsApp Error:', err);
+            }
+            if (['paid', 'advance-paid'].includes(saved.status)) {
+                try {
+                    const receiptPdf = await pdfGenerator.generatePaymentSlip(saved);
+                    const receiptPath = receiptPdf?.filePath || receiptPdf;
+                    if (receiptPdf?.cloudUrl) {
+                        await ExhibitorRegistration.findByIdAndUpdate(saved._id, { receiptPdfUrl: receiptPdf.cloudUrl });
+                    }
+                    await emailService.sendPaymentReceipt(saved, receiptPath);
+                } catch (err) {
+                    console.error('Payment Receipt Email Error (addRegistration):', err);
+                }
             }
 
             // --- ADMIN ALERT ---
@@ -104,8 +120,12 @@ class ExhibitorRegistrationService {
         const paymentStatuses = ['paid', 'advance-paid'];
         if (paymentStatuses.includes(updated.status) && !paymentStatuses.includes(current.status)) {
             try {
-                const pdfPath = await pdfGenerator.generatePaymentSlip(updated);
-                await emailService.sendPaymentReceipt(updated, pdfPath);
+                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated);
+                const receiptPath = receiptPdf?.filePath || receiptPdf;
+                if (receiptPdf?.cloudUrl) {
+                    await ExhibitorRegistration.findByIdAndUpdate(id, { receiptPdfUrl: receiptPdf.cloudUrl });
+                }
+                await emailService.sendPaymentReceipt(updated, receiptPath);
             } catch (err) {
                 console.error('Payment Receipt Email Error:', err);
             }
