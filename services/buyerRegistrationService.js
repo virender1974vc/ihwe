@@ -55,10 +55,12 @@ class BuyerRegistrationService {
         const newRegistration = new BuyerRegistration(data);
         const saved = await newRegistration.save();
 
-        // 2. Send Notifications
-        this.sendNotifications(saved).catch(err => {
-            console.error("Error sending buyer notifications:", err.message);
-        });
+        // 2. Send Notifications if payment didn't fail
+        if (saved.paymentStatus !== 'Failed') {
+            this.sendNotifications(saved).catch(err => {
+                console.error("Error sending buyer notifications:", err.message);
+            });
+        }
 
         return saved;
     }
