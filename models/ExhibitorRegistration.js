@@ -97,7 +97,25 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     // Vendor Login Credentials
     password: { type: String, select: false },
     otp: { type: String, select: false },
-    otpExpiry: { type: Date, select: false }
+    otpExpiry: { type: Date, select: false },
+
+    // MSME Details
+    msme: {
+        udhyamRegNo: String,
+        udhyamMobileNo: String,
+        udhyamEmailId: String,
+        udhyamContactPerson: String,
+        udhyamDesignation: String,
+        udhyamAddress: String,
+        udhyamIssueDate: Date,
+        udhyamCertificateUrl: String,
+        dfoLocation: String,
+        dfoEmail: String,
+        dfoMobileNo: String,
+        msmeCategory: { type: String, enum: ['Manufacturer', 'Service Provider', 'Trader', 'Others'], default: 'Manufacturer' },
+        msmeRemark: String,
+        updatedAt: Date
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

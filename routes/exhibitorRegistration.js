@@ -28,11 +28,10 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary,
     params: async (req, file) => {
-        const isPdf = file.mimetype === 'application/pdf';
         return {
             folder: 'receipts',
-            resource_type: isPdf ? 'raw' : 'image',
-            allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+            resource_type: 'image',
+            allowed_formats: ['jpg', 'jpeg', 'png'],
         };
     },
 });
@@ -49,5 +48,34 @@ router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req,
         return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
     res.status(200).json({ success: true, url: req.file.path });
+});
+
+// MSME Certificate upload (exhibitor or admin)
+const msmeStorage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => {
+        return {
+            folder: 'msme-certificates',
+            resource_type: 'image',
+            allowed_formats: ['jpg', 'jpeg', 'png'],
+        };
+    },
+});
+const msmeUpload = multer({ storage: msmeStorage });
+
+router.put('/:id/msme', msmeUpload.single('udhyamCertificate'), async (req, res) => {
+    try {
+        const msmeData = { ...req.body, updatedAt: new Date() };
+        if (req.file) msmeData.udhyamCertificateUrl = req.file.path;
+        const updated = await require('../models/ExhibitorRegistration').findByIdAndUpdate(
+            req.params.id,
+            { msme: msmeData },
+            { new: true }
+        );
+        if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
+        res.json({ success: true, data: updated.msme });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 module.exports = router;
