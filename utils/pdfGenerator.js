@@ -418,7 +418,7 @@ class PDFGenerator {
                 const statusColor = hasBalance ? '#f59e0b' : GREEN;
                 doc.rect(40, y, 160, 26).fill(statusColor);
                 doc.fillColor(WHITE).fontSize(10).font('Helvetica-Bold')
-                   .text(hasBalance ? '⚠  ADVANCE PAID' : '✓  PAYMENT VERIFIED', 40, y + 8, { width: 160, align: 'center' });
+                   .text(hasBalance ? 'ADVANCE PAID' : 'PAYMENT VERIFIED', 40, y + 8, { width: 160, align: 'center' });
 
                 if (hasBalance) {
                     doc.fillColor('#dc2626').fontSize(8).font('Helvetica-Bold')
