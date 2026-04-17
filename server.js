@@ -47,8 +47,6 @@ const eventRoutes = require('./routes/events');
 const stallRateRoutes = require('./routes/stallRates');
 const termsAndConditionsRoutes = require('./routes/termsAndConditions');
 const dashboardRoutes = require('./routes/dashboard');
-
-
 const bankListRoutes = require("./routes/bankListRoutes");
 const bankOptionRoutes = require("./routes/bankOptionRoutes");
 const commonWhatsappRoutes = require("./routes/commonWhatsappRoutes");
@@ -91,6 +89,7 @@ const meetingPriorityLevelRoutes = require("./routes/add_by_admin/MeetingPriorit
 const primaryProductInterestsRoutes = require("./routes/add_by_admin/primaryProductInterestsRoutes");
 const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
+const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 
 mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -116,12 +115,12 @@ app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static("uploads"));
 app.use('/temp', express.static('temp', {
-    setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.pdf')) {
-            res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'inline');
-        }
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
     }
+  }
 }));
 
 // SEO file serving middleware
@@ -281,6 +280,7 @@ app.use("/api/meeting-priorities", meetingPriorityLevelRoutes);
 app.use("/api/primary-products", primaryProductInterestsRoutes);
 app.use("/api/secondary-products", secondaryProductRoutes);
 app.use("/api/stall-accessories", stallAccessoryRoutes);
+app.use("/api/units", unitRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 
 
