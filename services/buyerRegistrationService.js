@@ -42,10 +42,18 @@ class BuyerRegistrationService {
         // 1. Calculate Buyer Tag (CRM Logic)
         data.buyerTag = this.calculateBuyerTag(data);
 
-        // 2. Generate registrationId
+        // 2. Generate registrationId & transactionId
         const year = new Date().getFullYear();
-        const rand = Math.floor(100000 + Math.random() * 900000);
-        data.registrationId = `IHWE-BYR-${year}-${rand}`;
+        const randBuyer = Math.floor(100 + Math.random() * 899); // 3-digit random for a suffix
+        const randTxn = Math.floor(1000 + Math.random() * 8999); // 4-digit random for txn
+        
+        if (!data.registrationId) {
+            data.registrationId = `IHWE/${year}/BYR-${randBuyer}`;
+        }
+        
+        if (!data.transactionId) {
+            data.transactionId = `IHWE/${year}/TXN-${randTxn}`;
+        }
 
         // 3. Ensure registrationFee is set (or default to 0)
         if (!data.registrationFee) {
@@ -110,13 +118,15 @@ class BuyerRegistrationService {
             registrationId: saved.registrationId,
         };
 
-        // User Email
-        emailService.sendDynamicConfirmation({
-            to: saved.emailAddress,
-            formType: 'buyer-registration',
-            data: notificationData,
-            profile: 'DEFAULT'
-        }).catch(err => console.error("Email fail:", err.message));
+        // 1. Send Professional Confirmation to User (with QR)
+        emailService.sendVisitorConfirmationOnly(saved, 'buyer-registration').catch(err => {
+            console.error("User email fail:", err.message);
+        });
+
+        // 2. Send Detailed Alert to Admin
+        emailService.sendDetailedBuyerNotification(saved).catch(err => {
+            console.error("Admin notification fail:", err.message);
+        });
 
         // WhatsApp to User
         const msg = `Hello ${saved.fullName},\n\nThank you for registering for the Buyer-Seller Meet at IHWE 2026. Your registration under ${saved.registrationCategory} category is received.\n\nOur team will review your application soon.\n\nRegards,\nIHWE Team`;
@@ -172,6 +182,37 @@ class BuyerRegistrationService {
         const registration = await BuyerRegistration.findById(id);
         if (!registration) throw { status: 404, message: 'Registration not found' };
         await registration.deleteOne();
+    }
+
+    /**
+     * Login for Buyer Dashboard
+     * @param {string} emailAddress 
+     * @param {string} registrationId 
+     */
+    async login(emailAddress, registrationId) {
+        if (!emailAddress || !registrationId) {
+            throw { status: 400, message: 'Email and Registration ID are required' };
+        }
+
+        const buyer = await BuyerRegistration.findOne({ 
+            emailAddress: emailAddress.trim().toLowerCase(), 
+            registrationId: registrationId.trim() 
+        });
+
+        if (!buyer) {
+            throw { status: 404, message: 'Invalid credentials or registration not found' };
+        }
+
+        return buyer;
+    }
+
+    /**
+     * Get global registration stats
+     */
+    async getStats() {
+        const totalBuyers = await BuyerRegistration.countDocuments();
+        const completedPayments = await BuyerRegistration.countDocuments({ paymentStatus: 'Completed' });
+        return { totalBuyers, completedPayments };
     }
 }
 
