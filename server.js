@@ -5,6 +5,8 @@ const mongoose = require("mongoose");
 const multer = require('multer');
 const path = require("path");
 const cookieParser = require("cookie-parser");
+const http = require("http");
+const { Server } = require("socket.io");
 require("dotenv").config();
 
 
@@ -99,14 +101,8 @@ mongoose
   .then(() => console.log("✅ Connected to MAIN MongoDB (default connection)"))
   .catch((err) => console.error("❌ MAIN DB connection error:", err));
 global.secondaryDB = mongoose;
-
-// ----------------------------------------------
-// Express App
-// ----------------------------------------------
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Razorpay Webhook - must be before bodyParser (needs raw body)
 app.use('/api/payment/webhook', require('./routes/payment'));
 
 // Middleware
@@ -282,8 +278,118 @@ app.use("/api/primary-products", primaryProductInterestsRoutes);
 app.use("/api/secondary-products", secondaryProductRoutes);
 app.use("/api/stall-accessories", stallAccessoryRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
+app.use("/api/chat", require('./routes/chatRoutes'));
 
+// ── Socket.io setup ───────────────────────────────────────────────────────────
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+    cors: { origin: '*', methods: ['GET', 'POST'] }
+});
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+const ChatMessage = require('./models/ChatMessage');
+
+// Track online users: socketId → { userId, userType, roomId, userName }
+const onlineUsers = new Map();
+// Track roomId → Set of socketIds
+const roomSockets = new Map();
+
+io.on('connection', (socket) => {
+
+    // Join a chat room
+    socket.on('join_room', ({ roomId, userId, userType, userName }) => {
+        socket.join(roomId);
+        onlineUsers.set(socket.id, { userId, userType, roomId, userName });
+        if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Set());
+        roomSockets.get(roomId).add(socket.id);
+
+        // Tell everyone in room this user is online
+        io.to(roomId).emit('user_status', { userId, userType, userName, online: true });
+    });
+
+    // Admin joins global notification room
+    socket.on('join_admin', ({ adminId, adminName } = {}) => {
+        socket.join('admin_room');
+        if (adminName) socket.join(`admin_room_${adminName.toLowerCase()}`);
+        if (adminId) onlineUsers.set(socket.id, { userId: adminId, userType: 'admin', roomId: 'admin_room', userName: adminName || 'Admin' });
+    });
+
+    // Send message
+    socket.on('send_message', async ({ roomId, exhibitorRegistrationId, exhibitorName, senderType, senderId, senderName, message }) => {
+        if (mongoose.connection.readyState !== 1) return;
+        try {
+            // Check if the other party is currently in the room (for instant read)
+            const roomSocketIds = roomSockets.get(roomId) || new Set();
+            const otherOnline = [...roomSocketIds].some(sid => {
+                const u = onlineUsers.get(sid);
+                return u && u.userId !== senderId;
+            });
+
+            const msg = await ChatMessage.create({
+                roomId, exhibitorRegistrationId, exhibitorName,
+                senderType, senderId, senderName, message,
+                readByExhibitor: senderType === 'exhibitor' || otherOnline,
+                readByAdmin: senderType === 'admin' || otherOnline,
+            });
+
+            // Broadcast to room
+            io.to(roomId).emit('receive_message', msg);
+
+            // If other party is online, send seen_update back to sender
+            if (otherOnline) {
+                io.to(roomId).emit('messages_seen', { roomId, seenBy: senderType === 'admin' ? 'exhibitor' : 'admin' });
+            }
+
+            // Notify specific admin sidebar
+            const ExhibitorRegistration = require('./models/ExhibitorRegistration');
+            const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
+            const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
+
+            io.to(targetRoom).emit('room_updated', {
+                roomId, exhibitorName, lastMessage: message,
+                lastMessageAt: msg.createdAt, lastSenderType: senderType,
+                unreadIncrement: senderType === 'exhibitor' && !otherOnline ? 1 : 0,
+                spokenWith: exhibitor?.spokenWith || ''
+            });
+        } catch (err) {
+            console.error('Chat save error:', err.message);
+        }
+    });
+
+    // Mark messages as read — emit seen update to room
+    socket.on('mark_read', async ({ roomId, readerType }) => {
+        // Wait for DB to be ready (readyState 1 = connected)
+        if (mongoose.connection.readyState !== 1) return;
+        try {
+            if (readerType === 'admin') {
+                await ChatMessage.updateMany({ roomId, senderType: 'exhibitor', readByAdmin: false }, { readByAdmin: true });
+            } else {
+                await ChatMessage.updateMany({ roomId, senderType: 'admin', readByExhibitor: false }, { readByExhibitor: true });
+            }
+            io.to(roomId).emit('messages_seen', { roomId, seenBy: readerType });
+        } catch (err) {
+            console.error('mark_read error:', err.message);
+        }
+    });
+
+    // Typing — room-scoped, only to others in room
+    socket.on('typing', ({ roomId, senderType, senderName }) => {
+        socket.to(roomId).emit('typing', { senderType, senderName, roomId });
+    });
+    socket.on('stop_typing', ({ roomId }) => {
+        socket.to(roomId).emit('stop_typing', { roomId });
+    });
+
+    socket.on('disconnect', () => {
+        const user = onlineUsers.get(socket.id);
+        if (user && user.roomId !== 'admin_room') {
+            io.to(user.roomId).emit('user_status', { userId: user.userId, userType: user.userType, online: false });
+            const rs = roomSockets.get(user.roomId);
+            if (rs) { rs.delete(socket.id); if (rs.size === 0) roomSockets.delete(user.roomId); }
+        }
+        onlineUsers.delete(socket.id);
+    });
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT} with Socket.io`);
 });
