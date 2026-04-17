@@ -25,6 +25,34 @@ const verifyToken = (req, res, next) => {
 // @desc    Get all admin users
 router.get('/all', verifyToken, (req, res) => adminUsersController.getAllAdmins(req, res));
 
+// @route   GET /api/admin/public-list
+// @desc    Get minimal public list of active admin users (for dropdowns)
+router.get('/public-list', async (req, res) => {
+    try {
+        const User = require('../models/User');
+        const users = await User.find({ status: 'Active' })
+            .select('username fullName designation email mobile altMobile role')
+            .sort({ fullName: 1 });
+        res.json({ success: true, data: users });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// @route   GET /api/admin/by-username/:username
+// @desc    Get a single admin user's public details by username (for RM card)
+router.get('/by-username/:username', async (req, res) => {
+    try {
+        const User = require('../models/User');
+        const user = await User.findOne({ username: req.params.username })
+            .select('username fullName designation email mobile altMobile role');
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        res.json({ success: true, data: user });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 // @route   POST /api/admin/create
 // @desc    Create a new admin user
 router.post('/create', verifyToken, (req, res) => adminUsersController.createAdmin(req, res));

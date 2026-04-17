@@ -22,11 +22,10 @@ class AdminUsersService {
      * Create a new user with permission checks.
      */
     async createAdmin(data, requester) {
-        const { username, password, role, mobile } = data;
+        const { username, password, role, fullName, designation, email, mobile, altMobile } = data;
 
-        // Permission check
         if (requester.role !== 'super-admin') {
-            if (role !== 'employee') {
+            if (role && role !== 'employee') {
                 throw { status: 403, message: 'You only have permission to create employees' };
             }
         }
@@ -35,10 +34,13 @@ class AdminUsersService {
         if (existingUser) throw { status: 409, message: 'Username already exists' };
 
         const newUser = new User({
-            username,
-            password,
+            username, password,
+            fullName: fullName || '',
+            designation: designation || '',
+            email: email || '',
+            mobile: mobile || '',
+            altMobile: altMobile || '',
             role: role || 'employee',
-            mobile,
             status: 'Active',
             createdBy: requester.id
         });
@@ -53,12 +55,11 @@ class AdminUsersService {
      * Update a user with permission checks.
      */
     async updateAdmin(id, data, requester) {
-        const { username, role, status, password, mobile } = data;
+        const { username, role, status, password, fullName, designation, email, mobile, altMobile } = data;
 
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
 
-        // Permission check: Must be Super Admin or the creator
         if (requester.role !== 'super-admin' && userToUpdate.createdBy?.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to update this user' };
         }
@@ -70,7 +71,6 @@ class AdminUsersService {
         }
 
         if (role) {
-            // Only super-admins can change roles to something other than employee
             if (requester.role !== 'super-admin' && role !== 'employee') {
                 throw { status: 403, message: 'Cannot assign non-employee roles' };
             }
@@ -79,7 +79,11 @@ class AdminUsersService {
 
         if (status) userToUpdate.status = status;
         if (password) userToUpdate.password = password;
-        if (mobile) userToUpdate.mobile = mobile;
+        if (fullName !== undefined) userToUpdate.fullName = fullName;
+        if (designation !== undefined) userToUpdate.designation = designation;
+        if (email !== undefined) userToUpdate.email = email;
+        if (mobile !== undefined) userToUpdate.mobile = mobile;
+        if (altMobile !== undefined) userToUpdate.altMobile = altMobile;
 
         await userToUpdate.save();
         const userData = userToUpdate.toObject();
