@@ -12,6 +12,8 @@ const heroSchema = new mongoose.Schema({
     button1Url: { type: String, default: '/projects-list' },
     button2Name: { type: String, default: 'Get Free Consultation' },
     button2Url: { type: String, default: '/contact-list' },
+    button3Name: { type: String, default: 'Attend Conference' },
+    button3Url: { type: String, default: '/conference' },
     isActive: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
     schedule: {

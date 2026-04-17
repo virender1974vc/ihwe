@@ -23,7 +23,7 @@ class HeroController {
      */
     async createSlide(req, res) {
         try {
-            const { subtitle, title, titleFontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, isActive, schedule, order } = req.body;
+            const { subtitle, title, titleFontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, button3Name, button3Url, isActive, schedule, order } = req.body;
 
             if (!req.file) {
                 return res.status(400).json({ success: false, message: 'Please upload an image' });
@@ -41,6 +41,8 @@ class HeroController {
                 button1Url,
                 button2Name,
                 button2Url,
+                button3Name,
+                button3Url,
                 isActive: isActive === 'true' || isActive === true,
                 order: order ? parseInt(order) : 0,
                 schedule: schedule ? JSON.parse(schedule) : undefined
@@ -60,7 +62,7 @@ class HeroController {
      */
     async updateSlide(req, res) {
         try {
-            const { subtitle, title, titleFontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, isActive, schedule, order } = req.body;
+            const { subtitle, title, titleFontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, button3Name, button3Url, isActive, schedule, order } = req.body;
 
             let updateData = {
                 subtitle,
@@ -73,6 +75,8 @@ class HeroController {
                 button1Url,
                 button2Name,
                 button2Url,
+                button3Name,
+                button3Url,
                 isActive: isActive === 'true' || isActive === true,
                 order: order ? parseInt(order) : 0,
                 schedule: schedule ? JSON.parse(schedule) : undefined

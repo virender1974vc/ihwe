@@ -62,7 +62,11 @@ const settingsSchema = new mongoose.Schema({
     exhibitionLinks: [{
         label: String,
         href: String
-    }]
+    }],
+    exhibitorBrochurePdf: {
+        type: String,
+        default: ""
+    }
 }, { timestamps: true });
 
 

@@ -38,8 +38,13 @@ class SettingsController {
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined
             };
 
-            if (req.file) {
-                updateData.logo = `/uploads/settings/${req.file.filename}`;
+            if (req.files) {
+                if (req.files.logo) {
+                    updateData.logo = `/uploads/settings/${req.files.logo[0].filename}`;
+                }
+                if (req.files.exhibitorBrochurePdf) {
+                    updateData.exhibitorBrochurePdf = `/uploads/settings/${req.files.exhibitorBrochurePdf[0].filename}`;
+                }
             }
 
             const data = await settingsService.updateSettings(updateData);

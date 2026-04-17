@@ -283,6 +283,7 @@ app.use("/api/primary-products", primaryProductInterestsRoutes);
 app.use("/api/secondary-products", secondaryProductRoutes);
 app.use("/api/stall-accessories", stallAccessoryRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
+app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 
 
 app.listen(PORT, () => {

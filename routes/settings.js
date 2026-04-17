@@ -27,7 +27,8 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, `logo-${Date.now()}${path.extname(file.originalname)}`);
+        const prefix = file.fieldname === 'logo' ? 'logo' : 'brochure';
+        cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
 
@@ -39,6 +40,6 @@ router.get('/', (req, res) => settingsController.getSettings(req, res));
 
 // @route   PUT /api/settings
 // @desc    Update system settings
-router.put('/', verifyToken, upload.single('logo'), (req, res) => settingsController.updateSettings(req, res));
+router.put('/', verifyToken, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'exhibitorBrochurePdf', maxCount: 1 }]), (req, res) => settingsController.updateSettings(req, res));
 
 module.exports = router;
