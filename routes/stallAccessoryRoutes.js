@@ -5,18 +5,34 @@ const jwt = require('jsonwebtoken');
 const razorpay = require('../utils/razorpay');
 const crypto = require('crypto');
 const AccessoryOrder = require('../models/AccessoryOrder');
+const StallAccessory = require('../models/StallAccessory');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = './uploads/accessories';
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname);
+    }
+});
 
-// Middleware: allow both admin and exhibitor tokens
+const upload = multer({ storage });
 const flexAuth = (req, res, next) => {
     const auth = req.headers.authorization;
     if (!auth || !auth.startsWith('Bearer ')) return next();
     try {
         const decoded = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET || 'fallback_secret_key');
         req.user = decoded;
-    } catch (_) {}
+    } catch (_) { }
     next();
 };
 
@@ -37,8 +53,8 @@ const requireExhibitor = (req, res, next) => {
 
 // ── Accessories catalog (public read) ────────────────────────────────────────
 router.get('/accessories', ctrl.getAllAccessories);
-router.post('/accessories', ctrl.createAccessory);
-router.put('/accessories/:id', ctrl.updateAccessory);
+router.post('/accessories', upload.single('image'), ctrl.createAccessory);
+router.put('/accessories/:id', upload.single('image'), ctrl.updateAccessory);
 router.delete('/accessories/:id', ctrl.deleteAccessory);
 
 // ── Orders ────────────────────────────────────────────────────────────────────
@@ -123,6 +139,20 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             notes: notes || '',
         });
         await order.save();
+        
+        // Update stock availability
+        try {
+            for (const item of items) {
+                if (item.accessoryId) {
+                    await StallAccessory.updateOne(
+                        { _id: item.accessoryId },
+                        { $inc: { availableQty: -Math.abs(Number(item.qty || 1)) } }
+                    );
+                }
+            }
+        } catch (stockErr) {
+            console.error('Stock update error:', stockErr.message);
+        }
 
         // Generate receipt PDF + send email
         try {

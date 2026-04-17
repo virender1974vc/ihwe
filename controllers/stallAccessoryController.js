@@ -17,7 +17,20 @@ const getAllAccessories = async (req, res) => {
 
 const createAccessory = async (req, res) => {
     try {
-        const item = new StallAccessory(req.body);
+        const data = { ...req.body };
+        if (req.file) {
+            data.imageUrl = `/uploads/accessories/${req.file.filename}`;
+        }
+        
+        // Handle numeric/boolean fields that might come as strings from FormData
+        if (data.price) data.price = Number(data.price);
+        if (data.gstPercent) data.gstPercent = Number(data.gstPercent);
+        if (data.includedQty) data.includedQty = Number(data.includedQty);
+        if (data.availableQty) data.availableQty = Number(data.availableQty);
+        if (data.sortOrder) data.sortOrder = Number(data.sortOrder);
+        if (data.isActive !== undefined) data.isActive = data.isActive === 'true' || data.isActive === true;
+
+        const item = new StallAccessory(data);
         await item.save();
         res.status(201).json({ success: true, data: item });
     } catch (err) {
@@ -27,7 +40,20 @@ const createAccessory = async (req, res) => {
 
 const updateAccessory = async (req, res) => {
     try {
-        const item = await StallAccessory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const data = { ...req.body };
+        if (req.file) {
+            data.imageUrl = `/uploads/accessories/${req.file.filename}`;
+        }
+
+        // Handle numeric/boolean fields
+        if (data.price) data.price = Number(data.price);
+        if (data.gstPercent) data.gstPercent = Number(data.gstPercent);
+        if (data.includedQty) data.includedQty = Number(data.includedQty);
+        if (data.availableQty) data.availableQty = Number(data.availableQty);
+        if (data.sortOrder) data.sortOrder = Number(data.sortOrder);
+        if (data.isActive !== undefined) data.isActive = data.isActive === 'true' || data.isActive === true;
+
+        const item = await StallAccessory.findByIdAndUpdate(req.params.id, data, { new: true });
         if (!item) return res.status(404).json({ success: false, message: 'Not found' });
         res.json({ success: true, data: item });
     } catch (err) {
@@ -117,6 +143,19 @@ const createOrder = async (req, res) => {
         });
 
         await order.save();
+
+        // Update Stock
+        try {
+            for (const item of items) {
+                if (item.accessoryId) {
+                    await StallAccessory.findByIdAndUpdate(item.accessoryId, {
+                        $inc: { availableQty: -Math.abs(Number(item.qty || 1)) }
+                    });
+                }
+            }
+        } catch (stockErr) {
+            console.error('Stock update error:', stockErr.message);
+        }
 
         // Generate PDF receipt
         try {
