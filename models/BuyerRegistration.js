@@ -96,6 +96,11 @@ const buyerRegistrationSchema = new mongoose.Schema(
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },
 
+    // Login Credentials
+    password: { type: String, select: false },
+    otp: { type: String, select: false },
+    otpExpiry: { type: Date, select: false },
+
     // Legacy fields (optional but kept for compatibility if needed during migration)
     // contactPerson: { type: String, trim: true },
     // email: { type: String, trim: true },
