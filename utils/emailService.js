@@ -1074,6 +1074,70 @@ class EmailService {
         const html = this.emailShell(`<div style="text-align: center;"><p>Hello <strong>${name}</strong>,</p><p>Your One Time Password (OTP) for IHWE access is:</p><div style="font-size: 32px; font-weight: 800; color: #d26019; letter-spacing: 5px; margin: 20px 0;">${otp}</div><p>Please do not share this OTP with anyone. It is valid for 10 minutes.</p></div>`);
         return await this.sendEmail({ to: email, subject, html });
     }
+
+    async sendAccessoryOrderEmail(registration, order, pdfPath) {
+        try {
+            const email = registration.contact1?.email;
+            if (!email) return false;
+
+            const isComplimentary = order.paymentStatus === 'complimentary';
+            const fmt = (n) => `INR ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+            const itemRows = order.items.map((item, i) => `
+                <tr style="border-bottom:1px solid #f3f4f6;">
+                    <td style="padding:8px 12px;font-size:13px;">${i + 1}. ${item.name}</td>
+                    <td style="padding:8px 12px;font-size:13px;text-align:center;">${item.qty}</td>
+                    <td style="padding:8px 12px;font-size:13px;text-align:center;color:${item.type === 'complimentary' ? '#16a34a' : '#d26019'};font-weight:700;">${item.type === 'complimentary' ? 'FREE' : 'Paid'}</td>
+                    <td style="padding:8px 12px;font-size:13px;text-align:right;font-weight:700;">${item.type === 'complimentary' ? 'Complimentary' : fmt(item.totalPrice)}</td>
+                </tr>
+            `).join('');
+
+            const subject = `Accessory Order Confirmation – ${order.orderNo} | IHWE 2026`;
+            const html = this.emailShell(`
+                <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
+                <p>Your accessory order has been successfully processed for <strong>IHWE 2026</strong>.</p>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0;border:1px solid #e5e7eb;">
+                    <thead>
+                        <tr style="background:#23471d;color:#fff;">
+                            <th style="padding:10px 12px;text-align:left;font-size:12px;">Item</th>
+                            <th style="padding:10px 12px;text-align:center;font-size:12px;">Qty</th>
+                            <th style="padding:10px 12px;text-align:center;font-size:12px;">Type</th>
+                            <th style="padding:10px 12px;text-align:right;font-size:12px;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>${itemRows}</tbody>
+                    <tfoot>
+                        <tr style="background:#f9fafb;">
+                            <td colspan="3" style="padding:10px 12px;font-weight:700;font-size:13px;">Grand Total</td>
+                            <td style="padding:10px 12px;font-weight:800;font-size:14px;text-align:right;color:#23471d;">${isComplimentary ? 'Complimentary' : fmt(order.grandTotal)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+                <p><strong>Order No:</strong> ${order.orderNo}</p>
+                <p><strong>Stall No:</strong> ${registration.participation?.stallFor || 'N/A'}</p>
+                <p><strong>Registration ID:</strong> ${registration.registrationId || 'N/A'}</p>
+                ${order.transactionId ? `<p><strong>Transaction ID:</strong> ${order.transactionId}</p>` : ''}
+                <p>Please find your receipt attached. For any queries, contact us at <a href="mailto:info@ihwe.in">info@ihwe.in</a>.</p>
+            `);
+
+            const attachments = [];
+            if (pdfPath && require('fs').existsSync(pdfPath)) {
+                attachments.push({ filename: `Accessory_Receipt_${order.orderNo}.pdf`, path: pdfPath });
+            }
+
+            return await this.sendEmail({
+                to: email,
+                subject,
+                html,
+                attachments,
+                profile: 'EXHIBITOR',
+                logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: `Accessory Order ${order.orderNo}` }
+            });
+        } catch (err) {
+            console.error('sendAccessoryOrderEmail error:', err.message);
+            return false;
+        }
+    }
 }
 
 module.exports = new EmailService();

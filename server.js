@@ -89,6 +89,7 @@ const annualTurnoverRoutes = require("./routes/add_by_admin/AnnualTurnoverRoutes
 const businessTypeRoutes = require("./routes/add_by_admin/BusinessType");
 const meetingPriorityLevelRoutes = require("./routes/add_by_admin/MeetingPriorityLevelRoutes");
 const primaryProductInterestsRoutes = require("./routes/add_by_admin/primaryProductInterestsRoutes");
+const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 
 mongoose
@@ -279,6 +280,7 @@ app.use("/api/annual-turnovers", annualTurnoverRoutes);
 app.use("/api/meeting-priorities", meetingPriorityLevelRoutes);
 app.use("/api/primary-products", primaryProductInterestsRoutes);
 app.use("/api/secondary-products", secondaryProductRoutes);
+app.use("/api/stall-accessories", stallAccessoryRoutes);
 
 
 app.listen(PORT, () => {

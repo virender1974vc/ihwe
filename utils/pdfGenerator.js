@@ -437,6 +437,138 @@ class PDFGenerator {
             } catch (err) { reject(err); }
         });
     }
+
+    // ─── Accessory Order Receipt ──────────────────────────────────────────────
+
+    async generateAccessoryReceipt(order, registration) {
+        return new Promise((resolve, reject) => {
+            try {
+                const doc = new PDFDocument({ margin: 0, size: 'A4' });
+                const filePath = path.join(TEMP_DIR, `acc_receipt_${order._id}_${Date.now()}.pdf`);
+                const stream = fs.createWriteStream(filePath);
+                doc.pipe(stream);
+
+                const pageW = doc.page.width;
+                const fmt = (n) => `INR ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+                this._headerImg(doc);
+                let y = doc.y + 10;
+
+                // Title
+                doc.rect(40, y, pageW - 80, 22).fill(ORANGE);
+                doc.fillColor(WHITE).fontSize(11).font('Helvetica-Bold')
+                   .text('ACCESSORY / EXTRAS PURCHASE RECEIPT', 40, y + 6, { width: pageW - 80, align: 'center' });
+                y += 30;
+
+                // Meta
+                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                   .text(`Order No: ${order.orderNo}`, 40, y)
+                   .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 0, y, { width: pageW - 40, align: 'right' });
+                y += 16;
+                this._line(doc, 40, y, pageW - 40);
+                y += 8;
+
+                // FROM | TO
+                const colW = (pageW - 100) / 2;
+                const lx = 40, rx = 60 + colW;
+                const c1 = registration.contact1 || {};
+
+                doc.rect(lx, y, colW, 80).lineWidth(0.5).stroke('#e5e7eb');
+                this._label(doc, 'From', lx + 8, y + 8, colW - 16);
+                doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold').text('IHWE 2026 – Organizer', lx + 8, y + 20, { width: colW - 16 });
+                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                   .text('Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 34, { width: colW - 16 })
+                   .text('Pragati Maidan, New Delhi – 110001', lx + 8, y + 46, { width: colW - 16 })
+                   .text('info@ihwe.in  |  +91-9654900525', lx + 8, y + 58, { width: colW - 16 });
+
+                doc.rect(rx, y, colW, 80).lineWidth(0.5).stroke('#e5e7eb');
+                this._label(doc, 'To (Exhibitor)', rx + 8, y + 8, colW - 16);
+                doc.fillColor(ORANGE).fontSize(10).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rx + 8, y + 20, { width: colW - 16 });
+                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                   .text(`Reg ID: ${registration.registrationId || 'N/A'}`, rx + 8, y + 34, { width: colW - 16 })
+                   .text(`Stall: ${registration.participation?.stallFor || 'N/A'}`, rx + 8, y + 46, { width: colW - 16 })
+                   .text(c1.email || '', rx + 8, y + 58, { width: colW - 16 });
+                y += 88;
+
+                // Items table
+                const tW = pageW - 80;
+                const cols = [
+                    { label: '#', w: tW * 0.05 },
+                    { label: 'Item', w: tW * 0.30 },
+                    { label: 'Type', w: tW * 0.12 },
+                    { label: 'Qty', w: tW * 0.08, align: 'center' },
+                    { label: 'Unit Price', w: tW * 0.15, align: 'right' },
+                    { label: 'GST', w: tW * 0.10, align: 'right' },
+                    { label: 'Total', w: tW * 0.20, align: 'right' },
+                ];
+
+                doc.rect(40, y, tW, 18).fill(DARK);
+                let tx = 40;
+                cols.forEach(col => {
+                    doc.fillColor(WHITE).fontSize(8).font('Helvetica-Bold')
+                       .text(col.label, tx + 4, y + 5, { width: col.w - 8, align: col.align || 'left' });
+                    tx += col.w;
+                });
+                y += 18;
+
+                order.items.forEach((item, idx) => {
+                    const bg = idx % 2 === 0 ? '#f9fafb' : WHITE;
+                    y = this._tableRow(doc, [
+                        { text: String(idx + 1), w: tW * 0.05 },
+                        { text: item.name, w: tW * 0.30 },
+                        { text: item.type === 'complimentary' ? 'FREE' : 'Paid', w: tW * 0.12, color: item.type === 'complimentary' ? '#16a34a' : ORANGE, bold: true },
+                        { text: String(item.qty), w: tW * 0.08, align: 'center' },
+                        { text: item.type === 'complimentary' ? '—' : fmt(item.unitPrice), w: tW * 0.15, align: 'right' },
+                        { text: item.type === 'complimentary' ? '—' : fmt(item.gstAmount), w: tW * 0.10, align: 'right' },
+                        { text: item.type === 'complimentary' ? 'Complimentary' : fmt(item.totalPrice), w: tW * 0.20, align: 'right', bold: true },
+                    ], y, bg);
+                });
+
+                this._line(doc, 40, y, 40 + tW, '#e5e7eb');
+                y += 8;
+
+                // Summary
+                const sumX = 40 + tW * 0.55;
+                const sumW = tW * 0.45;
+                [
+                    { label: 'Subtotal', value: fmt(order.subtotal) },
+                    { label: 'Total GST', value: fmt(order.totalGst) },
+                ].forEach(row => {
+                    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                       .text(row.label, sumX, y + 4, { width: sumW * 0.55 })
+                       .text(row.value, sumX + sumW * 0.55, y + 4, { width: sumW * 0.45, align: 'right' });
+                    y += 16;
+                });
+                this._line(doc, sumX, y, sumX + sumW, GREEN, 1);
+                y += 4;
+                doc.rect(sumX, y, sumW, 24).fill(GREEN);
+                doc.fillColor(WHITE).fontSize(10).font('Helvetica-Bold')
+                   .text('GRAND TOTAL', sumX + 8, y + 7, { width: sumW * 0.5 })
+                   .text(fmt(order.grandTotal), sumX + sumW * 0.5, y + 7, { width: sumW * 0.5 - 8, align: 'right' });
+                y += 32;
+
+                // Status badge
+                const statusColor = order.paymentStatus === 'complimentary' ? GREEN : (order.paymentStatus === 'paid' ? '#0891b2' : '#f59e0b');
+                doc.rect(40, y, 160, 22).fill(statusColor);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
+                   .text(order.paymentStatus.toUpperCase(), 40, y + 7, { width: 160, align: 'center' });
+
+                if (order.transactionId) {
+                    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                       .text(`Txn ID: ${order.transactionId}`, 210, y + 8, { width: pageW - 260 });
+                }
+
+                this._footerImg(doc);
+                doc.end();
+
+                stream.on('finish', () => {
+                    const publicUrl = getTempPdfUrl(filePath);
+                    resolve({ filePath, cloudUrl: publicUrl });
+                });
+                stream.on('error', reject);
+            } catch (err) { reject(err); }
+        });
+    }
 }
 
 module.exports = new PDFGenerator();
