@@ -89,7 +89,7 @@ class ExhibitorRegistrationService {
                             }
                         });
                     });
-                    
+
                     // Collect contacts
                     if (sib.contact1?.firstName && (!masterData.contact1 || !masterData.contact1.firstName)) {
                         masterData.contact1 = sib.contact1;
@@ -101,14 +101,13 @@ class ExhibitorRegistrationService {
             });
 
             // APPLY: Fill missing fields only — NEVER overwrite existing data
-            const KYC_IMAGE_FIELDS = ['companyLogoUrl','panCardFrontUrl','panCardBackUrl','aadhaarCardFrontUrl','aadhaarCardBackUrl','gstCertificateUrl','cancelledChequeUrl','representativePhotoUrl'];
+            const KYC_IMAGE_FIELDS = ['companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
             profileFields.forEach(f => {
                 const currentVal = doc[f];
                 const cleanCurrent = (typeof currentVal === 'string') ? currentVal.trim() : '';
                 const isEmpty = !cleanCurrent || cleanCurrent === 'undefined' || cleanCurrent === 'null';
+                if (KYC_IMAGE_FIELDS.includes(f)) return;
 
-                // For KYC image fields: only fill if EMPTY — never overwrite existing
-                // For other fields: fill if empty
                 if (isEmpty && masterData[f]) {
                     doc[f] = masterData[f];
                     doc._isEnriched = true;
@@ -371,7 +370,7 @@ class ExhibitorRegistrationService {
         // Collect BEST data (prefer non-empty) for each field
         const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'natureOfBusiness', 'primaryCategory', 'subCategory'];
         const kycFields = ['companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
-        
+
         const fieldAliases = {
             'companyLogoUrl': ['companyLogo', 'logo'],
             'panCardFrontUrl': ['panFrontUrl', 'panCardFront', 'panFront'],

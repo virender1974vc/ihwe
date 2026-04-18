@@ -43,8 +43,6 @@ router.get('/:id', (req, res) => exhibitorRegistrationController.getRegistration
 router.post('/', (req, res) => exhibitorRegistrationController.addRegistration(req, res));
 router.put('/:id', (req, res) => exhibitorRegistrationController.updateRegistration(req, res));
 router.delete('/:id', (req, res) => exhibitorRegistrationController.deleteRegistration(req, res));
-router.post('/:id/sync', (req, res) => exhibitorRegistrationController.syncProfileData(req, res));
-router.post('/:id/force-docs', (req, res) => exhibitorRegistrationController.forceDocs(req, res));
 
 // Per-field KYC document upload (admin only) — uploads to Cloudinary, saves to THIS registration only
 const kycStorage = new CloudinaryStorage({
