@@ -1,4 +1,5 @@
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
@@ -237,14 +238,14 @@ class ExhibitorAuthController {
                 });
             }
 
-            const mongoose = require('mongoose');
-            if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
-                console.error('Invalid User ID format:', req.user.id);
-                return res.status(400).json({ success: false, message: 'Invalid user ID format' });
-            }
+            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id) 
+                ? req.query.id 
+                : req.user.id;
+
+            console.log('Target ID for Update:', targetId);
 
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
-                req.user.id, 
+                targetId, 
                 { $set: update }, 
                 { new: true, runValidators: true }
             );

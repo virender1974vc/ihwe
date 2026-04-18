@@ -49,6 +49,31 @@ router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req,
     }
     res.status(200).json({ success: true, url: req.file.path });
 });
+const kycStorage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => {
+        return {
+            folder: 'exhibitor-docs',
+            resource_type: 'auto',
+            allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+        };
+    },
+});
+
+const kycUpload = multer({ storage: kycStorage });
+const kycFields = kycUpload.fields([
+    { name: 'companyLogo', maxCount: 1 },
+    { name: 'panCardFront', maxCount: 1 },
+    { name: 'aadhaarCardFront', maxCount: 1 },
+    { name: 'aadhaarCardBack', maxCount: 1 },
+    { name: 'gstCertificate', maxCount: 1 },
+    { name: 'cancelledCheque', maxCount: 1 },
+    { name: 'representativePhoto', maxCount: 1 }
+]);
+
+router.put('/:id/kyc-doc', kycFields, (req, res) => exhibitorRegistrationController.updateKycDocs(req, res));
+router.delete('/:id/kyc-doc/:field', (req, res) => exhibitorRegistrationController.deleteKycDoc(req, res));
+router.post('/bulk-cleanup-docs', (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
 
 // MSME Certificate upload (exhibitor or admin)
 const msmeStorage = new CloudinaryStorage({

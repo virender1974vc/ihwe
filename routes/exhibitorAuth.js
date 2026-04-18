@@ -28,7 +28,6 @@ const upload = multer({ storage });
 const uploadFields = upload.fields([
     { name: 'companyLogo', maxCount: 1 },
     { name: 'panCardFront', maxCount: 1 },
-    { name: 'panCardBack', maxCount: 1 },
     { name: 'aadhaarCardFront', maxCount: 1 },
     { name: 'aadhaarCardBack', maxCount: 1 },
     { name: 'gstCertificate', maxCount: 1 },
