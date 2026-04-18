@@ -26,7 +26,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            // Send OTP via email with proper template
+
             await emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName);
 
             res.status(200).json({
@@ -98,7 +98,7 @@ class ExhibitorAuthController {
             // Try sending via WhatsApp if available
             const { sendWhatsAppOTP } = require('../utils/whatsapp');
             await sendWhatsAppOTP(mobile, otp);
-            
+
             // Also send via email if exists
             if (exhibitor.contact1.email) {
                 await emailService.sendOtpEmail(exhibitor.contact1.email, otp, exhibitor.exhibitorName);
@@ -129,8 +129,8 @@ class ExhibitorAuthController {
                     { 'contact1.mobile': mobile }
                 ]
             })
-            .populate('eventId', 'name date location venue startDate endDate')
-            .sort({ createdAt: -1 });
+                .populate('eventId', 'name date location venue startDate endDate')
+                .sort({ createdAt: -1 });
 
             if (!registrations || registrations.length === 0)
                 return res.status(404).json({ success: false, message: 'No registrations found' });
@@ -188,19 +188,76 @@ class ExhibitorAuthController {
     }
     async updateProfile(req, res) {
         try {
-            if (req.user.role !== 'exhibitor')
+            console.log('--- Starting Profile Update ---');
+            console.log('User ID from token:', req.user?.id);
+            console.log('Body received:', JSON.stringify(req.body, null, 2));
+            console.log('Files received:', req.files ? Object.keys(req.files) : 'None');
+
+            if (req.user?.role !== 'exhibitor') {
+                console.log('Access denied: Role is not exhibitor');
                 return res.status(403).json({ success: false, message: 'Access denied.' });
+            }
 
             const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
             const update = {};
-            allowed.forEach(key => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
+            allowed.forEach(key => {
+                if (req.body[key] !== undefined) {
+                    try {
+                        const val = req.body[key];
+                        if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+                            update[key] = JSON.parse(val);
+                        } else {
+                            update[key] = val;
+                        }
+                    } catch (e) {
+                        console.error(`Error parsing field ${key}:`, e);
+                        update[key] = req.body[key];
+                    }
+                }
+            });
 
-            const updated = await ExhibitorRegistration.findByIdAndUpdate(req.user.id, { $set: update }, { new: true });
-            if (!updated)
+            // Handle file uploads from req.files (Multer fields)
+            if (req.files) {
+                const fileFields = {
+                    companyLogo: 'companyLogoUrl',
+                    panCardFront: 'panCardFrontUrl',
+                    panCardBack: 'panCardBackUrl',
+                    aadhaarCardFront: 'aadhaarCardFrontUrl',
+                    aadhaarCardBack: 'aadhaarCardBackUrl',
+                    gstCertificate: 'gstCertificateUrl',
+                    cancelledCheque: 'cancelledChequeUrl',
+                    representativePhoto: 'representativePhotoUrl'
+                };
+
+                Object.keys(fileFields).forEach(field => {
+                    if (req.files[field] && req.files[field][0]) {
+                        console.log(`Processing file: ${field} -> ${req.files[field][0].path}`);
+                        update[fileFields[field]] = req.files[field][0].path;
+                    }
+                });
+            }
+
+            const mongoose = require('mongoose');
+            if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
+                console.error('Invalid User ID format:', req.user.id);
+                return res.status(400).json({ success: false, message: 'Invalid user ID format' });
+            }
+
+            const updated = await ExhibitorRegistration.findByIdAndUpdate(
+                req.user.id, 
+                { $set: update }, 
+                { new: true, runValidators: true }
+            );
+
+            if (!updated) {
+                console.log('No exhibitor found for ID:', req.user.id);
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+            }
 
+            console.log('Profile updated successfully for:', req.user.id);
             res.status(200).json({ success: true, message: 'Profile updated successfully', data: updated });
         } catch (error) {
+            console.error('CRITICAL: Update profile error:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     }
