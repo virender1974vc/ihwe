@@ -125,7 +125,12 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     aadhaarCardBackUrl: String,
     gstCertificateUrl: String,
     cancelledChequeUrl: String,
-    representativePhotoUrl: String
+    representativePhotoUrl: String,
+    specialDocuments: [{
+        label: String,
+        url: String,
+        uploadedAt: { type: Date, default: Date.now }
+    }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

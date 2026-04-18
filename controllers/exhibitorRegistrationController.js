@@ -204,6 +204,54 @@ class ExhibitorRegistrationController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    /**
+     * Add a special document
+     */
+    async addSpecialDoc(req, res) {
+        try {
+            const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+            const { id } = req.params;
+            const { label } = req.body;
+            
+            if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+            if (!label) return res.status(400).json({ success: false, message: 'Label is required' });
+
+            const updated = await ExhibitorRegistration.findByIdAndUpdate(
+                id,
+                { $push: { specialDocuments: { label, url: req.file.path } } },
+                { new: true }
+            );
+
+            if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
+
+            res.status(200).json({ success: true, message: 'Special document added', data: updated.specialDocuments });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Delete a special document
+     */
+    async deleteSpecialDoc(req, res) {
+        try {
+            const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+            const { id, docId } = req.params;
+
+            const updated = await ExhibitorRegistration.findByIdAndUpdate(
+                id,
+                { $pull: { specialDocuments: { _id: docId } } },
+                { new: true }
+            );
+
+            if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
+
+            res.status(200).json({ success: true, message: 'Special document deleted', data: updated.specialDocuments });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new ExhibitorRegistrationController();

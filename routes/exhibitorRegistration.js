@@ -45,15 +45,21 @@ router.put('/:id', (req, res) => exhibitorRegistrationController.updateRegistrat
 router.delete('/:id', (req, res) => exhibitorRegistrationController.deleteRegistration(req, res));
 
 // Per-field KYC document upload (admin only) — uploads to Cloudinary, saves to THIS registration only
-const kycStorage = new CloudinaryStorage({
-    cloudinary,
-    params: async (req, file) => ({
-        folder: 'exhibitor-docs',
-        resource_type: 'auto',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-    }),
+// Local Storage for Special Documents and KYC to avoid Cloudinary issues
+const kycDiskStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = 'uploads/kyc';
+        const fs = require('fs');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        cb(null, 'ihwe-' + uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_'));
+    }
 });
-const kycUpload = multer({ storage: kycStorage });
+const kycUpload = multer({ storage: kycDiskStorage });
+const kycStorage = null; // Removed Cloudinary
 
 // KYC document configuration
 const kycFields = kycUpload.fields([
@@ -69,6 +75,8 @@ const kycFields = kycUpload.fields([
 router.put('/:id/kyc-doc', requireAdminAuth, kycFields, (req, res) => exhibitorRegistrationController.updateKycDocs(req, res));
 router.delete('/:id/kyc-doc/:field', requireAdminAuth, (req, res) => exhibitorRegistrationController.deleteKycDoc(req, res));
 router.post('/bulk-cleanup-docs', requireAdminAuth, (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
+router.post('/:id/special-docs', kycUpload.single('file'), (req, res) => exhibitorRegistrationController.addSpecialDoc(req, res));
+router.delete('/:id/special-docs/:docId', (req, res) => exhibitorRegistrationController.deleteSpecialDoc(req, res));
 router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
