@@ -10,8 +10,8 @@ class ExhibitorRegistrationController {
      */
     async getAllRegistrations(req, res) {
         try {
-            const registrations = await exhibitorRegistrationService.getAllRegistrations();
-            res.status(200).json({ success: true, data: registrations });
+            const enriched = await exhibitorRegistrationService.getAllRegistrations();
+            res.status(200).json({ success: true, data: enriched });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
@@ -74,6 +74,26 @@ class ExhibitorRegistrationController {
             res.status(200).json({ success: true, message: 'Registration deleted successfully' });
         } catch (error) {
             res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async syncProfileData(req, res) {
+        try {
+            const updated = await exhibitorRegistrationService.syncProfileData(req.params.id);
+            res.status(200).json({ success: true, message: 'Profile data synced across all registrations', data: updated });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async forceDocs(req, res) {
+        try {
+            const url = req.body.customPath || req.body.sampleUrl;
+            if (!url) return res.status(400).json({ success: false, message: 'URL is required (customPath or sampleUrl)' });
+            const result = await exhibitorRegistrationService.forceDocsScan(req.params.id, url);
+            res.status(200).json({ success: true, message: 'Documents updated across all related registrations', data: result });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 }

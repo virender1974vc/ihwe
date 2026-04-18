@@ -1,7 +1,9 @@
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const emailService = require('../utils/emailService');
+const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -123,7 +125,7 @@ class ExhibitorAuthController {
             const email = req.user.email;
             const mobile = req.user.mobile;
 
-            const registrations = await ExhibitorRegistration.find({
+            const rawRegistrations = await ExhibitorRegistration.find({
                 $or: [
                     { 'contact1.email': email },
                     { 'contact1.mobile': mobile }
@@ -132,14 +134,17 @@ class ExhibitorAuthController {
                 .populate('eventId', 'name date location venue startDate endDate')
                 .sort({ createdAt: -1 });
 
-            if (!registrations || registrations.length === 0)
+            if (!rawRegistrations || rawRegistrations.length === 0)
                 return res.status(404).json({ success: false, message: 'No registrations found' });
+
+            // ENRICH: Dynamically bridge data gaps across matched registrations
+            const registrations = await exhibitorRegistrationService._enrichRegistrations(rawRegistrations);
 
             // If an ID is provided in query, return that specific one
             const selectedId = req.query.id;
             let selectedRegistration = null;
             if (selectedId) {
-                selectedRegistration = registrations.find(r => r._id.toString() === selectedId);
+                selectedRegistration = registrations.find(r => (r._id.toString() === selectedId) || (r.id === selectedId));
             }
 
             // Default to latest if not specified or not found
@@ -198,7 +203,7 @@ class ExhibitorAuthController {
                 return res.status(403).json({ success: false, message: 'Access denied.' });
             }
 
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2', 'natureOfBusiness'];
             const update = {};
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
@@ -231,31 +236,82 @@ class ExhibitorAuthController {
 
                 Object.keys(fileFields).forEach(field => {
                     if (req.files[field] && req.files[field][0]) {
-                        console.log(`Processing file: ${field} -> ${req.files[field][0].path}`);
                         update[fileFields[field]] = req.files[field][0].path;
                     }
                 });
             }
 
-            const mongoose = require('mongoose');
-            if (!mongoose.Types.ObjectId.isValid(req.user.id)) {
-                console.error('Invalid User ID format:', req.user.id);
-                return res.status(400).json({ success: false, message: 'Invalid user ID format' });
+            // Determine which registration to update
+            // If an ID is provided in query, we update that one (after verifying ownership)
+            // Otherwise we fallback to req.user.id (the one they logged in with)
+            const targetId = req.query.id || req.user.id;
+
+            if (!mongoose.Types.ObjectId.isValid(targetId)) {
+                console.error('Invalid ID format:', targetId);
+                return res.status(400).json({ success: false, message: 'Invalid registration ID format' });
             }
 
-            const updated = await ExhibitorRegistration.findByIdAndUpdate(
-                req.user.id, 
-                { $set: update }, 
-                { new: true, runValidators: true }
-            );
+            // Verify ownership if targetId is different from req.user.id
+            // Or always verify by email/mobile to be safe
+            const exhibition = await ExhibitorRegistration.findById(targetId);
+            if (!exhibition) {
+                return res.status(404).json({ success: false, message: 'Registration not found' });
+            }
+
+            const userEmail = req.user.email;
+            const userMobile = req.user.mobile;
+
+            if (exhibition.contact1?.email !== userEmail && exhibition.contact1?.mobile !== userMobile) {
+                return res.status(403).json({ success: false, message: 'Access denied. You do not own this registration.' });
+            }
+
+            // --- Separate text updates from image/doc updates ---
+            const KYC_URL_FIELDS = ['companyLogoUrl','panCardFrontUrl','panCardBackUrl','aadhaarCardFrontUrl','aadhaarCardBackUrl','gstCertificateUrl','cancelledChequeUrl','representativePhotoUrl'];
+
+            const textUpdate = {};
+            const imageUpdate = {};
+            Object.entries(update).forEach(([k, v]) => {
+                if (KYC_URL_FIELDS.includes(k)) {
+                    imageUpdate[k] = v;
+                } else {
+                    textUpdate[k] = v;
+                }
+            });
+
+            // Sync TEXT fields across all registrations for this user
+            if (Object.keys(textUpdate).length > 0) {
+                await ExhibitorRegistration.updateMany(
+                    {
+                        $or: [
+                            { 'contact1.email': { $regex: new RegExp(`^${userEmail}$`, 'i') } },
+                            { 'contact1.mobile': userMobile },
+                            { 'contact2.email': { $regex: new RegExp(`^${userEmail}$`, 'i') } },
+                            { 'contact2.mobile': userMobile },
+                        ]
+                    },
+                    { $set: { ...textUpdate, updatedAt: new Date() } },
+                    { runValidators: true }
+                );
+            }
+
+            // Image/doc uploads go ONLY to this specific registration (targetId)
+            if (Object.keys(imageUpdate).length > 0) {
+                await ExhibitorRegistration.findByIdAndUpdate(
+                    targetId,
+                    { $set: { ...imageUpdate, updatedAt: new Date() } }
+                );
+            }
+
+            // Fetch the specific record to return to frontend
+            const updated = await ExhibitorRegistration.findById(targetId);
 
             if (!updated) {
-                console.log('No exhibitor found for ID:', req.user.id);
+                console.log('No exhibitor found for ID:', targetId);
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
             }
 
-            console.log('Profile updated successfully for:', req.user.id);
-            res.status(200).json({ success: true, message: 'Profile updated successfully', data: updated });
+            console.log('Profile updated successfully for:', targetId);
+            res.status(200).json({ success: true, message: 'Profile updated and synced successfully', data: updated });
         } catch (error) {
             console.error('CRITICAL: Update profile error:', error);
             res.status(500).json({ success: false, message: error.message });
