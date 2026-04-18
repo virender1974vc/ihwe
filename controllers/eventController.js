@@ -10,6 +10,15 @@ class EventController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async getEventById(req, res) {
+        try {
+            const data = await eventService.getEventById(req.params.id);
+            if (!data) return res.status(404).json({ success: false, message: 'Event not found' });
+            res.json({ success: true, data });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
     async getActiveEvents(req, res) {
         try {
             const data = await eventService.getActiveEvents();

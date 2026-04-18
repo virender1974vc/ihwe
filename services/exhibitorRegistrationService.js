@@ -19,10 +19,11 @@ class ExhibitorRegistrationService {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
 
-        // --- AUTO-GENERATE registrationId ---
+        // --- AUTO-GENERATE registrationId (Incremental) ---
         const year = new Date().getFullYear();
-        const rand = Math.floor(10000 + Math.random() * 90000);
-        data.registrationId = `IHWE-EXH-${year}-${rand}`;
+        const count = await ExhibitorRegistration.countDocuments({});
+        const nextId = (count + 1).toString().padStart(5, '0');
+        data.registrationId = `IHWE-EXH-${year}-${nextId}`;
         let rawPassword;
         const existing = await ExhibitorRegistration.findOne({ 'contact1.email': data.contact1?.email })
             .select('+password').sort({ createdAt: -1 });
