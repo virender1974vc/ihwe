@@ -10,8 +10,8 @@ class ExhibitorRegistrationController {
      */
     async getAllRegistrations(req, res) {
         try {
-            const registrations = await exhibitorRegistrationService.getAllRegistrations();
-            res.status(200).json({ success: true, data: registrations });
+            const enriched = await exhibitorRegistrationService.getAllRegistrations();
+            res.status(200).json({ success: true, data: enriched });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
@@ -33,7 +33,7 @@ class ExhibitorRegistrationController {
     async addRegistration(req, res) {
         try {
             const savedRegistration = await exhibitorRegistrationService.addRegistration(req.body);
-            
+
             await logActivity(req, 'Created', 'Exhibitor Bookings', `New booking: ${savedRegistration.companyName} (${savedRegistration.registrationId})`);
 
             res.status(201).json({ success: true, data: savedRegistration });
@@ -48,7 +48,7 @@ class ExhibitorRegistrationController {
     async updateRegistration(req, res) {
         try {
             const updatedRegistration = await exhibitorRegistrationService.updateRegistration(req.params.id, req.body);
-            
+
             if (updatedRegistration) {
                 await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.companyName} (${updatedRegistration.registrationId})`);
             }
@@ -66,7 +66,7 @@ class ExhibitorRegistrationController {
         try {
             const registration = await exhibitorRegistrationService.getRegistrationById(req.params.id); // Need this method
             const result = await exhibitorRegistrationService.deleteRegistration(req.params.id);
-            
+
             if (registration) {
                 await logActivity(req, 'Deleted', 'Exhibitor Bookings', `Deleted booking: ${registration.companyName} (${registration.registrationId})`);
             }
@@ -84,7 +84,7 @@ class ExhibitorRegistrationController {
         try {
             const ExhibitorRegistration = require('../models/ExhibitorRegistration');
             const update = {};
-            
+
             if (req.files) {
                 const fileFields = {
                     companyLogo: 'companyLogoUrl',
@@ -142,11 +142,11 @@ class ExhibitorRegistrationController {
         try {
             const ExhibitorRegistration = require('../models/ExhibitorRegistration');
             const { id, field } = req.params;
-            
+
             // Validate field name to prevent arbitrary updates
             const validFields = [
-                'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 
-                'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 
+                'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl',
+                'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl',
                 'cancelledChequeUrl', 'representativePhotoUrl'
             ];
 
@@ -191,12 +191,12 @@ class ExhibitorRegistrationController {
             };
 
             const result = await ExhibitorRegistration.updateMany(
-                {}, 
+                {},
                 { $set: fieldsToReset }
             );
 
-            res.status(200).json({ 
-                success: true, 
+            res.status(200).json({
+                success: true,
                 message: `Bulk cleanup successful. Reset ${result.modifiedCount} registrations.`,
                 details: result
             });

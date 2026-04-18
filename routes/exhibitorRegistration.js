@@ -43,24 +43,21 @@ router.get('/:id', (req, res) => exhibitorRegistrationController.getRegistration
 router.post('/', (req, res) => exhibitorRegistrationController.addRegistration(req, res));
 router.put('/:id', (req, res) => exhibitorRegistrationController.updateRegistration(req, res));
 router.delete('/:id', (req, res) => exhibitorRegistrationController.deleteRegistration(req, res));
-router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ success: false, message: 'No file uploaded' });
-    }
-    res.status(200).json({ success: true, url: req.file.path });
-});
+router.post('/:id/sync', (req, res) => exhibitorRegistrationController.syncProfileData(req, res));
+router.post('/:id/force-docs', (req, res) => exhibitorRegistrationController.forceDocs(req, res));
+
+// Per-field KYC document upload (admin only) — uploads to Cloudinary, saves to THIS registration only
 const kycStorage = new CloudinaryStorage({
     cloudinary,
-    params: async (req, file) => {
-        return {
-            folder: 'exhibitor-docs',
-            resource_type: 'auto',
-            allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-        };
-    },
+    params: async (req, file) => ({
+        folder: 'exhibitor-docs',
+        resource_type: 'auto',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+    }),
 });
-
 const kycUpload = multer({ storage: kycStorage });
+
+// KYC document configuration
 const kycFields = kycUpload.fields([
     { name: 'companyLogo', maxCount: 1 },
     { name: 'panCardFront', maxCount: 1 },
@@ -71,10 +68,15 @@ const kycFields = kycUpload.fields([
     { name: 'representativePhoto', maxCount: 1 }
 ]);
 
-router.put('/:id/kyc-doc', kycFields, (req, res) => exhibitorRegistrationController.updateKycDocs(req, res));
-router.delete('/:id/kyc-doc/:field', (req, res) => exhibitorRegistrationController.deleteKycDoc(req, res));
-router.post('/bulk-cleanup-docs', (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
-
+router.put('/:id/kyc-doc', requireAdminAuth, kycFields, (req, res) => exhibitorRegistrationController.updateKycDocs(req, res));
+router.delete('/:id/kyc-doc/:field', requireAdminAuth, (req, res) => exhibitorRegistrationController.deleteKycDoc(req, res));
+router.post('/bulk-cleanup-docs', requireAdminAuth, (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
+router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    res.status(200).json({ success: true, url: req.file.path });
+});
 // MSME Certificate upload (exhibitor or admin)
 const msmeStorage = new CloudinaryStorage({
     cloudinary,
@@ -87,6 +89,7 @@ const msmeStorage = new CloudinaryStorage({
     },
 });
 const msmeUpload = multer({ storage: msmeStorage });
+
 
 router.put('/:id/msme', msmeUpload.single('udhyamCertificate'), async (req, res) => {
     try {

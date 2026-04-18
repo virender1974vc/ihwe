@@ -14,13 +14,11 @@ cloudinary.config({
 
 const storage = new CloudinaryStorage({
     cloudinary,
-    params: async (req, file) => {
-        return {
-            folder: 'exhibitor-docs',
-            resource_type: 'auto',
-            allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
-        };
-    },
+    params: async (req, file) => ({
+        folder: 'exhibitor-docs',
+        resource_type: 'auto',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+    }),
 });
 
 const upload = multer({ storage });

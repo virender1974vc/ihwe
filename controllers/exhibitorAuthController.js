@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
+const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -124,7 +125,7 @@ class ExhibitorAuthController {
             const email = req.user.email;
             const mobile = req.user.mobile;
 
-            const registrations = await ExhibitorRegistration.find({
+            const rawRegistrations = await ExhibitorRegistration.find({
                 $or: [
                     { 'contact1.email': email },
                     { 'contact1.mobile': mobile }
@@ -133,14 +134,17 @@ class ExhibitorAuthController {
                 .populate('eventId', 'name date location venue startDate endDate')
                 .sort({ createdAt: -1 });
 
-            if (!registrations || registrations.length === 0)
+            if (!rawRegistrations || rawRegistrations.length === 0)
                 return res.status(404).json({ success: false, message: 'No registrations found' });
+
+            // ENRICH: Dynamically bridge data gaps across matched registrations
+            const registrations = await exhibitorRegistrationService._enrichRegistrations(rawRegistrations);
 
             // If an ID is provided in query, return that specific one
             const selectedId = req.query.id;
             let selectedRegistration = null;
             if (selectedId) {
-                selectedRegistration = registrations.find(r => r._id.toString() === selectedId);
+                selectedRegistration = registrations.find(r => (r._id.toString() === selectedId) || (r.id === selectedId));
             }
 
             // Default to latest if not specified or not found
@@ -199,7 +203,7 @@ class ExhibitorAuthController {
                 return res.status(403).json({ success: false, message: 'Access denied.' });
             }
 
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2', 'natureOfBusiness'];
             const update = {};
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
@@ -232,31 +236,30 @@ class ExhibitorAuthController {
 
                 Object.keys(fileFields).forEach(field => {
                     if (req.files[field] && req.files[field][0]) {
-                        console.log(`Processing file: ${field} -> ${req.files[field][0].path}`);
                         update[fileFields[field]] = req.files[field][0].path;
                     }
                 });
             }
 
-            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id) 
-                ? req.query.id 
+            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
+                ? req.query.id
                 : req.user.id;
 
             console.log('Target ID for Update:', targetId);
 
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
-                targetId, 
-                { $set: update }, 
+                targetId,
+                { $set: update },
                 { new: true, runValidators: true }
             );
 
             if (!updated) {
-                console.log('No exhibitor found for ID:', req.user.id);
+                console.log('No exhibitor found for ID:', targetId);
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
             }
 
-            console.log('Profile updated successfully for:', req.user.id);
-            res.status(200).json({ success: true, message: 'Profile updated successfully', data: updated });
+            console.log('Profile updated successfully for:', targetId);
+            res.status(200).json({ success: true, message: 'Profile updated and synced successfully', data: updated });
         } catch (error) {
             console.error('CRITICAL: Update profile error:', error);
             res.status(500).json({ success: false, message: error.message });
