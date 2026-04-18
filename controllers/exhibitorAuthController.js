@@ -1,7 +1,9 @@
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
+const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -26,7 +28,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            // Send OTP via email with proper template
+
             await emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName);
 
             res.status(200).json({
@@ -98,7 +100,7 @@ class ExhibitorAuthController {
             // Try sending via WhatsApp if available
             const { sendWhatsAppOTP } = require('../utils/whatsapp');
             await sendWhatsAppOTP(mobile, otp);
-            
+
             // Also send via email if exists
             if (exhibitor.contact1.email) {
                 await emailService.sendOtpEmail(exhibitor.contact1.email, otp, exhibitor.exhibitorName);
@@ -123,23 +125,26 @@ class ExhibitorAuthController {
             const email = req.user.email;
             const mobile = req.user.mobile;
 
-            const registrations = await ExhibitorRegistration.find({
+            const rawRegistrations = await ExhibitorRegistration.find({
                 $or: [
                     { 'contact1.email': email },
                     { 'contact1.mobile': mobile }
                 ]
             })
-            .populate('eventId', 'name date location venue startDate endDate')
-            .sort({ createdAt: -1 });
+                .populate('eventId', 'name date location venue startDate endDate')
+                .sort({ createdAt: -1 });
 
-            if (!registrations || registrations.length === 0)
+            if (!rawRegistrations || rawRegistrations.length === 0)
                 return res.status(404).json({ success: false, message: 'No registrations found' });
+
+            // ENRICH: Dynamically bridge data gaps across matched registrations
+            const registrations = await exhibitorRegistrationService._enrichRegistrations(rawRegistrations);
 
             // If an ID is provided in query, return that specific one
             const selectedId = req.query.id;
             let selectedRegistration = null;
             if (selectedId) {
-                selectedRegistration = registrations.find(r => r._id.toString() === selectedId);
+                selectedRegistration = registrations.find(r => (r._id.toString() === selectedId) || (r.id === selectedId));
             }
 
             // Default to latest if not specified or not found
@@ -188,19 +193,75 @@ class ExhibitorAuthController {
     }
     async updateProfile(req, res) {
         try {
-            if (req.user.role !== 'exhibitor')
+            console.log('--- Starting Profile Update ---');
+            console.log('User ID from token:', req.user?.id);
+            console.log('Body received:', JSON.stringify(req.body, null, 2));
+            console.log('Files received:', req.files ? Object.keys(req.files) : 'None');
+
+            if (req.user?.role !== 'exhibitor') {
+                console.log('Access denied: Role is not exhibitor');
                 return res.status(403).json({ success: false, message: 'Access denied.' });
+            }
 
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2', 'natureOfBusiness'];
             const update = {};
-            allowed.forEach(key => { if (req.body[key] !== undefined) update[key] = req.body[key]; });
+            allowed.forEach(key => {
+                if (req.body[key] !== undefined) {
+                    try {
+                        const val = req.body[key];
+                        if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+                            update[key] = JSON.parse(val);
+                        } else {
+                            update[key] = val;
+                        }
+                    } catch (e) {
+                        console.error(`Error parsing field ${key}:`, e);
+                        update[key] = req.body[key];
+                    }
+                }
+            });
 
-            const updated = await ExhibitorRegistration.findByIdAndUpdate(req.user.id, { $set: update }, { new: true });
-            if (!updated)
+            // Handle file uploads from req.files (Multer fields)
+            if (req.files) {
+                const fileFields = {
+                    companyLogo: 'companyLogoUrl',
+                    panCardFront: 'panCardFrontUrl',
+                    panCardBack: 'panCardBackUrl',
+                    aadhaarCardFront: 'aadhaarCardFrontUrl',
+                    aadhaarCardBack: 'aadhaarCardBackUrl',
+                    gstCertificate: 'gstCertificateUrl',
+                    cancelledCheque: 'cancelledChequeUrl',
+                    representativePhoto: 'representativePhotoUrl'
+                };
+
+                Object.keys(fileFields).forEach(field => {
+                    if (req.files[field] && req.files[field][0]) {
+                        update[fileFields[field]] = req.files[field][0].path;
+                    }
+                });
+            }
+
+            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
+                ? req.query.id
+                : req.user.id;
+
+            console.log('Target ID for Update:', targetId);
+
+            const updated = await ExhibitorRegistration.findByIdAndUpdate(
+                targetId,
+                { $set: update },
+                { new: true, runValidators: true }
+            );
+
+            if (!updated) {
+                console.log('No exhibitor found for ID:', targetId);
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+            }
 
-            res.status(200).json({ success: true, message: 'Profile updated successfully', data: updated });
+            console.log('Profile updated successfully for:', targetId);
+            res.status(200).json({ success: true, message: 'Profile updated and synced successfully', data: updated });
         } catch (error) {
+            console.error('CRITICAL: Update profile error:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     }

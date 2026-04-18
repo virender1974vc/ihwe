@@ -115,7 +115,17 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         msmeCategory: { type: String, enum: ['Manufacturer', 'Service Provider', 'Trader', 'Others'], default: 'Manufacturer' },
         msmeRemark: String,
         updatedAt: Date
-    }
+    },
+
+    // KYC and Business Documents
+    companyLogoUrl: String,
+    panCardFrontUrl: String,
+    panCardBackUrl: String,
+    aadhaarCardFrontUrl: String,
+    aadhaarCardBackUrl: String,
+    gstCertificateUrl: String,
+    cancelledChequeUrl: String,
+    representativePhotoUrl: String
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);
