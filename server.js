@@ -4,7 +4,17 @@ const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
 const multer = require('multer');
 const path = require("path");
+const fs = require("fs");
 const cookieParser = require("cookie-parser");
+
+// Ensure required directories exist
+['uploads', 'uploads/marketing', 'temp'].forEach(dir => {
+  const dirPath = path.join(__dirname, dir);
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+    console.log(`📁 Created directory: ${dir}`);
+  }
+});
 const http = require("http");
 const { Server } = require("socket.io");
 require("dotenv").config();
@@ -92,6 +102,7 @@ const primaryProductInterestsRoutes = require("./routes/add_by_admin/primaryProd
 const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 const unitRoutes = require("./routes/add_by_admin/UnitRoute");
+const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
 
 mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -281,6 +292,7 @@ app.use("/api/units", unitRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
+app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);

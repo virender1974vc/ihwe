@@ -61,8 +61,23 @@ class ExhibitorRegistrationService {
             }];
         }
 
-        const newRegistration = new ExhibitorRegistration(data);
-        const saved = await newRegistration.save();
+        // --- HANDLE DUPLICATE/RETRY LOGIC ---
+        // If a registration exists for the same email and stall in pending/failed state, update it instead of creating new
+        const duplicate = await ExhibitorRegistration.findOne({
+            'contact1.email': data.contact1?.email,
+            'participation.stallNo': data.participation?.stallNo,
+            status: { $in: ['pending', 'payment-failed'] }
+        });
+
+        let saved;
+        if (duplicate) {
+            // Update existing record
+            saved = await ExhibitorRegistration.findByIdAndUpdate(duplicate._id, data, { new: true });
+        } else {
+            // Create new record
+            const newRegistration = new ExhibitorRegistration(data);
+            saved = await newRegistration.save();
+        }
 
         // Only book stall and send emails if payment is NOT failed
         if (data.status !== 'payment-failed') {
