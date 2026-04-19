@@ -92,7 +92,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     consentPaymentValid: { type: Boolean, default: false },
     consentMatchedExhibitors: { type: Boolean, default: false },
 
-    // CRM / System Internal Fields
+
     registrationId: { type: String, unique: true, sparse: true },
     buyerTag: { type: String, enum: ['Hot', 'Warm', 'Cold'], default: 'Cold' },
     otpVerifiedEmail: { type: Boolean, default: false },
@@ -107,10 +107,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     otp: { type: String, select: false },
     otpExpiry: { type: Date, select: false },
 
-    // Legacy fields (optional but kept for compatibility if needed during migration)
-    // contactPerson: { type: String, trim: true },
-    // email: { type: String, trim: true },
-    // whatsapp: { type: String, trim: true },
+
   },
   { timestamps: true }
 );
