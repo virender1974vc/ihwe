@@ -12,6 +12,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     yearOfEstablishment: { type: String, required: true },
     gstNumber: { type: String },
     panNumber: { type: String },
+    brandName: { type: String },
 
     // 2. Contact Information
     mobileNumber: { type: String, required: true, trim: true },
@@ -29,6 +30,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     yearsInBusiness: { type: String, required: true },
     numberOfOutlets: { type: String, required: true },
     annualTurnover: { type: String, required: true },
+    buyerIndustry: { type: String },
 
     // 4. Sourcing & Buying Interests
     primaryProductInterest: { type: String, required: true },
@@ -36,6 +38,8 @@ const buyerRegistrationSchema = new mongoose.Schema(
     specificProductRequirements: { type: String },
     estimatedPurchaseVolume: { type: String },
     budgetRange: { type: String },
+    interestedInImporting: { type: String, default: "No" },
+    interestedInExporting: { type: String, default: "No" },
 
     // 5. Supplier Preference (India Only)
     preferredSupplierRegion: { type: [String], default: [] }, // North / South / East / West / Pan India

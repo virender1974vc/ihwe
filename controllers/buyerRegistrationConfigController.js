@@ -118,7 +118,7 @@ class BuyerRegistrationConfigController {
                 config = new BuyerRegistrationConfig({
                     companyTypes: ["Importer", "Distributor", "Retailer", "Wholesaler", "Hospital", "Wellness Center", "Others"],
                     annualTurnoverRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
-                    regions: ["North India", "South India", "East India", "West India", "Pan India"],
+                    regions: ["North India", "South India", "East India", "West India", "Pan India", "Global"],
                     supplierTypes: ["Manufacturer", "Exporter", "MSME", "Startup", "Wholesaler"],
                     purchaseTimelines: ["Immediate", "1–3 Months", "3–6 Months", "Exploring"],
                     roles: ["Final Decision Maker", "Influencer", "Research Only"],
@@ -135,7 +135,12 @@ class BuyerRegistrationConfigController {
             } else {
                 // Migration: Force update packages to include new full data
                 config.packages = defaultPackages;
-                
+
+                // Ensure "Global" is added to existing configs if missing
+                if (config.regions && !config.regions.includes("Global")) {
+                    config.regions.push("Global");
+                }
+
                 if (!config.primaryProductInterests || config.primaryProductInterests.length === 0) {
                     config.primaryProductInterests = ["Ayurveda", "Organic", "Wellness", "Pharma", "Cosmetics"];
                 }
@@ -157,14 +162,16 @@ class BuyerRegistrationConfigController {
                 await config.save();
             }
 
-            res.json({ success: true, data: {
-                ...config.toObject(),
-                companyTypes: bizTypes.length > 0 ? bizTypes.map(b => b.business_type) : config.companyTypes,
-                annualTurnoverRanges: annualTurnovers.length > 0 ? annualTurnovers.map(a => a.annual_turnover) : config.annualTurnoverRanges,
-                primaryProductInterests: primaryProducts.length > 0 ? primaryProducts.map(p => p.primary_product_interest) : config.primaryProductInterests,
-                secondaryProductCategories: secondaryProducts.length > 0 ? secondaryProducts.map(s => s.secondary_product_categories) : config.secondaryProductCategories,
-                meetingPriorityLevels: meetingPriorities.length > 0 ? meetingPriorities.map(m => m.meeting_priority_level) : ['Low', 'Medium', 'High']
-            } });
+            res.json({
+                success: true, data: {
+                    ...config.toObject(),
+                    companyTypes: bizTypes.length > 0 ? bizTypes.map(b => b.business_type) : config.companyTypes,
+                    annualTurnoverRanges: annualTurnovers.length > 0 ? annualTurnovers.map(a => a.annual_turnover) : config.annualTurnoverRanges,
+                    primaryProductInterests: primaryProducts.length > 0 ? primaryProducts.map(p => p.primary_product_interest) : config.primaryProductInterests,
+                    secondaryProductCategories: secondaryProducts.length > 0 ? secondaryProducts.map(s => s.secondary_product_categories) : config.secondaryProductCategories,
+                    meetingPriorityLevels: meetingPriorities.length > 0 ? meetingPriorities.map(m => m.meeting_priority_level) : ['Low', 'Medium', 'High']
+                }
+            });
         } catch (err) {
             console.error('Error fetching buyer registration config:', err);
             res.status(500).json({ success: false, message: 'Server Error' });
