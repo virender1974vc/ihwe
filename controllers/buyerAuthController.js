@@ -18,7 +18,7 @@ class BuyerAuthController {
                 return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
             // Using registrationId as password if password is not set
-            const isMatch = buyer.password 
+            const isMatch = buyer.password
                 ? await bcrypt.compare(password, buyer.password)
                 : password === buyer.registrationId;
 
@@ -31,7 +31,7 @@ class BuyerAuthController {
             await buyer.save();
 
             // Send OTP via email
-            await emailService.sendOtpEmail(email, otp, buyer.fullName, 'BUYER');
+            await emailService.sendOtpEmail(email, otp, buyer.companyName);
 
             res.status(200).json({
                 success: true,
@@ -65,7 +65,7 @@ class BuyerAuthController {
             await buyer.save();
 
             const token = jwt.sign(
-                { id: buyer._id, role: 'buyer', email: buyer.emailAddress, mobile: buyer.mobileNumber, name: buyer.fullName },
+                { id: buyer._id, role: 'buyer', email: buyer.emailAddress, mobile: buyer.mobileNumber, name: buyer.companyName },
                 process.env.JWT_SECRET || 'fallback_secret_key',
                 { expiresIn: '7d' }
             );
@@ -74,7 +74,7 @@ class BuyerAuthController {
                 success: true,
                 message: 'Login successful',
                 token,
-                buyer: { id: buyer._id, name: buyer.fullName, email: buyer.emailAddress }
+                buyer: { id: buyer._id, name: buyer.companyName, email: buyer.emailAddress }
             });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -105,10 +105,10 @@ class BuyerAuthController {
             } catch (waError) {
                 console.error("WhatsApp OTP failed:", waError.message);
             }
-            
+
             // Also send via email
             if (buyer.emailAddress) {
-                await emailService.sendOtpEmail(buyer.emailAddress, otp, buyer.fullName, 'BUYER');
+                await emailService.sendOtpEmail(buyer.emailAddress, otp, buyer.companyName);
             }
 
             res.status(200).json({

@@ -199,7 +199,7 @@ const getBuyerRegistrationAlertTemplate = (data) => {
             <div class="details-section">
                 <div class="details-row">
                     <span class="details-label">Full Name</span>
-                    <span class="details-value highlight">${data.fullName}</span>
+                    <span class="details-value highlight">${data.companyName}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Designation</span>

@@ -21,7 +21,7 @@ class BuyerRegistrationService {
      */
     async createRegistration(data) {
         // Validation (simplified for now, frontend handles most)
-        const required = ['fullName', 'companyName', 'emailAddress', 'mobileNumber', 'registrationCategory'];
+        const required = ['companyName', 'emailAddress', 'mobileNumber', 'registrationCategory'];
         for (const field of required) {
             if (!data[field]) throw { status: 400, message: `${field} is required` };
         }
@@ -107,7 +107,7 @@ class BuyerRegistrationService {
      */
     async sendNotifications(saved) {
         const notificationData = {
-            name: saved.fullName,
+            name: saved.companyName,
             company: saved.companyName,
             email: saved.emailAddress,
             phone: saved.mobileNumber,
@@ -129,7 +129,7 @@ class BuyerRegistrationService {
         });
 
         // WhatsApp to User
-        const msg = `Hello ${saved.fullName},\n\nThank you for registering for the Buyer-Seller Meet at IHWE 2026. Your registration under ${saved.registrationCategory} category is received.\n\nOur team will review your application soon.\n\nRegards,\nIHWE Team`;
+        const msg = `Hello ${saved.companyName},\n\nThank you for registering for the Buyer-Seller Meet at IHWE 2026. Your registration under ${saved.registrationCategory} category is received.\n\nOur team will review your application soon.\n\nRegards,\nIHWE Team`;
         whatsapp.sendWhatsAppMessage(saved.mobileNumber, msg, 'Buyer Registration').catch(err => console.error("WA fail:", err.message));
     }
 
