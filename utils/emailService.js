@@ -90,38 +90,66 @@ class EmailService {
             const footerSrc = footerCid ? `cid:${footerCid}` : toBase64(footerImage);
 
             const headerSection = headerSrc
-                ? `<div style="line-height:0;"><img src="${headerSrc}" alt="Header" style="width:100%;display:block;" /></div>`
-                : `<div class="header"><h1 style="margin:0; font-size: 22px;">9th International Health & Wellness Expo</h1><p style="margin:5px 0 0; opacity: 0.8; font-size: 14px;">Global Health Connect | IHWE 2026</p></div>`;
+                ? `<tr>
+                    <td align="center" style="line-height:0;">
+                        <img src="${headerSrc}" alt="Header" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
+                    </td>
+                   </tr>`
+                : `<tr>
+                    <td align="center" style="background: linear-gradient(135deg, #23471d 0%, #3d6b33 100%); padding: 40px; color: white;">
+                        <h1 style="margin:0; font-size: 26px; font-family: 'Segoe UI', Arial, sans-serif;">9th International Health & Wellness Expo</h1>
+                        <p style="margin:10px 0 0; opacity: 0.9; font-size: 16px;">Global Health Connect | IHWE 2026</p>
+                    </td>
+                   </tr>`;
 
             const footerSection = footerSrc
-                ? `<div style="line-height:0;"><img src="${footerSrc}" alt="Footer" style="width:100%;display:block;" /></div>`
-                : `<div class="footer"><p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p><p>Namo Gange Trust Foundation</p></div>`;
+                ? `<tr>
+                    <td align="center" style="line-height:0;">
+                        <img src="${footerSrc}" alt="Footer" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
+                    </td>
+                   </tr>`
+                : `<tr>
+                    <td align="center" style="background: #f9fafb; padding: 30px; border-top: 1px solid #f3f4f6;">
+                        <p style="margin:0; font-size: 14px; color: #6b7280; font-family: Arial, sans-serif;">&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p>
+                        <p style="margin:5px 0 0; font-size: 12px; color: #9ca3af; font-family: Arial, sans-serif;">Namo Gange Trust Foundation</p>
+                    </td>
+                   </tr>`;
 
             return `
-        <!DOCTYPE html>
-        <html>
+        <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+        <html xmlns="http://www.w3.org/1999/xhtml">
         <head>
+            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+            <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+            <title>IHWE Notification</title>
             <style>
-                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-                .container { max-width: 800px; margin: 20px auto; border: 1px solid #e1e1e1; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-                .header { background: linear-gradient(135deg, #23471d 0%, #3d6b33 100%); padding: 30px; text-align: center; color: white; }
-                .header-img { line-height: 0; }
-                .content { padding: 40px; background: #ffffff; }
-                .footer { background: #f9fafb; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-top: 1px solid #f3f4f6; }
-                .footer-img { line-height: 0; }
-                .btn { display: inline-block; padding: 12px 24px; background-color: #23471d; color: white !important; text-decoration: none; border-radius: 6px; font-weight: 600; margin-top: 20px; transition: background 0.3s ease; }
-                .qr-section { text-align: center; margin: 24px 0; padding: 20px; background: #f9fafb; border-radius: 8px; border: 1px dashed #d1d5db; }
-                .qr-section img { display: inline-block; }
+                body { margin: 0; padding: 0; min-width: 100%; background-color: #ffffff; }
+                table { border-collapse: collapse; }
+                .content-td { padding: 30px 20px; background-color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; line-height: 1.7; color: #333333; font-size: 16px; }
+                .btn { display: inline-block; padding: 12px 24px; background-color: #23471d; color: #ffffff !important; text-decoration: none; border-radius: 4px; font-weight: 600; margin-top: 15px; }
+                .qr-section { text-align: center; margin: 25px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; }
+                @media only screen and (max-width: 600px) {
+                    .container { width: 100% !important; }
+                    .content-td { padding: 20px 15px !important; }
+                }
             </style>
         </head>
-        <body>
-            <div class="container">
-                ${headerSection}
-                <div class="content">
-                    ${body}
-                </div>
-                ${footerSection}
-            </div>
+        <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; background-color: #f4f4f4;">
+                <tr>
+                    <td align="center" style="padding: 20px 0;">
+            <table border="0" cellpadding="0" cellspacing="0" width="800" class="container" style="background-color: #ffffff; border: 1px solid #eeeeee; width: 100%; max-width: 800px;">
+                            ${headerSection}
+                            <tr>
+                                <td class="content-td">
+                                    ${body}
+                                </td>
+                            </tr>
+                            ${footerSection}
+                        </table>
+                    </td>
+                </tr>
+            </table>
         </body>
         </html>
         `;
@@ -193,11 +221,48 @@ class EmailService {
         }
     }
 
+    async getExhibitorTemplateData() {
+        try {
+            const template = await this.getTemplate('exhibitor-registration');
+            if (!template) return null;
+
+            const getImageBuffer = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const fs = require('fs');
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) return null;
+                    return fs.readFileSync(absPath);
+                } catch (e) { return null; }
+            };
+
+            const headerBuf = getImageBuffer(template.headerImage);
+            const footerBuf = getImageBuffer(template.footerImage);
+
+            const attachments = [];
+            if (headerBuf) {
+                const ext = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
+                attachments.push({ filename: `header.${ext}`, content: headerBuf, cid: 'email_header_img' });
+            }
+            if (footerBuf) {
+                const ext = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
+                attachments.push({ filename: `footer.${ext}`, content: footerBuf, cid: 'email_footer_img' });
+            }
+
+            return {
+                headerImage: template.headerImage,
+                footerImage: template.footerImage,
+                headerCid: headerBuf ? 'email_header_img' : null,
+                footerCid: footerBuf ? 'email_footer_img' : null,
+                attachments
+            };
+        } catch (e) { return null; }
+    }
+
     applyPlaceholders(text, data) {
         if (!text) return '';
         let result = text;
 
-        // Create an alias map for common placeholders
         const aliases = {
             'NAME': data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : ''),
             'REG_ID': data.registrationId || data.regId || data.REG_ID || 'N/A',
@@ -212,26 +277,35 @@ class EmailService {
             'USERNAME': data.username || data.email || data.officialEmail || 'N/A',
             'PASSWORD': data.password || 'N/A',
             'EVENT_NAME': data.event_name || data.eventName || 'IHWE 2026',
+            'CONTACT_PERSON': data.contact_person || (data.contact1FirstName ? `${data.contact1FirstName} ${data.contact1LastName || ''}`.trim() : 'N/A'),
+            'DESIGNATION': data.designation || 'N/A',
+            'REGISTRATION_ID': data.registrationId || data.regId || 'N/A',
+            'STALL_TYPE': data.stall_type || 'N/A',
+            'TOTAL_AMOUNT': data.total_amount || 'N/A',
+            'AMOUNT_PAID': data.amount_paid || 'N/A',
+            'BALANCE_DUE': data.balance_due || 'N/A',
+            'PAYMENT_MODE': data.payment_mode || 'N/A',
+            'TRANSACTION_ID': data.transaction_id || 'N/A',
+            'ORDER_NO': data.order_no || 'N/A',
+            'GRAND_TOTAL': data.grand_total || 'N/A',
+            'ITEM_TABLE': data.item_table || 'N/A',
         };
-
-        // Apply Aliases first
-        Object.entries(aliases).forEach(([key, value]) => {
-            const placeholder = '[[' + key + ']]';
-            result = result.split(placeholder).join(value || '');
-        });
-
-        // Apply any specific data keys left over (case-insensitive)
-        Object.entries(data).forEach(([key, value]) => {
-            if (typeof value !== 'object') {
-                const placeholder = '[[' + key.toUpperCase() + ']]';
-                result = result.split(placeholder).join(value || '');
+        result = result.replace(/\[\[\s*([a-zA-Z0-9_]+)\s*\]\]/g, (match, key) => {
+            const upperKey = key.toUpperCase();
+            if (aliases[upperKey] !== undefined) return aliases[upperKey];
+            const cleanUpperKey = upperKey.replace(/_/g, '');
+            for (const [dKey, dValue] of Object.entries(data)) {
+                const cleanDKey = dKey.toUpperCase().replace(/_/g, '');
+                if (cleanDKey === cleanUpperKey) return dValue;
             }
+
+            return match;
         });
 
         return result;
     }
 
-    async sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT' }) {
+    async sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [] }) {
         try {
             const template = await this.getTemplate(formType);
             if (!template) {
@@ -245,8 +319,6 @@ class EmailService {
             const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
-
-            // For corporate/general visitor + buyer: generate QR code as CID attachment
             if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
@@ -323,7 +395,7 @@ class EmailService {
                 to,
                 subject,
                 html,
-                attachments: emailAttachments,
+                attachments: [...emailAttachments, ...attachments],
                 profile,
                 logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Dynamic Confirmation (${formType})` }
             });
@@ -893,6 +965,8 @@ class EmailService {
 
         const data = {
             exhibitor_name: registration.exhibitorName,
+            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            designation: registration.contact1.designation || 'N/A',
             stall_no: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
             event_name: eventName,
             registrationId: registration.registrationId,
@@ -944,6 +1018,14 @@ class EmailService {
                 attachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
             }
 
+            if (pdfPath && require('fs').existsSync(pdfPath)) {
+                attachments.push({
+                    filename: `RegistrationForm_${registration.registrationId || registration._id}.pdf`,
+                    path: pdfPath,
+                    contentType: 'application/pdf'
+                });
+            }
+
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
             const sentToUser = await this.sendEmail({
                 to: registration.contact1.email,
@@ -972,24 +1054,20 @@ class EmailService {
     async sendPaymentReceipt(registration, pdfPath) {
         const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
         const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-        const subject = `Payment Receipt - ${registration.exhibitorName} | ${registration.registrationId || ''}`;
-        const html = this.emailShell(`
-            <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
-            <p>Your payment has been received successfully. Here are your payment details:</p>
-            <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Registration ID</td><td style="padding:10px;">${registration.registrationId || 'N/A'}</td></tr>
-                <tr><td style="padding:10px;font-weight:700;color:#166534;">Stall No.</td><td style="padding:10px;">${registration.participation?.stallFor || 'N/A'}</td></tr>
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Stall Type</td><td style="padding:10px;">${registration.participation?.stallType || 'N/A'}</td></tr>
-                <tr><td style="padding:10px;font-weight:700;color:#166534;">Total Amount</td><td style="padding:10px;">${fmt(registration.participation?.total)}</td></tr>
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#23471d;">Amount Paid</td><td style="padding:10px;font-weight:700;color:#23471d;">${fmt(registration.amountPaid)}</td></tr>
-                <tr><td style="padding:10px;font-weight:700;color:${registration.balanceAmount > 0 ? '#dc2626' : '#166534'};">Balance Due</td><td style="padding:10px;font-weight:700;color:${registration.balanceAmount > 0 ? '#dc2626' : '#166534'};">${fmt(registration.balanceAmount)}</td></tr>
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Payment Mode</td><td style="padding:10px;">${registration.paymentMode || 'N/A'}</td></tr>
-                ${registration.paymentId ? `<tr><td style="padding:10px;font-weight:700;color:#166534;">Transaction ID</td><td style="padding:10px;">${registration.paymentId}</td></tr>` : ''}
-            </table>
-            ${registration.balanceAmount > 0 ? `<p style="color:#dc2626;font-weight:700;">⚠️ Balance amount of <strong>${fmt(registration.balanceAmount)}</strong> is pending. Please complete the payment at the earliest.</p>` : '<p style="color:#166534;font-weight:700;">✅ Your payment is fully settled. Thank you!</p>'}
-            <p>Please find your payment receipt attached as a PDF.</p>
-            <p>For any queries, please contact us.</p>
-        `);
+
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            designation: registration.contact1.designation || 'N/A',
+            registrationId: registration.registrationId,
+            stall_no: registration.participation?.stallFor || 'N/A',
+            stall_type: registration.participation?.stallType || 'N/A',
+            total_amount: fmt(registration.participation?.total),
+            amount_paid: fmt(registration.amountPaid),
+            balance_due: fmt(registration.balanceAmount),
+            payment_mode: registration.paymentMode || 'N/A',
+            transaction_id: registration.paymentId || 'N/A',
+        };
 
         const attachments = [];
         if (pdfPath && require('fs').existsSync(pdfPath)) {
@@ -1000,13 +1078,12 @@ class EmailService {
             });
         }
 
-        return await this.sendEmail({
+        return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
-            subject,
-            html,
-            attachments,
+            formType: 'exhibitor-payment-receipt',
+            data,
             profile: 'EXHIBITOR',
-            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Payment Receipt + PDF' }
+            attachments
         });
     }
 
@@ -1032,40 +1109,40 @@ class EmailService {
 
     async sendConfirmationEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
-        const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
-        const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-        const subject = `Booking Confirmed! 🎊 - ${registration.exhibitorName} | ${registration.registrationId || ''}`;
-        const html = this.emailShell(`
-            <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
-            <p>🎊 Congratulations! Your stall booking for <strong>IHWE 2026</strong> is now <strong style="color:#23471d;">CONFIRMED</strong>.</p>
-            <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Registration ID</td><td style="padding:10px;">${registration.registrationId || 'N/A'}</td></tr>
-                <tr><td style="padding:10px;font-weight:700;color:#166534;">Stall No.</td><td style="padding:10px;font-weight:700;color:#d26019;">${registration.participation?.stallFor || 'N/A'}</td></tr>
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Stall Type</td><td style="padding:10px;">${registration.participation?.stallType || 'N/A'}</td></tr>
-                <tr><td style="padding:10px;font-weight:700;color:#166534;">Event</td><td style="padding:10px;">${registration.eventId?.name || 'IHWE 2026'}</td></tr>
-                <tr style="background:#f0fdf4;"><td style="padding:10px;font-weight:700;color:#166534;">Amount Paid</td><td style="padding:10px;font-weight:700;color:#23471d;">${fmt(registration.amountPaid)}</td></tr>
-                ${registration.balanceAmount > 0 ? `<tr><td style="padding:10px;font-weight:700;color:#dc2626;">Balance Due</td><td style="padding:10px;font-weight:700;color:#dc2626;">${fmt(registration.balanceAmount)}</td></tr>` : ''}
-            </table>
-            <p>Login to your exhibitor portal: <a href="${loginUrl}" style="color:#23471d;font-weight:700;">${loginUrl}</a></p>
-            <p>Username: <strong>${registration.contact1.email}</strong></p>
-            <p>We look forward to seeing you at the expo!</p>
-        `);
-        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR',
-            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Booking Confirmed' }
+
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            designation: registration.contact1.designation || 'N/A',
+            registrationId: registration.registrationId,
+            stall_no: registration.participation?.stallFor || 'N/A',
+            stall_type: registration.participation?.stallType || 'N/A',
+            event_name: registration.eventId?.name || 'IHWE 2026',
+            login_url: loginUrl,
+        };
+
+        return await this.sendDynamicConfirmation({
+            to: registration.contact1.email,
+            formType: 'exhibitor-booking-confirmed',
+            data,
+            profile: 'EXHIBITOR'
         });
     }
 
     async sendRejectionEmail(registration) {
-        const subject = `Registration Update - ${registration.exhibitorName} | IHWE 2026`;
-        const html = this.emailShell(`
-            <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
-            <p>We regret to inform you that your registration application for <strong>IHWE 2026</strong> (Registration ID: <strong>${registration.registrationId || 'N/A'}</strong>) has not been approved at this time.</p>
-            <p>This could be due to stall unavailability or incomplete documentation. Please contact our support team for more details.</p>
-            <p>We hope to have you with us in future editions of IHWE.</p>
-            <p>Thank you for your interest.</p>
-        `);
-        return await this.sendEmail({ to: registration.contact1.email, subject, html, profile: 'EXHIBITOR',
-            logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: 'Registration Rejected' }
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            designation: registration.contact1.designation || 'N/A',
+            registrationId: registration.registrationId,
+            event_name: 'IHWE 2026',
+        };
+
+        return await this.sendDynamicConfirmation({
+            to: registration.contact1.email,
+            formType: 'exhibitor-registration-rejection',
+            data,
+            profile: 'EXHIBITOR'
         });
     }
 
@@ -1080,7 +1157,6 @@ class EmailService {
             const email = registration.contact1?.email;
             if (!email) return false;
 
-            const isComplimentary = order.paymentStatus === 'complimentary';
             const fmt = (n) => `INR ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
             const itemRows = order.items.map((item, i) => `
@@ -1092,10 +1168,7 @@ class EmailService {
                 </tr>
             `).join('');
 
-            const subject = `Accessory Order Confirmation – ${order.orderNo} | IHWE 2026`;
-            const html = this.emailShell(`
-                <p>Dear <strong>${registration.exhibitorName}</strong>,</p>
-                <p>Your accessory order has been successfully processed for <strong>IHWE 2026</strong>.</p>
+            const itemTable = `
                 <table style="width:100%;border-collapse:collapse;margin:16px 0;border:1px solid #e5e7eb;">
                     <thead>
                         <tr style="background:#23471d;color:#fff;">
@@ -1106,32 +1179,31 @@ class EmailService {
                         </tr>
                     </thead>
                     <tbody>${itemRows}</tbody>
-                    <tfoot>
-                        <tr style="background:#f9fafb;">
-                            <td colspan="3" style="padding:10px 12px;font-weight:700;font-size:13px;">Grand Total</td>
-                            <td style="padding:10px 12px;font-weight:800;font-size:14px;text-align:right;color:#23471d;">${isComplimentary ? 'Complimentary' : fmt(order.grandTotal)}</td>
-                        </tr>
-                    </tfoot>
                 </table>
-                <p><strong>Order No:</strong> ${order.orderNo}</p>
-                <p><strong>Stall No:</strong> ${registration.participation?.stallFor || 'N/A'}</p>
-                <p><strong>Registration ID:</strong> ${registration.registrationId || 'N/A'}</p>
-                ${order.transactionId ? `<p><strong>Transaction ID:</strong> ${order.transactionId}</p>` : ''}
-                <p>Please find your receipt attached. For any queries, contact us at <a href="mailto:info@ihwe.in">info@ihwe.in</a>.</p>
-            `);
+            `;
+
+            const data = {
+                exhibitor_name: registration.exhibitorName,
+                contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+                designation: registration.contact1.designation || 'N/A',
+                registrationId: registration.registrationId,
+                order_no: order.orderNo,
+                stall_no: registration.participation?.stallFor || 'N/A',
+                grand_total: order.paymentStatus === 'complimentary' ? 'Complimentary' : fmt(order.grandTotal),
+                item_table: itemTable,
+            };
 
             const attachments = [];
             if (pdfPath && require('fs').existsSync(pdfPath)) {
                 attachments.push({ filename: `Accessory_Receipt_${order.orderNo}.pdf`, path: pdfPath });
             }
 
-            return await this.sendEmail({
+            return await this.sendDynamicConfirmation({
                 to: email,
-                subject,
-                html,
-                attachments,
+                formType: 'exhibitor-accessory-order',
+                data,
                 profile: 'EXHIBITOR',
-                logData: { name: registration.exhibitorName, phone: registration.contact1?.mobile, message: `Accessory Order ${order.orderNo}` }
+                attachments
             });
         } catch (err) {
             console.error('sendAccessoryOrderEmail error:', err.message);

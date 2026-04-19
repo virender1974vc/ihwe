@@ -131,12 +131,32 @@ class ExhibitorRegistrationService {
     async addRegistration(data) {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
-
-        // --- AUTO-GENERATE registrationId (Incremental) ---
         const year = new Date().getFullYear();
-        const count = await ExhibitorRegistration.countDocuments({});
-        const nextId = (count + 1).toString().padStart(5, '0');
-        data.registrationId = `IHWE-EXH-${year}-${nextId}`;
+        let nextSeq = 1;
+        const lastReg = await ExhibitorRegistration.findOne(
+            { registrationId: { $regex: new RegExp(`^IHWE-EXH-${year}-`) } }
+        ).sort({ registrationId: -1 }).lean();
+
+        if (lastReg && lastReg.registrationId) {
+            const parts = lastReg.registrationId.split('-');
+            const lastSeq = parseInt(parts[parts.length - 1]);
+            if (!isNaN(lastSeq)) {
+                nextSeq = lastSeq + 1;
+            }
+        }
+        let isUnique = false;
+        while (!isUnique) {
+            const nextIdStr = nextSeq.toString().padStart(5, '0');
+            const candidateId = `IHWE-EXH-${year}-${nextIdStr}`;
+            const existingDoc = await ExhibitorRegistration.findOne({ registrationId: candidateId }).select('_id').lean();
+
+            if (!existingDoc) {
+                data.registrationId = candidateId;
+                isUnique = true;
+            } else {
+                nextSeq++;
+            }
+        }
         let rawPassword;
         const existing = await ExhibitorRegistration.findOne({ 'contact1.email': data.contact1?.email })
             .select('+password').sort({ createdAt: -1 });
