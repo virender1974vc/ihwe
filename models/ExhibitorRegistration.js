@@ -101,14 +101,14 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
 
     // MSME Details
     msme: {
-        udhyamRegNo: String,
-        udhyamMobileNo: String,
-        udhyamEmailId: String,
-        udhyamContactPerson: String,
-        udhyamDesignation: String,
-        udhyamAddress: String,
-        udhyamIssueDate: Date,
-        udhyamCertificateUrl: String,
+        udyamRegNo: String,
+        udyamMobileNo: String,
+        udyamEmailId: String,
+        udyamContactPerson: String,
+        udyamDesignation: String,
+        udyamAddress: String,
+        udyamIssueDate: Date,
+        udyamCertificateUrl: String,
         dfoLocation: String,
         dfoEmail: String,
         dfoMobileNo: String,
