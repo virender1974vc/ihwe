@@ -31,7 +31,7 @@ class BuyerAuthController {
             await buyer.save();
 
             // Send OTP via email
-            await emailService.sendOtpEmail(email, otp, buyer.fullName);
+            await emailService.sendOtpEmail(email, otp, buyer.fullName, 'BUYER');
 
             res.status(200).json({
                 success: true,
@@ -108,7 +108,7 @@ class BuyerAuthController {
             
             // Also send via email
             if (buyer.emailAddress) {
-                await emailService.sendOtpEmail(buyer.emailAddress, otp, buyer.fullName);
+                await emailService.sendOtpEmail(buyer.emailAddress, otp, buyer.fullName, 'BUYER');
             }
 
             res.status(200).json({
