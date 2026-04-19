@@ -238,6 +238,7 @@ app.use('/api/public', require('./routes/publicRoutes'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/policies', require('./routes/policyRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
+app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
