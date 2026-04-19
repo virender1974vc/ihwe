@@ -29,7 +29,7 @@ class OtpController {
 
             // Send via appropriate channel
             if (type === 'email') {
-                await emailService.sendOtpEmail(identifier, otpCode, name || 'Buyer');
+                await emailService.sendOtpEmail(identifier, otpCode, name || 'Buyer', 'BUYER');
             } else if (type === 'phone') {
                 await whatsapp.sendWhatsAppOTP(identifier, otpCode, 'BUYER');
             }

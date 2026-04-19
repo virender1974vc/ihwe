@@ -95,7 +95,7 @@ class EmailService {
 
             const footerSection = footerSrc
                 ? `<div style="line-height:0;"><img src="${footerSrc}" alt="Footer" style="width:100%;display:block;" /></div>`
-                : `<div class="footer"><p>&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p><p>Namo Gange Trust Foundation</p></div>`;
+                : `<div class="footer"><p>&copy; 2026 IHWE | Property of Namo Gange Wellness Pvt. Ltd. | All Rights Reserved</p><p style="margin-top: 8px;">Designed & Developed by Encodency Pvt. Ltd.</p></div>`;
 
             return `
         <!DOCTYPE html>
@@ -1069,9 +1069,83 @@ class EmailService {
         });
     }
 
-    async sendOtpEmail(email, otp, name) {
-        const subject = 'IHWE Login - One Time Password (OTP)';
-        const html = this.emailShell(`<div style="text-align: center;"><p>Hello <strong>${name}</strong>,</p><p>Your One Time Password (OTP) for IHWE access is:</p><div style="font-size: 32px; font-weight: 800; color: #d26019; letter-spacing: 5px; margin: 20px 0;">${otp}</div><p>Please do not share this OTP with anyone. It is valid for 10 minutes.</p></div>`);
+    async sendOtpEmail(email, otp, name, context = 'GENERAL') {
+        // Determine context-specific text
+        let contextTitle = 'Registration';
+        let contextDescription = 'registering';
+        let dashboardText = 'IHWE Portal';
+        
+        if (context === 'BUYER' || context.includes('buyer')) {
+            contextTitle = 'Buyer Registration';
+            contextDescription = 'registering as a Buyer';
+            dashboardText = 'IHWE Buyer Dashboard';
+        } else if (context === 'EXHIBITOR' || context.includes('exhibitor')) {
+            contextTitle = 'Exhibitor Registration';
+            contextDescription = 'registering as an Exhibitor';
+            dashboardText = 'IHWE Exhibitor Dashboard';
+        } else if (context === 'VISITOR' || context.includes('visitor')) {
+            contextTitle = 'Visitor Registration';
+            contextDescription = 'registering as a Visitor';
+            dashboardText = 'IHWE Visitor Portal';
+        } else if (context === 'DELEGATE' || context.includes('delegate')) {
+            contextTitle = 'Delegate Registration';
+            contextDescription = 'registering as a Delegate';
+            dashboardText = 'IHWE Delegate Portal';
+        } else if (context === 'SELLER' || context.includes('seller')) {
+            contextTitle = 'Seller Registration';
+            contextDescription = 'registering as a Seller';
+            dashboardText = 'IHWE Seller Dashboard';
+        }
+
+        const subject = `IHWE ${contextTitle} – Email Verification OTP`;
+        
+        const html = this.emailShell(`
+            <div style="text-align: left; max-width: 600px; margin: 0 auto; color: #333;">
+                <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Hello <strong>${name}</strong>,</p>
+                
+                <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                    Thank you for ${contextDescription} for the <strong>International Health & Wellness Expo (IHWE)</strong>.
+                </p>
+                
+                <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    To proceed with your ${contextTitle} and activate your access to the <strong>${dashboardText}</strong>, please verify your email using the One-Time Password (OTP) below:
+                </p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">🔐</p>
+                    <div style="font-size: 42px; font-weight: 800; color: #d26019; letter-spacing: 10px; font-family: 'Courier New', monospace; line-height: 1.2;">${otp}</div>
+                </div>
+                
+                <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                    <strong>This OTP is valid for 10 minutes only</strong> and can be used once.
+                </p>
+                
+                <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    For your security, please do not share this code with anyone. <strong>IHWE or its representatives will never ask for your OTP.</strong>
+                </p>
+                
+                <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    Once verified, our team will review your profile and connect with you shortly for further coordination.
+                </p>
+                
+                <p style="margin-bottom: 35px; font-size: 13px; color: #6b7280; font-style: italic; line-height: 1.6;">
+                    If you did not initiate this request, please ignore this email.
+                </p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 5px 0; font-size: 14px; color: #333;">Warm Regards,</p>
+                    <p style="margin: 5px 0; font-size: 15px; color: #23471d; font-weight: 700;">Team IHWE</p>
+                    <p style="margin: 5px 0; font-size: 13px; color: #6b7280;">International Health & Wellness Expo</p>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #9ca3af; font-style: italic;">Global Health Connect</p>
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center;">
+                    <p style="margin: 0 0 5px 0; font-size: 11px; color: #6b7280;">© 2026 IHWE. All Rights Reserved.</p>
+                    <p style="margin: 0; font-size: 10px; color: #9ca3af;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
+                </div>
+            </div>
+        `);
+        
         return await this.sendEmail({ to: email, subject, html });
     }
 
