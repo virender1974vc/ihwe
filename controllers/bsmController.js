@@ -8,7 +8,7 @@ exports.getMatchmakingBuyers = async (req, res) => {
     const query = { matchmakingInterest: "Yes" };
     if (search) {
       query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
+        { companyName: { $regex: search, $options: 'i' } },
         { companyName: { $regex: search, $options: 'i' } },
       ];
     }
@@ -18,7 +18,7 @@ exports.getMatchmakingBuyers = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const total = await BuyerRegistration.countDocuments(query);
     const buyers = await BuyerRegistration.find(query)
-      .select("fullName companyName designation businessType primaryProductInterest secondaryProductCategories country stateProvince city registrationId")
+      .select("companyName designation businessType primaryProductInterest secondaryProductCategories country stateProvince city registrationId")
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -86,7 +86,7 @@ exports.adminCreateMeeting = async (req, res) => {
 exports.adminGetAllMeetings = async (req, res) => {
   try {
     const meetings = await BSMMeeting.find()
-      .populate("buyerId", "fullName companyName registrationId")
+      .populate("buyerId", "companyName registrationId")
       .populate("exhibitorId", "exhibitorName registrationId")
       .sort({ date: 1, timeSlot: 1 });
     res.status(200).json({ success: true, data: meetings });
@@ -98,7 +98,7 @@ exports.exhibitorGetMyMeetings = async (req, res) => {
   try {
     const { exhibitorId } = req.params;
     const meetings = await BSMMeeting.find({ exhibitorId })
-      .populate("buyerId", "fullName companyName designation registrationId country primaryProductInterest")
+      .populate("buyerId", "companyName designation registrationId country primaryProductInterest")
       .sort({ date: 1, timeSlot: 1 });
     res.status(200).json({ success: true, data: meetings });
   } catch (error) {

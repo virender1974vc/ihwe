@@ -2,11 +2,14 @@ const mongoose = require("mongoose");
 
 const buyerRegistrationSchema = new mongoose.Schema(
   {
-    // 1. Personal & Company Information
-    fullName: { type: String, required: true, trim: true },
-    designation: { type: String, required: true, trim: true },
+    // 1. Basic Business Information
+    fullName: { type: String, required: false, trim: true }, // Legacy
+    designation: { type: String, required: false, trim: true }, // Legacy
     companyName: { type: String, required: true, trim: true },
-    businessType: { type: String, required: true }, // Importer / Distributor / Retailer / Wholesaler / Hospital / Wellness Center / Others
+    businessType: { type: String, required: true },
+    yearOfEstablishment: { type: String, required: true },
+    gstNumber: { type: String },
+    panNumber: { type: String },
 
     // 2. Contact Information
     mobileNumber: { type: String, required: true, trim: true },
