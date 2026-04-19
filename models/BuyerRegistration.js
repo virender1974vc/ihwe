@@ -38,6 +38,9 @@ const buyerRegistrationSchema = new mongoose.Schema(
     specificProductRequirements: { type: String },
     estimatedPurchaseVolume: { type: String },
     budgetRange: { type: String },
+    purchaseFrequency: { type: String },
+    businessModelPreference: { type: String },
+    b2bMeetInterest: { type: String, default: "Yes" },
     interestedInImporting: { type: String, default: "No" },
     interestedInExporting: { type: String, default: "No" },
 
@@ -65,8 +68,15 @@ const buyerRegistrationSchema = new mongoose.Schema(
 
     // 10. B2B Meeting Preferences
     preferredMeetingDate: { type: String, required: true },
+    preferredMeetingDay: { type: String, required: true },
     preferredTimeSlot: { type: String, required: true },
     requirePreScheduledB2B: { type: String, required: true }, // Yes/No
+    preferredMeetingCategories: { type: [String], default: [] },
+    preferredExhibitorTypes: { type: [String], default: [] },
+    numberOfMeetingsInterested: { type: String }, // 3–5 / 5–10 / 10+
+    meetingObjectives: { type: [String], default: [] },
+    preferredBusinessTypes: { type: [String], default: [] },
+    meetingRequirements: { type: String },
     meetingPriorityLevel: { type: String, required: true }, // High / Medium / General
 
     // 11. Logistics & Shipping
