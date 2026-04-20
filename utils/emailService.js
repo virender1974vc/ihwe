@@ -91,12 +91,12 @@ class EmailService {
 
             const headerSection = headerSrc
                 ? `<tr>
-                    <td align="center" style="line-height:0;">
+                    <td align="center" style="line-height:0; padding-top: 10px;">
                         <img src="${headerSrc}" alt="Header" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
                     </td>
                    </tr>`
                 : `<tr>
-                    <td align="center" style="background-color: #23471d; padding: 40px; color: #ffffff;">
+                    <td align="center" style="background-color: #23471d; padding: 50px 40px 40px; color: #ffffff;">
                         <h1 style="margin:0; font-size: 26px; font-family: Arial, Helvetica, sans-serif; color: #ffffff; font-weight: bold;">9th International Health & Wellness Expo</h1>
                         <p style="margin:10px 0 0; font-size: 16px; color: #ffffff; font-family: Arial, Helvetica, sans-serif;">Global Health Connect | IHWE 2026</p>
                     </td>
@@ -281,10 +281,14 @@ class EmailService {
             'DESIGNATION': data.designation || 'N/A',
             'REGISTRATION_ID': data.registrationId || data.regId || 'N/A',
             'STALL_TYPE': data.stall_type || 'N/A',
+            'STALL_SCHEME': data.stall_scheme || data.stallScheme || 'N/A',
+            'STALL_DIMENSION': data.stall_dimension || data.dimension || 'N/A',
+            'STALL_SIZE': data.stall_size || data.stallSize || 'N/A',
             'TOTAL_AMOUNT': data.total_amount || 'N/A',
             'AMOUNT_PAID': data.amount_paid || 'N/A',
             'BALANCE_DUE': data.balance_due || 'N/A',
             'PAYMENT_MODE': data.payment_mode || 'N/A',
+            'PAYMENT_METHOD': data.payment_method || data.method || 'N/A',
             'TRANSACTION_ID': data.transaction_id || 'N/A',
             'ORDER_NO': data.order_no || 'N/A',
             'GRAND_TOTAL': data.grand_total || 'N/A',
@@ -481,6 +485,8 @@ class EmailService {
                 fromEmail = process.env.EXHIBITOR_FROM_EMAIL || fromEmail;
                 fromName = process.env.EXHIBITOR_FROM_NAME || fromName;
             }
+            fromEmail = fromEmail || process.env.SMTP_USER || 'no-reply@ihwe.in';
+            fromName = fromName || 'IHWE Team';
 
             const info = await transporter.sendMail({
                 from: '"' + fromName + '" <' + fromEmail + '>',
@@ -974,7 +980,10 @@ class EmailService {
             username: registration.contact1.email,
             email: registration.contact1.email,
             password: rawPassword,
-            phone: registration.contact1.mobile || registration.contact1.alternateNo
+            phone: registration.contact1.mobile || registration.contact1.alternateNo,
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_dimension: registration.participation?.dimension || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A'
         };
 
         try {
@@ -1066,7 +1075,11 @@ class EmailService {
             amount_paid: fmt(registration.amountPaid),
             balance_due: fmt(registration.balanceAmount),
             payment_mode: registration.paymentMode || 'N/A',
-            transaction_id: registration.paymentId || 'N/A',
+            payment_method: registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
+            transaction_id: registration.paymentId || registration.manualPaymentDetails?.transactionId || 'N/A',
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_dimension: registration.participation?.dimension || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A',
         };
 
         const attachments = [];
@@ -1091,7 +1104,7 @@ class EmailService {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
-            formType: 'exhibitor-registration',
+            formType: 'exhibitor-registration-approved',
             data: {
                 exhibitor_name: registration.exhibitorName,
                 stall_no: registration.participation?.stallFor || 'N/A',
@@ -1099,6 +1112,7 @@ class EmailService {
                 registrationId: registration.registrationId,
                 login_url: loginUrl,
                 username: registration.contact1.email,
+                password: 'Check your previous registration email',
                 email: registration.contact1.email,
                 status: 'Approved',
                 phone: registration.contact1.mobile
@@ -1146,11 +1160,27 @@ class EmailService {
         });
     }
 
+    async sendPaymentFailedEmail(registration) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            registrationId: registration.registrationId,
+            stall_no: registration.participation?.stallFor || 'N/A',
+            login_url: loginUrl,
+        };
+        return await this.sendDynamicConfirmation({
+            to: registration.contact1.email,
+            formType: 'exhibitor-payment-failed',
+            data,
+            profile: 'EXHIBITOR'
+        });
+    }
+
     async sendOtpEmail(email, otp, name, context = 'GENERAL') {
         let contextTitle = 'Registration';
         let contextDescription = 'registering';
         let dashboardText = 'IHWE Portal';
-        
         if (context === 'BUYER' || context.includes('buyer')) {
             contextTitle = 'Buyer Registration';
             contextDescription = 'registering as a Buyer';
@@ -1174,7 +1204,6 @@ class EmailService {
         }
 
         const subject = `IHWE ${contextTitle} – Email Verification OTP`;
-        
         const html = this.emailShell(`
             <div style="text-align: left; max-width: 600px; margin: 0 auto; color: #333;">
                 <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Hello <strong>${name}</strong>,</p>
@@ -1221,7 +1250,6 @@ class EmailService {
                 </div>
             </div>
         `);
-        
         return await this.sendEmail({ to: email, subject, html });
     }
 

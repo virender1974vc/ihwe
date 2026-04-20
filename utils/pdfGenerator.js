@@ -23,29 +23,29 @@ const DARK = '#111827';
 const WHITE = '#ffffff';
 
 class PDFGenerator {
-
-    // ─── shared helpers ───────────────────────────────────────────────────────
-
-    _headerImg(doc) {
-        if (fs.existsSync(HEADER_IMG)) {
-            doc.image(HEADER_IMG, 0, 0, { width: doc.page.width });
-            doc.y = doc.page.width * (9 / 16) * 0.38; // approx header height
+    _headerImg(doc, customPath) {
+        const headerPath = customPath || HEADER_IMG;
+        const topPadding = 10;
+        const sidePadding = 40;
+        if (fs.existsSync(headerPath)) {
+            const imgW = doc.page.width - (sidePadding * 2);
+            doc.image(headerPath, sidePadding, topPadding, { width: imgW });
+            doc.y = topPadding + (imgW * (9 / 16) * 0.38) + 10;
         } else {
-            // fallback green bar
             doc.rect(0, 0, doc.page.width, 80).fill(GREEN);
             doc.fillColor(WHITE).fontSize(18).font('Helvetica-Bold')
-                .text('9th International Health & Wellness Expo 2026', 30, 28, { width: doc.page.width - 60, align: 'center' });
+                .text('9th International Health & Wellness Expo 2026', 40, 28, { width: doc.page.width - 80, align: 'center' });
             doc.y = 90;
         }
     }
 
-    _footerImg(doc) {
+    _footerImg(doc, customPath) {
         const pageH = doc.page.height;
         const pageW = doc.page.width;
-        if (fs.existsSync(FOOTER_IMG)) {
-            // footer image at bottom
+        const footerPath = customPath || FOOTER_IMG;
+        if (fs.existsSync(footerPath)) {
             const fH = 70;
-            doc.image(FOOTER_IMG, 0, pageH - fH, { width: pageW });
+            doc.image(footerPath, 0, pageH - fH, { width: pageW });
         } else {
             doc.rect(0, pageH - 40, pageW, 40).fill(GREEN);
             doc.fillColor(WHITE).fontSize(8).font('Helvetica')
@@ -81,7 +81,7 @@ class PDFGenerator {
 
     // ─── Registration Form ────────────────────────────────────────────────────
 
-    async generateRegistrationForm(registration) {
+    async generateRegistrationForm(registration, options = {}) {
         return new Promise((resolve, reject) => {
             try {
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
@@ -96,7 +96,7 @@ class PDFGenerator {
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
 
                 // ── Header image ──
-                this._headerImg(doc);
+                this._headerImg(doc, options.headerImage);
                 let y = doc.y + 10;
 
                 // ── Document title strip ──
@@ -108,7 +108,7 @@ class PDFGenerator {
                 // ── Meta row ──
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
                     .text(`Reg ID: ${registration.registrationId || 'N/A'}`, 40, y)
-                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 0, y, { width: pageW - 40, align: 'right' });
+                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 40, y, { width: pageW - 80, align: 'right' });
                 y += 16;
                 this._line(doc, 40, y, pageW - 40);
                 y += 8;
@@ -142,12 +142,12 @@ class PDFGenerator {
                     .text(c1.email || '', rx + 8, y + 82, { width: colW - 16 });
 
                 y += 125;
-
-                // ── Stall & Event info row ──
-                const infoW = (pageW - 80) / 4;
+                const infoW = (pageW - 80) / 6;
                 const infos = [
                     { label: 'Stall No.', value: p.stallFor || 'N/A' },
                     { label: 'Stall Type', value: p.stallType || 'N/A' },
+                    { label: 'Scheme', value: p.stallScheme || 'N/A' },
+                    { label: 'Dimension', value: p.dimension || 'N/A' },
                     { label: 'Stall Size', value: p.stallSize ? `${p.stallSize} SQM` : 'N/A' },
                     { label: 'Event', value: registration.eventId?.name || 'IHWE 2026' },
                 ];
@@ -155,7 +155,7 @@ class PDFGenerator {
                     const ix = 40 + i * infoW;
                     doc.rect(ix, y, infoW - 4, 36).fill(LGRAY);
                     this._label(doc, info.label, ix + 6, y + 6, infoW - 12);
-                    doc.fillColor(GREEN).fontSize(9).font('Helvetica-Bold')
+                    doc.fillColor(GREEN).fontSize(8).font('Helvetica-Bold')
                         .text(info.value, ix + 6, y + 18, { width: infoW - 12 });
                 });
                 y += 44;
@@ -179,8 +179,6 @@ class PDFGenerator {
                     tx += col.w;
                 });
                 y += 18;
-
-                // Table row
                 y = this._tableRow(doc, [
                     { text: `${p.stallType || 'Shell Space'} – Stall ${p.stallFor || 'N/A'}`, w: tW * 0.40 },
                     { text: p.dimension || 'N/A', w: tW * 0.15 },
@@ -233,8 +231,7 @@ class PDFGenerator {
                 doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
                     .text(`STATUS: ${(registration.status || 'PENDING').toUpperCase()}`, 40, y + 7, { width: 130, align: 'center' });
 
-                // ── Footer image ──
-                this._footerImg(doc);
+                // ── Footer image removed as per user request ──
 
                 doc.end();
                 stream.on('finish', () => {
@@ -248,7 +245,7 @@ class PDFGenerator {
 
     // ─── Payment Receipt ──────────────────────────────────────────────────────
 
-    async generatePaymentSlip(registration) {
+    async generatePaymentSlip(registration, options = {}) {
         return new Promise((resolve, reject) => {
             try {
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
@@ -264,7 +261,7 @@ class PDFGenerator {
                 const receiptNo = `REC-${registration._id.toString().slice(-8).toUpperCase()}`;
 
                 // ── Header image ──
-                this._headerImg(doc);
+                this._headerImg(doc, options.headerImage);
                 let y = doc.y + 10;
 
                 // ── Title strip ──
@@ -276,7 +273,7 @@ class PDFGenerator {
                 // ── Meta ──
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
                     .text(`Receipt No: ${receiptNo}`, 40, y)
-                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 0, y, { width: pageW - 40, align: 'right' });
+                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 40, y, { width: pageW - 80, align: 'right' });
                 y += 16;
                 this._line(doc, 40, y, pageW - 40);
                 y += 8;
@@ -349,14 +346,10 @@ class PDFGenerator {
                 ], y, '#f9fafb');
                 this._line(doc, 40, y, 40 + tW, '#e5e7eb');
                 y += 8;
-
-                // ── Payment details (left) + Summary (right) - same starting y ──
                 const sectionStartY = y;
                 const pdW = tW * 0.50;
                 const sumX = 40 + pdW + 10;
                 const sumW = tW * 0.50 - 10;
-
-                // LEFT: Payment Details
                 this._label(doc, 'Payment Details', 40, sectionStartY, pdW);
                 const txId = m.transactionId || registration.paymentId || 'N/A';
                 const orderId = registration.razorpayOrderId || 'N/A';
@@ -368,9 +361,10 @@ class PDFGenerator {
                 ];
                 let pdy = sectionStartY + 14;
                 payDetails.forEach(pd => {
+                    console.log(`DEBUG: Generating PDF line for ${pd.label}`);
                     doc.rect(40, pdy, pdW, 16).fill(pdy % 32 === 0 ? LGRAY : WHITE);
                     doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold')
-                        .text(pd.label, 44, pdy + 4, { width: pdW * 0.44 });
+                        .text(pd.label, 44, pdy + 4, { width: pdW * 0.44, characterSpacing: 0 });
                     doc.fillColor(DARK).fontSize(8).font('Helvetica')
                         .text(pd.value, 44 + pdW * 0.44, pdy + 4, { width: pdW * 0.54 - 8 });
                     pdy += 17;
@@ -413,10 +407,6 @@ class PDFGenerator {
                 y = Math.max(pdy, sy) + 10;
                 this._line(doc, 40, y, pageW - 40);
                 y += 10;
-
-                // ── Footer image ──
-                this._footerImg(doc);
-
                 stream.on('finish', () => {
                     const publicUrl = getTempPdfUrl(filePath);
                     resolve({ filePath, cloudUrl: publicUrl });

@@ -1,5 +1,5 @@
 const Otp = require('../models/Otp');
-const { sendEmail } = require('../utils/mailer');
+const emailService = require('../utils/emailService');
 const { sendWhatsAppOTP } = require('../utils/whatsapp');
 
 /**
@@ -118,7 +118,9 @@ class VerifyService {
             </html>
         `;
 
-        return await sendEmail(email, subject, html, context);
+        const logData = { message: `OTP for ${contextTitle}` };
+        const sent = await emailService.sendEmail({ to: email, subject, html, profile: context, logData });
+        return { success: sent };
     }
 
     /**
