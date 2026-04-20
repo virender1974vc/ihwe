@@ -51,7 +51,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     preferredCompanySize: { type: String }, // Small / Medium / Large
 
     // 6. Purchase Intent & Capacity
-    buyingFrequency: { type: String, required: true }, // One-time / Monthly / Quarterly / Long-term
+    buyingFrequency: { type: String, required: false }, // One-time / Monthly / Quarterly / Long-term
     estimatedAnnualPurchaseValue: { type: String, required: true },
     purchaseTimeline: { type: String, required: true }, // Immediate / 1–3 Months / 3–6 Months / Exploring
     roleInPurchaseDecision: { type: String, required: true }, // Final Decision Maker / Influencer / Research Only
@@ -64,20 +64,20 @@ const buyerRegistrationSchema = new mongoose.Schema(
     requiredCertifications: { type: [String], default: [] }, // ISO / GMP / FDA / AYUSH / Organic / Others
 
     // 9. Pricing Preference
-    pricingPreference: { type: String, required: true }, // Premium / Mid-Range / Budget
+    pricingPreference: { type: String, required: false }, // Premium / Mid-Range / Budget
 
     // 10. B2B Meeting Preferences
-    preferredMeetingDate: { type: String, required: true },
-    preferredMeetingDay: { type: String, required: true },
-    preferredTimeSlot: { type: String, required: true },
-    requirePreScheduledB2B: { type: String, required: true }, // Yes/No
+    preferredMeetingDate: { type: String, required: false },
+    preferredMeetingDay: { type: String, required: false },
+    preferredTimeSlot: { type: String, required: false },
+    requirePreScheduledB2B: { type: String, required: false }, // Yes/No
     preferredMeetingCategories: { type: [String], default: [] },
     preferredExhibitorTypes: { type: [String], default: [] },
     numberOfMeetingsInterested: { type: String }, // 3–5 / 5–10 / 10+
     meetingObjectives: { type: [String], default: [] },
     preferredBusinessTypes: { type: [String], default: [] },
     meetingRequirements: { type: String },
-    meetingPriorityLevel: { type: String, required: true }, // High / Medium / General
+    meetingPriorityLevel: { type: String, required: false }, // High / Medium / General
 
     // 11. Logistics & Shipping
     logisticsRequirements: { type: String },
