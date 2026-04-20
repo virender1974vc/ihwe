@@ -91,14 +91,14 @@ class EmailService {
 
             const headerSection = headerSrc
                 ? `<tr>
-                    <td align="center" style="line-height:0;">
+                    <td align="center" style="line-height:0; padding-top: 10px;">
                         <img src="${headerSrc}" alt="Header" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
                     </td>
                    </tr>`
                 : `<tr>
-                    <td align="center" style="background: linear-gradient(135deg, #23471d 0%, #3d6b33 100%); padding: 40px; color: white;">
-                        <h1 style="margin:0; font-size: 26px; font-family: 'Segoe UI', Arial, sans-serif;">9th International Health & Wellness Expo</h1>
-                        <p style="margin:10px 0 0; opacity: 0.9; font-size: 16px;">Global Health Connect | IHWE 2026</p>
+                    <td align="center" style="background-color: #23471d; padding: 50px 40px 40px; color: #ffffff;">
+                        <h1 style="margin:0; font-size: 26px; font-family: Arial, Helvetica, sans-serif; color: #ffffff; font-weight: bold;">9th International Health & Wellness Expo</h1>
+                        <p style="margin:10px 0 0; font-size: 16px; color: #ffffff; font-family: Arial, Helvetica, sans-serif;">Global Health Connect | IHWE 2026</p>
                     </td>
                    </tr>`;
 
@@ -281,10 +281,14 @@ class EmailService {
             'DESIGNATION': data.designation || 'N/A',
             'REGISTRATION_ID': data.registrationId || data.regId || 'N/A',
             'STALL_TYPE': data.stall_type || 'N/A',
+            'STALL_SCHEME': data.stall_scheme || data.stallScheme || 'N/A',
+            'STALL_DIMENSION': data.stall_dimension || data.dimension || 'N/A',
+            'STALL_SIZE': data.stall_size || data.stallSize || 'N/A',
             'TOTAL_AMOUNT': data.total_amount || 'N/A',
             'AMOUNT_PAID': data.amount_paid || 'N/A',
             'BALANCE_DUE': data.balance_due || 'N/A',
             'PAYMENT_MODE': data.payment_mode || 'N/A',
+            'PAYMENT_METHOD': data.payment_method || data.method || 'N/A',
             'TRANSACTION_ID': data.transaction_id || 'N/A',
             'ORDER_NO': data.order_no || 'N/A',
             'GRAND_TOTAL': data.grand_total || 'N/A',
@@ -481,6 +485,8 @@ class EmailService {
                 fromEmail = process.env.EXHIBITOR_FROM_EMAIL || fromEmail;
                 fromName = process.env.EXHIBITOR_FROM_NAME || fromName;
             }
+            fromEmail = fromEmail || process.env.SMTP_USER || 'no-reply@ihwe.in';
+            fromName = fromName || 'IHWE Team';
 
             const info = await transporter.sendMail({
                 from: '"' + fromName + '" <' + fromEmail + '>',
@@ -974,7 +980,10 @@ class EmailService {
             username: registration.contact1.email,
             email: registration.contact1.email,
             password: rawPassword,
-            phone: registration.contact1.mobile || registration.contact1.alternateNo
+            phone: registration.contact1.mobile || registration.contact1.alternateNo,
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_dimension: registration.participation?.dimension || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A'
         };
 
         try {
@@ -1066,7 +1075,11 @@ class EmailService {
             amount_paid: fmt(registration.amountPaid),
             balance_due: fmt(registration.balanceAmount),
             payment_mode: registration.paymentMode || 'N/A',
-            transaction_id: registration.paymentId || 'N/A',
+            payment_method: registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
+            transaction_id: registration.paymentId || registration.manualPaymentDetails?.transactionId || 'N/A',
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_dimension: registration.participation?.dimension || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A',
         };
 
         const attachments = [];
@@ -1091,7 +1104,7 @@ class EmailService {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
-            formType: 'exhibitor-registration',
+            formType: 'exhibitor-registration-approved',
             data: {
                 exhibitor_name: registration.exhibitorName,
                 stall_no: registration.participation?.stallFor || 'N/A',
@@ -1099,6 +1112,7 @@ class EmailService {
                 registrationId: registration.registrationId,
                 login_url: loginUrl,
                 username: registration.contact1.email,
+                password: 'Check your previous registration email',
                 email: registration.contact1.email,
                 status: 'Approved',
                 phone: registration.contact1.mobile
@@ -1146,9 +1160,96 @@ class EmailService {
         });
     }
 
-    async sendOtpEmail(email, otp, name) {
-        const subject = 'IHWE Login - One Time Password (OTP)';
-        const html = this.emailShell(`<div style="text-align: center;"><p>Hello <strong>${name}</strong>,</p><p>Your One Time Password (OTP) for IHWE access is:</p><div style="font-size: 32px; font-weight: 800; color: #d26019; letter-spacing: 5px; margin: 20px 0;">${otp}</div><p>Please do not share this OTP with anyone. It is valid for 10 minutes.</p></div>`);
+    async sendPaymentFailedEmail(registration) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            registrationId: registration.registrationId,
+            stall_no: registration.participation?.stallFor || 'N/A',
+            login_url: loginUrl,
+        };
+        return await this.sendDynamicConfirmation({
+            to: registration.contact1.email,
+            formType: 'exhibitor-payment-failed',
+            data,
+            profile: 'EXHIBITOR'
+        });
+    }
+
+    async sendOtpEmail(email, otp, name, context = 'GENERAL') {
+        let contextTitle = 'Registration';
+        let contextDescription = 'registering';
+        let dashboardText = 'IHWE Portal';
+        if (context === 'BUYER' || context.includes('buyer')) {
+            contextTitle = 'Buyer Registration';
+            contextDescription = 'registering as a Buyer';
+            dashboardText = 'IHWE Buyer Dashboard';
+        } else if (context === 'EXHIBITOR' || context.includes('exhibitor')) {
+            contextTitle = 'Exhibitor Registration';
+            contextDescription = 'registering as an Exhibitor';
+            dashboardText = 'IHWE Exhibitor Dashboard';
+        } else if (context === 'VISITOR' || context.includes('visitor')) {
+            contextTitle = 'Visitor Registration';
+            contextDescription = 'registering as a Visitor';
+            dashboardText = 'IHWE Visitor Portal';
+        } else if (context === 'DELEGATE' || context.includes('delegate')) {
+            contextTitle = 'Delegate Registration';
+            contextDescription = 'registering as a Delegate';
+            dashboardText = 'IHWE Delegate Portal';
+        } else if (context === 'SELLER' || context.includes('seller')) {
+            contextTitle = 'Seller Registration';
+            contextDescription = 'registering as a Seller';
+            dashboardText = 'IHWE Seller Dashboard';
+        }
+
+        const subject = `IHWE ${contextTitle} – Email Verification OTP`;
+        const html = this.emailShell(`
+            <div style="text-align: left; max-width: 600px; margin: 0 auto; color: #333;">
+                <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Hello <strong>${name}</strong>,</p>
+                
+                <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                    Thank you for ${contextDescription} for the <strong>International Health & Wellness Expo (IHWE)</strong>.
+                </p>
+                
+                <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    To proceed with your ${contextTitle} and activate your access to the <strong>${dashboardText}</strong>, please verify your email using the One-Time Password (OTP) below:
+                </p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">🔐</p>
+                    <div style="font-size: 42px; font-weight: 800; color: #d26019; letter-spacing: 10px; font-family: 'Courier New', monospace; line-height: 1.2;">${otp}</div>
+                </div>
+                
+                <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
+                    <strong>This OTP is valid for 10 minutes only</strong> and can be used once.
+                </p>
+                
+                <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    For your security, please do not share this code with anyone. <strong>IHWE or its representatives will never ask for your OTP.</strong>
+                </p>
+                
+                <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
+                    Once verified, our team will review your profile and connect with you shortly for further coordination.
+                </p>
+                
+                <p style="margin-bottom: 35px; font-size: 13px; color: #6b7280; font-style: italic; line-height: 1.6;">
+                    If you did not initiate this request, please ignore this email.
+                </p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0 0 5px 0; font-size: 14px; color: #333;">Warm Regards,</p>
+                    <p style="margin: 5px 0; font-size: 15px; color: #23471d; font-weight: 700;">Team IHWE</p>
+                    <p style="margin: 5px 0; font-size: 13px; color: #6b7280;">International Health & Wellness Expo</p>
+                    <p style="margin: 5px 0 0 0; font-size: 12px; color: #9ca3af; font-style: italic;">Global Health Connect</p>
+                </div>
+                
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center;">
+                    <p style="margin: 0 0 5px 0; font-size: 11px; color: #6b7280;">© 2026 IHWE. All Rights Reserved.</p>
+                    <p style="margin: 0; font-size: 10px; color: #9ca3af;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
+                </div>
+            </div>
+        `);
         return await this.sendEmail({ to: email, subject, html });
     }
 

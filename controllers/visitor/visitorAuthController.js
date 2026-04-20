@@ -49,7 +49,7 @@ const sendVisitorOtp = async (req, res) => {
     });
 
     // 4. Send OTP via Email
-    const emailSent = await emailService.sendOtpEmail(visitor.email, otp, `${visitor.firstName} ${visitor.lastName}`);
+    const emailSent = await emailService.sendOtpEmail(visitor.email, otp, `${visitor.firstName} ${visitor.lastName}`, 'VISITOR');
     
     // 5. Send OTP via WhatsApp
     const waSent = await whatsapp.sendWhatsAppOTP(visitor.mobile, otp, 'VISITOR');

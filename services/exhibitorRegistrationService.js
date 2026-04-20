@@ -3,6 +3,7 @@ const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
 const whatsapp = require('../utils/whatsapp');
+const path = require('path');
 
 class ExhibitorRegistrationService {
     async getAllRegistrations() {
@@ -132,29 +133,40 @@ class ExhibitorRegistrationService {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
         const year = new Date().getFullYear();
-        let nextSeq = 1;
-        const lastReg = await ExhibitorRegistration.findOne(
-            { registrationId: { $regex: new RegExp(`^IHWE-EXH-${year}-`) } }
-        ).sort({ registrationId: -1 }).lean();
-
-        if (lastReg && lastReg.registrationId) {
-            const parts = lastReg.registrationId.split('-');
-            const lastSeq = parseInt(parts[parts.length - 1]);
-            if (!isNaN(lastSeq)) {
-                nextSeq = lastSeq + 1;
-            }
+        // Use a persistent counter to ensure sequential IDs starting from 8001
+        const Counter = require('../models/visitor/CounterModel');
+        // Check if counter exists, if not initialize at 8000 so next is 8001
+        let counterRecord = await Counter.findOne({ type: `exhibitor-v2-${year}` });
+        if (!counterRecord) {
+            counterRecord = await Counter.findOneAndUpdate(
+                { type: `exhibitor-v2-${year}` },
+                { $setOnInsert: { seq: 8000 } },
+                { upsert: true, new: true }
+            );
         }
+
+        let counter = await Counter.findOneAndUpdate(
+            { type: `exhibitor-v2-${year}` },
+            { $inc: { seq: 1 } },
+            { new: true }
+        );
+
+        let currentSeq = counter.seq;
         let isUnique = false;
+
         while (!isUnique) {
-            const nextIdStr = nextSeq.toString().padStart(5, '0');
-            const candidateId = `IHWE-EXH-${year}-${nextIdStr}`;
+            const nextIdStr = currentSeq.toString().padStart(4, '0');
+            const candidateId = `9IHWE-EX-${year}-${nextIdStr}`;
             const existingDoc = await ExhibitorRegistration.findOne({ registrationId: candidateId }).select('_id').lean();
 
             if (!existingDoc) {
                 data.registrationId = candidateId;
                 isUnique = true;
+                if (currentSeq > counter.seq) {
+                    await Counter.findOneAndUpdate({ type: `exhibitor-v2-${year}` }, { seq: currentSeq });
+                }
             } else {
-                nextSeq++;
+                currentSeq++;
             }
         }
         let rawPassword;
@@ -224,7 +236,13 @@ class ExhibitorRegistrationService {
 
             // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
             try {
-                const regPdf = await pdfGenerator.generateRegistrationForm(saved);
+                const templateData = await emailService.getExhibitorTemplateData();
+                const pdfOptions = {
+                    headerImage: templateData?.headerImage ? path.resolve(__dirname, '..', templateData.headerImage.replace(/^\//, '')) : null,
+                    footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
+                };
+
+                const regPdf = await pdfGenerator.generateRegistrationForm(saved, pdfOptions);
                 const pdfPath = regPdf?.filePath || regPdf;
                 if (regPdf?.cloudUrl) {
                     await ExhibitorRegistration.findByIdAndUpdate(saved._id, { registrationPdfUrl: regPdf.cloudUrl });
@@ -235,7 +253,13 @@ class ExhibitorRegistrationService {
             }
             if (['paid', 'advance-paid'].includes(saved.status)) {
                 try {
-                    const receiptPdf = await pdfGenerator.generatePaymentSlip(saved);
+                    const templateData = await emailService.getExhibitorTemplateData();
+                    const pdfOptions = {
+                        headerImage: templateData?.headerImage ? path.resolve(__dirname, '..', templateData.headerImage.replace(/^\//, '')) : null,
+                        footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
+                    };
+
+                    const receiptPdf = await pdfGenerator.generatePaymentSlip(saved, pdfOptions);
                     const receiptPath = receiptPdf?.filePath || receiptPdf;
                     if (receiptPdf?.cloudUrl) {
                         await ExhibitorRegistration.findByIdAndUpdate(saved._id, { receiptPdfUrl: receiptPdf.cloudUrl });
@@ -304,7 +328,13 @@ class ExhibitorRegistrationService {
         // --- PAYMENT RECEIPT ---
         if (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status)) {
             try {
-                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated);
+                const templateData = await emailService.getExhibitorTemplateData();
+                const pdfOptions = {
+                    headerImage: templateData?.headerImage ? path.resolve(__dirname, '..', templateData.headerImage.replace(/^\//, '')) : null,
+                    footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
+                };
+
+                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated, pdfOptions);
                 const receiptPath = receiptPdf?.filePath || receiptPdf;
                 if (receiptPdf?.cloudUrl) {
                     await ExhibitorRegistration.findByIdAndUpdate(id, { receiptPdfUrl: receiptPdf.cloudUrl });

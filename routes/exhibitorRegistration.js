@@ -97,10 +97,10 @@ const msmeStorage = new CloudinaryStorage({
 const msmeUpload = multer({ storage: msmeStorage });
 
 
-router.put('/:id/msme', msmeUpload.single('udhyamCertificate'), async (req, res) => {
+router.put('/:id/msme', msmeUpload.single('udyamCertificate'), async (req, res) => {
     try {
         const msmeData = { ...req.body, updatedAt: new Date() };
-        if (req.file) msmeData.udhyamCertificateUrl = req.file.path;
+        if (req.file) msmeData.udyamCertificateUrl = req.file.path;
         const updated = await require('../models/ExhibitorRegistration').findByIdAndUpdate(
             req.params.id,
             { msme: msmeData },

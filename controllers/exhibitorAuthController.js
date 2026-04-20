@@ -29,7 +29,7 @@ class ExhibitorAuthController {
             await exhibitor.save();
 
 
-            await emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName);
+            await emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName, 'EXHIBITOR');
 
             res.status(200).json({
                 success: true,
@@ -103,7 +103,7 @@ class ExhibitorAuthController {
 
             // Also send via email if exists
             if (exhibitor.contact1.email) {
-                await emailService.sendOtpEmail(exhibitor.contact1.email, otp, exhibitor.exhibitorName);
+                await emailService.sendOtpEmail(exhibitor.contact1.email, otp, exhibitor.exhibitorName, 'EXHIBITOR');
             }
 
             res.status(200).json({
