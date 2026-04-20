@@ -60,11 +60,11 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     },
     spokenWith: {
         type: String,
-        default: null // Name of staff who spoke with them
+        default: null
     },
     filledBy: {
         type: String,
-        default: 'User' // Name of admin/employee or 'User'
+        default: 'User'
     },
     status: { type: String, enum: ['pending', 'approved', 'rejected', 'paid', 'advance-paid', 'confirmed', 'payment-failed'], default: 'pending' },
     paymentMode: { type: String, enum: ['manual', 'online'], default: 'manual' },

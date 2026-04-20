@@ -349,8 +349,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'approved' && current.status !== 'approved') {
             try {
                 await emailService.sendApprovalEmail(updated);
-                const msg = `Congratulations ${updated.exhibitorName}! 👋\n\nYour registration for IHWE 2026 has been APPROVED. ✅\n\nPlease login to the Exhibitor Portal to complete the payment and secure your stall ${updated.participation?.stallFor || ''}.\n\n- Team Namo Gange`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Approved');
             } catch (err) { console.error('Approval Notification Error:', err); }
         }
 
@@ -358,8 +356,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'confirmed' && current.status !== 'confirmed') {
             try {
                 await emailService.sendConfirmationEmail(updated);
-                const msg = `Booking Confirmed! 🎊\n\nDear ${updated.exhibitorName}, your stall booking for IHWE 2026 is now CONFIRMED. We look forward to seeing you at the expo!\n\n- Team Namo Gange`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Confirmed');
             } catch (err) { console.error('Confirmation Notification Error:', err); }
         }
 
@@ -367,8 +363,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'rejected' && current.status !== 'rejected') {
             try {
                 await emailService.sendRejectionEmail(updated);
-                const msg = `Hello ${updated.exhibitorName}. We regret to inform you that your registration application for IHWE 2026 has not been approved at this time. Please contact our support for more details.`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Rejected');
             } catch (err) { console.error('Rejection Notification Error:', err); }
         }
 
@@ -378,13 +372,9 @@ class ExhibitorRegistrationService {
     async deleteRegistration(id) {
         const reg = await ExhibitorRegistration.findById(id);
         if (!reg) throw new Error('Registration not found');
-
-        // Only free stall if payment was not failed (failed entries never booked a stall)
         if (reg.status !== 'payment-failed' && reg.participation?.stallNo) {
             await Stall.findByIdAndUpdate(reg.participation.stallNo, { status: 'available', bookedBy: null });
         }
-
-        // Archive payment snapshot to console/log before delete (soft audit trail)
         if (reg.amountPaid > 0) {
             console.log(`[PAYMENT ARCHIVE] Deleting registration ${id} | Exhibitor: ${reg.exhibitorName} | Paid: ${reg.amountPaid} | Receipt: ${reg.receiptUrl || 'none'} | TxnId: ${reg.paymentId || 'none'}`);
         }
