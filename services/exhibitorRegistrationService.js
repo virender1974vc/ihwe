@@ -8,7 +8,7 @@ const path = require('path');
 class ExhibitorRegistrationService {
     async getAllRegistrations() {
         const regs = await ExhibitorRegistration.find()
-            .populate('eventId', 'name')
+            .populate('eventId', 'name paymentPlans')
             .sort({ createdAt: -1 });
 
 
@@ -16,7 +16,7 @@ class ExhibitorRegistrationService {
     }
 
     async getRegistrationById(id) {
-        const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate');
+        const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate paymentPlans');
         if (!reg) return null;
 
         const enriched = await this._enrichRegistrations([reg]);
@@ -179,25 +179,24 @@ class ExhibitorRegistrationService {
             rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
             data.password = await bcrypt.hash(rawPassword, 10);
         }
-
-        // --- AUTO-POPULATE stallFor from Stall model ---
         if (data.participation?.stallNo) {
             try {
                 const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber');
                 if (stallDoc) data.participation.stallFor = stallDoc.stallNumber;
             } catch (_) { }
         }
-
-        // --- AUTO-CALCULATE balanceAmount ---
-        const total = data.participation?.total || 0;
+        const invoiceTotal = data.participation?.total || 0;
+        const tdsAmount = data.financeBreakdown?.tdsAmount || 0;
+        const netPayable = invoiceTotal - tdsAmount;
         const amountPaid = data.amountPaid || 0;
-        data.balanceAmount = Math.max(0, total - amountPaid);
+        data.balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
 
         // --- INITIAL PAYMENT HISTORY ---
         if (amountPaid > 0) {
+            const isFull = data.balanceAmount === 0;
             data.paymentHistory = [{
                 amount: amountPaid,
-                paymentType: data.paymentType || 'full',
+                paymentType: data.paymentType || (isFull ? 'full' : 'installment'),
                 paymentMode: data.paymentMode || 'online',
                 method: data.paymentMode === 'online' ? 'Razorpay' : (data.manualPaymentDetails?.method || 'Manual'),
                 transactionId: data.paymentId || data.manualPaymentDetails?.transactionId || '',
@@ -283,10 +282,25 @@ class ExhibitorRegistrationService {
         const current = await ExhibitorRegistration.findById(id);
 
         // --- AUTO-POPULATE stallFor if stallNo changed ---
+        let stallChanged = false;
         if (data.participation?.stallNo && data.participation.stallNo !== current.participation?.stallNo?.toString()) {
+            stallChanged = true;
             try {
-                const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber');
-                if (stallDoc) data.participation.stallFor = stallDoc.stallNumber;
+                const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber area incrementPercentage discountPercentage');
+                if (stallDoc) {
+                    data.participation.stallFor = stallDoc.stallNumber;
+                    // Recalculate gross for new stall
+                    const rate = data.participation?.rate || current.participation?.rate || 0;
+                    const baseCost = stallDoc.area * rate;
+                    const plInc = Math.round(baseCost * (stallDoc.incrementPercentage || 0) / 100);
+                    const newGross = baseCost + plInc;
+                    const stallDiscPct = stallDoc.discountPercentage || 0;
+                    const stallDiscAmt = Math.round(newGross * stallDiscPct / 100);
+                    // Store on data so needsFinanceRecalc can use it
+                    data._newGross = newGross;
+                    data._stallDiscountPercent = stallDiscPct;
+                    data._stallDiscountAmount = stallDiscAmt;
+                }
             } catch (_) { }
             // Free old stall
             if (current.participation?.stallNo) {
@@ -296,12 +310,72 @@ class ExhibitorRegistrationService {
             await Stall.findByIdAndUpdate(data.participation.stallNo, { status: 'booked', bookedBy: id });
         }
 
-        // --- AUTO-CALCULATE balanceAmount ---
-        const total = data.participation?.total ?? current.participation?.total ?? 0;
+        // --- AUTO-CALCULATE balanceAmount (will be recalculated below if finance recalc runs) ---
+        const invoiceTotal = data.participation?.total ?? current.participation?.total ?? 0;
+        const tdsAmountCurrent = data.financeBreakdown?.tdsAmount ?? current.financeBreakdown?.tdsAmount ?? 0;
+        const netPayableCurrent = invoiceTotal - tdsAmountCurrent;
         const amountPaid = data.amountPaid ?? current.amountPaid ?? 0;
-        data.balanceAmount = Math.max(0, total - amountPaid);
+        data.balanceAmount = Math.max(0, Math.round(netPayableCurrent - amountPaid));
 
-        // --- PUSH PAYMENT HISTORY if new payment is being recorded ---
+        // Only recalc if grossAmount is missing (new record from old schema) or TDS/plan/stall explicitly changed
+        const needsFinanceRecalc =
+            stallChanged ||
+            !current.financeBreakdown?.grossAmount ||
+            (data.chosenTdsPercent !== undefined && data.chosenTdsPercent !== current.chosenTdsPercent) ||
+            (data.paymentPlanType && data.paymentPlanType !== current.paymentPlanType);
+
+        if (needsFinanceRecalc) {
+            const Settings = require('../models/Settings');
+            const settings = await Settings.findOne();
+            const plan = data.paymentPlanType || current.paymentPlanType || 'full';
+
+            // If stall changed, use newly calculated gross; otherwise use stored grossAmount
+            const gross = data._newGross || current.financeBreakdown?.grossAmount || data.financeBreakdown?.grossAmount || 0;
+            const stallDiscPct = data._stallDiscountPercent ?? current.financeBreakdown?.stallDiscountPercent ?? 0;
+            const stallDiscAmt = data._stallDiscountAmount ?? current.financeBreakdown?.stallDiscountAmount ?? 0;
+            const sub1 = gross - stallDiscAmt;
+
+            let isFullPayment = (plan === 'full');
+            const Event = require('../models/Event');
+            const event = await Event.findById(current.eventId);
+            if (event?.paymentPlans) {
+                const selectedPlan = event.paymentPlans.find(p => p.id === plan);
+                if (selectedPlan && (Number(selectedPlan.percentage) === 100)) isFullPayment = true;
+            }
+
+            const discP = isFullPayment ? (settings?.fullPaymentDiscount || 5) : 0;
+            const discA = Math.round(sub1 * (discP / 100));
+            const sub = sub1 - discA;
+            const gstA = Math.round(sub * 0.18);
+            const tdsP = (data.chosenTdsPercent !== undefined) ? data.chosenTdsPercent : (current.chosenTdsPercent || 0);
+            const tdsA = Math.round(sub * (tdsP / 100));
+            const invoiceTot = sub + gstA;
+            const net = invoiceTot - tdsA;
+
+            if (!data.participation) data.participation = { ...current.participation.toObject() };
+            data.participation.amount = sub;
+            data.participation.total = invoiceTot;
+            data.balanceAmount = Math.max(0, Math.round(net - amountPaid));
+
+            data.financeBreakdown = {
+                grossAmount: gross,
+                stallDiscountPercent: stallDiscPct,
+                stallDiscountAmount: stallDiscAmt,
+                subtotal1: Math.round(sub1),
+                discountPercent: discP,
+                discountAmount: discA,
+                subtotal: sub,
+                gstAmount: gstA,
+                tdsPercent: tdsP,
+                tdsAmount: tdsA,
+                netPayable: net
+            };
+
+            // cleanup temp fields
+            delete data._newGross;
+            delete data._stallDiscountPercent;
+            delete data._stallDiscountAmount;
+        }
         const paymentStatuses = ['paid', 'advance-paid'];
         const wasAlreadyPaid = paymentStatuses.includes(current.status);
         const isNowPaid = paymentStatuses.includes(data.status);
@@ -311,7 +385,7 @@ class ExhibitorRegistrationService {
             if (newlyPaid > 0) {
                 const historyEntry = {
                     amount: newlyPaid,
-                    paymentType: data.paymentType || (wasAlreadyPaid ? 'balance' : 'advance'),
+                    paymentType: data.paymentType || (wasAlreadyPaid ? 'installment' : 'installment'),
                     paymentMode: data.paymentMode || current.paymentMode || 'manual',
                     method: data.manualPaymentDetails?.method || (data.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
                     transactionId: data.manualPaymentDetails?.transactionId || data.paymentId || '',
@@ -324,9 +398,10 @@ class ExhibitorRegistrationService {
         }
 
         const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { new: true });
+        const newlyReceived = (data.amountPaid != null && data.amountPaid > (current.amountPaid || 0));
+        const statusJustChanged = (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status));
 
-        // --- PAYMENT RECEIPT ---
-        if (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status)) {
+        if ((statusJustChanged || newlyReceived) && ['paid', 'advance-paid'].includes(updated.status)) {
             try {
                 const templateData = await emailService.getExhibitorTemplateData();
                 const pdfOptions = {
@@ -349,8 +424,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'approved' && current.status !== 'approved') {
             try {
                 await emailService.sendApprovalEmail(updated);
-                const msg = `Congratulations ${updated.exhibitorName}! 👋\n\nYour registration for IHWE 2026 has been APPROVED. ✅\n\nPlease login to the Exhibitor Portal to complete the payment and secure your stall ${updated.participation?.stallFor || ''}.\n\n- Team Namo Gange`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Approved');
             } catch (err) { console.error('Approval Notification Error:', err); }
         }
 
@@ -358,8 +431,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'confirmed' && current.status !== 'confirmed') {
             try {
                 await emailService.sendConfirmationEmail(updated);
-                const msg = `Booking Confirmed! 🎊\n\nDear ${updated.exhibitorName}, your stall booking for IHWE 2026 is now CONFIRMED. We look forward to seeing you at the expo!\n\n- Team Namo Gange`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Confirmed');
             } catch (err) { console.error('Confirmation Notification Error:', err); }
         }
 
@@ -367,8 +438,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'rejected' && current.status !== 'rejected') {
             try {
                 await emailService.sendRejectionEmail(updated);
-                const msg = `Hello ${updated.exhibitorName}. We regret to inform you that your registration application for IHWE 2026 has not been approved at this time. Please contact our support for more details.`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Rejected');
             } catch (err) { console.error('Rejection Notification Error:', err); }
         }
 
@@ -378,13 +447,9 @@ class ExhibitorRegistrationService {
     async deleteRegistration(id) {
         const reg = await ExhibitorRegistration.findById(id);
         if (!reg) throw new Error('Registration not found');
-
-        // Only free stall if payment was not failed (failed entries never booked a stall)
         if (reg.status !== 'payment-failed' && reg.participation?.stallNo) {
             await Stall.findByIdAndUpdate(reg.participation.stallNo, { status: 'available', bookedBy: null });
         }
-
-        // Archive payment snapshot to console/log before delete (soft audit trail)
         if (reg.amountPaid > 0) {
             console.log(`[PAYMENT ARCHIVE] Deleting registration ${id} | Exhibitor: ${reg.exhibitorName} | Paid: ${reg.amountPaid} | Receipt: ${reg.receiptUrl || 'none'} | TxnId: ${reg.paymentId || 'none'}`);
         }

@@ -250,7 +250,7 @@ class ExhibitorAuthController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 targetId,
                 { $set: update },
-                { new: true, runValidators: true }
+                { new: true, runValidators: false }
             );
 
             if (!updated) {
