@@ -77,7 +77,7 @@ router.delete('/:id/kyc-doc/:field', requireAdminAuth, (req, res) => exhibitorRe
 router.post('/bulk-cleanup-docs', requireAdminAuth, (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
 router.post('/:id/special-docs', kycUpload.single('file'), (req, res) => exhibitorRegistrationController.addSpecialDoc(req, res));
 router.delete('/:id/special-docs/:docId', (req, res) => exhibitorRegistrationController.deleteSpecialDoc(req, res));
-router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req, res) => {
+router.post('/upload-receipt', requireAdminAuth, kycUpload.single('receipt'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
     }

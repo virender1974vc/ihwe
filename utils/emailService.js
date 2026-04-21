@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+﻿const nodemailer = require('nodemailer');
 const fs = require('fs');
 const QRCode = require('qrcode');
 const EmailLog = require('../models/EmailLog');
@@ -1080,12 +1080,12 @@ class EmailService {
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             stall_type: registration.participation?.stallType || 'N/A',
-            total_amount: fmt(registration.participation?.total),
+            total_amount: fmt((registration.financeBreakdown || {}).netPayable || registration.participation?.total),
             amount_paid: fmt(registration.amountPaid),
             balance_due: fmt(registration.balanceAmount),
             payment_mode: registration.paymentMode || 'N/A',
-            payment_method: registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
-            transaction_id: registration.paymentId || registration.manualPaymentDetails?.transactionId || 'N/A',
+            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'); })(),
+            transaction_id: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && (l.transactionId || l.razorpayPaymentId)) || registration.manualPaymentDetails?.transactionId || registration.paymentId || 'N/A'; })(),
             stall_scheme: registration.participation?.stallScheme || 'N/A',
             stall_dimension: registration.participation?.dimension || 'N/A',
             stall_size: registration.participation?.stallSize || 'N/A',
@@ -1337,3 +1337,4 @@ class EmailService {
 }
 
 module.exports = new EmailService();
+
