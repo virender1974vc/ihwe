@@ -117,9 +117,9 @@ class BuyerRegistrationController {
             res.json({ success: true, message: 'Login successful', data });
         } catch (err) {
             console.error('Error buyer login:', err);
-            res.status(err.status || 500).json({ 
-                success: false, 
-                message: err.message || 'Login failed. Please check your credentials.' 
+            res.status(err.status || 500).json({
+                success: false,
+                message: err.message || 'Login failed. Please check your credentials.'
             });
         }
     }
