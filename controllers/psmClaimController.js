@@ -5,6 +5,7 @@ const PsmFeedbackReport = require('../models/psm_reports/PsmFeedbackReport');
 const PsmUndertaking = require('../models/psm_reports/PsmUndertaking');
 const PsmPreReceipt = require('../models/psm_reports/PsmPreReceipt');
 const PsmMandateForm = require('../models/psm_reports/PsmMandateForm.js');
+const PsmPfmsDetails = require('../models/psm_reports/PsmPfmsDetails');
 
 const models = {
     'annexure-c': PsmAnnexureC,
@@ -14,7 +15,7 @@ const models = {
     'undertaking': PsmUndertaking,
     'pre-receipt': PsmPreReceipt,
     'mandate-form': PsmMandateForm,
-
+    'pfms-details': PsmPfmsDetails,
 };
 
 class PsmClaimController {
