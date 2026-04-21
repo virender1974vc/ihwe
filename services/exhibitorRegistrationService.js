@@ -2,7 +2,6 @@ const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
-const whatsapp = require('../utils/whatsapp');
 const path = require('path');
 
 class ExhibitorRegistrationService {
@@ -84,7 +83,6 @@ class ExhibitorRegistrationService {
                         const keysToCheck = [f, ...(fieldAliases[f] || [])];
                         keysToCheck.forEach(key => {
                             const val = sib[key];
-                            // If we don't have a master value for this field yet, the first one seen is the LATEST (due to sort)
                             if (val && typeof val === 'string' && val !== 'undefined' && val !== 'null' && val.trim() !== '' && !masterData[f]) {
                                 masterData[f] = val;
                             }
@@ -100,8 +98,6 @@ class ExhibitorRegistrationService {
                     }
                 }
             });
-
-            // APPLY: Fill missing fields only — NEVER overwrite existing data
             const KYC_IMAGE_FIELDS = ['companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
             profileFields.forEach(f => {
                 const currentVal = doc[f];
@@ -205,9 +201,6 @@ class ExhibitorRegistrationService {
                 paidAt: new Date()
             }];
         }
-
-        // --- HANDLE DUPLICATE/RETRY LOGIC ---
-        // If a registration exists for the same email and stall in pending/failed state, update it instead of creating new
         const duplicate = await ExhibitorRegistration.findOne({
             'contact1.email': data.contact1?.email,
             'participation.stallNo': data.participation?.stallNo,

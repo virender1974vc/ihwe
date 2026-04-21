@@ -136,18 +136,12 @@ class ExhibitorAuthController {
 
             if (!rawRegistrations || rawRegistrations.length === 0)
                 return res.status(404).json({ success: false, message: 'No registrations found' });
-
-            // ENRICH: Dynamically bridge data gaps across matched registrations
-            const registrations = await exhibitorRegistrationService._enrichRegistrations(rawRegistrations);
-
-            // If an ID is provided in query, return that specific one
+            const registrations = rawRegistrations;
             const selectedId = req.query.id;
             let selectedRegistration = null;
             if (selectedId) {
                 selectedRegistration = registrations.find(r => (r._id.toString() === selectedId) || (r.id === selectedId));
             }
-
-            // Default to latest if not specified or not found
             if (!selectedRegistration) {
                 selectedRegistration = registrations[0];
             }
@@ -161,8 +155,6 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
-
-    // Change password from dashboard
     async changePassword(req, res) {
         try {
             if (req.user.role !== 'exhibitor')
@@ -220,8 +212,6 @@ class ExhibitorAuthController {
                     }
                 }
             });
-
-            // Handle file uploads from req.files (Multer fields)
             if (req.files) {
                 const fileFields = {
                     companyLogo: 'companyLogoUrl',

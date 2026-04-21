@@ -4,3 +4,6 @@ logs
 *.log
 dist
 build
+
+# Lock files
+package-lock.json
