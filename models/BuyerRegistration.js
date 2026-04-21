@@ -12,6 +12,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     yearOfEstablishment: { type: String, required: true },
     gstNumber: { type: String },
     panNumber: { type: String },
+    brandName: { type: String },
 
     // 2. Contact Information
     mobileNumber: { type: String, required: true, trim: true },
@@ -29,6 +30,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     yearsInBusiness: { type: String, required: true },
     numberOfOutlets: { type: String, required: true },
     annualTurnover: { type: String, required: true },
+    buyerIndustry: { type: String },
 
     // 4. Sourcing & Buying Interests
     primaryProductInterest: { type: String, required: true },
@@ -36,6 +38,11 @@ const buyerRegistrationSchema = new mongoose.Schema(
     specificProductRequirements: { type: String },
     estimatedPurchaseVolume: { type: String },
     budgetRange: { type: String },
+    purchaseFrequency: { type: String },
+    businessModelPreference: { type: String },
+    b2bMeetInterest: { type: String, default: "Yes" },
+    interestedInImporting: { type: String, default: "No" },
+    interestedInExporting: { type: String, default: "No" },
 
     // 5. Supplier Preference (India Only)
     preferredSupplierRegion: { type: [String], default: [] }, // North / South / East / West / Pan India
@@ -44,7 +51,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     preferredCompanySize: { type: String }, // Small / Medium / Large
 
     // 6. Purchase Intent & Capacity
-    buyingFrequency: { type: String, required: true }, // One-time / Monthly / Quarterly / Long-term
+    buyingFrequency: { type: String, required: false }, // One-time / Monthly / Quarterly / Long-term
     estimatedAnnualPurchaseValue: { type: String, required: true },
     purchaseTimeline: { type: String, required: true }, // Immediate / 1–3 Months / 3–6 Months / Exploring
     roleInPurchaseDecision: { type: String, required: true }, // Final Decision Maker / Influencer / Research Only
@@ -57,13 +64,20 @@ const buyerRegistrationSchema = new mongoose.Schema(
     requiredCertifications: { type: [String], default: [] }, // ISO / GMP / FDA / AYUSH / Organic / Others
 
     // 9. Pricing Preference
-    pricingPreference: { type: String, required: true }, // Premium / Mid-Range / Budget
+    pricingPreference: { type: String, required: false }, // Premium / Mid-Range / Budget
 
     // 10. B2B Meeting Preferences
-    preferredMeetingDate: { type: String, required: true },
-    preferredTimeSlot: { type: String, required: true },
-    requirePreScheduledB2B: { type: String, required: true }, // Yes/No
-    meetingPriorityLevel: { type: String, required: true }, // High / Medium / General
+    preferredMeetingDate: { type: String, required: false },
+    preferredMeetingDay: { type: String, required: false },
+    preferredTimeSlot: { type: String, required: false },
+    requirePreScheduledB2B: { type: String, required: false }, // Yes/No
+    preferredMeetingCategories: { type: [String], default: [] },
+    preferredExhibitorTypes: { type: [String], default: [] },
+    numberOfMeetingsInterested: { type: String }, // 3–5 / 5–10 / 10+
+    meetingObjectives: { type: [String], default: [] },
+    preferredBusinessTypes: { type: [String], default: [] },
+    meetingRequirements: { type: String },
+    meetingPriorityLevel: { type: String, required: false }, // High / Medium / General
 
     // 11. Logistics & Shipping
     logisticsRequirements: { type: String },
@@ -92,7 +106,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     consentPaymentValid: { type: Boolean, default: false },
     consentMatchedExhibitors: { type: Boolean, default: false },
 
-    // CRM / System Internal Fields
+
     registrationId: { type: String, unique: true, sparse: true },
     buyerTag: { type: String, enum: ['Hot', 'Warm', 'Cold'], default: 'Cold' },
     otpVerifiedEmail: { type: Boolean, default: false },
@@ -107,10 +121,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
     otp: { type: String, select: false },
     otpExpiry: { type: Date, select: false },
 
-    // Legacy fields (optional but kept for compatibility if needed during migration)
-    // contactPerson: { type: String, trim: true },
-    // email: { type: String, trim: true },
-    // whatsapp: { type: String, trim: true },
+
   },
   { timestamps: true }
 );
