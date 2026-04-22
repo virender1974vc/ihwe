@@ -1,21 +1,23 @@
 const WhatsAppLog = require('../models/WhatsAppLog');
 
-const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT') => {
+const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) => {
     let status = 'failed';
     let errorMsg = null;
     
-    let msg = `Namo Gange Namaskar!\n\nIHWE Secure Verification Code: ${otp}\n\nThis code is required to complete your mobile verification for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
+    let greeting = name ? `Namo Gange Namaskar!\n\nDear ${name},\n\n` : `Namo Gange Namaskar!\n\n`;
+    
+    let msg = `${greeting}IHWE Secure Verification Code:\n\n*${otp}*\n\nThis code is required to complete your mobile verification for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     
     if (context === 'VISITOR') {
-        msg = `Namo Gange Namaskar!\n\nIHWE Visitor Verification Code: ${otp}\n\nThis code is required to complete your visitor registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}IHWE Visitor Verification Code:\n\n*${otp}*\n\nThis code is required to complete your visitor registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'EXHIBITOR') {
-        msg = `Namo Gange Namaskar!\n\nIHWE Exhibitor Verification Code: ${otp}\n\nThis code is required to complete your exhibitor verification for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}IHWE Exhibitor Verification Code:\n\n*${otp}*\n\nThis code is required to complete your exhibitor verification for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'BUYER') {
-        msg = `Namo Gange Namaskar!\n\nIHWE Buyer Verification Code: ${otp}\n\nThis code is required to complete your buyer registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}IHWE Buyer Verification Code:\n\n*${otp}*\n\nThis code is required to complete your buyer registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'DELEGATE') {
-        msg = `Namo Gange Namaskar!\n\nIHWE Delegate Verification Code: ${otp}\n\nThis code is required to complete your delegate registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}IHWE Delegate Verification Code:\n\n*${otp}*\n\nThis code is required to complete your delegate registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'SELLER') {
-        msg = `Namo Gange Namaskar!\n\nIHWE Seller Verification Code: ${otp}\n\nThis code is required to complete your seller registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}IHWE Seller Verification Code:\n\n*${otp}*\n\nThis code is required to complete your seller registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     }
     
     try {

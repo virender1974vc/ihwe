@@ -26,7 +26,7 @@ router.get('/', async (req, res) => {
         if (req.query.type) {
             query.type = req.query.type;
         }
-        const categories = await GalleryCategory.find(query).sort({ createdAt: -1 });
+        const categories = await GalleryCategory.find(query).sort({ order: 1, createdAt: -1 });
         res.json({ success: true, data: categories });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -48,7 +48,8 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
             heading, 
             coverImage, 
             coverImageAlt,
-            type: type || 'gallery' 
+            type: type || 'gallery',
+            order: req.body.order || 0
         });
         await category.save();
         res.json({ success: true, data: category });
@@ -60,8 +61,9 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
 // PUT update category (with optional image)
 router.put('/:id', upload.single('coverImage'), async (req, res) => {
     try {
-        const { title, heading, coverImageAlt, type } = req.body;
+        const { title, heading, coverImageAlt, type, order } = req.body;
         const update = { title, heading, coverImageAlt };
+        if (order !== undefined) update.order = order;
         if (type) update.type = type;
         if (req.file) update.coverImage = `/uploads/gallery/categories/${req.file.filename}`;
         

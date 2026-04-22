@@ -24,6 +24,10 @@ const sidebarRoutes = require("./routes/sidebar");
 const rolesRoutes = require("./routes/roles");
 const heroRoutes = require("./routes/hero");
 const adminUsersRoutes = require("./routes/adminUsers");
+const eventOverviewRoutes = require("./routes/eventOverviewRoutes");
+const aboutOrganizerRoutes = require("./routes/aboutOrganizerRoutes");
+const ourJourneyRoutes = require("./routes/ourJourneyRoutes");
+
 const eventHighlightsRoutes = require("./routes/eventHighlights");
 const aboutRoutes = require("./routes/about");
 const settingsRoutes = require("./routes/settings");
@@ -58,6 +62,7 @@ const stallRoutes = require('./routes/stalls');
 const eventRoutes = require('./routes/events');
 const stallRateRoutes = require('./routes/stallRates');
 const termsAndConditionsRoutes = require('./routes/termsAndConditions');
+const sellerRegistrationRoutes = require('./routes/sellerRegistration');
 const dashboardRoutes = require('./routes/dashboard');
 const bankListRoutes = require("./routes/bankListRoutes");
 const bankOptionRoutes = require("./routes/bankOptionRoutes");
@@ -103,6 +108,7 @@ const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
+
 
 mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -220,6 +226,7 @@ app.use("/api/gallery-category", galleryCategoryRoutes);
 app.use("/api/contact-enquiry", contactEnquiryRoutes);
 app.use("/api/speaker-nomination", require("./routes/speakerRoutes"));
 app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
+app.use("/api/seller-registration", sellerRegistrationRoutes);
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
 app.use("/api/verify", require("./routes/verify"));
@@ -295,6 +302,9 @@ app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
+app.use("/api/event-overview", eventOverviewRoutes);
+app.use("/api/about-organizer", aboutOrganizerRoutes);
+app.use("/api/our-journey", ourJourneyRoutes);
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);

@@ -101,7 +101,7 @@ class BuyerAuthController {
             // Try sending via WhatsApp if available
             try {
                 const { sendWhatsAppOTP } = require('../utils/whatsapp');
-                await sendWhatsAppOTP(mobile, otp);
+                await sendWhatsAppOTP(mobile, otp, 'BUYER', buyer.companyName);
             } catch (waError) {
                 console.error("WhatsApp OTP failed:", waError.message);
             }
