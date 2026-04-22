@@ -1,11 +1,11 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const QRCode = require('qrcode');
+const Settings = require('../models/Settings');
 
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
-
-// Get public URL for a temp PDF - served via /temp static route in server.js
 function getTempPdfUrl(filePath) {
     const fileName = path.basename(filePath);
     const backendUrl = (process.env.BACKEND_URL || process.env.SITE_URL || 'http://localhost:5000').replace(/\/$/, '');
@@ -16,6 +16,9 @@ const HEADER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '177
 const FOOTER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '1776243243418-WhatsApp-Image-2026-04-15-at-12.00.27-PM.jpeg');
 
 const GREEN = '#23471d';
+const GREEN_DEEP = '#1a3a14';
+const BLUE_NAVY = '#1e3a8a';
+const BLUE_LIGHT = '#eff6ff';
 const ORANGE = '#d26019';
 const GRAY = '#6b7280';
 const LGRAY = '#f3f4f6';
@@ -23,29 +26,37 @@ const DARK = '#111827';
 const WHITE = '#ffffff';
 
 class PDFGenerator {
-
-    // ─── shared helpers ───────────────────────────────────────────────────────
-
-    _headerImg(doc) {
-        if (fs.existsSync(HEADER_IMG)) {
-            doc.image(HEADER_IMG, 0, 0, { width: doc.page.width });
-            doc.y = doc.page.width * (9 / 16) * 0.38; // approx header height
+    _headerImg(doc, customPath, isReceipt = false) {
+        const headerPath = customPath || HEADER_IMG;
+        const topPadding = 10;
+        const sidePadding = isReceipt ? 0 : 40;
+        if (fs.existsSync(headerPath)) {
+            const imgW = doc.page.width - (sidePadding * 2);
+            try {
+                const img = doc.openImage(headerPath);
+                const scale = imgW / img.width;
+                const imgH = img.height * scale;
+                doc.image(img, sidePadding, topPadding, { width: imgW });
+                doc.y = topPadding + imgH + 10;
+            } catch (e) {
+                doc.image(headerPath, sidePadding, topPadding, { width: imgW });
+                doc.y = topPadding + 110 + 10;
+            }
         } else {
-            // fallback green bar
             doc.rect(0, 0, doc.page.width, 80).fill(GREEN);
             doc.fillColor(WHITE).fontSize(18).font('Helvetica-Bold')
-                .text('9th International Health & Wellness Expo 2026', 30, 28, { width: doc.page.width - 60, align: 'center' });
+                .text('9th International Health & Wellness Expo 2026', 40, 28, { width: doc.page.width - 80, align: 'center' });
             doc.y = 90;
         }
     }
 
-    _footerImg(doc) {
+    _footerImg(doc, customPath) {
         const pageH = doc.page.height;
         const pageW = doc.page.width;
-        if (fs.existsSync(FOOTER_IMG)) {
-            // footer image at bottom
+        const footerPath = customPath || FOOTER_IMG;
+        if (fs.existsSync(footerPath)) {
             const fH = 70;
-            doc.image(FOOTER_IMG, 0, pageH - fH, { width: pageW });
+            doc.image(footerPath, 0, pageH - fH, { width: pageW });
         } else {
             doc.rect(0, pageH - 40, pageW, 40).fill(GREEN);
             doc.fillColor(WHITE).fontSize(8).font('Helvetica')
@@ -78,11 +89,8 @@ class PDFGenerator {
         });
         return y + 18;
     }
-
-    // ─── Registration Form ────────────────────────────────────────────────────
-
-    async generateRegistrationForm(registration) {
-        return new Promise((resolve, reject) => {
+    async generateRegistrationForm(registration, options = {}) {
+        return new Promise(async (resolve, reject) => {
             try {
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
                 const filePath = path.join(TEMP_DIR, `registration_${registration._id}.pdf`);
@@ -96,19 +104,19 @@ class PDFGenerator {
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
 
                 // ── Header image ──
-                this._headerImg(doc);
-                let y = doc.y + 10;
+                this._headerImg(doc, options.headerImage);
+                let y = doc.y;
 
                 // ── Document title strip ──
                 doc.rect(40, y, pageW - 80, 22).fill(GREEN);
                 doc.fillColor(WHITE).fontSize(11).font('Helvetica-Bold')
-                    .text('EXHIBITOR REGISTRATION FORM', 40, y + 6, { width: pageW - 80, align: 'center' });
+                    .text('EXHIBITOR REGISTRATION', 40, y + 6, { width: pageW - 80, align: 'center' });
                 y += 30;
 
                 // ── Meta row ──
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
                     .text(`Reg ID: ${registration.registrationId || 'N/A'}`, 40, y)
-                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 0, y, { width: pageW - 40, align: 'right' });
+                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 40, y, { width: pageW - 80, align: 'right' });
                 y += 16;
                 this._line(doc, 40, y, pageW - 40);
                 y += 8;
@@ -117,20 +125,25 @@ class PDFGenerator {
                 const colW = (pageW - 100) / 2;
                 const lx = 40, rx = 60 + colW;
 
+                const Settings = require('../models/Settings');
+                const settings = await Settings.findOne();
+
                 // Left box - IHWE / FROM
-                doc.rect(lx, y, colW, 115).lineWidth(0.5).stroke('#e5e7eb');
+                doc.rect(lx, y, colW, 125).lineWidth(0.5).stroke('#e5e7eb');
                 this._label(doc, 'From', lx + 8, y + 8, colW - 16);
                 doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
-                    .text('IHWE 2026 – Organizer', lx + 8, y + 20, { width: colW - 16 });
+                    .text(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 20, { width: colW - 16 });
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                    .text('Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 34, { width: colW - 16 })
-                    .text('Pragati Maidan, New Delhi – 110001', lx + 8, y + 46, { width: colW - 16 })
-                    .text('India', lx + 8, y + 58, { width: colW - 16 })
-                    .text('info@ihwe.in  |  +91-9654900525', lx + 8, y + 70, { width: colW - 16 })
-                    .text('www.ihwe.in', lx + 8, y + 82, { width: colW - 16 });
+                    .text(settings?.companyAddress || '12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India', lx + 8, y + 36, { width: colW - 16 });
+
+                let currentLeftY = Math.max(doc.y + 6, y + 72);
+
+                doc.text(`GST: ${settings?.companyGst || 'N/A'}`, lx + 8, currentLeftY, { width: colW - 16 });
+                doc.text(`CIN: ${settings?.companyCin || 'N/A'}`, lx + 8, currentLeftY + 12, { width: colW - 16 });
+                doc.text('info@ihwe.in  |  www.ihwe.in', lx + 8, currentLeftY + 24, { width: colW - 16 });
 
                 // Right box - Client / TO
-                doc.rect(rx, y, colW, 115).lineWidth(0.5).stroke('#e5e7eb');
+                doc.rect(rx, y, colW, 125).lineWidth(0.5).stroke('#e5e7eb');
                 this._label(doc, 'To (Exhibitor)', rx + 8, y + 8, colW - 16);
                 doc.fillColor(ORANGE).fontSize(10).font('Helvetica-Bold')
                     .text(registration.exhibitorName || 'N/A', rx + 8, y + 20, { width: colW - 16 });
@@ -142,20 +155,20 @@ class PDFGenerator {
                     .text(c1.email || '', rx + 8, y + 82, { width: colW - 16 });
 
                 y += 125;
-
-                // ── Stall & Event info row ──
-                const infoW = (pageW - 80) / 4;
+                const infoW = (pageW - 80) / 6;
                 const infos = [
                     { label: 'Stall No.', value: p.stallFor || 'N/A' },
                     { label: 'Stall Type', value: p.stallType || 'N/A' },
+                    { label: 'Scheme', value: p.stallScheme || 'N/A' },
+                    { label: 'Dimension', value: p.dimension || 'N/A' },
                     { label: 'Stall Size', value: p.stallSize ? `${p.stallSize} SQM` : 'N/A' },
-                    { label: 'Event', value: registration.eventId?.name || 'IHWE 2026' },
+                    { label: 'Event', value: registration.eventId?.name || '9IHWE 2026' },
                 ];
                 infos.forEach((info, i) => {
                     const ix = 40 + i * infoW;
                     doc.rect(ix, y, infoW - 4, 36).fill(LGRAY);
                     this._label(doc, info.label, ix + 6, y + 6, infoW - 12);
-                    doc.fillColor(GREEN).fontSize(9).font('Helvetica-Bold')
+                    doc.fillColor(GREEN).fontSize(8).font('Helvetica-Bold')
                         .text(info.value, ix + 6, y + 18, { width: infoW - 12 });
                 });
                 y += 44;
@@ -179,8 +192,6 @@ class PDFGenerator {
                     tx += col.w;
                 });
                 y += 18;
-
-                // Table row
                 y = this._tableRow(doc, [
                     { text: `${p.stallType || 'Shell Space'} – Stall ${p.stallFor || 'N/A'}`, w: tW * 0.40 },
                     { text: p.dimension || 'N/A', w: tW * 0.15 },
@@ -194,11 +205,35 @@ class PDFGenerator {
                 // ── Summary box (right-aligned) ──
                 const sumX = 40 + tW * 0.55;
                 const sumW = tW * 0.45;
+                const fb = registration.financeBreakdown || {};
+                const subtotalVal = fb.subtotal || p.amount || 0;
+                const gstVal = fb.gstAmount || Math.round(subtotalVal * 0.18);
+                const tdsVal = fb.tdsAmount || Math.round(subtotalVal * (registration.chosenTdsPercent || 0) / 100);
+                const netVal = fb.netPayable || (subtotalVal + gstVal - tdsVal);
+                const grossVal = fb.grossAmount || subtotalVal;
 
                 const summaryRows = [
-                    { label: 'Base Amount', value: fmt(p.amount) },
-                    { label: `GST @ ${p.gstPercent || 18}%`, value: fmt((p.total || 0) - (p.amount || 0)) },
+                    { label: 'Gross Amount', value: fmt(grossVal) },
                 ];
+
+                if (fb.stallDiscountAmount > 0) {
+                    summaryRows.push({ label: `Less: Stall Discount (${fb.stallDiscountPercent || 0}%)`, value: `- ${fmt(fb.stallDiscountAmount)}` });
+                }
+                const isFullPlan = registration.paymentPlanType === 'full' || fb.isFullPayment === true;
+                if (isFullPlan && fb.discountAmount > 0) {
+                    summaryRows.push({ label: `Less: Full Payment Discount (${fb.discountPercent || 0}%)`, value: `- ${fmt(fb.discountAmount)}` });
+                }
+
+                if (fb.stallDiscountAmount > 0 || (isFullPlan && fb.discountAmount > 0)) {
+                    summaryRows.push({ label: 'Subtotal (Taxable Value)', value: fmt(subtotalVal) });
+                }
+
+                summaryRows.push({ label: `GST @ ${p.gstPercent || 18}%`, value: `+ ${fmt(gstVal)}` });
+
+                if (tdsVal > 0) {
+                    summaryRows.push({ label: `Less: TDS @ ${registration.chosenTdsPercent || 0}%`, value: `- ${fmt(tdsVal)}` });
+                }
+
                 summaryRows.forEach(row => {
                     doc.fillColor(GRAY).fontSize(8).font('Helvetica')
                         .text(row.label, sumX, y + 4, { width: sumW * 0.55 })
@@ -210,31 +245,54 @@ class PDFGenerator {
                 doc.rect(sumX, y, sumW, 24).fill(GREEN);
                 doc.fillColor(WHITE).fontSize(10).font('Helvetica-Bold')
                     .text('GRAND TOTAL', sumX + 8, y + 7, { width: sumW * 0.5 })
-                    .text(fmt(p.total), sumX + sumW * 0.5, y + 7, { width: sumW * 0.5 - 8, align: 'right' });
+                    .text(fmt(fb.netPayable || netVal), sumX + sumW * 0.5, y + 7, { width: sumW * 0.5 - 8, align: 'right' });
                 y += 32;
 
                 // ── Contact & CRM ──
                 this._line(doc, 40, y, pageW - 40);
                 y += 8;
-                const cW = (pageW - 80) / 3;
+                const cW = (pageW - 80) / 4;
                 [
-                    { label: 'Contact Person', value: `${c1.title || ''} ${c1.firstName || ''} ${c1.lastName || ''}`.trim() },
-                    { label: 'Mobile', value: c1.mobile },
-                    { label: 'Referred By', value: registration.referredBy || 'Direct' },
+                    { label: 'Exhibitor Name (Co)', value: registration.exhibitorName || 'N/A' },
+                    { label: 'Authorized Person', value: `${c1.title || ''} ${c1.firstName || ''} ${c1.lastName || ''}`.trim() || 'N/A' },
+                    { label: 'Exhibitor Mobile No.', value: c1.mobile || 'N/A' },
+                    { label: 'Relationship Manager', value: registration.spokenWith || 'N/A' },
                 ].forEach((item, i) => {
                     this._label(doc, item.label, 40 + i * cW, y, cW - 8);
                     this._value(doc, item.value, 40 + i * cW, y + 12, cW - 8);
                 });
                 y += 30;
-
-                // ── Status badge ──
                 const statusColors = { pending: '#f59e0b', approved: '#22c55e', paid: GREEN, 'advance-paid': '#0891b2', confirmed: '#3b82f6', rejected: '#ef4444', 'payment-failed': '#dc2626' };
                 doc.rect(40, y, 130, 22).fill(statusColors[registration.status] || GRAY);
                 doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
                     .text(`STATUS: ${(registration.status || 'PENDING').toUpperCase()}`, 40, y + 7, { width: 130, align: 'center' });
 
-                // ── Footer image ──
-                this._footerImg(doc);
+                // ── Signature & Stamp ──
+                let sigY = y + 40;
+                const sigX = 40;
+
+                const sigPath = settings?.authorizedSignature ? path.resolve(__dirname, '..', settings.authorizedSignature.replace(/^\//, '')) : null;
+                const stampPath = settings?.companyStamp ? path.resolve(__dirname, '..', settings.companyStamp.replace(/^\//, '')) : null;
+
+                if (sigPath && fs.existsSync(sigPath)) {
+                    doc.image(sigPath, sigX + 10, sigY + 5, { height: 40 });
+                }
+                if (stampPath && fs.existsSync(stampPath)) {
+                    doc.image(stampPath, sigX + 130, sigY, { height: 50 });
+                }
+                sigY += 50;
+                this._line(doc, sigX, sigY, sigX + 220, GREEN);
+                doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text('Authorized Signatory', sigX, sigY + 5, { width: 220, align: 'center' });
+
+                // ── QR Code ──
+                const qrX = pageW - 120, qrY = y + 35;
+                try {
+                    const siteUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+                    const loginUrl = `${siteUrl}/exhibitor-login`;
+                    const qrBuffer = await QRCode.toBuffer(loginUrl, { margin: 1, width: 80 });
+                    doc.image(qrBuffer, qrX, qrY, { width: 80 });
+                    doc.fillColor(GRAY).fontSize(7).text('Scan for Login', qrX, qrY + 85, { width: 80, align: 'center' });
+                } catch (qrErr) { console.error('QR Generate Error:', qrErr); }
 
                 doc.end();
                 stream.on('finish', () => {
@@ -248,184 +306,258 @@ class PDFGenerator {
 
     // ─── Payment Receipt ──────────────────────────────────────────────────────
 
-    async generatePaymentSlip(registration) {
-        return new Promise((resolve, reject) => {
+    async generatePaymentSlip(registration, options = {}) {
+        return new Promise(async (resolve, reject) => {
             try {
+                const settings = await Settings.findOne();
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
-                const filePath = path.join(TEMP_DIR, `receipt_${registration._id}_${Date.now()}.pdf`);
+                const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
+                const suffix = paymentIndex >= 0 ? `_P${paymentIndex + 1}` : '';
+                const fileName = `receipt_${registration.registrationId || registration._id}${suffix}_${Date.now()}.pdf`;
+                const filePath = path.join(TEMP_DIR, fileName);
                 const stream = fs.createWriteStream(filePath);
                 doc.pipe(stream);
 
                 const pageW = doc.page.width;
                 const p = registration.participation || {};
-                const m = registration.manualPaymentDetails || {};
+                const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex]
+                    ? registration.paymentHistory[paymentIndex]
+                    : null;
+                const m = paymentHistoryEntry || registration.manualPaymentDetails || {};
+                const fb = registration.financeBreakdown || {};
                 const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
-                const receiptNo = `REC-${registration._id.toString().slice(-8).toUpperCase()}`;
+                // --- Generate Receipt Number ---
+                const Counter = require('../models/visitor/CounterModel');
+                const year = new Date().getFullYear();
+                let rNo = registration.customReceiptNo;
+                if (!rNo) {
+                    const counter = await Counter.findOneAndUpdate(
+                        { type: `receipt-ngw-${year}` },
+                        { $inc: { seq: 1 } },
+                        { upsert: true, new: true }
+                    );
+                    rNo = `NGW/IHWE/${year}/${String(counter.seq).padStart(3, '0')}`;
+                    await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
+                }
 
-                // ── Header image ──
-                this._headerImg(doc);
-                let y = doc.y + 10;
+                this._headerImg(doc, options.headerImage);
+                let y = doc.y;
+                const hasCustomHeader = !!options.headerImage;
+                if (!hasCustomHeader) {
+                    const addr = settings?.companyAddress || '12/51, Site 2, Sunrise Industrial Area, Mohan Nagar, Ghaziabad - 200107, UP, India';
+                    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                        .text(addr, 40, y, { width: pageW - 80, align: 'center' });
+
+                    const addrHeight = doc.heightOfString(addr, { width: pageW - 80 });
+                    y += addrHeight + 4;
+
+                    doc.text(`GSTIN: ${settings?.companyGst || 'N/A'}  |  CIN: ${settings?.companyCin || 'N/A'}`, 40, y, { width: pageW - 80, align: 'center' });
+                    y += 18;
+                } else {
+                    y += 10;
+                }
 
                 // ── Title strip ──
-                doc.rect(40, y, pageW - 80, 22).fill(GREEN);
-                doc.fillColor(WHITE).fontSize(11).font('Helvetica-Bold')
-                    .text('OFFICIAL PAYMENT RECEIPT', 40, y + 6, { width: pageW - 80, align: 'center' });
-                y += 30;
+                doc.rect(40, y, pageW - 80, 30).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(16).font('Helvetica-Bold')
+                    .text('PAYMENT RECEIPT', 40, y + 8, { width: pageW - 80, align: 'center', characterSpacing: 1 });
+                y += 45;
 
-                // ── Meta ──
-                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                    .text(`Receipt No: ${receiptNo}`, 40, y)
-                    .text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 0, y, { width: pageW - 40, align: 'right' });
-                y += 16;
-                this._line(doc, 40, y, pageW - 40);
-                y += 8;
+                // ── Receipt Meta ──
+                doc.fillColor(BLUE_NAVY).fontSize(9).font('Helvetica-Bold').text(`Receipt No.: ${rNo}`, 40, y);
+                doc.fillColor(GRAY).fontSize(9).font('Helvetica').text(`Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`, 40, y, { width: pageW - 80, align: 'right' });
+                y += 25;
 
-                // ── Two-column: FROM | TO ──
-                const colW = (pageW - 100) / 2;
-                const lx = 40, rx = 60 + colW;
+                // ── Client Information ──
+                doc.rect(40, y, 160, 18).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Client Information', 45, y + 5);
+                y += 25;
 
-                doc.rect(lx, y, colW, 100).lineWidth(0.5).stroke('#e5e7eb');
-                this._label(doc, 'From', lx + 8, y + 8, colW - 16);
-                doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
-                    .text('IHWE 2026 – Organizer', lx + 8, y + 20, { width: colW - 16 });
-                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                    .text('Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 34, { width: colW - 16 })
-                    .text('Pragati Maidan, New Delhi – 110001', lx + 8, y + 46, { width: colW - 16 })
-                    .text('info@ihwe.in  |  +91-9654900525', lx + 8, y + 58, { width: colW - 16 })
-                    .text('www.ihwe.in', lx + 8, y + 70, { width: colW - 16 });
-
-                doc.rect(rx, y, colW, 100).lineWidth(0.5).stroke('#e5e7eb');
-                this._label(doc, 'To (Exhibitor)', rx + 8, y + 8, colW - 16);
-                doc.fillColor(ORANGE).fontSize(10).font('Helvetica-Bold')
-                    .text(registration.exhibitorName || 'N/A', rx + 8, y + 20, { width: colW - 16 });
-                const c1 = registration.contact1 || {};
-                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                    .text([registration.address, registration.city, registration.state].filter(Boolean).join(', '), rx + 8, y + 34, { width: colW - 16 })
-                    .text(`${registration.country || ''} ${registration.pincode ? '– ' + registration.pincode : ''}`, rx + 8, y + 46, { width: colW - 16 })
-                    .text(c1.mobile || '', rx + 8, y + 58, { width: colW - 16 })
-                    .text(c1.email || '', rx + 8, y + 70, { width: colW - 16 });
-                y += 110;
-
-                // ── Receipt meta row ──
-                const metaW = (pageW - 80) / 3;
-                [
-                    { label: 'Receipt No.', value: receiptNo },
-                    { label: 'Registration ID', value: registration.registrationId || 'N/A' },
-                    { label: 'Receipt Date', value: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
-                ].forEach((item, i) => {
-                    this._label(doc, item.label, 40 + i * metaW, y, metaW - 8);
-                    doc.fillColor(DARK).fontSize(9).font('Helvetica-Bold')
-                        .text(item.value, 40 + i * metaW, y + 12, { width: metaW - 8 });
-                });
-                y += 32;
-                this._line(doc, 40, y, pageW - 40);
-                y += 8;
-
-                // ── Items table ──
-                const tW = pageW - 80;
-                const cols = [
-                    { label: 'Item / Description', w: tW * 0.42 },
-                    { label: 'Stall No.', w: tW * 0.13 },
-                    { label: 'Size', w: tW * 0.10 },
-                    { label: 'Rate/SQM', w: tW * 0.15, align: 'right' },
-                    { label: 'Amount', w: tW * 0.20, align: 'right' },
+                const clientRows = [
+                    { label: 'Client Name:', value: registration.exhibitorName },
+                    { label: 'Contact Person:', value: `${registration.contact1?.title || ''} ${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim() },
+                    { label: 'Mobile No.:', value: registration.contact1?.mobile || 'N/A' },
+                    { label: 'Email ID:', value: registration.contact1?.email || 'N/A' },
+                    { label: 'Address:', value: `${registration.address || ''}, ${registration.city || ''}, ${registration.state || ''}, ${registration.country || ''}`.trim() },
                 ];
-                doc.rect(40, y, tW, 18).fill(DARK);
-                let tx = 40;
-                cols.forEach(col => {
-                    doc.fillColor(WHITE).fontSize(8).font('Helvetica-Bold')
-                        .text(col.label, tx + 4, y + 5, { width: col.w - 8, align: col.align || 'left' });
-                    tx += col.w;
+                clientRows.forEach(row => {
+                    this._label(doc, row.label, 60, y, 100);
+                    this._value(doc, row.value, 160, y, pageW - 200);
+                    y += 18;
+                    this._line(doc, 60, y - 4, pageW - 40, '#f1f5f9');
                 });
-                y += 18;
+                y += 15;
 
-                y = this._tableRow(doc, [
-                    { text: `${p.stallType || 'Shell Space'} – ${registration.eventId?.name || 'IHWE 2026'}`, w: tW * 0.42 },
-                    { text: p.stallFor || 'N/A', w: tW * 0.13 },
-                    { text: p.stallSize ? `${p.stallSize} sqm` : 'N/A', w: tW * 0.10 },
-                    { text: fmt(p.rate), w: tW * 0.15, align: 'right' },
-                    { text: fmt(p.amount), w: tW * 0.20, align: 'right' },
-                ], y, '#f9fafb');
-                this._line(doc, 40, y, 40 + tW, '#e5e7eb');
-                y += 8;
-
-                // ── Payment details (left) + Summary (right) - same starting y ──
-                const sectionStartY = y;
-                const pdW = tW * 0.50;
-                const sumX = 40 + pdW + 10;
-                const sumW = tW * 0.50 - 10;
-
-                // LEFT: Payment Details
-                this._label(doc, 'Payment Details', 40, sectionStartY, pdW);
-                const txId = m.transactionId || registration.paymentId || 'N/A';
-                const orderId = registration.razorpayOrderId || 'N/A';
-                const payDetails = [
-                    { label: 'Payment Mode', value: (registration.paymentMode || 'N/A').toUpperCase() },
-                    { label: 'Payment Type', value: (registration.paymentType || 'full').toUpperCase() },
-                    { label: 'Transaction / Ref ID', value: txId },
-                    { label: 'Method', value: m.method || (registration.paymentMode === 'online' ? 'Razorpay (Online)' : 'Manual') },
+                // ── Two Column: Booking & Financial ──
+                const bookingY = y;
+                // LEFT: Booking Details
+                doc.rect(40, y, 160, 18).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Booking Details', 45, y + 5);
+                y += 25;
+                const bookingRows = [
+                    { label: 'Event:', value: registration.eventId?.name || 'IHWE 2026' },
+                    { label: 'Stall Booking No.:', value: registration.registrationId || 'N/A' },
+                    { label: 'Stall Size:', value: `${p.stallSize || 0} Sq. Meter` },
+                    { label: 'Rate per Sq. Meter:', value: fmt(p.rate) },
+                    { label: 'Stall Number:', value: p.stallFor || 'N/A' },
                 ];
-                let pdy = sectionStartY + 14;
-                payDetails.forEach(pd => {
-                    doc.rect(40, pdy, pdW, 16).fill(pdy % 32 === 0 ? LGRAY : WHITE);
-                    doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold')
-                        .text(pd.label, 44, pdy + 4, { width: pdW * 0.44 });
-                    doc.fillColor(DARK).fontSize(8).font('Helvetica')
-                        .text(pd.value, 44 + pdW * 0.44, pdy + 4, { width: pdW * 0.54 - 8 });
-                    pdy += 17;
+                bookingRows.forEach(row => {
+                    this._label(doc, row.label, 60, y, 100);
+                    this._value(doc, row.value, 160, y, 140);
+                    y += 18;
+                    this._line(doc, 60, y - 4, 300, '#f1f5f9');
                 });
+                let fy = bookingY;
+                const fx = 320;
+                const fw = pageW - fx - 40;
+                doc.rect(fx, fy, fw, 18).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Financial Summary', fx + 5, fy + 5);
+                fy += 25;
 
-                // RIGHT: Financial Summary
-                let sy = sectionStartY;
-                this._label(doc, 'Financial Summary', sumX, sy, sumW);
-                sy += 14;
+                const subtotalVal = fb.subtotal || p.amount || 0;
+                const gstVal = fb.gstAmount || Math.round(subtotalVal * 0.18);
+                const tdsVal = fb.tdsAmount || Math.round(subtotalVal * (registration.chosenTdsPercent || 0) / 100);
+                const netVal = fb.netPayable || (subtotalVal + gstVal - tdsVal);
+                const grossVal = fb.grossAmount || subtotalVal;
+                const invoiceTotalVal = subtotalVal + gstVal;
 
                 const summaryRows = [
-                    { label: 'Base Amount', value: fmt(p.amount), bg: WHITE },
-                    { label: `GST @ ${p.gstPercent || 18}%`, value: fmt((p.total || 0) - (p.amount || 0)), bg: LGRAY },
-                    { label: 'Contract Total', value: fmt(p.total), bg: WHITE },
+                    { label: `Total Stall Cost (${fmt(p.rate)} x ${p.stallSize} Sqm)`, value: fmt(grossVal), bg: LGRAY },
                 ];
+
+                if (fb.stallDiscountAmount > 0) {
+                    summaryRows.push({ label: `Less: Stall Discount (${fb.stallDiscountPercent || 0}%)`, value: `- ${fmt(fb.stallDiscountAmount)}`, bg: WHITE, color: BLUE_NAVY });
+                }
+
+                if (fb.discountAmount > 0) {
+                    summaryRows.push({ label: `Less: Full Payment Discount (${fb.discountPercent || 0}%)`, value: `- ${fmt(fb.discountAmount)}`, bg: WHITE, color: BLUE_NAVY });
+                }
+
+                summaryRows.push(
+                    { label: 'Subtotal (Taxable Value)', value: fmt(subtotalVal), bg: LGRAY, bold: true },
+                    { label: 'Add: GST @ 18%', value: `+ ${fmt(gstVal)}`, bg: WHITE, color: BLUE_NAVY },
+                );
                 summaryRows.forEach(row => {
-                    doc.rect(sumX, sy, sumW, 16).fill(row.bg);
-                    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                        .text(row.label, sumX + 6, sy + 4, { width: sumW * 0.55 });
-                    doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold')
-                        .text(row.value, sumX + sumW * 0.55, sy + 4, { width: sumW * 0.45 - 6, align: 'right' });
-                    sy += 17;
+                    doc.rect(fx, fy, fw, 18).fill(row.bg);
+                    doc.fillColor(BLUE_NAVY).fontSize(8).font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
+                        .text(row.label, fx + 6, fy + 5, { width: fw * 0.65 });
+                    doc.fillColor(row.color || DARK).fontSize(8).font('Helvetica-Bold')
+                        .text(row.value, fx + fw * 0.65, fy + 5, { width: fw * 0.35 - 6, align: 'right' });
+                    fy += 19;
                 });
 
-                // Amount Paid box
-                doc.rect(sumX, sy, sumW, 20).fill('#f0fdf4');
-                doc.fillColor(GREEN).fontSize(9).font('Helvetica-Bold')
-                    .text('AMOUNT PAID', sumX + 6, sy + 6, { width: sumW * 0.55 })
-                    .text(fmt(registration.amountPaid), sumX + sumW * 0.55, sy + 6, { width: sumW * 0.45 - 6, align: 'right' });
-                sy += 21;
+                doc.rect(fx, fy, fw, 1).fill(BLUE_NAVY);
+                fy += 4;
+                const contractTotal = invoiceTotalVal;
+                doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold').text('CONTRACT TOTAL (Incl. GST)', fx + 6, fy, { width: fw * 0.65 });
+                doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text(fmt(contractTotal), fx + fw * 0.65, fy, { width: fw * 0.35 - 6, align: 'right' });
+                fy += 16;
+                this._line(doc, fx, fy, fx + fw, '#e5e7eb');
+                fy += 6;
+                if (tdsVal > 0) {
+                    doc.rect(fx, fy, fw, 18).fill(LGRAY);
+                    doc.fillColor(BLUE_NAVY).fontSize(8).font('Helvetica').text(`Less: TDS @ ${registration.chosenTdsPercent || 0}%`, fx + 6, fy + 5, { width: fw * 0.65 });
+                    doc.fillColor('#dc2626').fontSize(8).font('Helvetica-Bold').text(`- ${fmt(tdsVal)}`, fx + fw * 0.65, fy + 5, { width: fw * 0.35 - 6, align: 'right' });
+                    fy += 24;
+                }
 
-                // Balance box
-                const hasBalance = (registration.balanceAmount || 0) > 0;
-                doc.rect(sumX, sy, sumW, 20).fill(hasBalance ? '#fef2f2' : '#f0fdf4');
-                doc.fillColor(hasBalance ? '#dc2626' : GREEN).fontSize(9).font('Helvetica-Bold')
-                    .text('BALANCE DUE', sumX + 6, sy + 6, { width: sumW * 0.55 })
-                    .text(fmt(registration.balanceAmount), sumX + sumW * 0.55, sy + 6, { width: sumW * 0.45 - 6, align: 'right' });
-                sy += 21;
+                const history = registration.paymentHistory || [];
+                const latestPayment = history.length > 0 ? history[history.length - 1] : { amount: registration.amountPaid };
+                const priorPaid = registration.amountPaid - latestPayment.amount;
 
-                y = Math.max(pdy, sy) + 10;
-                this._line(doc, 40, y, pageW - 40);
-                y += 10;
+                if (priorPaid > 0) {
+                    doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold').text('ALREADY RECEIVED (PRIOR)', fx + 6, fy, { width: fw * 0.55 });
+                    doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text(fmt(priorPaid), fx + fw * 0.55, fy, { width: fw * 0.45 - 6, align: 'right' });
+                    fy += 14;
+                }
 
-                // ── Footer image ──
-                this._footerImg(doc);
+                doc.rect(fx, fy, fw, 24).fill('#fef3c7');
+                doc.fillColor(BLUE_NAVY).fontSize(10).font('Helvetica-Bold')
+                    .text('RECEIVED NOW', fx + 6, fy + 7, { width: fw * 0.55 })
+                    .text(fmt(latestPayment.amount), fx + fw * 0.55, fy + 7, { width: fw * 0.45 - 6, align: 'right' });
+                fy += 28;
 
+                const balanceVal = registration.balanceAmount || 0;
+                doc.rect(fx, fy, fw, 22).fill('#fef2f2');
+                doc.fillColor('#b91c1c').fontSize(9).font('Helvetica-Bold')
+                    .text('BALANCE REMAINING', fx + 6, fy + 7, { width: fw * 0.55 })
+                    .text(fmt(balanceVal), fx + fw * 0.55, fy + 7, { width: fw * 0.45 - 6, align: 'right' });
+                fy += 32;
+
+                // ── Payment Details ──
+                y = Math.max(y, fy + 20);
+                doc.rect(40, y, 160, 18).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Payment Details', 45, y + 5);
+                y += 25;
+                const payRows = [
+                    { label: 'Payment Mode:', value: (latestPayment.paymentMode || registration.paymentMode || 'N/A').toUpperCase() },
+                    { label: 'Transaction / Reference No.:', value: latestPayment.transactionId || m.transactionId || registration.paymentId || 'N/A' },
+                    { label: 'Total Paid (Cumulative):', value: fmt(registration.amountPaid) },
+                    { label: 'Payment Date:', value: new Date(latestPayment.paidAt || m.paidAt || registration.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) },
+                ];
+                payRows.forEach(row => {
+                    this._label(doc, row.label, 60, y, 140);
+                    this._value(doc, row.value, 200, y, pageW - 240);
+                    y += 18;
+                    this._line(doc, 60, y - 4, pageW - 40, '#f1f5f9');
+                });
+                const endPaymentY = y;
+
+                // ── Declaration ──
+                y = endPaymentY + 30;
+                doc.rect(40, y, 75, 18).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Declaration', 45, y + 5);
+                y += 25;
+                const isFull = registration.balanceAmount <= 1;
+                const decs = [
+                    isFull ? 'Full payment received. Booking confirmed.' : 'Partial payment received. Booking held until balance',
+                    'Receipt is valid subject to realization of funds.',
+                    'This receipt is non-transferable without prior written approval.'
+                ];
+                decs.forEach(dec => {
+                    doc.fillColor(ORANGE).fontSize(10).text('-', 40, y);
+                    doc.fillColor(GRAY).fontSize(8).font('Helvetica').text(dec, 55, y, { width: 340 });
+                    y += 14;
+                });
+
+                // ── Signature & Stamp ──
+                let sigY = y + 20;
+                const sigX = 40;
+
+                const sigPath = settings?.authorizedSignature ? path.resolve(__dirname, '..', settings.authorizedSignature.replace(/^\//, '')) : null;
+                const stampPath = settings?.companyStamp ? path.resolve(__dirname, '..', settings.companyStamp.replace(/^\//, '')) : null;
+
+                if (sigPath && fs.existsSync(sigPath)) {
+                    doc.image(sigPath, sigX + 10, sigY + 5, { height: 40 });
+                }
+                if (stampPath && fs.existsSync(stampPath)) {
+                    doc.image(stampPath, sigX + 130, sigY, { height: 50 });
+                }
+                sigY += 50;
+                this._line(doc, sigX, sigY, sigX + 220, BLUE_NAVY);
+                doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text('Authorized Signatory', sigX, sigY + 5, { width: 220, align: 'center' });
+
+                // ── QR Code ──
+                const qrX = pageW - 120, qrY = y + 15;
+                try {
+                    const siteUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+                    const loginUrl = `${siteUrl}/exhibitor-login`;
+                    const qrBuffer = await QRCode.toBuffer(loginUrl, { margin: 1, width: 80 });
+                    doc.image(qrBuffer, qrX, qrY, { width: 80 });
+                    doc.fillColor(GRAY).fontSize(7).text('Scan for Login', qrX, qrY + 85, { width: 80, align: 'center' });
+                } catch (qrErr) { console.error('QR Generate Error:', qrErr); }
+
+                doc.end();
                 stream.on('finish', () => {
                     const publicUrl = getTempPdfUrl(filePath);
                     resolve({ filePath, cloudUrl: publicUrl });
                 });
                 stream.on('error', reject);
-                doc.end();
             } catch (err) { reject(err); }
         });
     }
+
     async generateAccessoryReceipt(order, registration) {
         return new Promise((resolve, reject) => {
             try {
@@ -461,7 +593,7 @@ class PDFGenerator {
 
                 doc.rect(lx, y, colW, 80).lineWidth(0.5).stroke('#e5e7eb');
                 this._label(doc, 'From', lx + 8, y + 8, colW - 16);
-                doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold').text('IHWE 2026 – Organizer', lx + 8, y + 20, { width: colW - 16 });
+                doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold').text('IHWE 2026', lx + 8, y + 20, { width: colW - 16 });
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
                     .text('Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 34, { width: colW - 16 })
                     .text('Pragati Maidan, New Delhi – 110001', lx + 8, y + 46, { width: colW - 16 })

@@ -27,7 +27,11 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        const prefix = file.fieldname === 'logo' ? 'logo' : 'brochure';
+        let prefix = 'asset';
+        if (file.fieldname === 'logo') prefix = 'logo';
+        else if (file.fieldname === 'exhibitorBrochurePdf') prefix = 'brochure';
+        else if (file.fieldname === 'authorizedSignature') prefix = 'signature';
+        else if (file.fieldname === 'companyStamp') prefix = 'stamp';
         cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
@@ -40,6 +44,11 @@ router.get('/', (req, res) => settingsController.getSettings(req, res));
 
 // @route   PUT /api/settings
 // @desc    Update system settings
-router.put('/', verifyToken, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'exhibitorBrochurePdf', maxCount: 1 }]), (req, res) => settingsController.updateSettings(req, res));
+router.put('/', verifyToken, upload.fields([
+    { name: 'logo', maxCount: 1 }, 
+    { name: 'exhibitorBrochurePdf', maxCount: 1 },
+    { name: 'authorizedSignature', maxCount: 1 },
+    { name: 'companyStamp', maxCount: 1 }
+]), (req, res) => settingsController.updateSettings(req, res));
 
 module.exports = router;

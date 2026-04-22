@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+﻿const nodemailer = require('nodemailer');
 const fs = require('fs');
 const QRCode = require('qrcode');
 const EmailLog = require('../models/EmailLog');
@@ -91,12 +91,12 @@ class EmailService {
 
             const headerSection = headerSrc
                 ? `<tr>
-                    <td align="center" style="line-height:0;">
+                    <td align="center" style="line-height:0; padding-top: 10px;">
                         <img src="${headerSrc}" alt="Header" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
                     </td>
                    </tr>`
                 : `<tr>
-                    <td align="center" bgcolor="#23471d" style="background-color: #23471d; padding: 15px 10px;">
+                    <td align="center" bgcolor="#23471d" style="background-color: #23471d; padding: 50px 40px 15px 10px;">
                         <!--[if gte mso 9]>
                         <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:800px;height:60px;">
                         <v:fill type="solid" color="#23471d" />
@@ -292,10 +292,14 @@ class EmailService {
             'DESIGNATION': data.designation || 'N/A',
             'REGISTRATION_ID': data.registrationId || data.regId || 'N/A',
             'STALL_TYPE': data.stall_type || 'N/A',
+            'STALL_SCHEME': data.stall_scheme || data.stallScheme || 'N/A',
+            'STALL_DIMENSION': data.stall_dimension || data.dimension || 'N/A',
+            'STALL_SIZE': data.stall_size || data.stallSize || 'N/A',
             'TOTAL_AMOUNT': data.total_amount || 'N/A',
             'AMOUNT_PAID': data.amount_paid || 'N/A',
             'BALANCE_DUE': data.balance_due || 'N/A',
             'PAYMENT_MODE': data.payment_mode || 'N/A',
+            'PAYMENT_METHOD': data.payment_method || data.method || 'N/A',
             'TRANSACTION_ID': data.transaction_id || 'N/A',
             'ORDER_NO': data.order_no || 'N/A',
             'GRAND_TOTAL': data.grand_total || 'N/A',
@@ -322,6 +326,15 @@ class EmailService {
             if (!template) {
                 console.warn('No dynamic template found for ' + formType + '. Falling back to logic-based default.');
                 return false;
+            }
+            if (formType.startsWith('exhibitor-') && formType !== 'exhibitor-registration') {
+                if (!template.headerImage || !template.footerImage) {
+                    const mainExTemplate = await this.getTemplate('exhibitor-registration');
+                    if (mainExTemplate) {
+                        if (!template.headerImage) template.headerImage = mainExTemplate.headerImage;
+                        if (!template.footerImage) template.footerImage = mainExTemplate.footerImage;
+                    }
+                }
             }
 
             const subject = this.applyPlaceholders(template.emailSubject, data);
@@ -492,6 +505,8 @@ class EmailService {
                 fromEmail = process.env.EXHIBITOR_FROM_EMAIL || fromEmail;
                 fromName = process.env.EXHIBITOR_FROM_NAME || fromName;
             }
+            fromEmail = fromEmail || process.env.SMTP_USER || 'no-reply@ihwe.in';
+            fromName = fromName || 'IHWE Team';
 
             const info = await transporter.sendMail({
                 from: '"' + fromName + '" <' + fromEmail + '>',
@@ -985,7 +1000,10 @@ class EmailService {
             username: registration.contact1.email,
             email: registration.contact1.email,
             password: rawPassword,
-            phone: registration.contact1.mobile || registration.contact1.alternateNo
+            phone: registration.contact1.mobile || registration.contact1.alternateNo,
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_dimension: registration.participation?.dimension || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A'
         };
 
         try {
@@ -1073,11 +1091,15 @@ class EmailService {
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             stall_type: registration.participation?.stallType || 'N/A',
-            total_amount: fmt(registration.participation?.total),
+            total_amount: fmt((registration.financeBreakdown || {}).netPayable || registration.participation?.total),
             amount_paid: fmt(registration.amountPaid),
             balance_due: fmt(registration.balanceAmount),
             payment_mode: registration.paymentMode || 'N/A',
-            transaction_id: registration.paymentId || 'N/A',
+            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'); })(),
+            transaction_id: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && (l.transactionId || l.razorpayPaymentId)) || registration.manualPaymentDetails?.transactionId || registration.paymentId || 'N/A'; })(),
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_dimension: registration.participation?.dimension || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A',
         };
 
         const attachments = [];
@@ -1100,16 +1122,21 @@ class EmailService {
 
     async sendApprovalEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
-            formType: 'exhibitor-registration',
+            formType: 'exhibitor-registration-approved',
             data: {
                 exhibitor_name: registration.exhibitorName,
+                contact_person: contactPerson,
+                contact1FirstName: registration.contact1.firstName,
+                name: contactPerson,
                 stall_no: registration.participation?.stallFor || 'N/A',
                 event_name: registration.eventId?.name || 'IHWE 2026',
                 registrationId: registration.registrationId,
                 login_url: loginUrl,
                 username: registration.contact1.email,
+                password: 'Check your previous registration email',
                 email: registration.contact1.email,
                 status: 'Approved',
                 phone: registration.contact1.mobile
@@ -1120,16 +1147,19 @@ class EmailService {
 
     async sendConfirmationEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
 
         const data = {
             exhibitor_name: registration.exhibitorName,
-            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
-            designation: registration.contact1.designation || 'N/A',
+            contact_person: contactPerson,
+            contact1FirstName: registration.contact1.firstName,
+            name: contactPerson,
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             stall_type: registration.participation?.stallType || 'N/A',
             event_name: registration.eventId?.name || 'IHWE 2026',
             login_url: loginUrl,
+            phone: registration.contact1.mobile
         };
 
         return await this.sendDynamicConfirmation({
@@ -1141,12 +1171,15 @@ class EmailService {
     }
 
     async sendRejectionEmail(registration) {
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
         const data = {
             exhibitor_name: registration.exhibitorName,
-            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
-            designation: registration.contact1.designation || 'N/A',
+            contact_person: contactPerson,
+            contact1FirstName: registration.contact1.firstName,
+            name: contactPerson,
             registrationId: registration.registrationId,
             event_name: 'IHWE 2026',
+            phone: registration.contact1.mobile
         };
 
         return await this.sendDynamicConfirmation({
@@ -1157,12 +1190,32 @@ class EmailService {
         });
     }
 
+    async sendPaymentFailedEmail(registration) {
+        const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
+        const data = {
+            exhibitor_name: registration.exhibitorName,
+            contact_person: contactPerson,
+            contact1FirstName: registration.contact1.firstName,
+            name: contactPerson,
+            registrationId: registration.registrationId,
+            stall_no: registration.participation?.stallFor || 'N/A',
+            login_url: loginUrl,
+            phone: registration.contact1.mobile
+        };
+        return await this.sendDynamicConfirmation({
+            to: registration.contact1.email,
+            formType: 'exhibitor-payment-failed',
+            data,
+            profile: 'EXHIBITOR'
+        });
+    }
+
     async sendOtpEmail(email, otp, name, context = 'GENERAL') {
         let contextTitle = 'Registration';
         let contextDescription = 'registering';
         let dashboardText = 'IHWE Portal';
         let contextGreeting = 'User';
-        
         if (context === 'BUYER' || context.includes('buyer')) {
             contextTitle = 'Buyer Registration';
             contextDescription = 'registering as a Buyer';
@@ -1191,7 +1244,6 @@ class EmailService {
         }
 
         const subject = `IHWE ${contextTitle} – Email Verification OTP`;
-        
         const html = this.emailShell(`
             <div style="text-align: left; max-width: 600px; margin: 0 auto; color: #333;">
                 <p style="margin-bottom: 8px; font-size: 15px; line-height: 1.6; font-weight: 600;">Namo Gange Namaskar!</p>
@@ -1233,7 +1285,6 @@ class EmailService {
                 </div>
             </div>
         `);
-        
         return await this.sendEmail({ to: email, subject, html });
     }
 
@@ -1298,3 +1349,4 @@ class EmailService {
 }
 
 module.exports = new EmailService();
+

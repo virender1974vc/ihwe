@@ -22,9 +22,18 @@ class SettingsService {
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings({});
 
-        const { logo, emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, quickLinks, exhibitionLinks } = updateData;
+        const { 
+            logo, exhibitorBrochurePdf, emails, phones, addresses, mapIframe, 
+            marqueeText, topbarDate, supportDeskText, 
+            onlineAdvancePercentage, manualAdvancePercentage, 
+            quickLinks, exhibitionLinks,
+            companyName, companyAddress, companyGst, companyCin,
+            fullPaymentDiscount, availableTdsRates,
+            authorizedSignature, companyStamp
+        } = updateData;
 
         if (logo) settings.logo = logo;
+        if (exhibitorBrochurePdf) settings.exhibitorBrochurePdf = exhibitorBrochurePdf;
         if (emails) settings.emails = emails;
         if (phones) settings.phones = phones;
         if (addresses) settings.addresses = addresses;
@@ -36,6 +45,16 @@ class SettingsService {
         if (supportDeskText !== undefined) settings.supportDeskText = supportDeskText;
         if (onlineAdvancePercentage !== undefined) settings.onlineAdvancePercentage = onlineAdvancePercentage;
         if (manualAdvancePercentage !== undefined) settings.manualAdvancePercentage = manualAdvancePercentage;
+        
+        // Financials
+        if (companyName !== undefined) settings.companyName = companyName;
+        if (companyAddress !== undefined) settings.companyAddress = companyAddress;
+        if (companyGst !== undefined) settings.companyGst = companyGst;
+        if (companyCin !== undefined) settings.companyCin = companyCin;
+        if (fullPaymentDiscount !== undefined) settings.fullPaymentDiscount = fullPaymentDiscount;
+        if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
+        if (authorizedSignature) settings.authorizedSignature = authorizedSignature;
+        if (companyStamp) settings.companyStamp = companyStamp;
 
         return await settings.save();
     }
