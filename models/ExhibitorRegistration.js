@@ -56,7 +56,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     otherSector: String,
     referredBy: {
         type: String,
-        default: null // Name of marketing person
+        default: null
     },
     spokenWith: {
         type: String,
@@ -101,7 +101,8 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         transactionId: String,
         razorpayPaymentId: String,
         notes: String,
-        paidAt: { type: Date, default: Date.now }
+        paidAt: { type: Date, default: Date.now },
+        receiptPdfUrl: String
     }],
     manualPaymentDetails: {
         method: { type: String, enum: ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'DD', 'Other', 'Online'], default: 'Online' },

@@ -273,8 +273,6 @@ class ExhibitorRegistrationService {
 
     async updateRegistration(id, data) {
         const current = await ExhibitorRegistration.findById(id);
-
-        // --- AUTO-POPULATE stallFor if stallNo changed ---
         let stallChanged = false;
         if (data.participation?.stallNo && data.participation.stallNo !== current.participation?.stallNo?.toString()) {
             stallChanged = true;
@@ -282,14 +280,12 @@ class ExhibitorRegistrationService {
                 const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber area incrementPercentage discountPercentage');
                 if (stallDoc) {
                     data.participation.stallFor = stallDoc.stallNumber;
-                    // Recalculate gross for new stall
                     const rate = data.participation?.rate || current.participation?.rate || 0;
                     const baseCost = stallDoc.area * rate;
                     const plInc = Math.round(baseCost * (stallDoc.incrementPercentage || 0) / 100);
                     const newGross = baseCost + plInc;
                     const stallDiscPct = stallDoc.discountPercentage || 0;
                     const stallDiscAmt = Math.round(newGross * stallDiscPct / 100);
-                    // Store on data so needsFinanceRecalc can use it
                     data._newGross = newGross;
                     data._stallDiscountPercent = stallDiscPct;
                     data._stallDiscountAmount = stallDiscAmt;
@@ -402,10 +398,18 @@ class ExhibitorRegistrationService {
                     footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
                 };
 
-                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated, pdfOptions);
+                // Generate receipt for the latest payment
+                const latestPaymentIdx = (updated.paymentHistory?.length || 1) - 1;
+                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated, { ...pdfOptions, paymentIndex: latestPaymentIdx });
                 const receiptPath = receiptPdf?.filePath || receiptPdf;
+
                 if (receiptPdf?.cloudUrl) {
-                    await ExhibitorRegistration.findByIdAndUpdate(id, { receiptPdfUrl: receiptPdf.cloudUrl });
+                    // Save to main receiptPdfUrl AND to the latest paymentHistory entry
+                    const updateObj = { receiptPdfUrl: receiptPdf.cloudUrl };
+                    if (latestPaymentIdx >= 0) {
+                        updateObj[`paymentHistory.${latestPaymentIdx}.receiptPdfUrl`] = receiptPdf.cloudUrl;
+                    }
+                    await ExhibitorRegistration.findByIdAndUpdate(id, { $set: updateObj });
                 }
                 await emailService.sendPaymentReceipt(updated, receiptPath);
             } catch (err) {

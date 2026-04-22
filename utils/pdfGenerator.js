@@ -219,12 +219,12 @@ class PDFGenerator {
                 if (fb.stallDiscountAmount > 0) {
                     summaryRows.push({ label: `Less: Stall Discount (${fb.stallDiscountPercent || 0}%)`, value: `- ${fmt(fb.stallDiscountAmount)}` });
                 }
-
-                if (fb.discountAmount > 0) {
+                const isFullPlan = registration.paymentPlanType === 'full' || fb.isFullPayment === true;
+                if (isFullPlan && fb.discountAmount > 0) {
                     summaryRows.push({ label: `Less: Full Payment Discount (${fb.discountPercent || 0}%)`, value: `- ${fmt(fb.discountAmount)}` });
                 }
 
-                if (fb.stallDiscountAmount > 0 || fb.discountAmount > 0) {
+                if (fb.stallDiscountAmount > 0 || (isFullPlan && fb.discountAmount > 0)) {
                     summaryRows.push({ label: 'Subtotal (Taxable Value)', value: fmt(subtotalVal) });
                 }
 
@@ -311,18 +311,22 @@ class PDFGenerator {
             try {
                 const settings = await Settings.findOne();
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
-                const fileName = `receipt_${registration.registrationId || registration._id}_${Date.now()}.pdf`;
+                const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
+                const suffix = paymentIndex >= 0 ? `_P${paymentIndex + 1}` : '';
+                const fileName = `receipt_${registration.registrationId || registration._id}${suffix}_${Date.now()}.pdf`;
                 const filePath = path.join(TEMP_DIR, fileName);
                 const stream = fs.createWriteStream(filePath);
                 doc.pipe(stream);
 
                 const pageW = doc.page.width;
                 const p = registration.participation || {};
-                const m = registration.manualPaymentDetails || {};
+                const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex]
+                    ? registration.paymentHistory[paymentIndex]
+                    : null;
+                const m = paymentHistoryEntry || registration.manualPaymentDetails || {};
                 const fb = registration.financeBreakdown || {};
                 const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
-
                 // --- Generate Receipt Number ---
                 const Counter = require('../models/visitor/CounterModel');
                 const year = new Date().getFullYear();
