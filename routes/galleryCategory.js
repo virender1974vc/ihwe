@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const GalleryCategory = require('../models/GalleryCategory');
+const GalleryItem = require('../models/GalleryItem');
 
 // Storage for category cover images
 const storage = multer.diskStorage({
@@ -43,10 +44,10 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
             ? `/uploads/gallery/categories/${req.file.filename}`
             : req.body.coverImage || '';
 
-        const category = new GalleryCategory({ 
-            title, 
-            heading, 
-            coverImage, 
+        const category = new GalleryCategory({
+            title,
+            heading,
+            coverImage,
             coverImageAlt,
             type: type || 'gallery',
             order: req.body.order || 0
@@ -62,15 +63,34 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
 router.put('/:id', upload.single('coverImage'), async (req, res) => {
     try {
         const { title, heading, coverImageAlt, type, order } = req.body;
+
+        // 1. Find existing to get old title
+        const existingCategory = await GalleryCategory.findById(req.params.id);
+        if (!existingCategory) return res.status(404).json({ success: false, message: 'Category not found' });
+
+        const oldTitle = existingCategory.title;
+
+        // 2. Prepare update object
         const update = { title, heading, coverImageAlt };
         if (order !== undefined) update.order = order;
         if (type) update.type = type;
         if (req.file) update.coverImage = `/uploads/gallery/categories/${req.file.filename}`;
-        
+
+        // 3. Update category
         const category = await GalleryCategory.findByIdAndUpdate(req.params.id, update, { new: true });
-        if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+
+        // 4. CASCADE: If title changed, update all gallery items that used the old title
+        if (title && title !== oldTitle) {
+            console.log(`Cascading title change from "${oldTitle}" to "${title}"`);
+            await GalleryItem.updateMany(
+                { title: oldTitle },
+                { title: title }
+            );
+        }
+
         res.json({ success: true, data: category });
     } catch (err) {
+        console.error('Category Update Error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });
