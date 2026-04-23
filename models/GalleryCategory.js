@@ -25,6 +25,10 @@ const GalleryCategorySchema = new mongoose.Schema(
       enum: ["gallery", "media"],
       default: "gallery",
     },
+    order: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

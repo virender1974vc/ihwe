@@ -49,10 +49,10 @@ class VerifyController {
      */
     async sendPhoneOtp(req, res) {
         try {
-            const { phone, profile } = req.body;
+            const { phone, profile, name } = req.body;
             if (!phone) return res.status(400).json({ success: false, message: 'Phone number is required' });
 
-            const result = await verifyService.sendPhoneOtp(phone, profile);
+            const result = await verifyService.sendPhoneOtp(phone, profile, name);
             
             if (result.success) {
                 res.json({ success: true, message: 'OTP sent to WhatsApp' });

@@ -41,6 +41,9 @@ router.post('/', (req, res) => galleryController.createItem(req, res));
 // Update gallery item
 router.put('/:id', (req, res) => galleryController.updateItem(req, res));
 
+// Delete gallery items by title (grouped deletion)
+router.delete('/delete-by-title/:title', (req, res) => galleryController.deleteByTitle(req, res));
+
 // Delete gallery item
 router.delete('/:id', (req, res) => galleryController.deleteItem(req, res));
 

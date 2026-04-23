@@ -99,7 +99,7 @@ class ExhibitorAuthController {
 
             // Try sending via WhatsApp if available
             const { sendWhatsAppOTP } = require('../utils/whatsapp');
-            await sendWhatsAppOTP(mobile, otp);
+            await sendWhatsAppOTP(mobile, otp, 'EXHIBITOR', exhibitor.exhibitorName);
 
             // Also send via email if exists
             if (exhibitor.contact1.email) {
