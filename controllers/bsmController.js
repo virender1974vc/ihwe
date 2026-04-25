@@ -32,6 +32,33 @@ exports.getMatchmakingBuyers = async (req, res) => {
   }
 };
 
+exports.getMatchmakingExhibitors = async (req, res) => {
+  try {
+    const { search = '', page = 1, limit = 20 } = req.query;
+    const query = { paymentStatus: "Completed" };
+    if (search) {
+      query.$or = [
+        { exhibitorName: { $regex: search, $options: 'i' } },
+        { industrySector: { $regex: search, $options: 'i' } },
+      ];
+    }
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await ExhibitorRegistration.countDocuments(query);
+    const exhibitors = await ExhibitorRegistration.find(query)
+      .select("exhibitorName contact1 typeOfBusiness industrySector country registrationId")
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      data: exhibitors,
+      pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.getBuyerCategories = async (req, res) => {
   try {
     const primaryCategories = await BuyerRegistration.distinct("primaryProductInterest", { matchmakingInterest: "Yes" });
@@ -174,6 +201,17 @@ exports.exhibitorRespondMeeting = async (req, res) => {
 
     await meeting.save();
     res.status(200).json({ success: true, data: meeting });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+exports.buyerGetMyMeetings = async (req, res) => {
+  try {
+    const { buyerId } = req.params;
+    const meetings = await BSMMeeting.find({ buyerId })
+      .populate("exhibitorId", "exhibitorName designation registrationId country exhibitorCategory companyLogo profileImage")
+      .sort({ date: 1, timeSlot: 1 });
+    res.status(200).json({ success: true, data: meetings });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
