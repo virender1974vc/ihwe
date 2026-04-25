@@ -1,4 +1,5 @@
 const BuyerRegistration = require('../models/BuyerRegistration');
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
@@ -118,6 +119,110 @@ class BuyerAuthController {
                 message: 'OTP sent to mobile & email',
                 buyerId: buyer._id
             });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getMyDashboard(req, res) {
+        try {
+            if (req.user.role !== 'buyer')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+
+            const email = req.user.email;
+            const mobile = req.user.mobile;
+
+            const registrations = await BuyerRegistration.find({
+                $or: [
+                    { emailAddress: email },
+                    { mobileNumber: mobile }
+                ]
+            }).sort({ createdAt: -1 });
+
+            if (!registrations || registrations.length === 0)
+                return res.status(404).json({ success: false, message: 'No registrations found' });
+
+            const selectedId = req.query.id;
+            let selectedRegistration = null;
+            if (selectedId) {
+                selectedRegistration = registrations.find(r => (r._id.toString() === selectedId) || (r.registrationId === selectedId));
+            }
+            if (!selectedRegistration) {
+                selectedRegistration = registrations[0];
+            }
+
+            res.status(200).json({
+                success: true,
+                data: selectedRegistration,
+                allRegistrations: registrations
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async changePassword(req, res) {
+        try {
+            if (req.user.role !== 'buyer')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+
+            const { currentPassword, newPassword } = req.body;
+            if (!currentPassword || !newPassword)
+                return res.status(400).json({ success: false, message: 'Both current and new password are required' });
+
+            const buyer = await BuyerRegistration.findById(req.user.id).select('+password');
+            if (!buyer)
+                return res.status(404).json({ success: false, message: 'Buyer not found' });
+
+            // If buyer has no password, they must use registrationId as current password
+            const isMatch = buyer.password
+                ? await bcrypt.compare(currentPassword, buyer.password)
+                : currentPassword === buyer.registrationId;
+
+            if (!isMatch)
+                return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+
+            buyer.password = await bcrypt.hash(newPassword, 10);
+            await buyer.save();
+
+            res.status(200).json({ success: true, message: 'Password changed successfully' });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async updateProfile(req, res) {
+        try {
+            if (req.user.role !== 'buyer')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+
+            const allowed = [
+                'companyName', 'companyFirmName', 'nameOfRepresentative', 'fullName', 
+                'designation', 'mobileNumber', 'emailAddress', 'gstNumber', 'panNumber',
+                'website', 'registeredAddress', 'pinCode', 'pincode', 'city', 'stateProvince', 'state', 'country',
+                'businessType', 'basicBusinessType', 'yearOfEstablishment', 'natureOfBusiness',
+                'yearsInBusiness', 'numberOfOutlets', 'annualTurnover', 'buyerIndustry',
+                'primaryProductInterest', 'secondaryProductCategories', 'specificProductRequirements'
+            ];
+            const update = {};
+            allowed.forEach(key => {
+                if (req.body[key] !== undefined) update[key] = req.body[key];
+            });
+
+            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
+                ? req.query.id
+                : req.user.id;
+
+            const updated = await BuyerRegistration.findByIdAndUpdate(
+                targetId,
+                { $set: update },
+                { new: true, runValidators: false }
+            );
+
+            if (!updated)
+                return res.status(404).json({ success: false, message: 'Buyer not found' });
+
+            res.status(200).json({ success: true, message: 'Profile updated successfully', data: updated });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
