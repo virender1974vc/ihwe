@@ -7,9 +7,9 @@ const buyerRegistrationSchema = new mongoose.Schema(
     designation: { type: String, required: false, trim: true }, // Legacy
     companyName: { type: String, required: true, trim: true },
     businessType: { type: String, required: true },
-    companyFirmName: { type: String, required: true },
-    basicBusinessType: { type: String, required: true },
-    yearOfEstablishment: { type: String, required: true },
+    companyFirmName: { type: String, required: false },
+    basicBusinessType: { type: String, required: false },
+    yearOfEstablishment: { type: String, required: false },
     gstNumber: { type: String },
     panNumber: { type: String },
     brandName: { type: String },
@@ -26,9 +26,9 @@ const buyerRegistrationSchema = new mongoose.Schema(
     city: { type: String, required: true },
 
     // 3. Business Profile
-    natureOfBusiness: { type: String, required: true },
-    yearsInBusiness: { type: String, required: true },
-    numberOfOutlets: { type: String, required: true },
+    natureOfBusiness: { type: String, required: false },
+    yearsInBusiness: { type: String, required: false },
+    numberOfOutlets: { type: String, required: false },
     annualTurnover: { type: String, required: true },
     buyerIndustry: { type: String },
 
