@@ -233,6 +233,7 @@ app.use("/api/otp", require("./routes/otpRoutes"));
 app.use('/api/exhibitor-registration', exhibitorRegistrationRoutes);
 app.use('/api/exhibitor-auth', require('./routes/exhibitorAuth'));
 app.use('/api/buyer-auth', require('./routes/buyerAuth'));
+app.use('/api/seller-auth', require('./routes/sellerAuth'));
 app.use('/api/stalls', stallRoutes);
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/registrations', require('./routes/registrations'));
