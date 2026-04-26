@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const BSMMeeting = require("../models/BSMMeeting");
 const BuyerRegistration = require("../models/BuyerRegistration");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
@@ -35,7 +36,7 @@ exports.getMatchmakingBuyers = async (req, res) => {
 exports.getMatchmakingExhibitors = async (req, res) => {
   try {
     const { search = '', page = 1, limit = 20 } = req.query;
-    const query = { paymentStatus: "Completed" };
+    const query = { status: { $in: ["paid", "confirmed", "advance-paid"] } };
     if (search) {
       query.$or = [
         { exhibitorName: { $regex: search, $options: 'i' } },
@@ -86,9 +87,9 @@ exports.adminCreateMeeting = async (req, res) => {
     });
 
     if (existing) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Conflict: One of the participants is already booked for this slot." 
+      return res.status(400).json({
+        success: false,
+        message: "Conflict: One of the participants is already booked for this slot."
       });
     }
 
@@ -124,44 +125,85 @@ exports.adminGetAllMeetings = async (req, res) => {
 exports.exhibitorGetMyMeetings = async (req, res) => {
   try {
     const { exhibitorId } = req.params;
-    const meetings = await BSMMeeting.find({ exhibitorId })
-      .populate("buyerId", "companyName designation registrationId country primaryProductInterest")
+    console.log("Fetching meetings for exhibitor ID:", exhibitorId);
+
+    // 1. Find the current registration to get email/mobile
+    const currentReg = await ExhibitorRegistration.findById(exhibitorId);
+    if (!currentReg) {
+      return res.status(404).json({ success: false, message: "Exhibitor not found" });
+    }
+
+    // 2. Find all registrations with same email or mobile
+    const allRegs = await ExhibitorRegistration.find({
+      $or: [
+        { 'contact1.email': currentReg.contact1?.email },
+        { 'contact1.mobile': currentReg.contact1?.mobile }
+      ]
+    }).select("_id");
+
+    const regIds = allRegs.map(r => r._id);
+    console.log(`Found ${regIds.length} related registrations for email ${currentReg.contact1?.email}`);
+
+    // 3. Find meetings for any of these registrations
+    const meetings = await BSMMeeting.find({
+      exhibitorId: { $in: regIds }
+    })
+      .populate("buyerId", "companyName fullName designation registrationId country primaryProductInterest")
       .sort({ date: 1, timeSlot: 1 });
+
+    console.log(`Found ${meetings.length} meetings for exhibitor ${exhibitorId} (across all registrations)`);
     res.status(200).json({ success: true, data: meetings });
   } catch (error) {
+    console.error("Fetch Exhibitor Meetings Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 exports.exhibitorRequestMeeting = async (req, res) => {
   try {
-    const { exhibitorId, buyerId, date, timeSlot, remarks } = req.body;
+    const { exhibitorId, buyerId, date, timeSlot, remarks, eventId } = req.body;
+
+    let normalizedDate = null;
+    if (date) {
+      normalizedDate = new Date(date);
+      normalizedDate.setHours(0, 0, 0, 0);
+    }
+
+    console.log("Exhibitor Requesting Meeting (Interest):", { exhibitorId, buyerId, date, timeSlot });
+
+
     const existing = await BSMMeeting.findOne({
       exhibitorId,
       buyerId,
-      date,
-      timeSlot,
-      status: { $ne: "Cancelled" }
+      eventId: eventId || null,
+      status: "Pending"
     });
 
-    if (existing) {
-      return res.status(400).json({ success: false, message: "Request already exists for this slot." });
+    if (existing && !existing.date) {
+      return res.status(400).json({ success: false, message: "Interest already registered. Awaiting Admin assignment." });
     }
 
     const meeting = await BSMMeeting.create({
       exhibitorId,
       buyerId,
-      date,
-      timeSlot,
+      date: normalizedDate,
+      timeSlot: timeSlot || null,
       remarks,
+      eventId: eventId || null,
       status: "Pending",
-      requestedBy: "Exhibitor"
+      requestedBy: "Exhibitor",
+      exhibitorApproval: "Approved",
+      buyerApproval: "Pending"
     });
 
+    console.log("Interest Registered with ID:", meeting._id);
     res.status(201).json({ success: true, data: meeting });
   } catch (error) {
+    console.error("Exhibitor Request Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 exports.updateMeetingStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -180,6 +222,7 @@ exports.updateMeetingStatus = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 exports.exhibitorRespondMeeting = async (req, res) => {
   try {
     const { id } = req.params;
@@ -205,17 +248,123 @@ exports.exhibitorRespondMeeting = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 exports.buyerGetMyMeetings = async (req, res) => {
   try {
     const { buyerId } = req.params;
-    const meetings = await BSMMeeting.find({ buyerId })
-      .populate("exhibitorId", "exhibitorName designation registrationId country exhibitorCategory companyLogo profileImage")
+    console.log("Fetching meetings for buyer ID:", buyerId);
+
+    // 1. Find the current registration to get email/mobile
+    const currentReg = await BuyerRegistration.findById(buyerId);
+    if (!currentReg) {
+      return res.status(404).json({ success: false, message: "Buyer not found" });
+    }
+
+    // 2. Find all registrations with same email or mobile
+    const allRegs = await BuyerRegistration.find({
+      $or: [
+        { email: currentReg.email },
+        { mobile: currentReg.mobile }
+      ]
+    }).select("_id");
+
+    const regIds = allRegs.map(r => r._id);
+    console.log(`Found ${regIds.length} related buyer registrations`);
+
+    // 3. Find meetings for any of these registrations
+    const meetings = await BSMMeeting.find({
+      buyerId: { $in: regIds }
+    })
+      .populate("exhibitorId", "exhibitorName contact1 registrationId country industrySector exhibitorCategory companyLogo profileImage")
       .sort({ date: 1, timeSlot: 1 });
+
+    console.log(`Found ${meetings.length} meetings for buyer ${buyerId} (across all registrations)`);
     res.status(200).json({ success: true, data: meetings });
+  } catch (error) {
+    console.error("Fetch Buyer Meetings Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.buyerRequestMeeting = async (req, res) => {
+  try {
+    const { buyerId, exhibitorId, date, timeSlot, remarks, eventId } = req.body;
+
+    let normalizedDate = null;
+    if (date) {
+      normalizedDate = new Date(date);
+      normalizedDate.setHours(0, 0, 0, 0);
+    }
+
+    console.log("Buyer Requesting Meeting (Interest):", { buyerId, exhibitorId, date, timeSlot });
+
+    const existing = await BSMMeeting.findOne({
+      exhibitorId,
+      buyerId,
+      eventId: eventId || null,
+      status: "Pending"
+    });
+
+    if (existing && !existing.date) {
+      return res.status(400).json({ success: false, message: "Interest already registered. Awaiting Admin assignment." });
+    }
+
+    const meeting = await BSMMeeting.create({
+      exhibitorId,
+      buyerId,
+      date: normalizedDate,
+      timeSlot: timeSlot || null,
+      remarks,
+      eventId: eventId || null,
+      status: "Pending",
+      requestedBy: "Buyer",
+      buyerApproval: "Approved",
+      exhibitorApproval: "Pending"
+    });
+
+    console.log("Interest Registered with ID:", meeting._id);
+    res.status(201).json({ success: true, data: meeting });
+  } catch (error) {
+    console.error("Buyer Request Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.buyerRespondMeeting = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approval } = req.body;
+
+    if (!["Approved", "Rejected"].includes(approval)) {
+      return res.status(400).json({ success: false, message: "Invalid approval value" });
+    }
+
+    const meeting = await BSMMeeting.findById(id);
+    if (!meeting) return res.status(404).json({ success: false, message: "Meeting not found" });
+
+    meeting.buyerApproval = approval;
+    if (approval === "Rejected") {
+      meeting.status = "Rejected";
+    } else if (meeting.exhibitorApproval === "Approved" && meeting.buyerApproval === "Approved") {
+      meeting.status = "Approved";
+    }
+
+    await meeting.save();
+    res.status(200).json({ success: true, data: meeting });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+exports.getExhibitorCategories = async (req, res) => {
+  try {
+    const sectors = await ExhibitorRegistration.distinct("industrySector", { status: { $in: ["paid", "confirmed", "advance-paid"] } });
+    res.status(200).json({ success: true, sectors: sectors.filter(Boolean).sort() });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 exports.adminSetApproval = async (req, res) => {
   try {
     const { id } = req.params;
@@ -233,6 +382,7 @@ exports.adminSetApproval = async (req, res) => {
 
     if (side === "exhibitor") meeting.exhibitorApproval = approval;
     else meeting.buyerApproval = approval;
+
     if (approval === "Rejected") {
       meeting.status = "Rejected";
     } else if (meeting.exhibitorApproval === "Approved" && meeting.buyerApproval === "Approved") {

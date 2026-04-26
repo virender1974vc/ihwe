@@ -224,6 +224,8 @@ app.use("/api/gallery-category", galleryCategoryRoutes);
 app.use("/api/contact-enquiry", contactEnquiryRoutes);
 app.use("/api/speaker-nomination", require("./routes/speakerRoutes"));
 app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
+app.use("/api/international-exhibitor", require("./routes/internationalExhibitorRoutes"));
+app.use("/api/international-buyer", require("./routes/internationalBuyerRoutes"));
 app.use("/api/seller-registration", sellerRegistrationRoutes);
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));

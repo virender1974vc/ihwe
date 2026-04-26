@@ -18,5 +18,8 @@ router.get("/exhibitor/:exhibitorId", bsmController.exhibitorGetMyMeetings);
 router.get("/buyer/:buyerId", bsmController.buyerGetMyMeetings);
 router.post("/exhibitor/request", bsmController.exhibitorRequestMeeting);
 router.put("/exhibitor/respond/:id", bsmController.exhibitorRespondMeeting);
+router.post("/buyer/request", bsmController.buyerRequestMeeting);
+router.put("/buyer/respond/:id", bsmController.buyerRespondMeeting);
+router.get("/exhibitors/categories", bsmController.getExhibitorCategories);
 
 module.exports = router;

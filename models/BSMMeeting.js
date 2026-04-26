@@ -18,11 +18,9 @@ const bsmMeetingSchema = new mongoose.Schema(
     },
     date: {
       type: Date,
-      required: true,
     },
     timeSlot: {
       type: String,
-      required: true,
     },
     status: {
       type: String,
@@ -57,7 +55,5 @@ const bsmMeetingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-bsmMeetingSchema.index({ buyerId: 1, date: 1, timeSlot: 1 }, { unique: true });
-bsmMeetingSchema.index({ exhibitorId: 1, date: 1, timeSlot: 1 }, { unique: true });
 
 module.exports = mongoose.model("BSMMeeting", bsmMeetingSchema);
