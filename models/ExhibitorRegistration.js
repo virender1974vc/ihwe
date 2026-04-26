@@ -45,6 +45,8 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     landlineNo: String,
     gstNo: String,
     panNo: String,
+    aadhaarNo: String,
+    registrantType: { type: String, enum: ['registered', 'unregistered'], default: 'registered' },
     natureOfBusiness: String,
     fasciaName: String,
     primaryCategory: String,

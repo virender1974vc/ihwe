@@ -18,13 +18,16 @@ router.post('/create-order/:registrationId', async (req, res) => {
         const balanceAmount = registration.balanceAmount || 0;
         const penaltyAmount = registration.penaltyAmount || 0;
         const totalPayable = registration.totalPayable || (balanceAmount + penaltyAmount);
-        let amountToPay = amount || totalPayable;
-        if (installmentNumber && registration.installments && registration.installments.length > 0) {
-            const installment = registration.installments.find(
-                inst => inst.installmentNumber === installmentNumber
-            );
-            if (installment && installment.status !== 'paid') {
-                amountToPay = installment.dueAmount - (installment.paidAmount || 0);
+        let amountToPay = amount;
+        if (!amountToPay) {
+            amountToPay = totalPayable;
+            if (installmentNumber && registration.installments && registration.installments.length > 0) {
+                const installment = registration.installments.find(
+                    inst => inst.installmentNumber === installmentNumber
+                );
+                if (installment && installment.status !== 'paid') {
+                    amountToPay = installment.dueAmount - (installment.paidAmount || 0);
+                }
             }
         }
 

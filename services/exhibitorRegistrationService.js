@@ -128,6 +128,26 @@ class ExhibitorRegistrationService {
     async addRegistration(data) {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
+
+        // ── Registrant type validation ──────────────────────────────────────────
+        const registrantType = data.registrantType || 'registered';
+        if (registrantType === 'registered') {
+            if (!data.gstNo || data.gstNo.trim() === '') {
+                throw new Error('GST Number (GSTIN) is required for Registered Exhibitors.');
+            }
+        } else {
+            // unregistered
+            if (!data.panNo || data.panNo.trim() === '') {
+                throw new Error('PAN Card Number is required for Unregistered Buyers.');
+            }
+            if (!data.aadhaarNo || data.aadhaarNo.trim() === '') {
+                throw new Error('Aadhaar Card Number is required for Unregistered Buyers.');
+            }
+            if (data.aadhaarNo.replace(/\D/g, '').length !== 12) {
+                throw new Error('Aadhaar Card Number must be exactly 12 digits.');
+            }
+        }
+
         const year = new Date().getFullYear();
         // Use a persistent counter to ensure sequential IDs starting from 8001
         const Counter = require('../models/visitor/CounterModel');
@@ -208,39 +228,47 @@ class ExhibitorRegistrationService {
             const sortedPlans = [...installmentPlans].sort((a, b) => Number(a.percentage) - Number(b.percentage));
 
             let cumulativePaid = 0;
-            const installmentAmounts = sortedPlans.map((plan, idx) => {
+            const installments = [];
+
+            sortedPlans.forEach((plan, idx) => {
                 const thisPct = Number(plan.percentage);
-                const isLast = idx === sortedPlans.length - 1;
-                if (isLast) {
-                    // Last installment = exact remaining balance (covers any rounding + remaining %)
-                    return netPayable - cumulativePaid;
-                }
-                // Cumulative approach: Phase amount = round(total × thisPct%) - already assigned
                 const cumulativeTarget = Math.round(netPayable * thisPct / 100);
                 const amount = cumulativeTarget - cumulativePaid;
                 cumulativePaid = cumulativeTarget;
-                return amount;
-            });
-            // No safety needed — last phase already gets exact remainder
 
-            data.installments = sortedPlans.map((plan, idx) => {
-                const dueDate = plan.dueDate
-                    ? new Date(plan.dueDate)
-                    : new Date(today.getTime() + (idx + 1) * 30 * 24 * 60 * 60 * 1000);
-                const dueAmount = installmentAmounts[idx];
                 const isPaidInstallment = idx === 0 && amountPaid > 0 && chosenPlanId === plan.id;
-                return {
+                installments.push({
                     installmentNumber: idx + 1,
                     planId: plan.id,
                     label: plan.label || `Installment ${idx + 1}`,
-                    percentage: Number(plan.percentage),
-                    dueAmount,
+                    percentage: thisPct,
+                    dueAmount: amount,
                     paidAmount: isPaidInstallment ? amountPaid : 0,
                     status: isPaidInstallment ? 'paid' : 'pending',
-                    dueDate,
+                    dueDate: plan.dueDate ? new Date(plan.dueDate) : new Date(today.getTime() + (idx + 1) * 30 * 24 * 60 * 60 * 1000),
                     paidAt: isPaidInstallment ? new Date() : null
-                };
+                });
             });
+
+            // Add Final Balance if not reached 100%
+            if (cumulativePaid < netPayable) {
+                const finalAmt = Math.max(0, Math.round(netPayable - cumulativePaid));
+                if (finalAmt > 0) {
+                    installments.push({
+                        installmentNumber: installments.length + 1,
+                        planId: 'final_balance',
+                        label: 'Final Balance Payment',
+                        percentage: 100,
+                        dueAmount: finalAmt,
+                        paidAmount: 0,
+                        status: 'pending',
+                        dueDate: installments.length > 0 ? installments[installments.length - 1].dueDate : today,
+                        paidAt: null
+                    });
+                }
+            }
+            data.installments = installments;
+
             // Set paymentDueDate to first unpaid installment's due date
             const firstUnpaid = data.installments.find(i => i.status !== 'paid');
             if (firstUnpaid) data.paymentDueDate = firstUnpaid.dueDate;
@@ -429,12 +457,84 @@ class ExhibitorRegistrationService {
                 tdsAmount: tdsA,
                 netPayable: net
             };
+            if (!isFullPayment && event?.paymentPlans) {
+                const installmentPlans = event.paymentPlans.filter(p => p.id !== 'full' && Number(p.percentage) < 100);
+                const sortedPlans = [...installmentPlans].sort((a, b) => Number(a.percentage) - Number(b.percentage));
 
-            // cleanup temp fields
+                let cumulativePaidSoFar = 0;
+                const installments = [];
+
+                sortedPlans.forEach((plan, idx) => {
+                    const thisPct = Number(plan.percentage);
+                    const cumulativeTarget = Math.round(net * thisPct / 100);
+                    const amount = cumulativeTarget - cumulativePaidSoFar;
+                    cumulativePaidSoFar = cumulativeTarget;
+
+                    const existing = (current.installments || []).find(inst => inst.installmentNumber === (idx + 1));
+                    const paidAmt = existing ? (existing.paidAmount || 0) : 0;
+                    let status = 'pending';
+                    if (paidAmt >= amount) status = 'paid';
+                    else if (paidAmt > 0) status = 'partial';
+
+                    installments.push({
+                        installmentNumber: idx + 1,
+                        planId: plan.id,
+                        label: plan.label || `Installment ${idx + 1}`,
+                        percentage: thisPct,
+                        dueAmount: amount,
+                        paidAmount: paidAmt,
+                        status: status,
+                        dueDate: plan.dueDate ? new Date(plan.dueDate) : (existing ? existing.dueDate : new Date()),
+                        paidAt: existing ? existing.paidAt : null
+                    });
+                });
+
+                // Add Final Balance if not reached 100%
+                if (cumulativePaidSoFar < net) {
+                    const finalAmt = Math.max(0, Math.round(net - cumulativePaidSoFar));
+                    if (finalAmt > 0) {
+                        const existing = (current.installments || []).find(inst => inst.planId === 'final_balance');
+                        const paidAmt = existing ? (existing.paidAmount || 0) : 0;
+                        let status = 'pending';
+                        if (paidAmt >= finalAmt) status = 'paid';
+                        else if (paidAmt > 0) status = 'partial';
+
+                        installments.push({
+                            installmentNumber: installments.length + 1,
+                            planId: 'final_balance',
+                            label: 'Final Balance Payment',
+                            percentage: 100,
+                            dueAmount: finalAmt,
+                            paidAmount: paidAmt,
+                            status: status,
+                            dueDate: installments.length > 0 ? installments[installments.length - 1].dueDate : new Date(),
+                            paidAt: existing ? existing.paidAt : null
+                        });
+                    }
+                }
+                data.installments = installments;
+
+                const selectedPlan = event.paymentPlans.find(p => p.id === plan);
+                data.paymentPlanLabel = selectedPlan?.label || 'Installment Plan';
+            } else if (isFullPayment) {
+                data.installments = [];
+                data.paymentPlanLabel = 'Full Payment';
+                if (!data.paymentDueDate && !current.paymentDueDate) {
+                    const dueDate = new Date();
+                    dueDate.setDate(dueDate.getDate() + 7);
+                    data.paymentDueDate = dueDate;
+                }
+            }
             delete data._newGross;
             delete data._stallDiscountPercent;
             delete data._stallDiscountAmount;
         }
+
+        // --- ALWAYS Update totalPayable (balance + penalty) ---
+        const finalBalance = data.balanceAmount ?? current.balanceAmount ?? 0;
+        const penalty = data.penaltyAmount ?? current.penaltyAmount ?? 0;
+        data.totalPayable = finalBalance + penalty;
+
         const paymentStatuses = ['paid', 'advance-paid'];
         const wasAlreadyPaid = paymentStatuses.includes(current.status);
         const isNowPaid = paymentStatuses.includes(data.status);
