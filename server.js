@@ -224,6 +224,8 @@ app.use("/api/gallery-category", galleryCategoryRoutes);
 app.use("/api/contact-enquiry", contactEnquiryRoutes);
 app.use("/api/speaker-nomination", require("./routes/speakerRoutes"));
 app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
+app.use("/api/international-exhibitor", require("./routes/internationalExhibitorRoutes"));
+app.use("/api/international-buyer", require("./routes/internationalBuyerRoutes"));
 app.use("/api/seller-registration", sellerRegistrationRoutes);
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
@@ -339,10 +341,9 @@ io.on('connection', (socket) => {
   });
 
   // Send message
-  socket.on('send_message', async ({ roomId, exhibitorRegistrationId, exhibitorName, senderType, senderId, senderName, message }) => {
+  socket.on('send_message', async ({ roomId, exhibitorRegistrationId, exhibitorName, buyerRegistrationId, buyerName, senderType, senderId, senderName, message }) => {
     if (mongoose.connection.readyState !== 1) return;
     try {
-      // Check if the other party is currently in the room (for instant read)
       const roomSocketIds = roomSockets.get(roomId) || new Set();
       const otherOnline = [...roomSocketIds].some(sid => {
         const u = onlineUsers.get(sid);
@@ -350,45 +351,56 @@ io.on('connection', (socket) => {
       });
 
       const msg = await ChatMessage.create({
-        roomId, exhibitorRegistrationId, exhibitorName,
+        roomId, 
+        exhibitorRegistrationId, exhibitorName,
+        buyerRegistrationId, buyerName,
         senderType, senderId, senderName, message,
         readByExhibitor: senderType === 'exhibitor' || otherOnline,
+        readByBuyer: senderType === 'buyer' || otherOnline,
         readByAdmin: senderType === 'admin' || otherOnline,
       });
 
-      // Broadcast to room
       io.to(roomId).emit('receive_message', msg);
 
-      // If other party is online, send seen_update back to sender
       if (otherOnline) {
-        io.to(roomId).emit('messages_seen', { roomId, seenBy: senderType === 'admin' ? 'exhibitor' : 'admin' });
+        io.to(roomId).emit('messages_seen', { roomId, seenBy: senderType });
       }
 
-      // Notify specific admin sidebar
-      const ExhibitorRegistration = require('./models/ExhibitorRegistration');
-      const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
-      const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
-
-      io.to(targetRoom).emit('room_updated', {
-        roomId, exhibitorName, lastMessage: message,
-        lastMessageAt: msg.createdAt, lastSenderType: senderType,
-        unreadIncrement: senderType === 'exhibitor' && !otherOnline ? 1 : 0,
-        spokenWith: exhibitor?.spokenWith || ''
-      });
+      // Notification logic
+      if (senderType === 'exhibitor') {
+        const ExhibitorRegistration = require('./models/ExhibitorRegistration');
+        const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
+        const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
+        io.to(targetRoom).emit('room_updated', {
+          roomId, exhibitorName, lastMessage: message,
+          lastMessageAt: msg.createdAt, lastSenderType: senderType,
+          unreadIncrement: !otherOnline ? 1 : 0,
+          spokenWith: exhibitor?.spokenWith || ''
+        });
+      } else if (senderType === 'buyer') {
+        // Buyer notification to admin
+        io.to('admin_room').emit('room_updated', {
+          roomId, buyerName, lastMessage: message,
+          lastMessageAt: msg.createdAt, lastSenderType: senderType,
+          unreadIncrement: !otherOnline ? 1 : 0,
+          isBuyer: true
+        });
+      }
     } catch (err) {
       console.error('Chat save error:', err.message);
     }
   });
 
-  // Mark messages as read — emit seen update to room
+  // Mark messages as read
   socket.on('mark_read', async ({ roomId, readerType }) => {
-    // Wait for DB to be ready (readyState 1 = connected)
     if (mongoose.connection.readyState !== 1) return;
     try {
       if (readerType === 'admin') {
-        await ChatMessage.updateMany({ roomId, senderType: 'exhibitor', readByAdmin: false }, { readByAdmin: true });
-      } else {
+        await ChatMessage.updateMany({ roomId, senderType: { $in: ['exhibitor', 'buyer'] }, readByAdmin: false }, { readByAdmin: true });
+      } else if (readerType === 'exhibitor') {
         await ChatMessage.updateMany({ roomId, senderType: 'admin', readByExhibitor: false }, { readByExhibitor: true });
+      } else if (readerType === 'buyer') {
+        await ChatMessage.updateMany({ roomId, senderType: 'admin', readByBuyer: false }, { readByBuyer: true });
       }
       io.to(roomId).emit('messages_seen', { roomId, seenBy: readerType });
     } catch (err) {
@@ -396,7 +408,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Typing — room-scoped, only to others in room
   socket.on('typing', ({ roomId, senderType, senderName }) => {
     socket.to(roomId).emit('typing', { senderType, senderName, roomId });
   });

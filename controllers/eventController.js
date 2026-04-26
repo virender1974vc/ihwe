@@ -63,6 +63,15 @@ class EventController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async getCurrentEvent(req, res) {
+        try {
+            const data = await eventService.getCurrentEvent();
+            if (!data) return res.status(404).json({ success: false, message: 'No current event found' });
+            res.json({ success: true, data });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new EventController();
