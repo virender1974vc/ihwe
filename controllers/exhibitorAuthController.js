@@ -120,8 +120,6 @@ class ExhibitorAuthController {
         try {
             if (req.user.role !== 'exhibitor')
                 return res.status(403).json({ success: false, message: 'Access denied. Exhibitors only.' });
-
-            // Find all registrations for this user by email OR mobile
             const email = req.user.email;
             const mobile = req.user.mobile;
 
@@ -252,6 +250,59 @@ class ExhibitorAuthController {
             res.status(200).json({ success: true, message: 'Profile updated and synced successfully', data: updated });
         } catch (error) {
             console.error('CRITICAL: Update profile error:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async registerSeller(req, res) {
+        try {
+            if (req.user?.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+
+            const { sellerDetails } = req.body;
+            
+            // Check for required bank info
+            if (!sellerDetails || !sellerDetails.bankName || !sellerDetails.accountNumber || !sellerDetails.ifscCode) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Bank Name, Account Number, and IFSC Code are required' 
+                });
+            }
+
+            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
+                ? req.query.id
+                : req.user.id;
+
+            const updateData = {
+                isSeller: true,
+                sellerStatus: 'pending',
+                brandName: sellerDetails.brandName,
+                productCategories: sellerDetails.productCategories,
+                businessRegistrationNo: sellerDetails.businessRegistrationNo,
+                gstNo: sellerDetails.gstNumber || sellerDetails.gstNo,
+                panNo: sellerDetails.panNumber || sellerDetails.panNo,
+                website: sellerDetails.website,
+                bankDetails: {
+                    bankName: sellerDetails.bankName,
+                    accountHolder: sellerDetails.accountHolder,
+                    accountNumber: sellerDetails.accountNumber,
+                    ifscCode: sellerDetails.ifscCode,
+                    branch: sellerDetails.branch,
+                    accountType: sellerDetails.accountType || 'Current'
+                }
+            };
+
+            const updated = await ExhibitorRegistration.findByIdAndUpdate(
+                targetId,
+                { $set: updateData },
+                { new: true }
+            );
+
+            if (!updated)
+                return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+
+            res.status(200).json({ success: true, message: 'Registered as seller successfully. Please wait for admin approval/subscription activation.', data: updated });
+        } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
     }
