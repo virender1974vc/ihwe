@@ -187,6 +187,76 @@ class ExhibitorRegistrationService {
         const amountPaid = data.amountPaid || 0;
         data.balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
 
+        // --- AUTO-GENERATE INSTALLMENTS based on payment plan ---
+        const Event = require('../models/Event');
+        const eventDoc = data.eventId ? await Event.findById(data.eventId).lean() : null;
+        const paymentPlans = eventDoc?.paymentPlans || [];
+        const chosenPlanId = data.paymentPlanType || 'full';
+        const chosenPlan = paymentPlans.find(p => p.id === chosenPlanId);
+        const isFull = chosenPlanId === 'full' || (chosenPlan && Number(chosenPlan.percentage) === 100);
+
+        if (!isFull && paymentPlans.length > 0) {
+            // Generate installments for all phases
+            // Each phase's dueAmount = (this phase % - previous phase %) of netPayable
+            // e.g. Phase1=25%, Phase2=50%, Phase3=75%
+            //   → Phase1 pays 25%, Phase2 pays 25% (50-25), Phase3 pays 25% (75-50)
+            // Last phase always gets the exact remaining to avoid rounding drift
+            const installmentPlans = paymentPlans.filter(p => p.id !== 'full' && Number(p.percentage) < 100);
+            const today = new Date();
+
+            // Sort by percentage ascending to ensure correct cumulative calculation
+            const sortedPlans = [...installmentPlans].sort((a, b) => Number(a.percentage) - Number(b.percentage));
+
+            let cumulativePaid = 0;
+            const installmentAmounts = sortedPlans.map((plan, idx) => {
+                const thisPct = Number(plan.percentage);
+                const isLast = idx === sortedPlans.length - 1;
+                if (isLast) {
+                    // Last installment = exact remaining balance (covers any rounding + remaining %)
+                    return netPayable - cumulativePaid;
+                }
+                // Cumulative approach: Phase amount = round(total × thisPct%) - already assigned
+                const cumulativeTarget = Math.round(netPayable * thisPct / 100);
+                const amount = cumulativeTarget - cumulativePaid;
+                cumulativePaid = cumulativeTarget;
+                return amount;
+            });
+            // No safety needed — last phase already gets exact remainder
+
+            data.installments = sortedPlans.map((plan, idx) => {
+                const dueDate = plan.dueDate
+                    ? new Date(plan.dueDate)
+                    : new Date(today.getTime() + (idx + 1) * 30 * 24 * 60 * 60 * 1000);
+                const dueAmount = installmentAmounts[idx];
+                const isPaidInstallment = idx === 0 && amountPaid > 0 && chosenPlanId === plan.id;
+                return {
+                    installmentNumber: idx + 1,
+                    planId: plan.id,
+                    label: plan.label || `Installment ${idx + 1}`,
+                    percentage: Number(plan.percentage),
+                    dueAmount,
+                    paidAmount: isPaidInstallment ? amountPaid : 0,
+                    status: isPaidInstallment ? 'paid' : 'pending',
+                    dueDate,
+                    paidAt: isPaidInstallment ? new Date() : null
+                };
+            });
+            // Set paymentDueDate to first unpaid installment's due date
+            const firstUnpaid = data.installments.find(i => i.status !== 'paid');
+            if (firstUnpaid) data.paymentDueDate = firstUnpaid.dueDate;
+        } else {
+            // Full payment - set due date to 7 days from now
+            if (!data.paymentDueDate) {
+                const dueDate = new Date();
+                dueDate.setDate(dueDate.getDate() + 7);
+                data.paymentDueDate = dueDate;
+            }
+            data.installments = [];
+        }
+
+        // Set totalPayable
+        data.totalPayable = data.balanceAmount;
+
         // --- INITIAL PAYMENT HISTORY ---
         if (amountPaid > 0) {
             const isFull = data.balanceAmount === 0;

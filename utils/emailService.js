@@ -1346,6 +1346,243 @@ class EmailService {
             return false;
         }
     }
+
+    /**
+     * Send Payment Delay Warning Email
+     * @param {Object} registration - Exhibitor registration object
+     * @param {Object} templateData - Template data for email
+     * @param {string} customMessage - Optional custom message
+     */
+    async sendPaymentDelayWarning(registration, templateData, customMessage = null) {
+        try {
+            const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
+            const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+            const html = this.emailShell(`
+                <tr>
+                    <td style="padding: 40px 30px; background-color: #ffffff;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif;">
+                            <tr>
+                                <td align="center" style="padding-bottom: 20px;">
+                                    <span style="font-size: 48px;">⚠️</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding-bottom: 30px;">
+                                    <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: #dc2626;">
+                                        PAYMENT REMINDER
+                                    </h1>
+                                    <p style="margin: 10px 0 0 0; font-size: 16px; color: #666;">
+                                        Your payment is <strong style="color: #dc2626;">${templateData.daysOverdue || 0} days overdue</strong>
+                                    </p>
+                                </td>
+                            </tr>
+                            ${customMessage ? `
+                            <tr>
+                                <td style="padding: 20px; background-color: #fef3c7; border-radius: 8px; margin-bottom: 20px;">
+                                    <p style="margin: 0; font-size: 14px; color: #92400e; font-style: italic;">
+                                        "${customMessage}"
+                                    </p>
+                                </td>
+                            </tr>
+                            ` : ''}
+                            <tr>
+                                <td style="padding-bottom: 20px;">
+                                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #333;">
+                                        Dear <strong>${templateData.contactPerson || 'Customer'}</strong>,
+                                    </p>
+                                    <p style="margin: 0; font-size: 14px; color: #555; line-height: 1.6;">
+                                        This is a reminder regarding your pending payment for <strong>${templateData.eventName || 'the Exhibition'}</strong>.
+                                        Please complete your payment at the earliest to avoid any inconvenience.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="background-color: #f8fafc; border-radius: 8px; padding: 25px; margin: 20px 0;">
+                                    <h2 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1px;">
+                                        Payment Details
+                                    </h2>
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px;">
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Registration ID:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${templateData.registrationId || 'N/A'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Stall No:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${templateData.stallNo || 'N/A'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Stall Type:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${templateData.stallType || 'N/A'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td colspan="2" style="padding: 15px 0; border-top: 1px dashed #e2e8f0;"></td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Original Amount:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; text-align: right;">${fmt(templateData.originalAmount || 0)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Amount Paid:</td>
+                                            <td style="padding: 8px 0; color: #16a34a; text-align: right;">${fmt(templateData.amountPaid || 0)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Balance Amount:</td>
+                                            <td style="padding: 8px 0; color: #dc2626; font-weight: 600; text-align: right;">${fmt(templateData.balanceAmount || 0)}</td>
+                                        </tr>
+                                        ${templateData.penaltyAmount > 0 ? `
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #dc2626;">Penalty:</td>
+                                            <td style="padding: 8px 0; color: #dc2626; font-weight: 600; text-align: right;">${fmt(templateData.penaltyAmount)}</td>
+                                        </tr>
+                                        ` : ''}
+                                        <tr>
+                                            <td colspan="2" style="padding: 15px 0; border-top: 2px solid #1e293b;"></td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 12px 0; color: #1e293b; font-size: 16px; font-weight: 700;">TOTAL PAYABLE:</td>
+                                            <td style="padding: 12px 0; color: #dc2626; font-size: 18px; font-weight: 800; text-align: right;">${fmt(templateData.totalPayable || 0)}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 20px 0;">
+                                    <table width="100%" cellpadding="0" cellspacing="0">
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b; font-size: 14px;">
+                                                <strong>Payment Due Date:</strong> ${templateData.dueDate || 'N/A'}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #dc2626; font-size: 14px; font-weight: 600;">
+                                                Days Overdue: ${templateData.daysOverdue || 0} days
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding: 30px 0;">
+                                    <a href="${templateData.paymentLink || '#'}" 
+                                       style="display: inline-block; padding: 16px 40px; background-color: #dc2626; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px;">
+                                        💳 PAY NOW
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 20px 0; border-top: 1px solid #e2e8f0;">
+                                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.6;">
+                                        If you have already made the payment, please ignore this email and share the payment details with us.
+                                    </p>
+                                    <p style="margin: 0; font-size: 14px; color: #555; line-height: 1.6;">
+                                        For any queries, please contact us at <a href="mailto:${templateData.supportEmail}" style="color: #23471d;">${templateData.supportEmail}</a> or call <a href="tel:${templateData.supportPhone}" style="color: #23471d;">${templateData.supportPhone}</a>.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            `);
+
+            const data = {
+                to: registration.contact1?.email,
+                subject: `⚠️ Payment Reminder - ${registration.exhibitorName} - ${templateData.daysOverdue || 0} Days Overdue`,
+                html
+            };
+
+            return await this.sendEmail({
+                ...data,
+                profile: 'EXHIBITOR'
+            });
+        } catch (err) {
+            console.error('sendPaymentDelayWarning error:', err.message);
+            return false;
+        }
+    }
+
+    /**
+     * Send Installment Due Reminder Email
+     * @param {Object} registration - Exhibitor registration object
+     * @param {Object} installment - Installment details
+     */
+    async sendInstallmentReminder(registration, installment) {
+        try {
+            const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
+            const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+            const html = this.emailShell(`
+                <tr>
+                    <td style="padding: 40px 30px; background-color: #ffffff;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif;">
+                            <tr>
+                                <td align="center" style="padding-bottom: 20px;">
+                                    <span style="font-size: 48px;">📅</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding-bottom: 30px;">
+                                    <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: #f59e0b;">
+                                        INSTALLMENT DUE REMINDER
+                                    </h1>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding-bottom: 20px;">
+                                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #333;">
+                                        Dear <strong>${registration.contact1?.firstName || 'Customer'}</strong>,
+                                    </p>
+                                    <p style="margin: 0; font-size: 14px; color: #555; line-height: 1.6;">
+                                        Your <strong>${installment.label || 'installment'}</strong> payment is due. Please complete your payment to avoid any late fees.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="background-color: #f8fafc; border-radius: 8px; padding: 25px; margin: 20px 0;">
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px;">
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Installment:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${installment.label || 'N/A'}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Amount Due:</td>
+                                            <td style="padding: 8px 0; color: #f59e0b; font-size: 18px; font-weight: 700; text-align: right;">${fmt(installment.dueAmount || 0)}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Due Date:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${installment.dueDate ? new Date(installment.dueDate).toLocaleDateString('en-IN') : 'N/A'}</td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td align="center" style="padding: 30px 0;">
+                                    <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/exhibitor/payment/${registration._id}" 
+                                       style="display: inline-block; padding: 16px 40px; background-color: #f59e0b; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; border-radius: 8px;">
+                                        💳 PAY NOW
+                                    </a>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            `);
+
+            const data = {
+                to: registration.contact1?.email,
+                subject: `📅 ${installment.label || 'Installment'} Due - ${registration.exhibitorName}`,
+                html
+            };
+
+            return await this.sendEmail({
+                ...data,
+                profile: 'EXHIBITOR'
+            });
+        } catch (err) {
+            console.error('sendInstallmentReminder error:', err.message);
+            return false;
+        }
+    }
 }
 
 module.exports = new EmailService();

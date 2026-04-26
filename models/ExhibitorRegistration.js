@@ -111,6 +111,43 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         advancePercent: { type: Number, default: 100 },
         updatedAt: Date
     },
+    penaltyAmount: { type: Number, default: 0 },
+    penaltyReason: String,
+    penaltyAddedAt: Date,
+    penaltyAddedBy: String,
+    penaltyHistory: [{
+        amount: Number,
+        reason: String,
+        addedBy: String,
+        addedAt: { type: Date, default: Date.now },
+        removedAt: Date,
+        removedBy: String
+    }],
+    paymentDueDate: Date,
+    lastWarningSentAt: Date,
+    warningCount: { type: Number, default: 0 },
+    warningHistory: [{
+        sentAt: { type: Date, default: Date.now },
+        type: { type: String, enum: ['email', 'whatsapp', 'both'] },
+        message: String,
+        daysOverdue: Number,
+        sentBy: String
+    }],
+    installments: [{
+        installmentNumber: Number,
+        planId: String,
+        label: String,
+        percentage: Number,
+        dueAmount: Number,
+        paidAmount: { type: Number, default: 0 },
+        status: { type: String, enum: ['pending', 'partial', 'paid', 'overdue'], default: 'pending' },
+        dueDate: Date,
+        paidAt: Date,
+        razorpayPaymentId: String,
+        razorpayOrderId: String,
+        paymentMethod: String
+    }],
+    totalPayable: { type: Number, default: 0 },
     password: { type: String, select: false },
     otp: { type: String, select: false },
     otpExpiry: { type: Date, select: false },

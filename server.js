@@ -304,6 +304,12 @@ app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/event-overview", eventOverviewRoutes);
 app.use("/api/about-organizer", aboutOrganizerRoutes);
 app.use("/api/our-journey", ourJourneyRoutes);
+app.use("/api/penalty", require('./routes/penaltyRoutes'));
+app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
+
+// ── Initialize Cron Jobs ──────────────────────────────────────────────────────
+const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
+initPaymentWarningCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);

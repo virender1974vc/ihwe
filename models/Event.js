@@ -39,7 +39,8 @@ const eventSchema = new mongoose.Schema({
         id: String,
         label: String,
         percentage: Number,
-        isDefault: { type: Boolean, default: false }
+        isDefault: { type: Boolean, default: false },
+        dueDate: { type: Date, default: null }
     }]
 }, { timestamps: true });
 
