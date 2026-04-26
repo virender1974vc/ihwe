@@ -1,4 +1,4 @@
-﻿const nodemailer = require('nodemailer');
+const nodemailer = require('nodemailer');
 const fs = require('fs');
 const QRCode = require('qrcode');
 const EmailLog = require('../models/EmailLog');
@@ -281,7 +281,9 @@ class EmailService {
             'COMPANY': data.companyName || data.company || data.organization || data.organizationName || 'N/A',
             'CATEGORY': data.category || data.registrationCategory || 'N/A',
             'EMAIL': data.email || data.officialEmail || 'N/A',
-            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A',
+            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || data.mobileNumber || 'N/A',
+            'MOBILE': data.mobile || data.phone || data.whatsapp || data.mobileNumber || 'N/A',
+            'MOBILE_NUMBER': data.mobileNumber || data.mobile || data.phone || 'N/A',
             'EXHIBITOR_NAME': data.exhibitor_name || data.exhibitorName || data.name || 'N/A',
             'STALL_NO': data.stall_no || data.stallNo || data.stallFor || 'N/A',
             'LOGIN_URL': data.login_url || 'https://ihwe.in/exhibitor-login',
@@ -425,7 +427,7 @@ class EmailService {
             });
 
             // 2. Send WhatsApp to USER (if available)
-            const mobile = data.mobile || data.phone || data.whatsapp;
+            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
             if (mobile && whatsappContent) {
                 whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Dynamic: ${formType}`).catch(err => {
                     console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
@@ -631,7 +633,7 @@ class EmailService {
             });
 
             // 2. Send WhatsApp to USER (if available)
-            const mobile = data.mobile || data.phone || data.whatsapp;
+            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
             if (mobile && whatsappContent) {
                 whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Visitor: ${formType}`).catch(err => {
                     console.error(`[WhatsApp] Failed to send msg for ${formType}:`, err.message);

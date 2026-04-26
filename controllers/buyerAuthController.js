@@ -26,9 +26,10 @@ class BuyerAuthController {
                 return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            buyer.otp = otp;
-            buyer.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-            await buyer.save();
+            await BuyerRegistration.findByIdAndUpdate(buyer._id, {
+                otp,
+                otpExpiry: new Date(Date.now() + 10 * 60 * 1000)
+            });
 
             // Send OTP via email
             await emailService.sendOtpEmail(email, otp, buyer.companyName);
@@ -60,9 +61,9 @@ class BuyerAuthController {
             if (new Date() > buyer.otpExpiry)
                 return res.status(401).json({ success: false, message: 'OTP has expired. Please log in again.' });
 
-            buyer.otp = undefined;
-            buyer.otpExpiry = undefined;
-            await buyer.save();
+            await BuyerRegistration.findByIdAndUpdate(buyer._id, {
+                $unset: { otp: 1, otpExpiry: 1 }
+            });
 
             const token = jwt.sign(
                 { id: buyer._id, role: 'buyer', email: buyer.emailAddress, mobile: buyer.mobileNumber, name: buyer.companyName },
@@ -94,9 +95,10 @@ class BuyerAuthController {
                 return res.status(404).json({ success: false, message: 'Buyer with this mobile number not found' });
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
-            buyer.otp = otp;
-            buyer.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
-            await buyer.save();
+            await BuyerRegistration.findByIdAndUpdate(buyer._id, {
+                otp,
+                otpExpiry: new Date(Date.now() + 10 * 60 * 1000)
+            });
 
             // Try sending via WhatsApp if available
             try {

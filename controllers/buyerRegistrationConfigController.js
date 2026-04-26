@@ -30,10 +30,11 @@ class BuyerRegistrationConfigController {
                     price: 999,
                     category: "Pass",
                     cta: "Register Now",
-                    targetAudience: "For Emerging Buyers & Business Explorers",
+                    tagline: "For Emerging Buyers & Business Explorers",
                     description: "Designed for professionals who want to explore new products, suppliers, and market opportunities through structured Buyer–Seller interactions.",
                     whyChoose: "A great starting point to explore opportunities and build initial business connections.",
                     isRecommended: false,
+                    color: "blue",
                     benefits: [
                         "Opportunity to participate in Buyer–Seller Meet interactions (subject to availability)",
                         "Initiate self-managed B2B meetings",
@@ -48,10 +49,11 @@ class BuyerRegistrationConfigController {
                     category: "Pass",
                     cta: "Register Now",
                     badge: "Recommended",
-                    targetAudience: "For Serious Buyers & Decision Makers",
+                    tagline: "For Serious Buyers & Decision Makers",
                     description: "Crafted for high-intent buyers who are looking for structured, result-oriented meetings and premium networking.",
                     whyChoose: "Perfect for buyers who want focused meetings, comfort, and faster business outcomes.",
                     isRecommended: true,
+                    color: "yellow",
                     benefits: [
                         "Pre-scheduled & curated B2B meetings",
                         "Dedicated assistance for meeting coordination",
@@ -66,9 +68,10 @@ class BuyerRegistrationConfigController {
                     price: 1999,
                     category: "Membership",
                     cta: "Become a Member",
-                    targetAudience: "For Active Buyers & Market Explorers",
+                    tagline: "For Active Buyers & Market Explorers",
                     description: "The Buyer–Seller Meet at IHWE 2026 is being conducted in association with the International Council of AYUSH (ICOA), bringing you access to a trusted network of verified suppliers and brands.",
                     whyChoose: "Ideal for buyers who want to explore the AYUSH and wellness ecosystem and build reliable connections.",
+                    color: "blue",
                     benefits: [
                         "Access to Buyer–Seller Meet opportunities curated by ICOA at IHWE & associated events",
                         "Opportunity to participate in B2B meetings (subject to availability)",
@@ -100,9 +103,10 @@ class BuyerRegistrationConfigController {
                     price: 25000,
                     category: "Membership",
                     cta: "Get Elite Membership",
-                    targetAudience: "For High-Value & Institutional Buyers",
+                    tagline: "For High-Value & Institutional Buyers",
                     description: "An exclusive membership offering a fully managed sourcing experience through ICOA’s curated network and IHWE platform.",
                     whyChoose: "Designed for buyers who want a complete sourcing ecosystem with strategic business support.",
+                    color: "red",
                     benefits: [
                         "Fully curated B2B meetings conducted by ICOA across IHWE and associated platforms",
                         "Dedicated Relationship Manager for end-to-end coordination",
@@ -141,8 +145,10 @@ class BuyerRegistrationConfigController {
                 });
                 await config.save();
             } else {
-                // Migration: Force update packages to include new full data
-                config.packages = defaultPackages;
+                // Migration: Ensure packages exist if missing
+                if (!config.packages || config.packages.length === 0) {
+                    config.packages = defaultPackages;
+                }
 
                 // Ensure "Global" is added to existing configs if missing
                 if (config.regions && !config.regions.includes("Global")) {
