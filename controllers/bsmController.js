@@ -207,11 +207,24 @@ exports.exhibitorRequestMeeting = async (req, res) => {
 exports.updateMeetingStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, adminNotes, location } = req.body;
+    const fields = ['status', 'adminNotes', 'location', 'date', 'timeSlot'];
+    const updateData = {};
+    
+    fields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        if (field === 'date' && req.body[field]) {
+          const d = new Date(req.body[field]);
+          d.setHours(0, 0, 0, 0);
+          updateData[field] = d;
+        } else {
+          updateData[field] = req.body[field];
+        }
+      }
+    });
 
     const meeting = await BSMMeeting.findByIdAndUpdate(
       id,
-      { status, adminNotes, location },
+      { $set: updateData },
       { new: true }
     );
 
