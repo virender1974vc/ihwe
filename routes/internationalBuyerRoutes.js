@@ -31,7 +31,8 @@ const cpUpload = upload.fields([
     { name: 'logo', maxCount: 1 },
     { name: 'visitingCard', maxCount: 1 },
     { name: 'productCertifications', maxCount: 1 },
-    { name: 'previousParticipationProof', maxCount: 1 }
+    { name: 'previousParticipationProof', maxCount: 1 },
+    { name: 'paymentScreenshot', maxCount: 1 }
 ]);
 
 // Configuration Routes

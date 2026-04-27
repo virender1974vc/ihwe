@@ -66,7 +66,8 @@ class InternationalBuyerController {
                     logo: 'logo',
                     visitingCard: 'visitingCard',
                     productCertifications: 'productCertifications',
-                    previousParticipationProof: 'previousParticipationProof'
+                    previousParticipationProof: 'previousParticipationProof',
+                    paymentScreenshot: 'paymentScreenshot'
                 };
 
                 Object.keys(fileMap).forEach(key => {
