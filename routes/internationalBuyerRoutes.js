@@ -41,6 +41,7 @@ router.put('/config', internationalBuyerRegistrationConfigController.updateConfi
 router.get('/', internationalBuyerController.getAllRegistrations);
 router.get('/:id', internationalBuyerController.getRegistrationById);
 router.post('/register', cpUpload, internationalBuyerController.register);
+router.put('/:id', internationalBuyerController.updateRegistration);
 router.patch('/:id/status', internationalBuyerController.updateStatus);
 router.delete('/:id', internationalBuyerController.deleteRegistration);
 
