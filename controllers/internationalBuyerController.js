@@ -29,7 +29,7 @@ class InternationalBuyerController {
             const nestedFields = [
                 'primaryContact', 'secondaryContact', 'stallRequirement', 
                 'sponsorship', 'businessProfile', 'b2bInterest', 
-                'travelSupport', 'billingDetails', 'declarations', 'vipProgram'
+                'travelSupport', 'billingDetails', 'declarations', 'vipProgram', 'verification'
             ];
 
             nestedFields.forEach(field => {
@@ -66,7 +66,8 @@ class InternationalBuyerController {
                     logo: 'logo',
                     visitingCard: 'visitingCard',
                     productCertifications: 'productCertifications',
-                    previousParticipationProof: 'previousParticipationProof'
+                    previousParticipationProof: 'previousParticipationProof',
+                    paymentScreenshot: 'paymentScreenshot'
                 };
 
                 Object.keys(fileMap).forEach(key => {
@@ -99,6 +100,35 @@ class InternationalBuyerController {
                 'verification.adminApprovalStatus': adminApprovalStatus 
             });
 
+            if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
+
+            res.status(200).json({ success: true, data: updated });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
+    async updateRegistration(req, res) {
+        try {
+            const { id } = req.params;
+            const data = { ...req.body };
+
+            // Handle nested objects if they come as strings
+            const nestedFields = [
+                'primaryContact', 'secondaryContact', 'stallRequirement', 
+                'sponsorship', 'businessProfile', 'b2bInterest', 
+                'travelSupport', 'billingDetails', 'declarations', 'vipProgram', 'verification'
+            ];
+
+            nestedFields.forEach(field => {
+                if (typeof data[field] === 'string') {
+                    try {
+                        data[field] = JSON.parse(data[field]);
+                    } catch (e) {}
+                }
+            });
+
+            const updated = await internationalBuyerService.updateRegistration(id, data);
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
 
             res.status(200).json({ success: true, data: updated });

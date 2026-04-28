@@ -31,7 +31,8 @@ const cpUpload = upload.fields([
     { name: 'logo', maxCount: 1 },
     { name: 'visitingCard', maxCount: 1 },
     { name: 'productCertifications', maxCount: 1 },
-    { name: 'previousParticipationProof', maxCount: 1 }
+    { name: 'previousParticipationProof', maxCount: 1 },
+    { name: 'paymentScreenshot', maxCount: 1 }
 ]);
 
 // Configuration Routes
@@ -41,6 +42,7 @@ router.put('/config', internationalBuyerRegistrationConfigController.updateConfi
 router.get('/', internationalBuyerController.getAllRegistrations);
 router.get('/:id', internationalBuyerController.getRegistrationById);
 router.post('/register', cpUpload, internationalBuyerController.register);
+router.put('/:id', internationalBuyerController.updateRegistration);
 router.patch('/:id/status', internationalBuyerController.updateStatus);
 router.delete('/:id', internationalBuyerController.deleteRegistration);
 

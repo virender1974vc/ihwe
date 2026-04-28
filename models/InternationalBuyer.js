@@ -110,7 +110,8 @@ const internationalBuyerSchema = new mongoose.Schema(
       logo: { type: String },
       visitingCard: { type: String },
       productCertifications: { type: String },
-      previousParticipationProof: { type: String }
+      previousParticipationProof: { type: String },
+      paymentScreenshot: { type: String }
     },
 
     // Section 13 – Verification (Internal)

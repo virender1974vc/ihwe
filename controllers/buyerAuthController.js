@@ -197,17 +197,28 @@ class BuyerAuthController {
                 return res.status(403).json({ success: false, message: 'Access denied.' });
 
             const allowed = [
-                'companyName', 'companyFirmName', 'nameOfRepresentative', 'fullName', 
+                'companyName', 'companyFirmName', 'nameOfRepresentative', 'fullName',
                 'designation', 'mobileNumber', 'emailAddress', 'gstNumber', 'panNumber',
                 'website', 'registeredAddress', 'pinCode', 'pincode', 'city', 'stateProvince', 'state', 'country',
                 'businessType', 'basicBusinessType', 'yearOfEstablishment', 'natureOfBusiness',
                 'yearsInBusiness', 'numberOfOutlets', 'annualTurnover', 'buyerIndustry',
-                'primaryProductInterest', 'secondaryProductCategories', 'specificProductRequirements'
+                'primaryProductInterest', 'secondaryProductCategories', 'specificProductRequirements',
+                'importLicense', 'companyProfile'
             ];
             const update = {};
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) update[key] = req.body[key];
             });
+
+            // Handle file uploads
+            if (req.files) {
+                if (req.files.companyProfile) {
+                    update.companyProfile = req.files.companyProfile[0].path;
+                }
+                if (req.files.importLicense) {
+                    update.importLicense = req.files.importLicense[0].path;
+                }
+            }
 
             const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
                 ? req.query.id
