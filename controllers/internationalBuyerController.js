@@ -54,6 +54,14 @@ class InternationalBuyerController {
                 }
             });
 
+            // Handle transactionId from frontend payments - MUST BE AFTER PARSING billingDetails
+            if (formData.transactionId) {
+                formData.paymentStatus = 'Completed';
+                formData.billingDetails = formData.billingDetails || {};
+                formData.billingDetails.utrTransactionId = formData.transactionId;
+                formData.billingDetails.paymentMode = 'Online Payment Gateway';
+            }
+
             // Handle Files
             if (req.files) {
                 formData.documents = formData.documents || {};
