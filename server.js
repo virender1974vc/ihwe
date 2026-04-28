@@ -106,6 +106,7 @@ const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
+const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 
 
 mongoose
@@ -244,6 +245,7 @@ app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
 app.use('/api/public', require('./routes/publicRoutes'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/policies', require('./routes/policyRoutes'));
+app.use('/api/dashboard-banners', require('./routes/dashboardBannerRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 
@@ -299,13 +301,21 @@ app.use("/api/secondary-products", secondaryProductRoutes);
 app.use("/api/stall-accessories", stallAccessoryRoutes);
 app.use("/api/stall-products", require('./routes/stallProductRoutes'));
 app.use("/api/units", unitRoutes);
+app.use("/api/seller-subscription-plans", sellerSubscriptionPlanRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
+app.use("/api/seller-portal", require("./routes/sellerPortalRoutes"));
 app.use("/api/event-overview", eventOverviewRoutes);
 app.use("/api/about-organizer", aboutOrganizerRoutes);
 app.use("/api/our-journey", ourJourneyRoutes);
+app.use("/api/penalty", require('./routes/penaltyRoutes'));
+app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
+
+// ── Initialize Cron Jobs ──────────────────────────────────────────────────────
+const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
+initPaymentWarningCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);

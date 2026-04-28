@@ -15,7 +15,12 @@ class EventService {
         return await Event.findById(id);
     }
     async updateEvent(id, data) {
-        return await Event.findByIdAndUpdate(id, data, { new: true });
+        const { _id, __v, createdAt, updatedAt, ...updateData } = data;
+        return await Event.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        );
     }
     async deleteEvent(id) {
         return await Event.findByIdAndDelete(id);
