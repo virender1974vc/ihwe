@@ -150,6 +150,42 @@ router.post('/verify-payment', async (req, res) => {
             }
         }
 
+        // Update all installments based on total paid
+        if (registration.installments && registration.installments.length > 0) {
+            // Sort installments by number
+            const sortedInstallments = [...registration.installments].sort((a, b) => a.installmentNumber - b.installmentNumber);
+            
+            // Redistribute total paid amount across installments
+            let remainingPaid = newTotalPaid;
+            
+            for (const inst of sortedInstallments) {
+                const dueAmount = inst.dueAmount || 0;
+                
+                if (remainingPaid >= dueAmount) {
+                    // Fully paid
+                    inst.paidAmount = dueAmount;
+                    inst.status = 'paid';
+                    if (!inst.paidAt) inst.paidAt = new Date();
+                    remainingPaid -= dueAmount;
+                } else if (remainingPaid > 0) {
+                    // Partially paid
+                    inst.paidAmount = remainingPaid;
+                    inst.status = 'partial';
+                    if (!inst.paidAt) inst.paidAt = new Date();
+                    remainingPaid = 0;
+                } else {
+                    // Keep existing paid amount if any
+                    inst.paidAmount = inst.paidAmount || 0;
+                    inst.status = inst.paidAmount > 0 ? 'partial' : 'pending';
+                }
+                
+                // Check if overdue
+                if (inst.status !== 'paid' && inst.dueDate && new Date(inst.dueDate) < new Date()) {
+                    inst.status = 'overdue';
+                }
+            }
+        }
+
         // Update registration
         registration.amountPaid = newTotalPaid;
         registration.balanceAmount = newBalance;
@@ -172,14 +208,11 @@ router.post('/verify-payment', async (req, res) => {
         // Generate and send receipt
         try {
             const pdfResult = await pdfGenerator.generatePaymentSlip(registration);
-            // pdfGenerator returns either a string path or { filePath, cloudUrl } object
             const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
             const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
 
             registration.receiptPdfUrl = pdfUrl || '';
             await registration.save();
-
-            // Send email receipt — pass the actual file path for attachment
             await emailService.sendPaymentReceipt(registration, pdfFilePath);
 
             // Send WhatsApp confirmation
@@ -518,6 +551,42 @@ router.post('/manual/:registrationId', async (req, res) => {
 
         registration.paymentHistory = registration.paymentHistory || [];
         registration.paymentHistory.push(paymentEntry);
+
+        // Update installments if they exist
+        if (registration.installments && registration.installments.length > 0) {
+            // Sort installments by number
+            const sortedInstallments = [...registration.installments].sort((a, b) => a.installmentNumber - b.installmentNumber);
+            
+            // Redistribute total paid amount across installments
+            let remainingPaid = newTotalPaid;
+            
+            for (const inst of sortedInstallments) {
+                const dueAmount = inst.dueAmount || 0;
+                
+                if (remainingPaid >= dueAmount) {
+                    // Fully paid
+                    inst.paidAmount = dueAmount;
+                    inst.status = 'paid';
+                    inst.paidAt = inst.paidAt || new Date();
+                    remainingPaid -= dueAmount;
+                } else if (remainingPaid > 0) {
+                    // Partially paid
+                    inst.paidAmount = remainingPaid;
+                    inst.status = 'partial';
+                    inst.paidAt = inst.paidAt || new Date();
+                    remainingPaid = 0;
+                } else {
+                    // Not paid yet
+                    inst.paidAmount = inst.paidAmount || 0;
+                    inst.status = inst.paidAmount > 0 ? 'partial' : 'pending';
+                }
+                
+                // Check if overdue
+                if (inst.status !== 'paid' && inst.dueDate && new Date(inst.dueDate) < new Date()) {
+                    inst.status = 'overdue';
+                }
+            }
+        }
 
         // Update registration
         registration.amountPaid = newTotalPaid;

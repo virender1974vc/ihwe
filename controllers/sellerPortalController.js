@@ -878,11 +878,43 @@ exports.updateSellerProfile = async (req, res) => {
 exports.getStallMap = async (req, res) => {
     try {
         const Stall = require('../models/Stall');
-        const stalls = await Stall.find({ isActive: true })
-            .select('stallNumber hallNumber size type price currency status isCorner position exhibitorId')
-            .sort({ hallNumber: 1, stallNumber: 1 });
-        
-        res.json({ success: true, data: stalls });
+        const Event = require('../models/Event');
+        const firstEvent = await Event.findOne({ status: 'active' })
+            .sort({ order: 1, createdAt: 1 });
+
+        if (!firstEvent) {
+            return res.json({ success: true, data: [], event: null });
+        }
+
+        // Get all stalls for this event
+        const stalls = await Stall.find({ eventId: firstEvent._id })
+            .populate('bookedBy', 'exhibitorName registrationId createdAt')
+            .sort({ stallNumber: 1 });
+
+        // Map stalls to include bookedBy info
+        const stallsData = stalls.map(stall => {
+            const stallObj = stall.toObject();
+            if (stall.status === 'booked' && stall.bookedBy) {
+                stallObj.bookedByInfo = {
+                    exhibitorName: stall.bookedBy.exhibitorName,
+                    registrationId: stall.bookedBy.registrationId,
+                    bookedAt: stall.bookedBy.createdAt
+                };
+            }
+            return stallObj;
+        });
+
+        res.json({
+            success: true,
+            data: stallsData,
+            event: {
+                _id: firstEvent._id,
+                name: firstEvent.name,
+                startDate: firstEvent.startDate,
+                endDate: firstEvent.endDate,
+                location: firstEvent.location
+            }
+        });
     } catch (error) {
         console.error('Stall map error:', error);
         res.status(500).json({ success: false, message: 'Failed to fetch stall map' });
