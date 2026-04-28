@@ -371,6 +371,14 @@ class ExhibitorRegistrationService {
 
     async updateRegistration(id, data) {
         const current = await ExhibitorRegistration.findById(id);
+
+        // Fix: empty string planId causes ObjectId cast error — convert to null
+        if (data.sellerSubscription?.planId === '' || data.sellerSubscription?.planId === null) {
+            data.sellerSubscription.planId = undefined; // unset it
+        }
+        if (data.sellerSubscription?.expiresAt === '') {
+            data.sellerSubscription.expiresAt = undefined;
+        }
         let stallChanged = false;
         if (data.participation?.stallNo && data.participation.stallNo !== current.participation?.stallNo?.toString()) {
             stallChanged = true;

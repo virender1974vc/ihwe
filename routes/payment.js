@@ -204,14 +204,15 @@ router.post('/verify-payment', async (req, res) => {
         }
 
         await registration.save();
-
-        // Generate and send receipt
         try {
-            const pdfResult = await pdfGenerator.generatePaymentSlip(registration);
+            const latestPaymentIdx = registration.paymentHistory.length - 1;
+            const pdfResult = await pdfGenerator.generatePaymentSlip(registration, { paymentIndex: latestPaymentIdx });
             const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
             const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
-
             registration.receiptPdfUrl = pdfUrl || '';
+            if (latestPaymentIdx >= 0 && registration.paymentHistory[latestPaymentIdx]) {
+                registration.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
+            }
             await registration.save();
             await emailService.sendPaymentReceipt(registration, pdfFilePath);
 
@@ -374,6 +375,24 @@ router.post('/installment/:registrationId/:installmentNumber', async (req, res) 
 
         await registration.save();
 
+        // Generate and send receipt
+        try {
+            // Generate receipt for the latest payment (the one just added)
+            const latestPaymentIdx = registration.paymentHistory.length - 1;
+            const pdfResult = await pdfGenerator.generatePaymentSlip(registration, { paymentIndex: latestPaymentIdx });
+            const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
+            const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
+
+            // Save receipt URL to the specific payment entry
+            if (latestPaymentIdx >= 0 && registration.paymentHistory[latestPaymentIdx]) {
+                registration.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
+                await registration.save();
+            }
+            await emailService.sendPaymentReceipt(registration, pdfFilePath);
+        } catch (err) {
+            console.error('Payment Receipt Error:', err);
+        }
+
         // Send confirmation
         try {
             if (registration.contact1?.mobile) {
@@ -457,10 +476,17 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                 await reg.save();
 
                 try {
-                    const pdfResult = await pdfGenerator.generatePaymentSlip(reg);
+                    // Generate receipt for the latest payment (the one just added)
+                    const latestPaymentIdx = reg.paymentHistory.length - 1;
+                    const pdfResult = await pdfGenerator.generatePaymentSlip(reg, { paymentIndex: latestPaymentIdx });
                     const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
                     const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
+                    
+                    // Save receipt URL to both main field and the specific payment entry
                     reg.receiptPdfUrl = pdfUrl || '';
+                    if (latestPaymentIdx >= 0 && reg.paymentHistory[latestPaymentIdx]) {
+                        reg.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
+                    }
                     await reg.save();
                     await emailService.sendPaymentReceipt(reg, pdfFilePath);
                 } catch (err) {
@@ -529,16 +555,12 @@ router.post('/manual/:registrationId', async (req, res) => {
         // Calculate new balance
         const netPayable = registration.financeBreakdown?.netPayable || registration.participation?.total || 0;
         const newBalance = Math.max(0, netPayable - newTotalPaid);
-
-        // Determine new status
         let newStatus = registration.status;
         if (newBalance <= 0) {
             newStatus = 'paid';
         } else if (newTotalPaid > 0) {
             newStatus = 'advance-paid';
         }
-
-        // Add to payment history
         const paymentEntry = {
             amount: paidAmount,
             paymentType: 'manual',
@@ -611,10 +633,17 @@ router.post('/manual/:registrationId', async (req, res) => {
 
         // Send receipt
         try {
-            const pdfResult = await pdfGenerator.generatePaymentSlip(registration);
+            // Generate receipt for the latest payment (the one just added)
+            const latestPaymentIdx = registration.paymentHistory.length - 1;
+            const pdfResult = await pdfGenerator.generatePaymentSlip(registration, { paymentIndex: latestPaymentIdx });
             const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
             const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
+            
+            // Save receipt URL to both main field and the specific payment entry
             registration.receiptPdfUrl = pdfUrl || '';
+            if (latestPaymentIdx >= 0 && registration.paymentHistory[latestPaymentIdx]) {
+                registration.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
+            }
             await registration.save();
             await emailService.sendPaymentReceipt(registration, pdfFilePath);
             if (registration.contact1?.mobile) {

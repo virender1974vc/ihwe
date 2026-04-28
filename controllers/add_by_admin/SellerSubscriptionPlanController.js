@@ -200,14 +200,17 @@ const deletePlan = async (req, res) => {
 const getAvailableFeatures = async (req, res) => {
   try {
     const features = [
-      { key: "bsm_marketing", label: "BSM Marketing Access", description: "Access to Buyer Seller Meeting marketing tools" },
-      { key: "export_inquiry", label: "Export Inquiry Submission", description: "Submit export-related inquiries" },
-      { key: "lead_access", label: "Lead Access", description: "View and access buyer leads" },
-      { key: "service_request", label: "Service Requests", description: "Submit service requests to organizers" },
-      { key: "premium_support", label: "Premium Support", description: "Priority support from organizers" },
-      { key: "analytics_dashboard", label: "Analytics Dashboard", description: "Access to detailed analytics and reports" },
-      { key: "product_showcase", label: "Product Showcase", description: "Feature products on seller portal" },
-      { key: "meeting_scheduler", label: "Meeting Scheduler", description: "Schedule meetings with buyers" },
+      { key: "bsm_marketing",      label: "BSM Marketing Access",        description: "Access to Buyer Seller Meeting marketing tools" },
+      { key: "export_inquiry",     label: "Export Inquiry Submission",    description: "Submit export-related inquiries" },
+      { key: "lead_access",        label: "Lead Access",                  description: "View and access buyer leads" },
+      { key: "service_request",    label: "Service Requests",             description: "Submit service requests to organizers" },
+      { key: "premium_support",    label: "Premium Support",              description: "Priority support from organizers" },
+      { key: "analytics_dashboard",label: "Analytics Dashboard",          description: "Access to detailed analytics and reports" },
+      { key: "product_showcase",   label: "Product Showcase",             description: "Feature products on seller portal" },
+      { key: "meeting_scheduler",  label: "Meeting Scheduler",            description: "Schedule meetings with buyers" },
+      { key: "conference",         label: "Conference Participation",     description: "Access to conference sessions and registration" },
+      { key: "logistics",          label: "Logistics & Operations",       description: "Access to logistics and operations support" },
+      { key: "accessories",        label: "Stall Accessories",            description: "Order stall accessories and equipment" },
     ];
 
     res.status(200).json({

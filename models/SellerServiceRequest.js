@@ -14,7 +14,8 @@ const sellerServiceRequestSchema = new mongoose.Schema({
     serviceName: { type: String, required: true },
     details: { type: Object },
     status: { type: String, enum: ['pending', 'open', 'in-progress', 'resolved', 'completed', 'reviewed', 'approved', 'rejected'], default: 'pending' },
-    remarks: { type: String }
+    remarks: { type: String },
+    adminNote: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('SellerServiceRequest', sellerServiceRequestSchema);

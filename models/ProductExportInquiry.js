@@ -15,7 +15,8 @@ const productExportInquirySchema = new mongoose.Schema({
     exportExperience: { type: String, enum: ['beginner', 'intermediate', 'expert'] },
     certifications: [String],
     message: { type: String },
-    status: { type: String, enum: ['pending', 'reviewed', 'contacted'], default: 'pending' }
+    status: { type: String, enum: ['pending', 'reviewed', 'contacted'], default: 'pending' },
+    adminNote: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ProductExportInquiry', productExportInquirySchema);

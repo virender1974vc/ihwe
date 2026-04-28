@@ -41,13 +41,13 @@ const isSubscriptionActive = (exhibitor) => {
 // ─── GET /seller-portal/subscription-info ────────────────────────────────────
 exports.getSubscriptionInfo = async (req, res) => {
     try {
-        const result = await getExhibitorWithPlan(req.user.id);
+        // Support ?regId= param so multi-registration users get correct subscription
+        const targetId = req.query.regId || req.user.id;
+        const result = await getExhibitorWithPlan(targetId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
         const { exhibitor, planDetails } = result;
         const active = isSubscriptionActive(exhibitor);
-
-        // Calculate days remaining
         let daysRemaining = null;
         if (exhibitor.sellerSubscription?.expiresAt) {
             const expiry = new Date(exhibitor.sellerSubscription.expiresAt);
@@ -101,8 +101,6 @@ exports.getSubscriptionInfo = async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 };
-
-// ─── GET /seller-portal/available-plans ──────────────────────────────────────
 exports.getAvailablePlans = async (req, res) => {
     try {
         const plans = await SellerSubscriptionPlan.find({ status: 'active' })
@@ -114,11 +112,10 @@ exports.getAvailablePlans = async (req, res) => {
         res.status(500).json({ success: false, message: 'Error fetching plans' });
     }
 };
-
-// ─── POST /seller-portal/export-inquiry ──────────────────────────────────────
 exports.submitExportInquiry = async (req, res) => {
     try {
-        const result = await getExhibitorWithPlan(req.user.id);
+        const targetId = req.body.regId || req.query.regId || req.user.id;
+        const result = await getExhibitorWithPlan(targetId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
         const { exhibitor, planDetails } = result;
@@ -132,7 +129,7 @@ exports.submitExportInquiry = async (req, res) => {
 
         // Check limit
         if (planDetails?.maxExportInquiries > 0) {
-            const count = await ProductExportInquiry.countDocuments({ exhibitorId: req.user.id });
+            const count = await ProductExportInquiry.countDocuments({ exhibitorId: targetId });
             if (count >= planDetails.maxExportInquiries) {
                 return res.status(403).json({ success: false, message: `Export inquiry limit (${planDetails.maxExportInquiries}) reached for your plan.` });
             }
@@ -140,7 +137,7 @@ exports.submitExportInquiry = async (req, res) => {
 
         const { brandName, contactPerson, email, phone, productCategories, targetCountries, exportExperience, certifications, message } = req.body;
         const inquiry = new ProductExportInquiry({
-            exhibitorId: req.user.id,
+            exhibitorId: targetId,
             brandName, contactPerson, email, phone,
             productCategories, targetCountries, exportExperience, certifications, message
         });
@@ -152,10 +149,23 @@ exports.submitExportInquiry = async (req, res) => {
     }
 };
 
+// ─── GET /seller-portal/export-inquiries ─────────────────────────────────────
+exports.getExportInquiries = async (req, res) => {
+    try {
+        const targetId = req.query.regId || req.user.id;
+        const inquiries = await ProductExportInquiry.find({ exhibitorId: targetId })
+            .sort({ createdAt: -1 });
+        res.json({ success: true, data: inquiries });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error fetching export inquiries' });
+    }
+};
+
 // ─── GET /seller-portal/leads ─────────────────────────────────────────────────
 exports.getSellerLeads = async (req, res) => {
     try {
-        const result = await getExhibitorWithPlan(req.user.id);
+        const targetId = req.query.regId || req.user.id;
+        const result = await getExhibitorWithPlan(targetId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
         const { exhibitor, planDetails } = result;
@@ -167,23 +177,154 @@ exports.getSellerLeads = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Your current plan does not include Lead Access. Please upgrade.' });
         }
 
-        const leads = await StallProductEnquiry.find({ exhibitorId: req.user.id })
-            .populate('productId', 'name images')
-            .sort({ createdAt: -1 });
+        const BuyerRegistration  = require('../models/BuyerRegistration');
+        const CorporateVisitor   = require('../models/visitor/CorporateVisitorModel');
+        const GeneralVisitor     = require('../models/visitor/GeneralVisitorModel');
 
-        // Apply limit if set
-        const limitedLeads = (planDetails?.maxLeads > 0) ? leads.slice(0, planDetails.maxLeads) : leads;
+        // ── Source 1: Direct product enquiries ───────────────────────────────
+        const directEnquiries = await StallProductEnquiry.find({ exhibitorId: targetId })
+            .populate('productId', 'name')
+            .sort({ createdAt: -1 })
+            .lean();
 
-        res.json({ success: true, data: limitedLeads, total: leads.length, showing: limitedLeads.length });
+        const directLeads = directEnquiries.map(e => ({
+            _id:          String(e._id),
+            name:         e.visitorName,
+            email:        e.visitorEmail || '',
+            phone:        e.visitorPhone || '',
+            company:      '',
+            designation:  '',
+            city:         '',
+            state:        '',
+            country:      '',
+            interest:     e.productId?.name || '',
+            message:      e.message || '',
+            source:       e.source || 'web',
+            leadType:     'product_enquiry',
+            tag:          null,
+            priority:     e.priority || null,
+            interested:   e.interested || false,
+            createdAt:    e.createdAt,
+        }));
+
+        // ── Source 2: Domestic + International Buyers ─────────────────────────
+        const buyers = await BuyerRegistration.find({})
+            .select('companyName fullName mobileNumber emailAddress city stateProvince country primaryProductInterest secondaryProductCategories annualTurnover estimatedAnnualPurchaseValue purchaseTimeline buyerTag registrationId createdAt')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const buyerLeads = buyers.map(b => ({
+            _id:          String(b._id),
+            name:         b.companyName || b.fullName || 'Unknown Buyer',
+            email:        b.emailAddress || '',
+            phone:        b.mobileNumber || '',
+            company:      b.companyName || '',
+            designation:  '',
+            city:         b.city || '',
+            state:        b.stateProvince || '',
+            country:      b.country || 'India',
+            interest:     b.primaryProductInterest || '',
+            message:      b.secondaryProductCategories?.join(', ') || '',
+            source:       'buyer',
+            leadType:     b.country && b.country.toLowerCase() !== 'india' ? 'international_buyer' : 'domestic_buyer',
+            tag:          b.buyerTag || 'Cold',
+            priority:     b.buyerTag === 'Hot' ? 'high' : b.buyerTag === 'Warm' ? 'medium' : 'low',
+            interested:   false,
+            registrationId: b.registrationId,
+            purchaseTimeline: b.purchaseTimeline,
+            annualTurnover: b.annualTurnover,
+            createdAt:    b.createdAt,
+        }));
+
+        // ── Source 3: Corporate Visitors ──────────────────────────────────────
+        const corporateVisitors = await CorporateVisitor.find({})
+            .select('firstName lastName email mobile companyName designation industrySector country state city areaOfInterest b2bMeeting registrationId createdAt')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Helper: safely convert areaOfInterest (array or string) to string
+        const toInterestStr = (val) => {
+            if (!val) return '';
+            if (Array.isArray(val)) return val.join(', ');
+            return String(val);
+        };
+
+        const corporateLeads = corporateVisitors.map(v => ({
+            _id:          String(v._id),
+            name:         `${v.firstName || ''} ${v.lastName || ''}`.trim() || 'Unknown',
+            email:        v.email || '',
+            phone:        v.mobile || '',
+            company:      v.companyName || '',
+            designation:  v.designation || '',
+            city:         v.city || '',
+            state:        v.state || '',
+            country:      v.country || 'India',
+            interest:     v.industrySector || toInterestStr(v.areaOfInterest),
+            message:      v.b2bMeeting === 'Yes' ? 'Interested in B2B Meeting' : '',
+            source:       'visitor',
+            leadType:     v.country && v.country.toLowerCase() !== 'india' ? 'international_visitor' : 'domestic_visitor',
+            tag:          null,
+            priority:     v.b2bMeeting === 'Yes' ? 'high' : 'low',
+            interested:   false,
+            registrationId: v.registrationId,
+            createdAt:    v.createdAt,
+        }));
+
+        // ── Source 4: General Visitors ────────────────────────────────────────
+        const generalVisitors = await GeneralVisitor.find({})
+            .select('firstName lastName email mobile companyName designation industrySector country state city areaOfInterest registrationId createdAt')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const generalLeads = generalVisitors.map(v => ({
+            _id:          String(v._id),
+            name:         `${v.firstName || ''} ${v.lastName || ''}`.trim() || 'Unknown',
+            email:        v.email || '',
+            phone:        v.mobile || '',
+            company:      v.companyName || '',
+            designation:  v.designation || '',
+            city:         v.city || '',
+            state:        v.state || '',
+            country:      v.country || 'India',
+            interest:     v.industrySector || toInterestStr(v.areaOfInterest),
+            message:      '',
+            source:       'visitor',
+            leadType:     v.country && v.country.toLowerCase() !== 'india' ? 'international_visitor' : 'domestic_visitor',
+            tag:          null,
+            priority:     'low',
+            interested:   false,
+            registrationId: v.registrationId,
+            createdAt:    v.createdAt,
+        }));
+
+        // ── Merge all sources ─────────────────────────────────────────────────
+        const allLeads = [...directLeads, ...buyerLeads, ...corporateLeads, ...generalLeads]
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        // Apply plan limit
+        const limitedLeads = (planDetails?.maxLeads > 0) ? allLeads.slice(0, planDetails.maxLeads) : allLeads;
+
+        res.json({
+            success: true,
+            data: limitedLeads,
+            total: allLeads.length,
+            showing: limitedLeads.length,
+            breakdown: {
+                directEnquiries:      directLeads.length,
+                domesticBuyers:       buyerLeads.filter(l => l.leadType === 'domestic_buyer').length,
+                internationalBuyers:  buyerLeads.filter(l => l.leadType === 'international_buyer').length,
+                domesticVisitors:     [...corporateLeads, ...generalLeads].filter(l => l.leadType === 'domestic_visitor').length,
+                internationalVisitors:[...corporateLeads, ...generalLeads].filter(l => l.leadType === 'international_visitor').length,
+            }
+        });
     } catch (error) {
+        console.error('getSellerLeads error:', error);
         res.status(500).json({ success: false, message: 'Error fetching leads' });
     }
 };
-
-// ─── GET /seller-portal/stats ─────────────────────────────────────────────────
 exports.getSellerStats = async (req, res) => {
     try {
-        const exhibitorId = req.user.id;
+        const exhibitorId = req.query.regId || req.user.id;
 
         const result = await getExhibitorWithPlan(exhibitorId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
@@ -192,17 +333,31 @@ exports.getSellerStats = async (req, res) => {
         const active = isSubscriptionActive(exhibitor);
 
         const SellerServiceRequest = require('../models/SellerServiceRequest');
-        
-        const [totalLeads, productEnquiries, meetingRequests] = await Promise.all([
+        const BuyerRegistration   = require('../models/BuyerRegistration');
+        const CorporateVisitor    = require('../models/visitor/CorporateVisitorModel');
+        const GeneralVisitor      = require('../models/visitor/GeneralVisitorModel');
+
+        const [directEnquiries, buyerCount, corporateCount, generalCount, meetingRequests] = await Promise.all([
             StallProductEnquiry.countDocuments({ exhibitorId }),
-            StallProductEnquiry.find({ exhibitorId }).populate('productId', 'views enquiryCount'),
-            SellerServiceRequest.countDocuments({ 
-                exhibitorId, 
+            BuyerRegistration.countDocuments({}),
+            CorporateVisitor.countDocuments({}),
+            GeneralVisitor.countDocuments({}),
+            SellerServiceRequest.countDocuments({
+                exhibitorId,
                 serviceType: 'meeting',
                 status: { $in: ['pending', 'reviewed'] }
             })
         ]);
 
+        // Total leads = direct enquiries + all buyers + all visitors
+        const totalLeads = directEnquiries + buyerCount + corporateCount + generalCount;
+
+        // Apply plan limit for display
+        const maxLeads = planDetails?.maxLeads || 0;
+        const displayLeads = maxLeads > 0 ? Math.min(totalLeads, maxLeads) : totalLeads;
+
+        // Views from product enquiries
+        const productEnquiries = await StallProductEnquiry.find({ exhibitorId }).populate('productId', 'views enquiryCount');
         let totalViews = 0;
         productEnquiries.forEach(enq => {
             if (enq.productId) totalViews += (enq.productId.views || 0);
@@ -240,12 +395,14 @@ exports.getSellerStats = async (req, res) => {
         res.json({
             success: true,
             data: {
-                totalLeads,
+                totalLeads: displayLeads,
+                totalLeadsRaw: totalLeads,
+                maxLeads,
                 totalViews,
                 meetingRequests,
                 profileCompletion,
-                profileVisibility: totalViews + (totalLeads * 10),
-                visibilityScore: active ? Math.min(100, 60 + (totalLeads * 2) + (totalViews)) : 0,
+                profileVisibility: totalViews + (displayLeads * 10),
+                visibilityScore: active ? Math.min(100, 60 + (displayLeads * 2) + (totalViews)) : 0,
                 subscriptionActive: active,
                 daysRemaining,
                 planName: planDetails?.name || null,
@@ -259,31 +416,38 @@ exports.getSellerStats = async (req, res) => {
 // ─── POST /seller-portal/service-request ─────────────────────────────────────
 exports.submitServiceRequest = async (req, res) => {
     try {
-        const result = await getExhibitorWithPlan(req.user.id);
+        // Support selectedRegId so multi-registration users submit under the correct registration
+        const targetId = req.body.regId || req.query.regId || req.user.id;
+        const result = await getExhibitorWithPlan(targetId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
         const { exhibitor, planDetails } = result;
+        const { serviceType, serviceName, details } = req.body;
 
-        if (!isSubscriptionActive(exhibitor)) {
-            return res.status(403).json({ success: false, message: 'Active subscription required to submit service requests.' });
-        }
-        if (!hasFeature(planDetails, 'service_request')) {
-            return res.status(403).json({ success: false, message: 'Your current plan does not include Service Requests. Please upgrade.' });
-        }
+        // Helpdesk tickets are always allowed — no subscription required
+        const isHelpdesk = serviceType === 'helpdesk';
 
-        // Check limit
-        if (planDetails?.maxServiceRequests > 0) {
-            const SellerServiceRequest = require('../models/SellerServiceRequest');
-            const count = await SellerServiceRequest.countDocuments({ exhibitorId: req.user.id });
-            if (count >= planDetails.maxServiceRequests) {
-                return res.status(403).json({ success: false, message: `Service request limit (${planDetails.maxServiceRequests}) reached for your plan.` });
+        if (!isHelpdesk) {
+            if (!isSubscriptionActive(exhibitor)) {
+                return res.status(403).json({ success: false, message: 'Active subscription required to submit service requests.' });
+            }
+            if (!hasFeature(planDetails, 'service_request')) {
+                return res.status(403).json({ success: false, message: 'Your current plan does not include Service Requests. Please upgrade.' });
+            }
+
+            // Check limit (only for non-helpdesk requests)
+            if (planDetails?.maxServiceRequests > 0) {
+                const SellerServiceRequest = require('../models/SellerServiceRequest');
+                const count = await SellerServiceRequest.countDocuments({ exhibitorId: targetId, serviceType: { $ne: 'helpdesk' } });
+                if (count >= planDetails.maxServiceRequests) {
+                    return res.status(403).json({ success: false, message: `Service request limit (${planDetails.maxServiceRequests}) reached for your plan.` });
+                }
             }
         }
 
         const SellerServiceRequest = require('../models/SellerServiceRequest');
-        const { serviceType, serviceName, details } = req.body;
         const request = new SellerServiceRequest({
-            exhibitorId: req.user.id,
+            exhibitorId: targetId,
             serviceType, serviceName, details
         });
         await request.save();
@@ -297,7 +461,9 @@ exports.submitServiceRequest = async (req, res) => {
 exports.getServiceRequests = async (req, res) => {
     try {
         const SellerServiceRequest = require('../models/SellerServiceRequest');
-        const requests = await SellerServiceRequest.find({ exhibitorId: req.user.id })
+        // Support ?regId= so multi-registration users see the correct registration's tickets
+        const targetId = req.query.regId || req.user.id;
+        const requests = await SellerServiceRequest.find({ exhibitorId: targetId })
             .sort({ createdAt: -1 });
         res.json({ success: true, data: requests });
     } catch (error) {
@@ -308,7 +474,8 @@ exports.getServiceRequests = async (req, res) => {
 // ─── GET /seller-portal/conference-sessions ───────────────────────────────────
 exports.getConferenceSessions = async (req, res) => {
     try {
-        const result = await getExhibitorWithPlan(req.user.id);
+        const targetId = req.query.regId || req.user.id;
+        const result = await getExhibitorWithPlan(targetId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
         const { exhibitor, planDetails } = result;
@@ -339,7 +506,8 @@ exports.getConferenceSessions = async (req, res) => {
 // ─── POST /seller-portal/conference-register ──────────────────────────────────
 exports.registerForSession = async (req, res) => {
     try {
-        const result = await getExhibitorWithPlan(req.user.id);
+        const targetId = req.body.regId || req.user.id;
+        const result = await getExhibitorWithPlan(targetId);
         if (!result) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
         const { exhibitor, planDetails } = result;
@@ -356,10 +524,10 @@ exports.registerForSession = async (req, res) => {
         // Store registration
         const SellerServiceRequest = require('../models/SellerServiceRequest');
         const reg = new SellerServiceRequest({
-            exhibitorId: req.user.id,
+            exhibitorId: targetId,
             serviceType: 'conference',
             serviceName: sessionTitle || 'Conference Session',
-            details: { sessionId, sessionDate, sessionTime, sessionHall }
+            details: { sessionId, sessionDate, sessionTime, sessionHall, type: 'session_register' }
         });
         await reg.save();
 
@@ -373,8 +541,9 @@ exports.registerForSession = async (req, res) => {
 exports.getLogisticsRequests = async (req, res) => {
     try {
         const SellerServiceRequest = require('../models/SellerServiceRequest');
+        const targetId = req.query.regId || req.user.id;
         const requests = await SellerServiceRequest.find({
-            exhibitorId: req.user.id,
+            exhibitorId: targetId,
             serviceType: 'logistics'
         }).sort({ createdAt: -1 });
 
@@ -420,7 +589,7 @@ exports.createSubscriptionOrder = async (req, res) => {
         const order = await razorpay.orders.create({
             amount: amountPaise,
             currency: plan.currency === 'INR' ? 'INR' : plan.currency,
-            receipt: `sub_${req.user.id}_${Date.now()}`,
+            receipt: `sub_${Date.now()}`,
             notes: {
                 planId: plan._id.toString(),
                 planName: plan.name,
@@ -470,11 +639,11 @@ exports.verifySubscriptionPayment = async (req, res) => {
         const now = new Date();
         const expiresAt = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
 
-        // Update exhibitor subscription
+        // Update exhibitor subscription — do NOT force isSeller:true here
+        // isSeller is set only via seller registration flow, not subscription purchase
         const updated = await ExhibitorRegistration.findByIdAndUpdate(
             req.user.id,
             {
-                isSeller: true,
                 sellerStatus: 'active',
                 'sellerSubscription.status': 'active',
                 'sellerSubscription.planId': plan._id,
@@ -758,21 +927,27 @@ exports.getProductCategories = async (req, res) => {
 exports.getMeetingStats = async (req, res) => {
     try {
         const SellerServiceRequest = require('../models/SellerServiceRequest');
+        const exhibitorId = req.query.regId || req.user.id;
         
-        const [totalMeetings, completedMeetings, pendingMeetings] = await Promise.all([
+        const [totalMeetings, completedMeetings, pendingMeetings, cancelledMeetings] = await Promise.all([
             SellerServiceRequest.countDocuments({ 
-                exhibitorId: req.user.id, 
+                exhibitorId, 
                 serviceType: 'meeting' 
             }),
             SellerServiceRequest.countDocuments({ 
-                exhibitorId: req.user.id, 
+                exhibitorId, 
                 serviceType: 'meeting',
                 status: 'completed'
             }),
             SellerServiceRequest.countDocuments({ 
-                exhibitorId: req.user.id, 
+                exhibitorId, 
                 serviceType: 'meeting',
                 status: { $in: ['pending', 'reviewed'] }
+            }),
+            SellerServiceRequest.countDocuments({ 
+                exhibitorId, 
+                serviceType: 'meeting',
+                status: 'rejected'
             })
         ]);
         
@@ -781,7 +956,8 @@ exports.getMeetingStats = async (req, res) => {
             data: {
                 totalMeetings,
                 completedMeetings,
-                pendingMeetings
+                pendingMeetings,
+                cancelledMeetings
             }
         });
     } catch (error) {
