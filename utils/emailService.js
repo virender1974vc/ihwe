@@ -8,6 +8,7 @@ const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInteres
 const { getSimpleVisitorAlertTemplate } = require('./emailTemplates/simpleVisitorAlert');
 const { getExhibitorAdminAlertTemplate } = require('./emailTemplates/exhibitorAdminAlert');
 const { getBuyerRegistrationAlertTemplate } = require('./emailTemplates/buyerRegistrationAlert');
+const { getInternationalBuyerRegistrationAlertTemplate } = require('./emailTemplates/internationalBuyerRegistrationAlert');
 
 class EmailService {
     constructor() {
@@ -930,6 +931,49 @@ class EmailService {
             console.error('Error sending detailed buyer notification:', error);
             return false;
         }
+    }
+
+    async sendDetailedInternationalBuyerNotification(data) {
+        try {
+            const subject = `NEW INTL BUYER REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId}`;
+            const html = getInternationalBuyerRegistrationAlertTemplate(data);
+            const recipientEmail = process.env.INTERNATIONAL_BUYER_ADMIN_EMAIL || process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
+
+            await this.sendEmail({
+                to: recipientEmail,
+                subject,
+                html,
+                profile: 'DEFAULT',
+                logData: {
+                    name: data.brandName,
+                    phone: data.primaryContact?.mobileNumber,
+                    message: 'Admin International Buyer Alert'
+                }
+            });
+
+            console.log(`[AdminIntlBuyerAlert] Sent to ${recipientEmail} for ${data.registrationId}`);
+            return true;
+        } catch (error) {
+            console.error('Error sending detailed international buyer notification:', error);
+            return false;
+        }
+    }
+
+    async sendInternationalBuyerRegistrationEmails(data) {
+        return await this.sendDynamicConfirmation({
+            to: data.primaryContact?.emailId,
+            formType: 'buyer-registration', // Reusing buyer template for now as requested "jase buyer ma jara ha"
+            data: {
+                name: data.primaryContact?.fullName,
+                company: data.brandName,
+                email: data.primaryContact?.emailId,
+                phone: data.primaryContact?.mobileNumber,
+                city: data.city,
+                country: data.country,
+                registrationId: data.registrationId
+            },
+            profile: 'DEFAULT'
+        });
     }
 
     async sendSpeakerNominationEmails(nomination) {

@@ -25,6 +25,9 @@ class EventService {
     async deleteEvent(id) {
         return await Event.findByIdAndDelete(id);
     }
+    async getCurrentEvent() {
+        return await Event.findOne({ status: 'active' }).sort({ startDate: -1 });
+    }
 }
 
 module.exports = new EventService();
