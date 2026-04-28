@@ -34,6 +34,8 @@ class SettingsService {
 
         if (logo) settings.logo = logo;
         if (exhibitorBrochurePdf) settings.exhibitorBrochurePdf = exhibitorBrochurePdf;
+        if (updateData.domesticRegistrationFormPdf) settings.domesticRegistrationFormPdf = updateData.domesticRegistrationFormPdf;
+        if (updateData.internationalRegistrationFormPdf) settings.internationalRegistrationFormPdf = updateData.internationalRegistrationFormPdf;
         if (emails) settings.emails = emails;
         if (phones) settings.phones = phones;
         if (addresses) settings.addresses = addresses;
