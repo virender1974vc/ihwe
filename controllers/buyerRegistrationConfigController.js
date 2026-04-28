@@ -30,10 +30,11 @@ class BuyerRegistrationConfigController {
                     price: 999,
                     category: "Pass",
                     cta: "Register Now",
-                    targetAudience: "For Emerging Buyers & Business Explorers",
+                    tagline: "For Emerging Buyers & Business Explorers",
                     description: "Designed for professionals who want to explore new products, suppliers, and market opportunities through structured Buyer–Seller interactions.",
                     whyChoose: "A great starting point to explore opportunities and build initial business connections.",
                     isRecommended: false,
+                    color: "blue",
                     benefits: [
                         "Opportunity to participate in Buyer–Seller Meet interactions (subject to availability)",
                         "Initiate self-managed B2B meetings",
@@ -48,10 +49,11 @@ class BuyerRegistrationConfigController {
                     category: "Pass",
                     cta: "Register Now",
                     badge: "Recommended",
-                    targetAudience: "For Serious Buyers & Decision Makers",
+                    tagline: "For Serious Buyers & Decision Makers",
                     description: "Crafted for high-intent buyers who are looking for structured, result-oriented meetings and premium networking.",
                     whyChoose: "Perfect for buyers who want focused meetings, comfort, and faster business outcomes.",
                     isRecommended: true,
+                    color: "yellow",
                     benefits: [
                         "Pre-scheduled & curated B2B meetings",
                         "Dedicated assistance for meeting coordination",
@@ -66,9 +68,10 @@ class BuyerRegistrationConfigController {
                     price: 1999,
                     category: "Membership",
                     cta: "Become a Member",
-                    targetAudience: "For Active Buyers & Market Explorers",
+                    tagline: "For Active Buyers & Market Explorers",
                     description: "The Buyer–Seller Meet at IHWE 2026 is being conducted in association with the International Council of AYUSH (ICOA), bringing you access to a trusted network of verified suppliers and brands.",
                     whyChoose: "Ideal for buyers who want to explore the AYUSH and wellness ecosystem and build reliable connections.",
+                    color: "blue",
                     benefits: [
                         "Access to Buyer–Seller Meet opportunities curated by ICOA at IHWE & associated events",
                         "Opportunity to participate in B2B meetings (subject to availability)",
@@ -100,9 +103,10 @@ class BuyerRegistrationConfigController {
                     price: 25000,
                     category: "Membership",
                     cta: "Get Elite Membership",
-                    targetAudience: "For High-Value & Institutional Buyers",
+                    tagline: "For High-Value & Institutional Buyers",
                     description: "An exclusive membership offering a fully managed sourcing experience through ICOA’s curated network and IHWE platform.",
                     whyChoose: "Designed for buyers who want a complete sourcing ecosystem with strategic business support.",
+                    color: "red",
                     benefits: [
                         "Fully curated B2B meetings conducted by ICOA across IHWE and associated platforms",
                         "Dedicated Relationship Manager for end-to-end coordination",
@@ -118,7 +122,7 @@ class BuyerRegistrationConfigController {
                 config = new BuyerRegistrationConfig({
                     companyTypes: ["Importer", "Distributor", "Retailer", "Wholesaler", "Hospital", "Wellness Center", "Others"],
                     annualTurnoverRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
-                    regions: ["North India", "South India", "East India", "West India", "Pan India"],
+                    regions: ["North India", "South India", "East India", "West India", "Pan India", "Global"],
                     supplierTypes: ["Manufacturer", "Exporter", "MSME", "Startup", "Wholesaler"],
                     purchaseTimelines: ["Immediate", "1–3 Months", "3–6 Months", "Exploring"],
                     roles: ["Final Decision Maker", "Influencer", "Research Only"],
@@ -127,15 +131,30 @@ class BuyerRegistrationConfigController {
                     annualPurchaseValueRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
                     primaryProductInterests: ["Ayurveda", "Organic", "Wellness", "Pharma", "Cosmetics"],
                     budgetRanges: ["< 5 Lakhs", "5 - 10 Lakhs", "10 - 25 Lakhs", "25 - 50 Lakhs", "> 50 Lakhs"],
+                    purchaseFrequencyOptions: ["Regular (Monthly Procurement)", "Seasonal Buying", "One-Time Bulk Purchase", "Exploring Opportunities"],
+                    businessModelOptions: ["Private Label / White Label", "Bulk Purchase", "Exclusive Distribution", "Franchise Opportunity", "OEM Manufacturing"],
+                    meetingCategoryOptions: ["Ayurveda & Herbal", "Organic Food & Beverages", "Nutraceuticals & Supplements", "Fitness Equipment", "Beauty & Cosmetics", "Skincare", "Medical Devices", "Wellness Services", "Spa & Salon", "HealthTech", "Others (Specify)"],
+                    meetingDayOptions: ["Day 1", "Day 2", "Day 3", "Flexible"],
+                    exhibitorTypeOptions: ["Manufacturer", "Brand Owner", "Distributor", "Exporter", "Startup / Innovator"],
                     companySizes: ["Small", "Medium", "Large"],
                     certificationOptions: ["ISO", "GMP", "FDA", "AYUSH", "Organic", "Others"],
+                    numberOfMeetingsOptions: ["3–5 Meetings", "5–10 Meetings", "10+ Meetings"],
+                    meetingObjectiveOptions: ["Product Sourcing", "Partnership / Collaboration", "Distribution Opportunities", "Private Label / OEM", "Investment / Business Expansion"],
+                    preferredBusinessTypeOptions: ["Bulk Purchase", "Private Label", "Franchise", "Exclusive Distribution"],
                     packages: defaultPackages
                 });
                 await config.save();
             } else {
-                // Migration: Force update packages to include new full data
-                config.packages = defaultPackages;
-                
+                // Migration: Ensure packages exist if missing
+                if (!config.packages || config.packages.length === 0) {
+                    config.packages = defaultPackages;
+                }
+
+                // Ensure "Global" is added to existing configs if missing
+                if (config.regions && !config.regions.includes("Global")) {
+                    config.regions.push("Global");
+                }
+
                 if (!config.primaryProductInterests || config.primaryProductInterests.length === 0) {
                     config.primaryProductInterests = ["Ayurveda", "Organic", "Wellness", "Pharma", "Cosmetics"];
                 }
@@ -148,23 +167,49 @@ class BuyerRegistrationConfigController {
                 if (!config.budgetRanges || config.budgetRanges.length === 0) {
                     config.budgetRanges = ["< 5 Lakhs", "5 - 10 Lakhs", "10 - 25 Lakhs", "25 - 50 Lakhs", "> 50 Lakhs"];
                 }
+                if (!config.purchaseFrequencyOptions || config.purchaseFrequencyOptions.length === 0) {
+                    config.purchaseFrequencyOptions = ["Regular (Monthly Procurement)", "Seasonal Buying", "One-Time Bulk Purchase", "Exploring Opportunities"];
+                }
+                if (!config.businessModelOptions || config.businessModelOptions.length === 0) {
+                    config.businessModelOptions = ["Private Label / White Label", "Bulk Purchase", "Exclusive Distribution", "Franchise Opportunity", "OEM Manufacturing"];
+                }
+                if (!config.meetingCategoryOptions || config.meetingCategoryOptions.length === 0) {
+                    config.meetingCategoryOptions = ["Ayurveda & Herbal", "Organic Food & Beverages", "Nutraceuticals & Supplements", "Fitness Equipment", "Beauty & Cosmetics", "Skincare", "Medical Devices", "Wellness Services", "Spa & Salon", "HealthTech", "Others (Specify)"];
+                }
+                if (!config.meetingDayOptions || config.meetingDayOptions.length === 0) {
+                    config.meetingDayOptions = ["Day 1", "Day 2", "Day 3", "Flexible"];
+                }
+                if (!config.exhibitorTypeOptions || config.exhibitorTypeOptions.length === 0) {
+                    config.exhibitorTypeOptions = ["Manufacturer", "Brand Owner", "Distributor", "Exporter", "Startup / Innovator"];
+                }
                 if (!config.companySizes || config.companySizes.length === 0) {
                     config.companySizes = ["Small", "Medium", "Large"];
                 }
                 if (!config.certificationOptions || config.certificationOptions.length === 0) {
                     config.certificationOptions = ["ISO", "GMP", "FDA", "AYUSH", "Organic", "Others"];
                 }
+                if (!config.numberOfMeetingsOptions || config.numberOfMeetingsOptions.length === 0) {
+                    config.numberOfMeetingsOptions = ["3–5 Meetings", "5–10 Meetings", "10+ Meetings"];
+                }
+                if (!config.meetingObjectiveOptions || config.meetingObjectiveOptions.length === 0) {
+                    config.meetingObjectiveOptions = ["Product Sourcing", "Partnership / Collaboration", "Distribution Opportunities", "Private Label / OEM", "Investment / Business Expansion"];
+                }
+                if (!config.preferredBusinessTypeOptions || config.preferredBusinessTypeOptions.length === 0) {
+                    config.preferredBusinessTypeOptions = ["Bulk Purchase", "Private Label", "Franchise", "Exclusive Distribution"];
+                }
                 await config.save();
             }
 
-            res.json({ success: true, data: {
-                ...config.toObject(),
-                companyTypes: bizTypes.length > 0 ? bizTypes.map(b => b.business_type) : config.companyTypes,
-                annualTurnoverRanges: annualTurnovers.length > 0 ? annualTurnovers.map(a => a.annual_turnover) : config.annualTurnoverRanges,
-                primaryProductInterests: primaryProducts.length > 0 ? primaryProducts.map(p => p.primary_product_interest) : config.primaryProductInterests,
-                secondaryProductCategories: secondaryProducts.length > 0 ? secondaryProducts.map(s => s.secondary_product_categories) : config.secondaryProductCategories,
-                meetingPriorityLevels: meetingPriorities.length > 0 ? meetingPriorities.map(m => m.meeting_priority_level) : ['Low', 'Medium', 'High']
-            } });
+            res.json({
+                success: true, data: {
+                    ...config.toObject(),
+                    companyTypes: bizTypes.length > 0 ? bizTypes.map(b => b.business_type) : config.companyTypes,
+                    annualTurnoverRanges: annualTurnovers.length > 0 ? annualTurnovers.map(a => a.annual_turnover) : config.annualTurnoverRanges,
+                    primaryProductInterests: primaryProducts.length > 0 ? primaryProducts.map(p => p.primary_product_interest) : config.primaryProductInterests,
+                    secondaryProductCategories: secondaryProducts.length > 0 ? secondaryProducts.map(s => s.secondary_product_categories) : config.secondaryProductCategories,
+                    meetingPriorityLevels: meetingPriorities.length > 0 ? meetingPriorities.map(m => m.meeting_priority_level) : ['Low', 'Medium', 'High']
+                }
+            });
         } catch (err) {
             console.error('Error fetching buyer registration config:', err);
             res.status(500).json({ success: false, message: 'Server Error' });
@@ -181,7 +226,7 @@ class BuyerRegistrationConfigController {
                 config = new BuyerRegistrationConfig(req.body);
             } else {
                 // Update fields
-                const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, budgetRanges, companySizes, certificationOptions, packages, lastUpdatedBy } = req.body;
+                const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, budgetRanges, purchaseFrequencyOptions, businessModelOptions, meetingCategoryOptions, meetingDayOptions, exhibitorTypeOptions, companySizes, certificationOptions, numberOfMeetingsOptions, meetingObjectiveOptions, preferredBusinessTypeOptions, packages, lastUpdatedBy } = req.body;
                 if (companyTypes) config.companyTypes = companyTypes;
                 if (annualTurnoverRanges) config.annualTurnoverRanges = annualTurnoverRanges;
                 if (regions) config.regions = regions;
@@ -193,8 +238,16 @@ class BuyerRegistrationConfigController {
                 if (annualPurchaseValueRanges) config.annualPurchaseValueRanges = annualPurchaseValueRanges;
                 if (primaryProductInterests) config.primaryProductInterests = primaryProductInterests;
                 if (budgetRanges) config.budgetRanges = budgetRanges;
+                if (purchaseFrequencyOptions) config.purchaseFrequencyOptions = purchaseFrequencyOptions;
+                if (businessModelOptions) config.businessModelOptions = businessModelOptions;
+                if (meetingCategoryOptions) config.meetingCategoryOptions = meetingCategoryOptions;
+                if (meetingDayOptions) config.meetingDayOptions = meetingDayOptions;
+                if (exhibitorTypeOptions) config.exhibitorTypeOptions = exhibitorTypeOptions;
                 if (companySizes) config.companySizes = companySizes;
                 if (certificationOptions) config.certificationOptions = certificationOptions;
+                if (numberOfMeetingsOptions) config.numberOfMeetingsOptions = numberOfMeetingsOptions;
+                if (meetingObjectiveOptions) config.meetingObjectiveOptions = meetingObjectiveOptions;
+                if (preferredBusinessTypeOptions) config.preferredBusinessTypeOptions = preferredBusinessTypeOptions;
                 if (packages) config.packages = packages;
                 config.lastUpdatedBy = lastUpdatedBy || null;
             }

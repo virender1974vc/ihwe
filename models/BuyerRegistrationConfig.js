@@ -5,11 +5,13 @@ const PackageBenefitSchema = new mongoose.Schema({
     price: { type: Number, required: true },
     category: { type: String, default: 'Pass' }, // 'Pass' or 'Membership'
     targetAudience: { type: String }, // e.g., "For Serious Buyers & Decision Makers"
+    tagline: { type: String }, // e.g., "For Emerging Buyers & Business Explorers"
     description: { type: String },
     whyChoose: { type: String },
     isRecommended: { type: Boolean, default: false },
     badge: { type: String }, // e.g., "Best Value", "Recommended"
     cta: { type: String, default: "Select" }, // e.g., "Become a Member", "Get Membership"
+    color: { type: String, default: "blue" }, // e.g., "blue", "yellow", "green", "red"
     benefits: [{ type: String }]
 });
 
@@ -25,8 +27,16 @@ const BuyerRegistrationConfigSchema = new mongoose.Schema({
     annualPurchaseValueRanges: [{ type: String }],
     primaryProductInterests: [{ type: String }],
     budgetRanges: [{ type: String }],
+    purchaseFrequencyOptions: [{ type: String }],
+    businessModelOptions: [{ type: String }],
+    meetingCategoryOptions: [{ type: String }],
+    meetingDayOptions: [{ type: String }],
+    exhibitorTypeOptions: [{ type: String }],
     companySizes: [{ type: String }],
     certificationOptions: [{ type: String }],
+    numberOfMeetingsOptions: [{ type: String }],
+    meetingObjectiveOptions: [{ type: String }],
+    preferredBusinessTypeOptions: [{ type: String }],
     packages: [PackageBenefitSchema],
     lastUpdatedBy: { type: String, default: null }
 }, { timestamps: true });

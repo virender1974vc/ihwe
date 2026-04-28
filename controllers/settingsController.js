@@ -22,7 +22,13 @@ class SettingsController {
      */
     async updateSettings(req, res) {
         try {
-            const { emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, quickLinks, exhibitionLinks } = req.body;
+            const { 
+                emails, phones, addresses, mapIframe, marqueeText, topbarDate, 
+                supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, 
+                quickLinks, exhibitionLinks,
+                companyName, companyAddress, companyGst, companyCin, 
+                fullPaymentDiscount, availableTdsRates
+            } = req.body;
             
             const updateData = {
                 emails: emails ? JSON.parse(emails) : undefined,
@@ -30,12 +36,18 @@ class SettingsController {
                 addresses: addresses ? JSON.parse(addresses) : undefined,
                 quickLinks: quickLinks ? JSON.parse(quickLinks) : undefined,
                 exhibitionLinks: exhibitionLinks ? JSON.parse(exhibitionLinks) : undefined,
+                availableTdsRates: availableTdsRates ? (typeof availableTdsRates === 'string' ? JSON.parse(availableTdsRates) : availableTdsRates) : undefined,
                 mapIframe,
                 marqueeText,
                 topbarDate,
                 supportDeskText,
+                companyName,
+                companyAddress,
+                companyGst,
+                companyCin,
                 onlineAdvancePercentage: onlineAdvancePercentage ? Number(onlineAdvancePercentage) : undefined,
-                manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined
+                manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
+                fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined
             };
 
             if (req.files) {
@@ -44,6 +56,12 @@ class SettingsController {
                 }
                 if (req.files.exhibitorBrochurePdf) {
                     updateData.exhibitorBrochurePdf = `/uploads/settings/${req.files.exhibitorBrochurePdf[0].filename}`;
+                }
+                if (req.files.authorizedSignature) {
+                    updateData.authorizedSignature = `/uploads/settings/${req.files.authorizedSignature[0].filename}`;
+                }
+                if (req.files.companyStamp) {
+                    updateData.companyStamp = `/uploads/settings/${req.files.companyStamp[0].filename}`;
                 }
             }
 

@@ -56,19 +56,35 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     otherSector: String,
     referredBy: {
         type: String,
-        default: null // Name of marketing person
+        default: null
     },
     spokenWith: {
         type: String,
-        default: null // Name of staff who spoke with them
+        default: null
     },
     filledBy: {
         type: String,
-        default: 'User' // Name of admin/employee or 'User'
+        default: 'User'
     },
     status: { type: String, enum: ['pending', 'approved', 'rejected', 'paid', 'advance-paid', 'confirmed', 'payment-failed'], default: 'pending' },
     paymentMode: { type: String, enum: ['manual', 'online'], default: 'manual' },
-    paymentType: { type: String, enum: ['advance', 'full'], default: 'full' },
+    paymentType: { type: String, default: 'full' },
+    paymentPlanType: { type: String, default: 'full' },
+    paymentPlanLabel: { type: String, default: 'Full Payment' },
+    chosenTdsPercent: { type: Number, default: 0 }, // 0, 1, 2, 10
+    financeBreakdown: {
+        grossAmount: { type: Number, default: 0 },          // gross cost after PL increment, before any discount
+        stallDiscountPercent: { type: Number, default: 0 }, // stall-specific discount %
+        stallDiscountAmount: { type: Number, default: 0 },  // stall-specific discount amount
+        subtotal1: { type: Number, default: 0 },            // after stall discount
+        discountPercent: { type: Number, default: 0 },      // full payment discount %
+        discountAmount: { type: Number, default: 0 },       // full payment discount amount
+        subtotal: { type: Number, default: 0 },             // taxable value (pre-GST, pre-TDS)
+        gstAmount: { type: Number, default: 0 },            // GST 18% on subtotal
+        tdsPercent: { type: Number, default: 0 },           // TDS % chosen
+        tdsAmount: { type: Number, default: 0 },            // TDS on subtotal (not on GST)
+        netPayable: { type: Number, default: 0 }            // subtotal + GST - TDS (cash buyer pays)
+    },
     amountPaid: { type: Number, default: 0 },
     balanceAmount: { type: Number, default: 0 },
     paymentId: String,
@@ -85,21 +101,19 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         transactionId: String,
         razorpayPaymentId: String,
         notes: String,
-        paidAt: { type: Date, default: Date.now }
+        paidAt: { type: Date, default: Date.now },
+        receiptPdfUrl: String
     }],
     manualPaymentDetails: {
         method: { type: String, enum: ['Cash', 'Bank Transfer', 'Cheque', 'UPI', 'DD', 'Other', 'Online'], default: 'Online' },
         transactionId: String,
         notes: String,
-        advancePercent: { type: Number, default: 100 }, // 100 = Full payment, < 100 = Advance
+        advancePercent: { type: Number, default: 100 },
         updatedAt: Date
     },
-    // Vendor Login Credentials
     password: { type: String, select: false },
     otp: { type: String, select: false },
     otpExpiry: { type: Date, select: false },
-
-    // MSME Details
     msme: {
         udyamRegNo: String,
         udyamMobileNo: String,

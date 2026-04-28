@@ -31,7 +31,7 @@ class OtpController {
             if (type === 'email') {
                 await emailService.sendOtpEmail(identifier, otpCode, name || 'Buyer', 'BUYER');
             } else if (type === 'phone') {
-                await whatsapp.sendWhatsAppOTP(identifier, otpCode, 'BUYER');
+                await whatsapp.sendWhatsAppOTP(identifier, otpCode, 'BUYER', name || 'Buyer');
             }
 
             res.json({ success: true, message: `OTP sent to ${identifier}` });

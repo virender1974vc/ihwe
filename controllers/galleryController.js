@@ -58,6 +58,20 @@ class GalleryController {
     }
 
     /**
+     * Delete gallery items by title.
+     */
+    async deleteByTitle(req, res) {
+        try {
+            const { title } = req.params;
+            await galleryService.deleteByTitle(title);
+            await logActivity(req, 'Deleted', 'Gallery', `Deleted grouped gallery with title: ${title}`);
+            res.json({ success: true, message: "Gallery grouped items deleted successfully" });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
      * Handle file upload.
      */
     async uploadFile(req, res) {

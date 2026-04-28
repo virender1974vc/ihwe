@@ -8,6 +8,7 @@ const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInteres
 const { getSimpleVisitorAlertTemplate } = require('./emailTemplates/simpleVisitorAlert');
 const { getExhibitorAdminAlertTemplate } = require('./emailTemplates/exhibitorAdminAlert');
 const { getBuyerRegistrationAlertTemplate } = require('./emailTemplates/buyerRegistrationAlert');
+const { getInternationalBuyerRegistrationAlertTemplate } = require('./emailTemplates/internationalBuyerRegistrationAlert');
 
 class EmailService {
     constructor() {
@@ -96,9 +97,20 @@ class EmailService {
                     </td>
                    </tr>`
                 : `<tr>
-                    <td align="center" style="background-color: #23471d; padding: 50px 40px 40px; color: #ffffff;">
-                        <h1 style="margin:0; font-size: 26px; font-family: Arial, Helvetica, sans-serif; color: #ffffff; font-weight: bold;">9th International Health & Wellness Expo</h1>
-                        <p style="margin:10px 0 0; font-size: 16px; color: #ffffff; font-family: Arial, Helvetica, sans-serif;">Global Health Connect | IHWE 2026</p>
+                    <td align="center" bgcolor="#23471d" style="background-color: #23471d; padding: 50px 40px 15px 10px;">
+                        <!--[if gte mso 9]>
+                        <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:800px;height:60px;">
+                        <v:fill type="solid" color="#23471d" />
+                        <v:textbox inset="0,0,0,0">
+                        <![endif]-->
+                        <div>
+                            <h1 style="margin:0; padding:0; font-size: 18px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #ffffff; font-weight: 600; text-align: center; line-height: 1.1;">9th International Health & Wellness Expo</h1>
+                            <p style="margin:3px 0 0; padding:0; font-size: 12px; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; line-height: 1.1; opacity: 0.9;">Global Health Connect | IHWE 2026</p>
+                        </div>
+                        <!--[if gte mso 9]>
+                        </v:textbox>
+                        </v:rect>
+                        <![endif]-->
                     </td>
                    </tr>`;
 
@@ -109,9 +121,9 @@ class EmailService {
                     </td>
                    </tr>`
                 : `<tr>
-                    <td align="center" style="background: #f9fafb; padding: 30px; border-top: 1px solid #f3f4f6;">
-                        <p style="margin:0; font-size: 14px; color: #6b7280; font-family: Arial, sans-serif;">&copy; 2026 IHWE | Global Health Connect. All rights reserved.</p>
-                        <p style="margin:5px 0 0; font-size: 12px; color: #9ca3af; font-family: Arial, sans-serif;">Namo Gange Trust Foundation</p>
+                    <td align="center" style="background: #f9fafb; padding: 20px; border-top: 1px solid #e5e7eb;">
+                        <p style="margin:0; font-size: 13px; color: #6b7280; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">&copy; 2026 IHWE. All Rights Reserved.</p>
+                        <p style="margin:3px 0 0; font-size: 12px; color: #9ca3af; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
                     </td>
                    </tr>`;
 
@@ -270,7 +282,9 @@ class EmailService {
             'COMPANY': data.companyName || data.company || data.organization || data.organizationName || 'N/A',
             'CATEGORY': data.category || data.registrationCategory || 'N/A',
             'EMAIL': data.email || data.officialEmail || 'N/A',
-            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || 'N/A',
+            'PHONE': data.phone || data.mobileNo || data.mobile || data.whatsapp || data.mobileNumber || 'N/A',
+            'MOBILE': data.mobile || data.phone || data.whatsapp || data.mobileNumber || 'N/A',
+            'MOBILE_NUMBER': data.mobileNumber || data.mobile || data.phone || 'N/A',
             'EXHIBITOR_NAME': data.exhibitor_name || data.exhibitorName || data.name || 'N/A',
             'STALL_NO': data.stall_no || data.stallNo || data.stallFor || 'N/A',
             'LOGIN_URL': data.login_url || 'https://ihwe.in/exhibitor-login',
@@ -315,6 +329,15 @@ class EmailService {
             if (!template) {
                 console.warn('No dynamic template found for ' + formType + '. Falling back to logic-based default.');
                 return false;
+            }
+            if (formType.startsWith('exhibitor-') && formType !== 'exhibitor-registration') {
+                if (!template.headerImage || !template.footerImage) {
+                    const mainExTemplate = await this.getTemplate('exhibitor-registration');
+                    if (mainExTemplate) {
+                        if (!template.headerImage) template.headerImage = mainExTemplate.headerImage;
+                        if (!template.footerImage) template.footerImage = mainExTemplate.footerImage;
+                    }
+                }
             }
 
             const subject = this.applyPlaceholders(template.emailSubject, data);
@@ -405,7 +428,7 @@ class EmailService {
             });
 
             // 2. Send WhatsApp to USER (if available)
-            const mobile = data.mobile || data.phone || data.whatsapp;
+            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
             if (mobile && whatsappContent) {
                 whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Dynamic: ${formType}`).catch(err => {
                     console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
@@ -611,7 +634,7 @@ class EmailService {
             });
 
             // 2. Send WhatsApp to USER (if available)
-            const mobile = data.mobile || data.phone || data.whatsapp;
+            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
             if (mobile && whatsappContent) {
                 whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Visitor: ${formType}`).catch(err => {
                     console.error(`[WhatsApp] Failed to send msg for ${formType}:`, err.message);
@@ -910,6 +933,49 @@ class EmailService {
         }
     }
 
+    async sendDetailedInternationalBuyerNotification(data) {
+        try {
+            const subject = `NEW INTL BUYER REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId}`;
+            const html = getInternationalBuyerRegistrationAlertTemplate(data);
+            const recipientEmail = process.env.INTERNATIONAL_BUYER_ADMIN_EMAIL || process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
+
+            await this.sendEmail({
+                to: recipientEmail,
+                subject,
+                html,
+                profile: 'DEFAULT',
+                logData: {
+                    name: data.brandName,
+                    phone: data.primaryContact?.mobileNumber,
+                    message: 'Admin International Buyer Alert'
+                }
+            });
+
+            console.log(`[AdminIntlBuyerAlert] Sent to ${recipientEmail} for ${data.registrationId}`);
+            return true;
+        } catch (error) {
+            console.error('Error sending detailed international buyer notification:', error);
+            return false;
+        }
+    }
+
+    async sendInternationalBuyerRegistrationEmails(data) {
+        return await this.sendDynamicConfirmation({
+            to: data.primaryContact?.emailId,
+            formType: 'buyer-registration', // Reusing buyer template for now as requested "jase buyer ma jara ha"
+            data: {
+                name: data.primaryContact?.fullName,
+                company: data.brandName,
+                email: data.primaryContact?.emailId,
+                phone: data.primaryContact?.mobileNumber,
+                city: data.city,
+                country: data.country,
+                registrationId: data.registrationId
+            },
+            profile: 'DEFAULT'
+        });
+    }
+
     async sendSpeakerNominationEmails(nomination) {
         return await this.sendDynamicConfirmation({
             to: nomination.email,
@@ -1071,12 +1137,12 @@ class EmailService {
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             stall_type: registration.participation?.stallType || 'N/A',
-            total_amount: fmt(registration.participation?.total),
+            total_amount: fmt((registration.financeBreakdown || {}).netPayable || registration.participation?.total),
             amount_paid: fmt(registration.amountPaid),
             balance_due: fmt(registration.balanceAmount),
             payment_mode: registration.paymentMode || 'N/A',
-            payment_method: registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
-            transaction_id: registration.paymentId || registration.manualPaymentDetails?.transactionId || 'N/A',
+            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'); })(),
+            transaction_id: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && (l.transactionId || l.razorpayPaymentId)) || registration.manualPaymentDetails?.transactionId || registration.paymentId || 'N/A'; })(),
             stall_scheme: registration.participation?.stallScheme || 'N/A',
             stall_dimension: registration.participation?.dimension || 'N/A',
             stall_size: registration.participation?.stallSize || 'N/A',
@@ -1102,11 +1168,15 @@ class EmailService {
 
     async sendApprovalEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
             formType: 'exhibitor-registration-approved',
             data: {
                 exhibitor_name: registration.exhibitorName,
+                contact_person: contactPerson,
+                contact1FirstName: registration.contact1.firstName,
+                name: contactPerson,
                 stall_no: registration.participation?.stallFor || 'N/A',
                 event_name: registration.eventId?.name || 'IHWE 2026',
                 registrationId: registration.registrationId,
@@ -1123,16 +1193,19 @@ class EmailService {
 
     async sendConfirmationEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
 
         const data = {
             exhibitor_name: registration.exhibitorName,
-            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
-            designation: registration.contact1.designation || 'N/A',
+            contact_person: contactPerson,
+            contact1FirstName: registration.contact1.firstName,
+            name: contactPerson,
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             stall_type: registration.participation?.stallType || 'N/A',
             event_name: registration.eventId?.name || 'IHWE 2026',
             login_url: loginUrl,
+            phone: registration.contact1.mobile
         };
 
         return await this.sendDynamicConfirmation({
@@ -1144,12 +1217,15 @@ class EmailService {
     }
 
     async sendRejectionEmail(registration) {
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
         const data = {
             exhibitor_name: registration.exhibitorName,
-            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
-            designation: registration.contact1.designation || 'N/A',
+            contact_person: contactPerson,
+            contact1FirstName: registration.contact1.firstName,
+            name: contactPerson,
             registrationId: registration.registrationId,
             event_name: 'IHWE 2026',
+            phone: registration.contact1.mobile
         };
 
         return await this.sendDynamicConfirmation({
@@ -1162,12 +1238,16 @@ class EmailService {
 
     async sendPaymentFailedEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
+        const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
         const data = {
             exhibitor_name: registration.exhibitorName,
-            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            contact_person: contactPerson,
+            contact1FirstName: registration.contact1.firstName,
+            name: contactPerson,
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             login_url: loginUrl,
+            phone: registration.contact1.mobile
         };
         return await this.sendDynamicConfirmation({
             to: registration.contact1.email,
@@ -1181,32 +1261,39 @@ class EmailService {
         let contextTitle = 'Registration';
         let contextDescription = 'registering';
         let dashboardText = 'IHWE Portal';
+        let contextGreeting = 'User';
         if (context === 'BUYER' || context.includes('buyer')) {
             contextTitle = 'Buyer Registration';
             contextDescription = 'registering as a Buyer';
             dashboardText = 'IHWE Buyer Dashboard';
+            contextGreeting = 'Buyer';
         } else if (context === 'EXHIBITOR' || context.includes('exhibitor')) {
             contextTitle = 'Exhibitor Registration';
             contextDescription = 'registering as an Exhibitor';
             dashboardText = 'IHWE Exhibitor Dashboard';
+            contextGreeting = 'Exhibitor';
         } else if (context === 'VISITOR' || context.includes('visitor')) {
             contextTitle = 'Visitor Registration';
             contextDescription = 'registering as a Visitor';
             dashboardText = 'IHWE Visitor Portal';
+            contextGreeting = 'Visitor';
         } else if (context === 'DELEGATE' || context.includes('delegate')) {
             contextTitle = 'Delegate Registration';
             contextDescription = 'registering as a Delegate';
             dashboardText = 'IHWE Delegate Portal';
+            contextGreeting = 'Delegate';
         } else if (context === 'SELLER' || context.includes('seller')) {
             contextTitle = 'Seller Registration';
             contextDescription = 'registering as a Seller';
             dashboardText = 'IHWE Seller Dashboard';
+            contextGreeting = 'Seller';
         }
 
         const subject = `IHWE ${contextTitle} – Email Verification OTP`;
         const html = this.emailShell(`
             <div style="text-align: left; max-width: 600px; margin: 0 auto; color: #333;">
-                <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Hello <strong>${name}</strong>,</p>
+                <p style="margin-bottom: 8px; font-size: 15px; line-height: 1.6; font-weight: 600;">Namo Gange Namaskar!</p>
+                <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Dear ${contextGreeting},</p>
                 
                 <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
                     Thank you for ${contextDescription} for the <strong>International Health & Wellness Expo (IHWE)</strong>.
@@ -1217,7 +1304,6 @@ class EmailService {
                 </p>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">🔐</p>
                     <div style="font-size: 42px; font-weight: 800; color: #d26019; letter-spacing: 10px; font-family: 'Courier New', monospace; line-height: 1.2;">${otp}</div>
                 </div>
                 
@@ -1242,11 +1328,6 @@ class EmailService {
                     <p style="margin: 5px 0; font-size: 15px; color: #23471d; font-weight: 700;">Team IHWE</p>
                     <p style="margin: 5px 0; font-size: 13px; color: #6b7280;">International Health & Wellness Expo</p>
                     <p style="margin: 5px 0 0 0; font-size: 12px; color: #9ca3af; font-style: italic;">Global Health Connect</p>
-                </div>
-                
-                <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center;">
-                    <p style="margin: 0 0 5px 0; font-size: 11px; color: #6b7280;">© 2026 IHWE. All Rights Reserved.</p>
-                    <p style="margin: 0; font-size: 10px; color: #9ca3af;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
                 </div>
             </div>
         `);
@@ -1314,3 +1395,4 @@ class EmailService {
 }
 
 module.exports = new EmailService();
+

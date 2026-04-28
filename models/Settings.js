@@ -66,6 +66,39 @@ const settingsSchema = new mongoose.Schema({
     exhibitorBrochurePdf: {
         type: String,
         default: ""
+    },
+    // --- Corporate & Financial Settings (New) ---
+    companyName: {
+        type: String,
+        default: "Namo Gange Wellness Pvt. Ltd."
+    },
+    companyAddress: {
+        type: String,
+        default: "12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India"
+    },
+    companyGst: {
+        type: String,
+        default: ""
+    },
+    companyCin: {
+        type: String,
+        default: ""
+    },
+    authorizedSignature: {
+        type: String,
+        default: ""
+    },
+    companyStamp: {
+        type: String,
+        default: ""
+    },
+    fullPaymentDiscount: {
+        type: Number,
+        default: 5
+    },
+    availableTdsRates: {
+        type: [Number],
+        default: [1, 2, 10]
     }
 }, { timestamps: true });
 

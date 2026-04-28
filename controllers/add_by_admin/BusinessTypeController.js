@@ -44,7 +44,7 @@ const createBusinessType = async (req, res) => {
     }
 };
 
-// UPDATE
+
 const updateBusinessType = async (req, res) => {
     try {
         const updates = req.body || {};

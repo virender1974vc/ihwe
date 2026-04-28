@@ -10,14 +10,6 @@ const eventSchema = new mongoose.Schema({
     startDate: Date,
     endDate: Date,
     location: String,
-    onlineAdvancePercentage: { 
-        type: Number, 
-        default: 50 
-    },
-    manualAdvancePercentage: { 
-        type: Number, 
-        default: 50 
-    },
     status: { 
         type: String, 
         enum: ['active', 'inactive'], 
@@ -42,7 +34,13 @@ const eventSchema = new mongoose.Schema({
     order: {
         type: Number,
         default: 0
-    }
+    },
+    paymentPlans: [{
+        id: String,
+        label: String,
+        percentage: Number,
+        isDefault: { type: Boolean, default: false }
+    }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Event', eventSchema);
