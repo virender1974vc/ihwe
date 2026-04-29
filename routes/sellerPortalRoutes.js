@@ -1,7 +1,23 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const sellerPortalController = require('../controllers/sellerPortalController');
 const { protectExhibitor } = require('../middleware/auth');
+
+// ── Multer for document uploads ───────────────────────────────────────────────
+const docStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, '../uploads/seller-docs');
+        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `doc-${Date.now()}${path.extname(file.originalname)}`);
+    }
+});
+const uploadDoc = multer({ storage: docStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // ── Admin routes (no exhibitor auth needed) ───────────────────────────────────
 router.get('/admin/service-requests', async (req, res) => {
@@ -151,7 +167,7 @@ router.post('/leads/:leadId/convert-opportunity', sellerPortalController.convert
 
 // Profile Management
 router.get('/product-categories', sellerPortalController.getProductCategories);
-router.post('/upload-document', sellerPortalController.uploadDocument);
+router.post('/upload-document', uploadDoc.single('file'), sellerPortalController.uploadDocument);
 router.put('/update-profile', sellerPortalController.updateSellerProfile);
 
 // Meeting Stats

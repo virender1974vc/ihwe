@@ -224,6 +224,8 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     kycStatus: { type: String, enum: ['pending', 'approved', 'rejected', 'reupload'], default: 'pending' },
     verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
     documentStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+    paymentVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
+    bankVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
     specialDocuments: [{
         label: String,
         url: String,
