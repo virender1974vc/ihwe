@@ -12,8 +12,54 @@ function getTempPdfUrl(filePath) {
     return `${backendUrl}/temp/${fileName}`;
 }
 
-const HEADER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '1776243243412-WhatsApp-Image-2026-04-15-at-12.00.08-PM.jpeg');
-const FOOTER_IMG = path.join(__dirname, '..', 'uploads', 'email-templates', '1776243243418-WhatsApp-Image-2026-04-15-at-12.00.27-PM.jpeg');
+// Resolve header/footer image paths dynamically from Settings, with hardcoded filenames as fallback
+async function resolveHeaderFooterPaths(optionsHeaderImage, optionsFooterImage) {
+    // If caller already passed explicit paths, use them
+    if (optionsHeaderImage && fs.existsSync(optionsHeaderImage)) {
+        return { headerPath: optionsHeaderImage, footerPath: optionsFooterImage || null };
+    }
+
+    // Try to load from Settings model (emailTemplateHeader / emailTemplateFooter fields)
+    try {
+        const settings = await Settings.findOne().lean();
+        const uploadsBase = path.join(__dirname, '..');
+
+        let headerPath = null;
+        let footerPath = null;
+
+        // Settings may store relative paths like /uploads/email-templates/filename.jpg
+        if (settings?.emailTemplateHeader) {
+            const rel = settings.emailTemplateHeader.replace(/^\//, '');
+            const candidate = path.join(uploadsBase, rel);
+            if (fs.existsSync(candidate)) headerPath = candidate;
+        }
+        if (settings?.emailTemplateFooter) {
+            const rel = settings.emailTemplateFooter.replace(/^\//, '');
+            const candidate = path.join(uploadsBase, rel);
+            if (fs.existsSync(candidate)) footerPath = candidate;
+        }
+
+        // Fallback: scan uploads/email-templates for any jpeg/jpg/png files
+        if (!headerPath || !footerPath) {
+            const emailTemplatesDir = path.join(uploadsBase, 'uploads', 'email-templates');
+            if (fs.existsSync(emailTemplatesDir)) {
+                const files = fs.readdirSync(emailTemplatesDir)
+                    .filter(f => /\.(jpg|jpeg|png)$/i.test(f))
+                    .sort();
+                if (!headerPath && files.length > 0) {
+                    headerPath = path.join(emailTemplatesDir, files[0]);
+                }
+                if (!footerPath && files.length > 1) {
+                    footerPath = path.join(emailTemplatesDir, files[files.length - 1]);
+                }
+            }
+        }
+
+        return { headerPath, footerPath };
+    } catch (e) {
+        return { headerPath: null, footerPath: null };
+    }
+}
 
 const GREEN = '#23471d';
 const GREEN_DEEP = '#1a3a14';
@@ -27,10 +73,10 @@ const WHITE = '#ffffff';
 
 class PDFGenerator {
     _headerImg(doc, customPath, isReceipt = false) {
-        const headerPath = customPath || HEADER_IMG;
+        const headerPath = customPath || null;
         const topPadding = 10;
         const sidePadding = isReceipt ? 0 : 40;
-        if (fs.existsSync(headerPath)) {
+        if (headerPath && fs.existsSync(headerPath)) {
             const imgW = doc.page.width - (sidePadding * 2);
             try {
                 const img = doc.openImage(headerPath);
@@ -53,8 +99,8 @@ class PDFGenerator {
     _footerImg(doc, customPath) {
         const pageH = doc.page.height;
         const pageW = doc.page.width;
-        const footerPath = customPath || FOOTER_IMG;
-        if (fs.existsSync(footerPath)) {
+        const footerPath = customPath || null;
+        if (footerPath && fs.existsSync(footerPath)) {
             const fH = 70;
             doc.image(footerPath, 0, pageH - fH, { width: pageW });
         } else {
@@ -92,6 +138,12 @@ class PDFGenerator {
     async generateRegistrationForm(registration, options = {}) {
         return new Promise(async (resolve, reject) => {
             try {
+                // Resolve header/footer images dynamically
+                const { headerPath, footerPath } = await resolveHeaderFooterPaths(
+                    options.headerImage,
+                    options.footerImage
+                );
+
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
                 const filePath = path.join(TEMP_DIR, `registration_${registration._id}.pdf`);
                 const stream = fs.createWriteStream(filePath);
@@ -104,7 +156,7 @@ class PDFGenerator {
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
 
                 // ── Header image ──
-                this._headerImg(doc, options.headerImage);
+                this._headerImg(doc, headerPath);
                 let y = doc.y;
 
                 // ── Document title strip ──
@@ -140,7 +192,7 @@ class PDFGenerator {
 
                 doc.text(`GST: ${settings?.companyGst || 'N/A'}`, lx + 8, currentLeftY, { width: colW - 16 });
                 doc.text(`CIN: ${settings?.companyCin || 'N/A'}`, lx + 8, currentLeftY + 12, { width: colW - 16 });
-                doc.text('info@ihwe.in  |  www.ihwe.in', lx + 8, currentLeftY + 24, { width: colW - 16 });
+                doc.text('info@namogangewellness.com  |  www.ihwe.in', lx + 8, currentLeftY + 24, { width: colW - 16 });
 
                 // Right box - Client / TO
                 doc.rect(rx, y, colW, 125).lineWidth(0.5).stroke('#e5e7eb');
@@ -309,6 +361,12 @@ class PDFGenerator {
     async generatePaymentSlip(registration, options = {}) {
         return new Promise(async (resolve, reject) => {
             try {
+                // Resolve header/footer images dynamically
+                const { headerPath, footerPath } = await resolveHeaderFooterPaths(
+                    options.headerImage,
+                    options.footerImage
+                );
+
                 const settings = await Settings.findOne();
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
                 const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
@@ -341,9 +399,9 @@ class PDFGenerator {
                     await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
                 }
 
-                this._headerImg(doc, options.headerImage);
+                this._headerImg(doc, headerPath);
                 let y = doc.y;
-                const hasCustomHeader = !!options.headerImage;
+                const hasCustomHeader = !!headerPath;
                 if (!hasCustomHeader) {
                     const addr = settings?.companyAddress || '12/51, Site 2, Sunrise Industrial Area, Mohan Nagar, Ghaziabad - 200107, UP, India';
                     doc.fillColor(GRAY).fontSize(8).font('Helvetica')
@@ -597,7 +655,7 @@ class PDFGenerator {
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
                     .text('Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 34, { width: colW - 16 })
                     .text('Pragati Maidan, New Delhi – 110001', lx + 8, y + 46, { width: colW - 16 })
-                    .text('info@ihwe.in  |  +91-9654900525', lx + 8, y + 58, { width: colW - 16 });
+                    .text('info@namogangewellness.com  |  +91-9654900525', lx + 8, y + 58, { width: colW - 16 });
 
                 doc.rect(rx, y, colW, 80).lineWidth(0.5).stroke('#e5e7eb');
                 this._label(doc, 'To (Exhibitor)', rx + 8, y + 8, colW - 16);
@@ -676,7 +734,7 @@ class PDFGenerator {
                         .text(`Txn ID: ${order.transactionId}`, 210, y + 8, { width: pageW - 260 });
                 }
 
-                this._footerImg(doc);
+                this._footerImg(doc, footerPath);
                 doc.end();
 
                 stream.on('finish', () => {
