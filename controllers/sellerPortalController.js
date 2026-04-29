@@ -974,7 +974,7 @@ exports.uploadDocument = async (req, res) => {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
         
-        const fileUrl = `/uploads/${file.filename}`;
+        const fileUrl = `/uploads/seller-docs/${file.filename}`;
         
         const updateField = field.startsWith('kyc.') 
             ? { [`kycDocuments.${field.split('.')[1]}`]: fileUrl }
@@ -1011,7 +1011,11 @@ exports.updateSellerProfile = async (req, res) => {
             primaryContact,
             secondaryContact,
             billingContact,
-            accountsContact
+            accountsContact,
+            logo,
+            brochure,
+            productCatalogue,
+            kycDocuments
         } = req.body;
         
         const updated = await ExhibitorRegistration.findByIdAndUpdate(
@@ -1027,6 +1031,10 @@ exports.updateSellerProfile = async (req, res) => {
                 contact2: secondaryContact,
                 billingContact,
                 accountsContact,
+                ...(logo && { logo }),
+                ...(brochure && { brochure }),
+                ...(productCatalogue && { productCatalogue }),
+                ...(kycDocuments && { kycDocuments }),
                 profileUpdatedAt: new Date()
             },
             { new: true }
