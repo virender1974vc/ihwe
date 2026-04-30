@@ -87,7 +87,8 @@ class AuthController {
             }
 
             // Security check: only allow users to change their own password (or Super Admin)
-            if (req.user.id !== adminId && req.user.role !== 'super-admin') {
+            const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
+            if (req.user.id !== adminId && userRole !== 'super-admin') {
                 return res.status(403).json({ success: false, message: 'Unauthorized to change this password' });
             }
 

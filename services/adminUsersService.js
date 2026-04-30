@@ -9,7 +9,8 @@ class AdminUsersService {
      */
     async getAllAdmins(requester) {
         let filter = {};
-        if (requester.role !== 'super-admin') {
+        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
+        if (reqRole !== 'super-admin') {
             filter = { createdBy: requester.id };
         }
         return await User.find(filter)
@@ -24,8 +25,11 @@ class AdminUsersService {
     async createAdmin(data, requester) {
         const { username, password, role, fullName, designation, email, mobile, altMobile } = data;
 
-        if (requester.role !== 'super-admin') {
-            if (role && role !== 'employee') {
+        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
+        const assignRole = role?.toLowerCase().replace(/\s+/g, '-');
+
+        if (reqRole !== 'super-admin') {
+            if (role && assignRole !== 'employee') {
                 throw { status: 403, message: 'You only have permission to create employees' };
             }
         }
@@ -60,7 +64,10 @@ class AdminUsersService {
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
 
-        if (requester.role !== 'super-admin' && userToUpdate.createdBy?.toString() !== requester.id) {
+        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
+        const assignRole = role?.toLowerCase().replace(/\s+/g, '-');
+
+        if (reqRole !== 'super-admin' && userToUpdate.createdBy?.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to update this user' };
         }
 
@@ -71,7 +78,7 @@ class AdminUsersService {
         }
 
         if (role) {
-            if (requester.role !== 'super-admin' && role !== 'employee') {
+            if (reqRole !== 'super-admin' && assignRole !== 'employee') {
                 throw { status: 403, message: 'Cannot assign non-employee roles' };
             }
             userToUpdate.role = role;
@@ -98,8 +105,10 @@ class AdminUsersService {
         const userToDelete = await User.findById(id);
         if (!userToDelete) throw { status: 404, message: 'User not found' };
 
+        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
+
         // Permission check
-        if (requester.role !== 'super-admin' && userToDelete.createdBy?.toString() !== requester.id) {
+        if (reqRole !== 'super-admin' && userToDelete.createdBy?.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to delete this user' };
         }
 

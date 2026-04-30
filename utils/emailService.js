@@ -352,16 +352,16 @@ class EmailService {
                     const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
                     const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
                     const qrBuffer = await QRCode.toBuffer(scanUrl, {
-                        width: 280,
+                        width: 150,
                         margin: 2,
                         color: { dark: '#000000', light: '#ffffff' }
                     });
                     const qrBlock = `
                         <div class="qr-section">
                             <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="240" height="240" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
                             <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                            <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
                         </div>
                     `;
                     if (bodyContent.includes(QR_TOKEN)) {
@@ -578,11 +578,11 @@ class EmailService {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
                     const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
                     const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
-                    const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 280, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+                    const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 150, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
                     const qrBlock = `
                         <div class="qr-section">
                             <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="240" height="240" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
                             <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
                             <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
                         </div>`;

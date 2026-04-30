@@ -35,7 +35,8 @@ const requireAdmin = (req, res, next) => {
     if (!auth?.startsWith('Bearer ')) return res.status(401).json({ success: false, message: 'Unauthorized' });
     try {
         const decoded = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET || 'fallback_secret_key');
-        if (decoded.role !== 'admin' && decoded.role !== 'super-admin')
+        const role = decoded.role?.toLowerCase().replace(/\s+/g, '-');
+        if (role !== 'admin' && role !== 'super-admin')
             return res.status(403).json({ success: false, message: 'Admin access only' });
         req.user = decoded;
         next();

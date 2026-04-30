@@ -25,7 +25,7 @@ router.get('/messages/:roomId', flexAuth, async (req, res) => {
 router.get('/rooms', flexAuth, async (req, res) => {
     try {
         const adminUsername = req.query.adminUsername || '';
-        const adminRole = req.query.adminRole || '';
+        const adminRole = req.query.adminRole?.toLowerCase().replace(/\s+/g, '-') || '';
         const isSuperAdmin = adminRole === 'super-admin';
         
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
