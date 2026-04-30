@@ -27,7 +27,7 @@ class InternationalBuyerRegistrationConfigController {
             const defaultPackages = [
                 {
                     name: "Standard Buyer Pass",
-                    price: 999,
+                    price: 12,
                     category: "Pass",
                     cta: "Register Now",
                     tagline: "For Emerging Buyers & Business Explorers",
@@ -45,7 +45,7 @@ class InternationalBuyerRegistrationConfigController {
                 },
                 {
                     name: "VIP Buyer Pass",
-                    price: 4999,
+                    price: 55,
                     category: "Pass",
                     cta: "Register Now",
                     badge: "Recommended",
@@ -65,7 +65,7 @@ class InternationalBuyerRegistrationConfigController {
                 },
                 {
                     name: "ICOA Standard Buyer Membership",
-                    price: 1999,
+                    price: 25,
                     category: "Membership",
                     cta: "Become a Member",
                     tagline: "For Active Buyers & Market Explorers",
@@ -82,7 +82,7 @@ class InternationalBuyerRegistrationConfigController {
                 },
                 {
                     name: "ICOA VIP Buyer Membership",
-                    price: 9999,
+                    price: 110,
                     category: "Membership",
                     badge: "Recommended",
                     cta: "Upgrade to VIP Membership",
@@ -100,7 +100,7 @@ class InternationalBuyerRegistrationConfigController {
                 },
                 {
                     name: "ICOA Elite Buyer Membership",
-                    price: 25000,
+                    price: 270,
                     category: "Membership",
                     cta: "Get Elite Membership",
                     tagline: "For High-Value & Institutional Buyers",
@@ -175,7 +175,7 @@ class InternationalBuyerRegistrationConfigController {
                     'budgetRanges', 'purchaseFrequencyOptions', 'businessModelOptions', 
                     'meetingCategoryOptions', 'meetingDayOptions', 'exhibitorTypeOptions', 
                     'companySizes', 'certificationOptions', 'numberOfMeetingsOptions', 
-                    'meetingObjectiveOptions', 'preferredBusinessTypeOptions', 'packages'
+                    'meetingObjectiveOptions', 'preferredBusinessTypeOptions', 'packages', 'stateCodes'
                 ];
                 fields.forEach(field => {
                     if (req.body[field]) config[field] = req.body[field];

@@ -226,7 +226,7 @@ class BuyerRegistrationConfigController {
                 config = new BuyerRegistrationConfig(req.body);
             } else {
                 // Update fields
-                const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, budgetRanges, purchaseFrequencyOptions, businessModelOptions, meetingCategoryOptions, meetingDayOptions, exhibitorTypeOptions, companySizes, certificationOptions, numberOfMeetingsOptions, meetingObjectiveOptions, preferredBusinessTypeOptions, packages, lastUpdatedBy } = req.body;
+                const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, budgetRanges, purchaseFrequencyOptions, businessModelOptions, meetingCategoryOptions, meetingDayOptions, exhibitorTypeOptions, companySizes, certificationOptions, numberOfMeetingsOptions, meetingObjectiveOptions, preferredBusinessTypeOptions, packages, stateCodes, lastUpdatedBy } = req.body;
                 if (companyTypes) config.companyTypes = companyTypes;
                 if (annualTurnoverRanges) config.annualTurnoverRanges = annualTurnoverRanges;
                 if (regions) config.regions = regions;
@@ -249,6 +249,7 @@ class BuyerRegistrationConfigController {
                 if (meetingObjectiveOptions) config.meetingObjectiveOptions = meetingObjectiveOptions;
                 if (preferredBusinessTypeOptions) config.preferredBusinessTypeOptions = preferredBusinessTypeOptions;
                 if (packages) config.packages = packages;
+                if (stateCodes) config.stateCodes = stateCodes;
                 config.lastUpdatedBy = lastUpdatedBy || null;
             }
 

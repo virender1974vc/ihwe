@@ -12,7 +12,9 @@ const PackageBenefitSchema = new mongoose.Schema({
     badge: { type: String }, // e.g., "Best Value", "Recommended"
     cta: { type: String, default: "Select" }, // e.g., "Become a Member", "Get Membership"
     color: { type: String, default: "blue" }, // e.g., "blue", "yellow", "green", "red"
-    benefits: [{ type: String }]
+    benefits: [{ type: String }],
+    hsnSacCode: { type: String, default: '998596' },
+    gstPercentage: { type: Number, default: 18 }
 });
 
 const BuyerRegistrationConfigSchema = new mongoose.Schema({
@@ -38,6 +40,10 @@ const BuyerRegistrationConfigSchema = new mongoose.Schema({
     meetingObjectiveOptions: [{ type: String }],
     preferredBusinessTypeOptions: [{ type: String }],
     packages: [PackageBenefitSchema],
+    stateCodes: [{
+        name: { type: String },
+        code: { type: String }
+    }],
     lastUpdatedBy: { type: String, default: null }
 }, { timestamps: true });
 
