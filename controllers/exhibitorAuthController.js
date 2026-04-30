@@ -144,6 +144,26 @@ class ExhibitorAuthController {
                 selectedRegistration = registrations[0];
             }
 
+            // Resolve filledByFullName from User DB
+            if (selectedRegistration && selectedRegistration.filledBy && selectedRegistration.filledBy !== 'User') {
+                try {
+                    const User = require('../models/User');
+                    const filledByVal = (selectedRegistration.filledBy || '').trim();
+                    let adminUser = await User.findOne({ username: filledByVal }).select('fullName username').lean();
+                    if (!adminUser) {
+                        adminUser = await User.findOne({ username: { $regex: new RegExp(`^${filledByVal}`, 'i') } }).select('fullName username').lean();
+                    }
+                    if (!adminUser) {
+                        adminUser = await User.findOne({ fullName: { $regex: new RegExp(filledByVal, 'i') } }).select('fullName username').lean();
+                    }
+                    const plain = selectedRegistration.toObject ? selectedRegistration.toObject() : Object.assign({}, selectedRegistration);
+                    plain.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
+                    selectedRegistration = plain;
+                } catch (err) {
+                    console.error('filledByFullName lookup error:', err);
+                }
+            }
+
             res.status(200).json({
                 success: true,
                 data: selectedRegistration,
