@@ -20,7 +20,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowed = /pdf|doc|docx|jpg|jpeg|png|mp4/i;
+    const allowed = /pdf|doc|docx|jpg|jpeg|png|mp4|mov|avi|webm/i;
     if (allowed.test(path.extname(file.originalname))) cb(null, true);
     else cb(new Error('Invalid file type'));
   }
