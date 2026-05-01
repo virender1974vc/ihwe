@@ -19,7 +19,27 @@ class ExhibitorRegistrationService {
         if (!reg) return null;
 
         const enriched = await this._enrichRegistrations([reg]);
-        return enriched[0];
+        const result = enriched[0];
+        if (result && result.filledBy && result.filledBy !== 'User') {
+            try {
+                const User = require('../models/User');
+                const filledByVal = (result.filledBy || '').trim();
+                let adminUser = await User.findOne({ username: filledByVal }).select('fullName username').lean();
+                if (!adminUser) {
+                    adminUser = await User.findOne({ username: { $regex: new RegExp(`^${filledByVal}`, 'i') } }).select('fullName username').lean();
+                }
+                if (!adminUser) {
+                    adminUser = await User.findOne({ fullName: { $regex: new RegExp(filledByVal, 'i') } }).select('fullName username').lean();
+                }
+                const plain = result.toObject ? result.toObject() : Object.assign({}, result);
+                plain.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
+                return plain;
+            } catch (err) {
+                console.error('filledByFullName lookup error:', err);
+            }
+        }
+
+        return result;
     }
 
     async _enrichRegistrations(regs) {
@@ -33,7 +53,6 @@ class ExhibitorRegistrationService {
 
         if (names.length) {
             const pattern = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-            // Loose match: any registration containing the name (with word boundaries)
             query.$or.push({ exhibitorName: { $regex: new RegExp(`(${pattern})`, 'i') } });
         }
         if (emails.length) {
@@ -57,7 +76,6 @@ class ExhibitorRegistrationService {
             const rMobile = (doc.contact1?.mobile || '').trim();
 
             const masterData = {};
-            // We'll map multiple keys to a single 'canonical' key for the UI
             const fieldAliases = {
                 'companyLogoUrl': ['companyLogo', 'logo'],
                 'panCardFrontUrl': ['panFrontUrl', 'panCardFront', 'panFront'],

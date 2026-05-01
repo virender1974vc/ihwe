@@ -44,7 +44,8 @@ router.get('/public-list', async (req, res) => {
 router.get('/by-username/:username', async (req, res) => {
     try {
         const User = require('../models/User');
-        const user = await User.findOne({ username: req.params.username })
+        const query = req.params.username;
+        const user = await User.findOne({ username: query })
             .select('username fullName designation email mobile altMobile role');
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
         res.json({ success: true, data: user });

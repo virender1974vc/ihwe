@@ -43,6 +43,7 @@ class AuthService {
                 _id: user._id,
                 username: user.username,
                 role: user.role,
+                fullName: user.fullName || '',
                 mobile: user.mobile || ''
             }
         };
