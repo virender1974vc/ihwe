@@ -1,5 +1,5 @@
-import express from 'express';
-import { createSpeaker, getAllSpeakers, getSpeakerById, updateSpeakerStatus, deleteSpeaker } from '../controllers/speakerController.js';
+const express = require('express');
+const { createSpeaker, getAllSpeakers, getSpeakerById, updateSpeakerStatus, deleteSpeaker } = require('../controllers/speakerController.js');
 
 const router = express.Router();
 
@@ -9,4 +9,4 @@ router.get('/:id', getSpeakerById);
 router.put('/:id/status', updateSpeakerStatus);
 router.delete('/:id', deleteSpeaker);
 
-export default router;
+module.exports = router;

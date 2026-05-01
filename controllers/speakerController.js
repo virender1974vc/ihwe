@@ -1,7 +1,7 @@
-import Speaker from '../models/Speaker.js';
+const Speaker = require('../models/Speaker.js');
 
 // Create a new speaker registration
-export const createSpeaker = async (req, res) => {
+exports.createSpeaker = async (req, res) => {
     try {
         const newSpeaker = new Speaker(req.body);
         await newSpeaker.save();
@@ -12,7 +12,7 @@ export const createSpeaker = async (req, res) => {
 };
 
 // Get all speakers
-export const getAllSpeakers = async (req, res) => {
+exports.getAllSpeakers = async (req, res) => {
     try {
         const speakers = await Speaker.find().sort({ createdAt: -1 });
         res.status(200).json({ success: true, count: speakers.length, data: speakers });
@@ -22,7 +22,7 @@ export const getAllSpeakers = async (req, res) => {
 };
 
 // Get a single speaker by ID
-export const getSpeakerById = async (req, res) => {
+exports.getSpeakerById = async (req, res) => {
     try {
         const speaker = await Speaker.findById(req.params.id);
         if (!speaker) {
@@ -35,7 +35,7 @@ export const getSpeakerById = async (req, res) => {
 };
 
 // Update speaker status
-export const updateSpeakerStatus = async (req, res) => {
+exports.updateSpeakerStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const updatedSpeaker = await Speaker.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true });
@@ -49,7 +49,7 @@ export const updateSpeakerStatus = async (req, res) => {
 };
 
 // Delete a speaker
-export const deleteSpeaker = async (req, res) => {
+exports.deleteSpeaker = async (req, res) => {
     try {
         const deletedSpeaker = await Speaker.findByIdAndDelete(req.params.id);
         if (!deletedSpeaker) {

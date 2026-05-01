@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const speakerSchema = new mongoose.Schema({
     fullName: { type: String, required: true, trim: true },
@@ -24,4 +24,4 @@ const speakerSchema = new mongoose.Schema({
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' }
 }, { timestamps: true });
 
-export default mongoose.model('Speaker', speakerSchema);
+module.exports = mongoose.model('Speaker', speakerSchema);
