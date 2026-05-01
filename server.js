@@ -315,6 +315,7 @@ app.use("/api/about-organizer", aboutOrganizerRoutes);
 app.use("/api/our-journey", ourJourneyRoutes);
 app.use("/api/penalty", require('./routes/penaltyRoutes'));
 app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
+app.use("/api/speakers", require('./routes/speaker'));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
@@ -364,7 +365,7 @@ io.on('connection', (socket) => {
       });
 
       const msg = await ChatMessage.create({
-        roomId, 
+        roomId,
         exhibitorRegistrationId, exhibitorName,
         buyerRegistrationId, buyerName,
         senderType, senderId, senderName, message,
