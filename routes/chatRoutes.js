@@ -27,14 +27,23 @@ router.get('/rooms', flexAuth, async (req, res) => {
         const adminUsername = req.query.adminUsername || '';
         const adminRole = req.query.adminRole || '';
         const isSuperAdmin = adminRole === 'super-admin';
+        
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
-        const filter = adminUsername ? { spokenWith: adminUsername } : { _id: null };
-        const assignedExhibitors = await ExhibitorRegistration.find(filter)
+        const BuyerRegistration = require('../models/BuyerRegistration');
+
+        // Fetch assigned exhibitors
+        const exFilter = adminUsername ? { spokenWith: adminUsername } : { _id: null };
+        const assignedExhibitors = await ExhibitorRegistration.find(exFilter)
             .select('_id exhibitorName registrationId participation spokenWith')
             .sort({ createdAt: -1 });
 
-        // For each assigned exhibitor, get their last message and unread count
-        const rooms = await Promise.all(assignedExhibitors.map(async (e) => {
+        // Fetch ALL buyers for now (or assigned if buyers have spokenWith)
+        // Since buyers might not have 'spokenWith' yet, we show all who have messages
+        const buyersWithMessages = await ChatMessage.distinct('buyerRegistrationId', { buyerRegistrationId: { $ne: null } });
+        const buyers = await BuyerRegistration.find({ _id: { $in: buyersWithMessages } })
+            .select('_id companyName companyFirmName registrationId');
+
+        const exRooms = await Promise.all(assignedExhibitors.map(async (e) => {
             const roomId = e._id.toString();
             const lastMsg = await ChatMessage.findOne({ roomId }).sort({ createdAt: -1 }).lean();
             const unreadAdmin = await ChatMessage.countDocuments({ roomId, senderType: 'exhibitor', readByAdmin: false });
@@ -52,6 +61,26 @@ router.get('/rooms', flexAuth, async (req, res) => {
                 noMessages: !lastMsg,
             };
         }));
+
+        const buyerRooms = await Promise.all(buyers.map(async (b) => {
+            const roomId = b._id.toString();
+            const lastMsg = await ChatMessage.findOne({ roomId }).sort({ createdAt: -1 }).lean();
+            const unreadAdmin = await ChatMessage.countDocuments({ roomId, senderType: 'buyer', readByAdmin: false });
+            return {
+                _id: roomId,
+                buyerRegistrationId: b._id,
+                buyerName: b.companyName || b.companyFirmName,
+                registrationId: b.registrationId,
+                isBuyer: true,
+                lastMessage: lastMsg?.message || null,
+                lastMessageAt: lastMsg?.createdAt || null,
+                lastSenderType: lastMsg?.senderType || null,
+                unreadAdmin,
+                noMessages: !lastMsg,
+            };
+        }));
+
+        const rooms = [...exRooms, ...buyerRooms];
         rooms.sort((a, b) => {
             if (!a.lastMessageAt && !b.lastMessageAt) return 0;
             if (!a.lastMessageAt) return 1;
@@ -68,11 +97,13 @@ router.get('/rooms', flexAuth, async (req, res) => {
 // Mark messages as read
 router.put('/read/:roomId', flexAuth, async (req, res) => {
     try {
-        const { readerType } = req.body; // 'admin' or 'exhibitor'
+        const { readerType } = req.body; // 'admin' or 'exhibitor' or 'buyer'
         if (readerType === 'admin') {
-            await ChatMessage.updateMany({ roomId: req.params.roomId, senderType: 'exhibitor' }, { readByAdmin: true });
-        } else {
+            await ChatMessage.updateMany({ roomId: req.params.roomId, senderType: { $in: ['exhibitor', 'buyer'] } }, { readByAdmin: true });
+        } else if (readerType === 'exhibitor') {
             await ChatMessage.updateMany({ roomId: req.params.roomId, senderType: 'admin' }, { readByExhibitor: true });
+        } else if (readerType === 'buyer') {
+            await ChatMessage.updateMany({ roomId: req.params.roomId, senderType: 'admin' }, { readByBuyer: true });
         }
         res.json({ success: true });
     } catch (err) {
@@ -80,14 +111,20 @@ router.put('/read/:roomId', flexAuth, async (req, res) => {
     }
 });
 
-// Unread count for exhibitor
+// Unread count for user
 router.get('/unread/:roomId', flexAuth, async (req, res) => {
     try {
-        const count = await ChatMessage.countDocuments({
+        const { userType } = req.query; // 'exhibitor' or 'buyer'
+        const filter = {
             roomId: req.params.roomId,
             senderType: 'admin',
-            readByExhibitor: false
-        });
+        };
+        if (userType === 'buyer') {
+            filter.readByBuyer = false;
+        } else {
+            filter.readByExhibitor = false;
+        }
+        const count = await ChatMessage.countDocuments(filter);
         res.json({ success: true, count });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

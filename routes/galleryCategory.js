@@ -44,10 +44,10 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
             ? `/uploads/gallery/categories/${req.file.filename}`
             : req.body.coverImage || '';
 
-        const category = new GalleryCategory({ 
-            title, 
-            heading, 
-            coverImage, 
+        const category = new GalleryCategory({
+            title,
+            heading,
+            coverImage,
             coverImageAlt,
             type: type || 'gallery',
             order: req.body.order || 0

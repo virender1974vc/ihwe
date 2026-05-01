@@ -67,6 +67,14 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    domesticRegistrationFormPdf: {
+        type: String,
+        default: ""
+    },
+    internationalRegistrationFormPdf: {
+        type: String,
+        default: ""
+    },
     // --- Corporate & Financial Settings (New) ---
     companyName: {
         type: String,

@@ -57,6 +57,12 @@ class SettingsController {
                 if (req.files.exhibitorBrochurePdf) {
                     updateData.exhibitorBrochurePdf = `/uploads/settings/${req.files.exhibitorBrochurePdf[0].filename}`;
                 }
+                if (req.files.domesticRegistrationFormPdf) {
+                    updateData.domesticRegistrationFormPdf = `/uploads/settings/${req.files.domesticRegistrationFormPdf[0].filename}`;
+                }
+                if (req.files.internationalRegistrationFormPdf) {
+                    updateData.internationalRegistrationFormPdf = `/uploads/settings/${req.files.internationalRegistrationFormPdf[0].filename}`;
+                }
                 if (req.files.authorizedSignature) {
                     updateData.authorizedSignature = `/uploads/settings/${req.files.authorizedSignature[0].filename}`;
                 }

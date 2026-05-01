@@ -8,7 +8,8 @@ const deleteFile = (filePath) => {
 };
 exports.getMyProducts = async (req, res) => {
     try {
-        const products = await StallProduct.find({ exhibitorId: req.user.id }).sort({ createdAt: -1 });
+        const exhibitorId = req.query.regId || req.user.id;
+        const products = await StallProduct.find({ exhibitorId }).sort({ createdAt: -1 });
         res.json({ success: true, data: products });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -16,11 +17,12 @@ exports.getMyProducts = async (req, res) => {
 };
 exports.addProduct = async (req, res) => {
     try {
+        const exhibitorId = req.body.regId || req.query.regId || req.user.id;
         const { name, description, category, tags, price, priceUnit, moq } = req.body;
         const images = (req.files || []).map(f => `/uploads/stall-products/${f.filename}`);
 
         const product = await StallProduct.create({
-            exhibitorId: req.user.id,
+            exhibitorId,
             name, description, category,
             tags: tags ? (Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim()).filter(Boolean)) : [],
             price: Number(price) || 0,
@@ -105,7 +107,8 @@ exports.submitEnquiry = async (req, res) => {
 };
 exports.getProductEnquiries = async (req, res) => {
     try {
-        const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId: req.user.id });
+        const exhibitorId = req.query.regId || req.user.id;
+        const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId });
         if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
         const enquiries = await StallProductEnquiry.find({ productId: req.params.id }).sort({ createdAt: -1 });
@@ -116,14 +119,15 @@ exports.getProductEnquiries = async (req, res) => {
 };
 exports.getAnalytics = async (req, res) => {
     try {
-        const products = await StallProduct.find({ exhibitorId: req.user.id })
+        const exhibitorId = req.query.regId || req.user.id;
+        const products = await StallProduct.find({ exhibitorId })
             .select('name views enquiryCount images isActive createdAt')
             .sort({ views: -1 });
 
         const totalViews = products.reduce((s, p) => s + p.views, 0);
         const totalEnquiries = products.reduce((s, p) => s + p.enquiryCount, 0);
         const topProduct = products[0] || null;
-        const recentEnquiries = await StallProductEnquiry.find({ exhibitorId: req.user.id })
+        const recentEnquiries = await StallProductEnquiry.find({ exhibitorId })
             .populate('productId', 'name')
             .sort({ createdAt: -1 })
             .limit(10);

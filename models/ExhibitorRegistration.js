@@ -45,6 +45,8 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     landlineNo: String,
     gstNo: String,
     panNo: String,
+    aadhaarNo: String,
+    registrantType: { type: String, enum: ['registered', 'unregistered'], default: 'registered' },
     natureOfBusiness: String,
     fasciaName: String,
     primaryCategory: String,
@@ -111,6 +113,43 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         advancePercent: { type: Number, default: 100 },
         updatedAt: Date
     },
+    penaltyAmount: { type: Number, default: 0 },
+    penaltyReason: String,
+    penaltyAddedAt: Date,
+    penaltyAddedBy: String,
+    penaltyHistory: [{
+        amount: Number,
+        reason: String,
+        addedBy: String,
+        addedAt: { type: Date, default: Date.now },
+        removedAt: Date,
+        removedBy: String
+    }],
+    paymentDueDate: Date,
+    lastWarningSentAt: Date,
+    warningCount: { type: Number, default: 0 },
+    warningHistory: [{
+        sentAt: { type: Date, default: Date.now },
+        type: { type: String, enum: ['email', 'whatsapp', 'both'] },
+        message: String,
+        daysOverdue: Number,
+        sentBy: String
+    }],
+    installments: [{
+        installmentNumber: Number,
+        planId: String,
+        label: String,
+        percentage: Number,
+        dueAmount: Number,
+        paidAmount: { type: Number, default: 0 },
+        status: { type: String, enum: ['pending', 'partial', 'paid', 'overdue'], default: 'pending' },
+        dueDate: Date,
+        paidAt: Date,
+        razorpayPaymentId: String,
+        razorpayOrderId: String,
+        paymentMethod: String
+    }],
+    totalPayable: { type: Number, default: 0 },
     password: { type: String, select: false },
     otp: { type: String, select: false },
     otpExpiry: { type: Date, select: false },
@@ -130,8 +169,28 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         msmeRemark: String,
         updatedAt: Date
     },
-
-    // KYC and Business Documents
+    isSeller: { type: Boolean, default: false },
+    sellerStatus: { type: String, enum: ['none', 'pending', 'active', 'expired'], default: 'none' },
+    sellerSubscription: {
+        status: { type: String, enum: ['inactive', 'active', 'expired'], default: 'inactive' },
+        planId: { type: mongoose.Schema.Types.ObjectId, ref: 'SellerSubscriptionPlan' },
+        plan: String,
+        amount: Number,
+        startDate: Date,
+        endDate: Date,
+        expiresAt: Date,
+        paymentId: String,
+        transactionId: String,
+        notes: String
+    },
+    bankDetails: {
+        bankName: String,
+        accountHolder: String,
+        accountNumber: String,
+        ifscCode: String,
+        branch: String,
+        accountType: { type: String, enum: ['Savings', 'Current'], default: 'Current' }
+    },
     companyLogoUrl: String,
     panCardFrontUrl: String,
     panCardBackUrl: String,
@@ -140,6 +199,31 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     gstCertificateUrl: String,
     cancelledChequeUrl: String,
     representativePhotoUrl: String,
+    brandName: String,
+    companyDescription: String,
+    productCategories: [String],
+    businessRegistrationNo: String,
+    logo: String,
+    brochure: String,
+    productCatalogue: String,
+    socialMedia: {
+        facebook: String,
+        instagram: String,
+        linkedin: String,
+        twitter: String,
+        youtube: String
+    },
+    billingContact: ContactPersonSchema,
+    accountsContact: ContactPersonSchema,
+    kycDocuments: {
+        gstCertificate: String,
+        panCard: String,
+        registrationCertificate: String,
+        authorizedSignatoryId: String
+    },
+    kycStatus: { type: String, enum: ['pending', 'approved', 'rejected', 'reupload'], default: 'pending' },
+    verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
+    documentStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
     specialDocuments: [{
         label: String,
         url: String,
