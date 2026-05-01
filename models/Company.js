@@ -28,6 +28,7 @@ const CompanySchema = new mongoose.Schema(
     eventName: { type: String, required: true },
     reminder: { type: Date, required: true },
     companyStatus: { type: String, required: true, default: "New Lead" },
+    added_by: { type: String, required: true, trim: true },
     updated_by: {
       type: String,
       default: null,
