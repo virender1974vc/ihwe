@@ -4,6 +4,7 @@ const ctrl = require('../controllers/awardsNominationController');
 
 // Public
 router.post('/', (req, res) => ctrl.submitNomination(req, res));
+router.post('/upload', (req, res) => ctrl.uploadFile(req, res));
 
 // Admin
 router.get('/', (req, res) => ctrl.getAllNominations(req, res));
