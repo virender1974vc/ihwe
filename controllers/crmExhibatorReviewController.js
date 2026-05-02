@@ -54,6 +54,7 @@ const updateReview = async (req, res) => {
       "re_id",
       "cmpny_id",
       "evnt_id",
+      "event_name",
       "sender_id",
       "status_short",
       "reminder_dt",

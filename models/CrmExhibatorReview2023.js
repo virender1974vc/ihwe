@@ -4,6 +4,7 @@ const CrmExhibatorReviewSchema = new mongoose.Schema(
   {
     cmpny_id: { type: String, required: true },
     evnt_id: { type: String, default: "1" },
+    event_name: { type: String },
     status_short: { type: String, required: true },
     reminder_dt: { type: String },
     forward_to: { type: String },
