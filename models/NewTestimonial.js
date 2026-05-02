@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 const testimonialItemSchema = new mongoose.Schema({
   icon: { type: String, default: 'Quote' },
+  cardTopImage: { type: String }, // Path for the top left image
+  cardBottomImage: { type: String }, // Path for the bottom right image
   description: { type: String, required: true },
   authorName: { type: String, required: true },
   location: { type: String, required: true },
