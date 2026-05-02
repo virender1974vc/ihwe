@@ -68,6 +68,9 @@ class AwardsNominationService {
     if (filters.awardCategory && filters.awardCategory !== 'all') {
       query.awardCategory = filters.awardCategory;
     }
+    if (filters.applicantType && filters.applicantType !== 'all') {
+      query.applicantType = filters.applicantType;
+    }
     if (filters.search) {
       const regex = new RegExp(filters.search, 'i');
       query.$or = [

@@ -59,6 +59,7 @@ class AwardsNominationController {
       const filters = {
         status: req.query.status,
         awardCategory: req.query.awardCategory,
+        applicantType: req.query.applicantType,
         search: req.query.search,
       };
       const result = await awardsNominationService.getAllNominations(filters);
