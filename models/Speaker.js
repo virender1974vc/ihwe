@@ -21,6 +21,9 @@ const speakerSchema = new mongoose.Schema({
     expectations: [{ type: String, required: true }],
     consent1: { type: Boolean, required: true },
     consent2: { type: Boolean, required: true },
+    speakerPhotoUrl: { type: String, default: "" },
+    companyLogoUrl: { type: String, default: "" },
+    presentationUrl: { type: String, default: "" },
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' }
 }, { timestamps: true });
 

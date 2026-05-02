@@ -3,7 +3,27 @@ const Speaker = require('../models/Speaker.js');
 // Create a new speaker registration
 exports.createSpeaker = async (req, res) => {
     try {
-        const newSpeaker = new Speaker(req.body);
+        const speakerData = { ...req.body };
+
+        // Parse JSON arrays sent as strings in multipart form
+        if (typeof speakerData.expertise === 'string') {
+            try { speakerData.expertise = JSON.parse(speakerData.expertise); } catch { speakerData.expertise = [speakerData.expertise]; }
+        }
+        if (typeof speakerData.expectations === 'string') {
+            try { speakerData.expectations = JSON.parse(speakerData.expectations); } catch { speakerData.expectations = [speakerData.expectations]; }
+        }
+        // Booleans come as strings in multipart
+        if (typeof speakerData.consent1 === 'string') speakerData.consent1 = speakerData.consent1 === 'true';
+        if (typeof speakerData.consent2 === 'string') speakerData.consent2 = speakerData.consent2 === 'true';
+
+        // Attach Cloudinary file URLs if uploaded
+        if (req.files) {
+            if (req.files.speakerPhoto?.[0]) speakerData.speakerPhotoUrl = req.files.speakerPhoto[0].path;
+            if (req.files.companyLogo?.[0]) speakerData.companyLogoUrl = req.files.companyLogo[0].path;
+            if (req.files.presentation?.[0]) speakerData.presentationUrl = req.files.presentation[0].path;
+        }
+
+        const newSpeaker = new Speaker(speakerData);
         await newSpeaker.save();
         res.status(201).json({ success: true, message: 'Speaker application submitted successfully.', data: newSpeaker });
     } catch (error) {
