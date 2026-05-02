@@ -84,13 +84,26 @@ router.post('/settings', upload.fields([
 });
 
 // Add Testimonial
-router.post('/testimonials', async (req, res) => {
+router.post('/testimonials', upload.fields([
+  { name: 'cardTopImage', maxCount: 1 },
+  { name: 'cardBottomImage', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { icon, description, authorName, location, order } = req.body;
     const data = await NewTestimonial.findOne();
     if (!data) return res.status(404).json({ success: false, message: 'Settings not found' });
 
-    data.testimonials.push({ icon, description, authorName, location, order });
+    const newTestimonial = { icon, description, authorName, location, order };
+    if (req.files) {
+      if (req.files.cardTopImage) {
+        newTestimonial.cardTopImage = `/uploads/${req.files.cardTopImage[0].filename}`;
+      }
+      if (req.files.cardBottomImage) {
+        newTestimonial.cardBottomImage = `/uploads/${req.files.cardBottomImage[0].filename}`;
+      }
+    }
+
+    data.testimonials.push(newTestimonial);
     await data.save();
     res.json({ success: true, data });
   } catch (error) {
@@ -99,7 +112,10 @@ router.post('/testimonials', async (req, res) => {
 });
 
 // Update Testimonial
-router.put('/testimonials/:id', async (req, res) => {
+router.put('/testimonials/:id', upload.fields([
+  { name: 'cardTopImage', maxCount: 1 },
+  { name: 'cardBottomImage', maxCount: 1 }
+]), async (req, res) => {
   try {
     const { icon, description, authorName, location, order } = req.body;
     const data = await NewTestimonial.findOne();
@@ -113,6 +129,15 @@ router.put('/testimonials/:id', async (req, res) => {
     if (authorName !== undefined) testimonial.authorName = authorName;
     if (location !== undefined) testimonial.location = location;
     if (order !== undefined) testimonial.order = order;
+    
+    if (req.files) {
+      if (req.files.cardTopImage) {
+        testimonial.cardTopImage = `/uploads/${req.files.cardTopImage[0].filename}`;
+      }
+      if (req.files.cardBottomImage) {
+        testimonial.cardBottomImage = `/uploads/${req.files.cardBottomImage[0].filename}`;
+      }
+    }
 
     await data.save();
     res.json({ success: true, data });
