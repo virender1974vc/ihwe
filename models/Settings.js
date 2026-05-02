@@ -75,6 +75,10 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    sponsorshipDeckPdf: {
+        type: String,
+        default: ""
+    },
     // --- Corporate & Financial Settings (New) ---
     companyName: {
         type: String,

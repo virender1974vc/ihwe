@@ -63,6 +63,9 @@ class SettingsController {
                 if (req.files.internationalRegistrationFormPdf) {
                     updateData.internationalRegistrationFormPdf = `/uploads/settings/${req.files.internationalRegistrationFormPdf[0].filename}`;
                 }
+                if (req.files.sponsorshipDeckPdf) {
+                    updateData.sponsorshipDeckPdf = `/uploads/settings/${req.files.sponsorshipDeckPdf[0].filename}`;
+                }
                 if (req.files.authorizedSignature) {
                     updateData.authorizedSignature = `/uploads/settings/${req.files.authorizedSignature[0].filename}`;
                 }
