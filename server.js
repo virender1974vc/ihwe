@@ -375,7 +375,7 @@ io.on('connection', (socket) => {
       });
 
       const msg = await ChatMessage.create({
-        roomId, 
+        roomId,
         exhibitorRegistrationId, exhibitorName,
         buyerRegistrationId, buyerName,
         senderType, senderId, senderName, message,
