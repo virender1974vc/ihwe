@@ -27,8 +27,8 @@ class SettingsController {
                 supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, 
                 quickLinks, exhibitionLinks,
                 companyName, companyAddress, companyGst, companyCin, 
-                fullPaymentDiscount, availableTdsRates, msmeLogoTitle,
-                msmeLogos
+                fullPaymentDiscount, availableTdsRates,
+                msmeLogos, isMsmeLogoActive
             } = req.body;
             
             const updateData = {
@@ -39,6 +39,7 @@ class SettingsController {
                 exhibitionLinks: exhibitionLinks ? JSON.parse(exhibitionLinks) : undefined,
                 availableTdsRates: availableTdsRates ? (typeof availableTdsRates === 'string' ? JSON.parse(availableTdsRates) : availableTdsRates) : undefined,
                 msmeLogos: msmeLogos ? JSON.parse(msmeLogos) : undefined,
+                isMsmeLogoActive: isMsmeLogoActive === 'true' || isMsmeLogoActive === true,
                 mapIframe,
                 marqueeText,
                 topbarDate,
@@ -49,11 +50,10 @@ class SettingsController {
                 companyCin,
                 onlineAdvancePercentage: onlineAdvancePercentage ? Number(onlineAdvancePercentage) : undefined,
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
-                fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined,
-                msmeLogoTitle: msmeLogoTitle || undefined,
-                isMsmeLogoActive: req.body.isMsmeLogoActive === 'true' || req.body.isMsmeLogoActive === true
+                fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined
             };
 
+            // Handle file uploads
             if (req.files) {
                 if (req.files.logo) {
                     updateData.logo = `/uploads/settings/${req.files.logo[0].filename}`;
@@ -76,15 +76,22 @@ class SettingsController {
                 if (req.files.companyStamp) {
                     updateData.companyStamp = `/uploads/settings/${req.files.companyStamp[0].filename}`;
                 }
-                // Handle multiple MSME logo uploads
-                if (req.files.msmeLogoFiles && req.files.msmeLogoFiles.length > 0) {
-                    const uploadedLogos = req.files.msmeLogoFiles.map(file => `/uploads/settings/${file.filename}`);
-                    updateData._uploadedMsmeLogos = uploadedLogos;
+                // Handle single MSME logo file upload
+                if (req.files.msmeLogoFile && req.files.msmeLogoFile.length > 0) {
+                    // Return the uploaded file path in a special field
+                    updateData.uploadedMsmeLogoPath = `/uploads/settings/${req.files.msmeLogoFile[0].filename}`;
                 }
             }
 
             const data = await settingsService.updateSettings(updateData);
-            res.json({ success: true, data, message: 'Settings updated successfully' });
+            
+            // If a file was uploaded, return the path in response
+            const response = { success: true, data, message: 'Settings updated successfully' };
+            if (updateData.uploadedMsmeLogoPath) {
+                response.uploadedMsmeLogoPath = updateData.uploadedMsmeLogoPath;
+            }
+            
+            res.json(response);
         } catch (error) {
             console.error('Update settings error:', error);
             res.status(500).json({ success: false, message: 'Server error' });
