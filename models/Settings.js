@@ -112,14 +112,28 @@ const settingsSchema = new mongoose.Schema({
         type: [Number],
         default: [1, 2, 10]
     },
-    msmeLogo: {
-        type: String,
-        default: ""
-    },
-    msmeLogoTitle: {
-        type: String,
-        default: "Supported by"
-    },
+    msmeLogos: [{
+        imageUrl: {
+            type: String,
+            required: true
+        },
+        title: {
+            type: String,
+            default: "Partner Logo"
+        },
+        category: {
+            type: String,
+            default: "Supported By"
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        displayOrder: {
+            type: Number,
+            default: 0
+        }
+    }],
     isMsmeLogoActive: {
         type: Boolean,
         default: true
