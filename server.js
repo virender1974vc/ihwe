@@ -113,6 +113,7 @@ const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
+const agendaRoutes = require("./routes/agendaRoutes");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 
 
@@ -324,6 +325,7 @@ app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
+app.use("/api/agenda", agendaRoutes);
 app.use("/api/seller-portal", require("./routes/sellerPortalRoutes"));
 app.use("/api/event-overview", eventOverviewRoutes);
 app.use("/api/about-organizer", aboutOrganizerRoutes);
