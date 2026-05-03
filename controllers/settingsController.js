@@ -27,7 +27,7 @@ class SettingsController {
                 supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, 
                 quickLinks, exhibitionLinks,
                 companyName, companyAddress, companyGst, companyCin, 
-                fullPaymentDiscount, availableTdsRates
+                fullPaymentDiscount, availableTdsRates, msmeLogoTitle
             } = req.body;
             
             const updateData = {
@@ -47,12 +47,17 @@ class SettingsController {
                 companyCin,
                 onlineAdvancePercentage: onlineAdvancePercentage ? Number(onlineAdvancePercentage) : undefined,
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
-                fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined
+                fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined,
+                msmeLogoTitle: msmeLogoTitle || undefined,
+                isMsmeLogoActive: req.body.isMsmeLogoActive === 'true' || req.body.isMsmeLogoActive === true
             };
 
             if (req.files) {
                 if (req.files.logo) {
                     updateData.logo = `/uploads/settings/${req.files.logo[0].filename}`;
+                }
+                if (req.files.msmeLogo) {
+                    updateData.msmeLogo = `/uploads/settings/${req.files.msmeLogo[0].filename}`;
                 }
                 if (req.files.exhibitorBrochurePdf) {
                     updateData.exhibitorBrochurePdf = `/uploads/settings/${req.files.exhibitorBrochurePdf[0].filename}`;

@@ -111,6 +111,18 @@ const settingsSchema = new mongoose.Schema({
     availableTdsRates: {
         type: [Number],
         default: [1, 2, 10]
+    },
+    msmeLogo: {
+        type: String,
+        default: ""
+    },
+    msmeLogoTitle: {
+        type: String,
+        default: "Supported by"
+    },
+    isMsmeLogoActive: {
+        type: Boolean,
+        default: true
     }
 }, { timestamps: true });
 

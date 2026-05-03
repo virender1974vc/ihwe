@@ -58,6 +58,9 @@ class SettingsService {
         if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
         if (authorizedSignature) settings.authorizedSignature = authorizedSignature;
         if (companyStamp) settings.companyStamp = companyStamp;
+        if (updateData.msmeLogo) settings.msmeLogo = updateData.msmeLogo;
+        if (updateData.msmeLogoTitle !== undefined) settings.msmeLogoTitle = updateData.msmeLogoTitle;
+        if (updateData.isMsmeLogoActive !== undefined) settings.isMsmeLogoActive = updateData.isMsmeLogoActive;
 
         return await settings.save();
     }
