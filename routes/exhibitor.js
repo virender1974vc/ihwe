@@ -36,4 +36,7 @@ router.put('/:id', upload.single('image'), (req, res) => exhibitorController.upd
 // DELETE exhibitor
 router.delete('/:id', (req, res) => exhibitorController.deleteExhibitor(req, res));
 
+router.post('/bulk', upload.array('images', 50), (req, res) => exhibitorController.bulkAddExhibitors(req, res));
+router.post('/reorder', (req, res) => exhibitorController.reorderExhibitors(req, res));
+
 module.exports = router;
