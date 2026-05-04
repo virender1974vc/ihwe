@@ -140,19 +140,23 @@ class ExhibitorController {
      */
     async bulkAddExhibitors(req, res) {
         try {
-            const { category, location } = req.body;
+            const { category, location, altText } = req.body;
             if (!req.files || req.files.length === 0) {
                 return res.status(400).json({ success: false, message: 'No images uploaded' });
             }
 
             const maxOrder = await exhibitorService.getMaxOrder();
-            const exhibitors = req.files.map((file, index) => ({
-                title: file.originalname.split('.')[0].replace(/[-_]/g, ' '),
-                location: location || 'India',
-                category: category || 'OTHERS',
-                image: `/uploads/exhibitors/${file.filename}`,
-                order: maxOrder + index + 1
-            }));
+            const exhibitors = req.files.map((file, index) => {
+                const title = file.originalname.split('.')[0].replace(/[-_]/g, ' ');
+                return {
+                    title: title,
+                    location: location || 'India',
+                    category: category || 'OTHERS',
+                    image: `/uploads/exhibitors/${file.filename}`,
+                    altText: altText || title,
+                    order: maxOrder + index + 1
+                };
+            });
 
             // Using for...of loop for sequential saving to ensure order is preserved perfectly
             for (const ex of exhibitors) {
