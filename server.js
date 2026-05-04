@@ -114,6 +114,7 @@ const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRo
 const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
 const agendaRoutes = require("./routes/agendaRoutes");
+const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 
 
@@ -326,6 +327,7 @@ app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);
+app.use("/api/conference-testimonials", conferenceTestimonialsRoutes);
 app.use("/api/seller-portal", require("./routes/sellerPortalRoutes"));
 app.use("/api/event-overview", eventOverviewRoutes);
 app.use("/api/about-organizer", aboutOrganizerRoutes);

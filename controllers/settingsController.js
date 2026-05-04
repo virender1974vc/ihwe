@@ -27,7 +27,8 @@ class SettingsController {
                 supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, 
                 quickLinks, exhibitionLinks,
                 companyName, companyAddress, companyGst, companyCin, 
-                fullPaymentDiscount, availableTdsRates, msmeLogoTitle
+                fullPaymentDiscount, availableTdsRates, msmeLogoTitle,
+                msmeLogos
             } = req.body;
             
             const updateData = {
@@ -37,6 +38,7 @@ class SettingsController {
                 quickLinks: quickLinks ? JSON.parse(quickLinks) : undefined,
                 exhibitionLinks: exhibitionLinks ? JSON.parse(exhibitionLinks) : undefined,
                 availableTdsRates: availableTdsRates ? (typeof availableTdsRates === 'string' ? JSON.parse(availableTdsRates) : availableTdsRates) : undefined,
+                msmeLogos: msmeLogos ? JSON.parse(msmeLogos) : undefined,
                 mapIframe,
                 marqueeText,
                 topbarDate,
@@ -56,9 +58,6 @@ class SettingsController {
                 if (req.files.logo) {
                     updateData.logo = `/uploads/settings/${req.files.logo[0].filename}`;
                 }
-                if (req.files.msmeLogo) {
-                    updateData.msmeLogo = `/uploads/settings/${req.files.msmeLogo[0].filename}`;
-                }
                 if (req.files.exhibitorBrochurePdf) {
                     updateData.exhibitorBrochurePdf = `/uploads/settings/${req.files.exhibitorBrochurePdf[0].filename}`;
                 }
@@ -76,6 +75,11 @@ class SettingsController {
                 }
                 if (req.files.companyStamp) {
                     updateData.companyStamp = `/uploads/settings/${req.files.companyStamp[0].filename}`;
+                }
+                // Handle multiple MSME logo uploads
+                if (req.files.msmeLogoFiles && req.files.msmeLogoFiles.length > 0) {
+                    const uploadedLogos = req.files.msmeLogoFiles.map(file => `/uploads/settings/${file.filename}`);
+                    updateData._uploadedMsmeLogos = uploadedLogos;
                 }
             }
 
