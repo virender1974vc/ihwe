@@ -14,11 +14,11 @@ class ExhibitorController {
             const { category, search, page, limit } = req.query;
             console.log('Fetching exhibitors with filters:', { category, search, page, limit });
             const result = await exhibitorService.getAllExhibitors({ category, search, page, limit });
-            
-            res.json({ 
-                success: true, 
-                data: result.data, 
-                pagination: result.pagination 
+
+            res.json({
+                success: true,
+                data: result.data,
+                pagination: result.pagination
             });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -88,7 +88,7 @@ class ExhibitorController {
      */
     async reorderExhibitors(req, res) {
         try {
-            const { orders, id, targetId, targetOrder, mode } = req.body; 
+            const { orders, id, targetId, targetOrder, mode } = req.body;
 
             // If id and targetId or targetOrder are provided, use the new single reorder logic
             if (id && (targetId || targetOrder !== undefined)) {
@@ -134,10 +134,6 @@ class ExhibitorController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
-
-    /**
-     * Bulk add exhibitors with proper sequential ordering.
-     */
     async bulkAddExhibitors(req, res) {
         try {
             const { category, location, altText } = req.body;
@@ -164,8 +160,43 @@ class ExhibitorController {
             }
 
             await logActivity(req, 'Created', 'Exhibitor List', `Bulk uploaded ${req.files.length} exhibitors to ${category}`);
-            
+
             res.status(201).json({ success: true, message: `Successfully added ${req.files.length} exhibitors with sequential ordering` });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Bulk delete exhibitors.
+     */
+    async bulkDeleteExhibitors(req, res) {
+        try {
+            const { ids } = req.body;
+            if (!ids || !Array.isArray(ids) || ids.length === 0) {
+                return res.status(400).json({ success: false, message: 'Exhibitor IDs are required' });
+            }
+
+            let deletedCount = 0;
+            for (const id of ids) {
+                const exhibitor = await exhibitorService.getExhibitorById(id);
+                if (exhibitor) {
+                    // Try to delete image file
+                    try {
+                        const imagePath = exhibitor.image.startsWith('/') ? exhibitor.image.substring(1) : exhibitor.image;
+                        if (fs.existsSync(imagePath)) {
+                            fs.unlinkSync(imagePath);
+                        }
+                    } catch (err) {
+                        console.error('Error deleting image file:', err);
+                    }
+                    await exhibitorService.deleteExhibitor(id);
+                    deletedCount++;
+                }
+            }
+
+            await logActivity(req, 'Deleted', 'Exhibitor List', `Bulk deleted ${deletedCount} exhibitors`);
+            res.json({ success: true, message: `Successfully deleted ${deletedCount} exhibitors` });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
