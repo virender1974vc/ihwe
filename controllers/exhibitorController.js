@@ -72,7 +72,6 @@ class ExhibitorController {
 
             if (req.file) {
                 updateData.image = `/uploads/exhibitors/${req.file.filename}`;
-                const oldExhibitor = await exhibitorService.getExhibitorById(req.params.id);
             }
 
             const data = await exhibitorService.updateExhibitor(req.params.id, updateData);
@@ -123,8 +122,12 @@ class ExhibitorController {
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
             }
 
-            if (exhibitor.image && fs.existsSync(exhibitor.image)) {
-                fs.unlinkSync(exhibitor.image);
+            // Remove physical file
+            if (exhibitor.image) {
+                const imagePath = exhibitor.image.startsWith('/') ? exhibitor.image.substring(1) : exhibitor.image;
+                if (fs.existsSync(imagePath)) {
+                    fs.unlinkSync(imagePath);
+                }
             }
 
             await exhibitorService.deleteExhibitor(req.params.id);
@@ -142,8 +145,14 @@ class ExhibitorController {
             }
 
             const maxOrder = await exhibitorService.getMaxOrder();
-            const exhibitors = req.files.map((file, index) => {
-                const title = file.originalname.split('.')[0].replace(/[-_]/g, ' ');
+            const exhibitorsData = req.files.map((file, index) => {
+                // Sanitize title from filename
+                const title = file.originalname.split('.')[0]
+                    .replace(/[-_]/g, ' ')
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                    .join(' ');
+
                 return {
                     title: title,
                     location: location || 'India',
@@ -154,14 +163,20 @@ class ExhibitorController {
                 };
             });
 
-            // Using for...of loop for sequential saving to ensure order is preserved perfectly
-            for (const ex of exhibitors) {
-                await exhibitorService.addExhibitor(ex);
+            // Sequential save to prevent order/ID collisions
+            const results = [];
+            for (const ex of exhibitorsData) {
+                const saved = await exhibitorService.addExhibitor(ex);
+                results.push(saved);
             }
 
-            await logActivity(req, 'Created', 'Exhibitor List', `Bulk uploaded ${req.files.length} exhibitors to ${category}`);
+            await logActivity(req, 'Created', 'Exhibitor List', `Bulk uploaded ${req.files.length} exhibitors to ${category || 'OTHERS'}`);
 
-            res.status(201).json({ success: true, message: `Successfully added ${req.files.length} exhibitors with sequential ordering` });
+            res.status(201).json({ 
+                success: true, 
+                message: `Successfully added ${req.files.length} exhibitors`,
+                count: results.length
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
