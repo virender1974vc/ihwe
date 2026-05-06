@@ -131,6 +131,29 @@ app.use('/api/payment/webhook', require('./routes/payment'));
 
 // Middleware
 app.use(cors());
+// const allowedOrigins = [
+//   "https://ihwe.in",
+//   "https://www.ihwe.in",
+//   "https://admin.ihwe.in"
+// ];
+
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       // allow requests with no origin (like Postman / mobile apps)
+//       if (!origin) return callback(null, true);
+
+//       if (allowedOrigins.includes(origin)) {
+//         return callback(null, true);
+//       } else {
+//         console.warn(`⚠️ CORS blocked for origin: ${origin}`);
+//         return callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     credentials: true
+//   })
+// );
+
 app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
