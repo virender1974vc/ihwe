@@ -137,6 +137,10 @@ const settingsSchema = new mongoose.Schema({
     isMsmeLogoActive: {
         type: Boolean,
         default: true
+    },
+    floatingVideoTimer: {
+        type: Number,
+        default: 7
     }
 }, { timestamps: true });
 
