@@ -6,7 +6,7 @@ const multer = require('multer');
 const path = require("path");
 const fs = require("fs");
 const cookieParser = require("cookie-parser");
-['uploads', 'uploads/marketing', 'temp'].forEach(dir => {
+['uploads', 'uploads/marketing', 'temp', 'uploads/videos'].forEach(dir => {
   const dirPath = path.join(__dirname, dir);
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -116,6 +116,9 @@ const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
 const agendaRoutes = require("./routes/agendaRoutes");
 const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
+const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
+const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
+
 
 
 mongoose
@@ -306,6 +309,9 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/visitor-reviews", visitorReviewRoutes);
 app.use("/api/visitor-auth", visitorAuthRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/floating-videos", floatingVideoRoutes);
+app.use("/api/sponsorship-enquiry", sponsorshipEnquiryRoutes);
+
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
 app.use("/api/pdf-manager", require("./routes/pdfManagerRoutes"));

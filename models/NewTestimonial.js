@@ -1,34 +1,55 @@
 const mongoose = require('mongoose');
 
-const testimonialItemSchema = new mongoose.Schema({
-  icon: { type: String, default: 'Quote' },
-  cardTopImage: { type: String }, // Path for the top left image
-  cardBottomImage: { type: String }, // Path for the bottom right image
-  description: { type: String, required: true },
-  authorName: { type: String, required: true },
-  location: { type: String, required: true },
-  order: { type: Number, default: 0 }
-}, { timestamps: true });
+const statSchema = new mongoose.Schema({
+  icon: { type: String, default: 'Globe' },
+  value: { type: String, default: '1000+' },
+  label: { type: String, default: 'Global Buyers' },
+  color: { type: String, default: '#005c22ff' }
+});
+
+const bottomStatSchema = new mongoose.Schema({
+  icon: { type: String, default: 'Leaf' },
+  label: { type: String, default: 'Trusted by' },
+  value: { type: String, default: '150+ Exhibitors' }
+});
 
 const newTestimonialSchema = new mongoose.Schema({
-  subtitle: { type: String, default: 'Testimonials' },
+  // Main Hero Section
+  subtitle: { type: String, default: 'Voices That Inspire Change' },
   heading: { 
     type: String, 
-    default: 'Testimonials<br/>Real Voices.<br/>Real Impact.' 
+    default: 'What Industry<br />Leaders Say<br />About IHWE' 
   },
   description: { 
     type: String, 
-    default: 'From innovation to collaboration, our global community shares how IHWE is driving meaningful connections, advancing healthcare, and building a healthier future for all.' 
+    default: 'Real experiences. Real partnerships. Real impact. Discover how IHWE is transforming the global health & wellness ecosystem.' 
   },
-  leftBgImage: { type: String },
-  leftBgAlt: { type: String, default: 'Left Pattern' },
-  rightBgImage: { type: String },
-  rightBgAlt: { type: String, default: 'Right Pattern' },
-  highlightCardText: { 
-    type: String, 
-    default: 'Where global collaboration meets meaningful change. IHWE brings together brilliant minds, breakthrough ideas, and boundless opportunities —under one roof.' 
-  },
-  testimonials: [testimonialItemSchema]
+  heroBgImage: { type: String }, 
+  heroBgAlt: { type: String, default: 'IHWE Expo Background' },
+  
+  // Section Divider
+  dividerText: { type: String, default: 'WHAT OUR EXHIBITORS & PARTNERS SAY' },
+  
+  // Stats (Hero)
+  heroStats: [statSchema], // Array of 4 stats
+  
+  // Video Section Settings
+  videoMainHeading: { type: String, default: 'Our Exhibitors' },
+  videoSubheading: { type: String, default: 'Hear Directly From' },
+  videoDescription: { type: String, default: 'Real stories from real partners who experienced the IHWE impact.' },
+  videoButtonText: { type: String, default: 'View More Videos' },
+  videoButtonPath: { type: String, default: '#' },
+  
+  // Bottom Bar & CTA
+  bottomBarStats: [bottomStatSchema],
+  ctaMainText: { type: String, default: 'Be the Next' },
+  ctaSubText: { type: String, default: 'Success Story' },
+  ctaBottomText: { type: String, default: 'at IHWE 2026!' },
+  ctaButton1Name: { type: String, default: 'Book Your Stall' },
+  ctaButton1Path: { type: String, default: '/book-a-stand' },
+  ctaButton2Name: { type: String, default: 'Apply Now' },
+  ctaButton2Path: { type: String, default: '/registration' }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('NewTestimonial', newTestimonialSchema);
