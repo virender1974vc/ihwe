@@ -47,38 +47,6 @@ router.get('/', async (req, res) => {
 
     const cards = await NewTestimonialCard.find().sort({ order: 1 });
     
-    // Seed initial cards if empty
-    if (cards.length === 0) {
-      const initialCards = [
-        {
-          quote: "IHWE helped us connect with serious buyers and expand globally. The response was exceptional and beyond our expectations.",
-          company1: "NatureCure",
-          company2: "International",
-          location: "Dubai, UAE",
-          color: "#23471d"
-        },
-        {
-          quote: "A powerful platform for healthcare innovation and meaningful networking. We met the right partners for our business.",
-          company1: "MediWell",
-          company2: "Research",
-          location: "Toronto, Canada",
-          color: "#1a4d8f"
-        }
-      ];
-      await NewTestimonialCard.insertMany(initialCards);
-    }
-
-    const videos = await NewTestimonialVideo.find().sort({ order: 1 });
-    
-    // Seed initial videos if empty
-    if (videos.length === 0) {
-      const initialVideos = [
-        { title: "NatureCure International", location: "Dubai, UAE", videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
-        { title: "MediWell Research", location: "Toronto, Canada", videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }
-      ];
-      await NewTestimonialVideo.insertMany(initialVideos);
-    }
-
     const finalCards = await NewTestimonialCard.find().sort({ order: 1 });
     const finalVideos = await NewTestimonialVideo.find().sort({ order: 1 });
 
@@ -172,9 +140,19 @@ router.delete('/cards/:id', async (req, res) => {
 });
 
 // ─── VIDEO ROUTES ───
-router.post('/videos', async (req, res) => {
+router.post('/videos', upload.fields([
+  { name: 'videoFile', maxCount: 1 },
+  { name: 'thumbnail', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const video = new NewTestimonialVideo(req.body);
+    const videoData = { ...req.body };
+    if (req.files && req.files.videoFile) {
+      videoData.videoFile = `/uploads/testimonials/${req.files.videoFile[0].filename}`;
+    }
+    if (req.files && req.files.thumbnail) {
+      videoData.thumbnail = `/uploads/testimonials/${req.files.thumbnail[0].filename}`;
+    }
+    const video = new NewTestimonialVideo(videoData);
     await video.save();
     res.json({ success: true, data: video });
   } catch (error) {
@@ -182,9 +160,19 @@ router.post('/videos', async (req, res) => {
   }
 });
 
-router.put('/videos/:id', async (req, res) => {
+router.put('/videos/:id', upload.fields([
+  { name: 'videoFile', maxCount: 1 },
+  { name: 'thumbnail', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const video = await NewTestimonialVideo.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const videoData = { ...req.body };
+    if (req.files && req.files.videoFile) {
+      videoData.videoFile = `/uploads/testimonials/${req.files.videoFile[0].filename}`;
+    }
+    if (req.files && req.files.thumbnail) {
+      videoData.thumbnail = `/uploads/testimonials/${req.files.thumbnail[0].filename}`;
+    }
+    const video = await NewTestimonialVideo.findByIdAndUpdate(req.params.id, videoData, { new: true });
     res.json({ success: true, data: video });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
