@@ -2,7 +2,6 @@ const AwardsGallery = require('../models/AwardsGallery');
 const { logActivity } = require('../utils/logger');
 
 class AwardsGalleryController {
-    // GET all gallery items
     async getAll(req, res) {
         try {
             const items = await AwardsGallery.find({ status: 'Active' }).sort({ order: 1, createdAt: -1 });
@@ -39,7 +38,7 @@ class AwardsGalleryController {
     async create(req, res) {
         try {
             const { title, label, order, status } = req.body;
-            
+
             if (!req.file) {
                 return res.status(400).json({ success: false, message: 'Image is required' });
             }
@@ -70,11 +69,11 @@ class AwardsGalleryController {
             }
 
             const { label, status } = req.body;
-            
+
             // Get the current max order to continue from there
             const maxOrderItem = await AwardsGallery.findOne().sort({ order: -1 });
             const startOrder = maxOrderItem ? maxOrderItem.order + 1 : 0;
-            
+
             const items = [];
 
             for (let i = 0; i < req.files.length; i++) {
@@ -92,10 +91,10 @@ class AwardsGalleryController {
 
             const saved = await AwardsGallery.insertMany(items);
             await logActivity(req, 'Created', 'Awards Gallery', `Bulk created ${saved.length} gallery items`);
-            res.status(201).json({ 
-                success: true, 
-                data: saved, 
-                message: `${saved.length} gallery items created successfully` 
+            res.status(201).json({
+                success: true,
+                data: saved,
+                message: `${saved.length} gallery items created successfully`
             });
         } catch (error) {
             console.error('Bulk create gallery error:', error);
@@ -108,7 +107,7 @@ class AwardsGalleryController {
         try {
             const { title, label, order, status } = req.body;
             const item = await AwardsGallery.findById(req.params.id);
-            
+
             if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
 
             if (title) item.title = title;
@@ -132,7 +131,7 @@ class AwardsGalleryController {
         try {
             const item = await AwardsGallery.findByIdAndDelete(req.params.id);
             if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
-            
+
             await logActivity(req, 'Deleted', 'Awards Gallery', `Deleted gallery item: ${item.title}`);
             res.json({ success: true, message: 'Gallery item deleted successfully' });
         } catch (error) {
