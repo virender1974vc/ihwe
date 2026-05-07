@@ -119,7 +119,7 @@ const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
 const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
-
+const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 
 
 mongoose
@@ -366,6 +366,7 @@ app.use("/api/our-journey", ourJourneyRoutes);
 app.use("/api/penalty", require('./routes/penaltyRoutes'));
 app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
 app.use("/api/speaker", require('./routes/speaker'));
+app.use("/api/conference-days", conferenceDayRoutes);
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
