@@ -1,16 +1,16 @@
 const mongoose = require('mongoose');
 
 const statSchema = new mongoose.Schema({
-  icon: { type: String, default: 'Globe' },
-  value: { type: String, default: '1000+' },
-  label: { type: String, default: 'Global Buyers' },
-  color: { type: String, default: '#005c22ff' }
+  icon: { type: String, default: 'Users' },
+  value: { type: String, default: '8,000+' },
+  label: { type: String, default: 'Visitors / Delegates' },
+  color: { type: String, default: '#004ac2ff' }
 });
 
 const bottomStatSchema = new mongoose.Schema({
-  icon: { type: String, default: 'Leaf' },
-  label: { type: String, default: 'Trusted by' },
-  value: { type: String, default: '150+ Exhibitors' }
+  icon: { type: String, default: 'Users' },
+  label: { type: String, default: 'B2B' },
+  value: { type: String, default: 'B2B Meetings' }
 });
 
 const newTestimonialSchema = new mongoose.Schema({
