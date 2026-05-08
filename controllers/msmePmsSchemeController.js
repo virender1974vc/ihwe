@@ -1,4 +1,5 @@
 const MsmePmsScheme = require('../models/MsmePmsScheme');
+const MsmePmsPage = require('../models/MsmePmsPage');
 
 class MsmePmsSchemeController {
     async submitApplication(req, res) {
@@ -91,6 +92,60 @@ class MsmePmsSchemeController {
             res.status(200).json({ success: true, message: 'Application deleted successfully' });
         } catch (error) {
             console.error('Error deleting MSME PMS application:', error);
+            res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+        }
+    }
+
+    async getPageContent(req, res) {
+        try {
+            let page = await MsmePmsPage.findOne();
+            if (!page) {
+                page = new MsmePmsPage({
+                    stats: [
+                        { img: "/msmepmsscheme/global.png", val: "1,000+", label: "GLOBAL BUYERS" },
+                        { img: "/msmepmsscheme/exhibitors.png", val: "150+", label: "EXHIBITORS" },
+                        { img: "/msmepmsscheme/visitors.png", val: "8,000+", label: "VISITORS/ DELEGATES" },
+                        { img: "/msmepmsscheme/conference.png", val: "18+", label: "CONFERENCE SESSIONS" },
+                        { img: "/msmepmsscheme/businessOpportunities.png", val: "3 DAYS", label: "OF BUSINESS OPPORTUNITIES" },
+                        { img: "/msmepmsscheme/networkevents.png", val: "MULTIPLE", label: "NETWORKING EVENTS" },
+                    ],
+                    footerStats: [
+                        { img: "/msmepmsscheme/global1.png", val: "1,000+", label: "GLOBAL BUYERS" },
+                        { img: "/msmepmsscheme/exhibitors.png", val: "150+", label: "EXHIBITORS" },
+                        { img: "/msmepmsscheme/visitors.png", val: "8,000+", label: "VISITORS/ DELEGATES" },
+                        { img: "/msmepmsscheme/conference.png", val: "18+", label: "CONFERENCE SESSIONS" },
+                        { img: "/msmepmsscheme/businessOpportunities1.png", val: "3 DAYS", label: "OF BUSINESS OPPORTUNITIES" },
+                    ],
+                    benefits: [
+                        { img: "/msmepmsscheme/reimbursement.png", title: "Up to ₹1.5 Lakh* Reimbursement", desc: "Subsidy on stall booking & participation cost" },
+                        { img: "/msmepmsscheme/reducedCost.png", title: "Reduced Cost", desc: "Lower financial burden for market expansion" },
+                        { img: "/msmepmsscheme/marketexposure.png", title: "Market Exposure", desc: "Showcase your products to national & international buyers" },
+                        { img: "/msmepmsscheme/businessgrowth.png", title: "Business Growth", desc: "Generate leads & expand your network" },
+                        { img: "/msmepmsscheme/govsupport.png", title: "Government Support", desc: "Exhibit with the backing of Ministry of MSME" },
+                        { img: "/msmepmsscheme/brandvisibility.png", title: "Brand Visibility", desc: "Enhance brand credibility and recognition" },
+                    ]
+                });
+                await page.save();
+            }
+            res.status(200).json({ success: true, data: page });
+        } catch (error) {
+            console.error('Error fetching MSME PMS Page content:', error);
+            res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+        }
+    }
+
+    async updatePageContent(req, res) {
+        try {
+            let page = await MsmePmsPage.findOne();
+            if (!page) {
+                page = new MsmePmsPage(req.body);
+            } else {
+                Object.assign(page, req.body);
+            }
+            await page.save();
+            res.status(200).json({ success: true, message: 'Page content updated successfully', data: page });
+        } catch (error) {
+            console.error('Error updating MSME PMS Page content:', error);
             res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
         }
     }
