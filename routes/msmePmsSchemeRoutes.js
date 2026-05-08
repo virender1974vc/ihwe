@@ -28,5 +28,9 @@ const upload = multer({
 });
 
 router.post('/apply', upload.array('documents', 5), msmePmsSchemeController.submitApplication);
+router.get('/all', msmePmsSchemeController.getAllApplications);
+router.get('/:id', msmePmsSchemeController.getApplicationById);
+router.patch('/:id/status', msmePmsSchemeController.updateApplicationStatus);
+router.delete('/:id', msmePmsSchemeController.deleteApplication);
 
 module.exports = router;
