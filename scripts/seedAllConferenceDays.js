@@ -1,8 +1,10 @@
 const mongoose = require("mongoose");
 const ConferenceDay = require("../models/ConferenceDay");
-require("dotenv").config();
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/arogyasangosti";
+const MONGO_URI = process.env.MONGO_URI_MAIN || process.env.MONGO_URI || "mongodb://localhost:27017/arogyasangosti";
+console.log("Connecting to:", MONGO_URI.split('@')[1] || "localhost (default)");
 
 const conferenceData = [
   {
