@@ -107,13 +107,11 @@ const seedDay1 = async () => {
   try {
     await mongoose.connect(MONGO_URI);
     console.log("Connected to MongoDB for Day 1 seeding...");
-
     await ConferenceDay.findOneAndUpdate(
       { dayNumber: 1 },
       { $set: day1Data },
       { upsert: true, new: true }
     );
-
     console.log("Seeded Day 1 successfully.");
     process.exit(0);
   } catch (error) {
