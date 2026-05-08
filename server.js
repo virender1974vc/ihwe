@@ -367,6 +367,7 @@ app.use("/api/penalty", require('./routes/penaltyRoutes'));
 app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
 app.use("/api/speaker", require('./routes/speaker'));
 app.use("/api/conference-days", conferenceDayRoutes);
+app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
