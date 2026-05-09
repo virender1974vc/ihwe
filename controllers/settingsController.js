@@ -28,7 +28,7 @@ class SettingsController {
                 quickLinks, exhibitionLinks,
                 companyName, companyAddress, companyGst, companyCin, 
                 fullPaymentDiscount, availableTdsRates, msmeLogoTitle,
-                msmeLogos
+                msmeLogos, showBrochurePopUp, brochurePopUpDelay
             } = req.body;
             
             const updateData = {
@@ -51,7 +51,9 @@ class SettingsController {
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
                 fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined,
                 msmeLogoTitle: msmeLogoTitle || undefined,
-                isMsmeLogoActive: req.body.isMsmeLogoActive === 'true' || req.body.isMsmeLogoActive === true
+                isMsmeLogoActive: req.body.isMsmeLogoActive === 'true' || req.body.isMsmeLogoActive === true,
+                showBrochurePopUp: showBrochurePopUp === 'true' || showBrochurePopUp === true,
+                brochurePopUpDelay: brochurePopUpDelay ? Number(brochurePopUpDelay) : undefined
             };
 
             if (req.files) {

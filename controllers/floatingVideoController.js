@@ -12,13 +12,16 @@ exports.getAllVideos = async (req, res) => {
 
 exports.createVideo = async (req, res) => {
   try {
-    const { title, status, order } = req.body;
+    const { title, name, companyName, companyNameColor, status, order } = req.body;
     let videoUrl = "";
     if (req.file) {
       videoUrl = `/uploads/videos/${req.file.filename}`;
     }
     const video = await FloatingVideo.create({
       title,
+      name,
+      companyName,
+      companyNameColor,
       videoUrl,
       status: status || "active",
       order: order ? Number(order) : 0,
@@ -31,9 +34,12 @@ exports.createVideo = async (req, res) => {
 
 exports.updateVideo = async (req, res) => {
   try {
-    const { title, status, order } = req.body;
+    const { title, name, companyName, companyNameColor, status, order } = req.body;
     const updateData = {
       title,
+      name,
+      companyName,
+      companyNameColor,
       status,
       order: order ? Number(order) : 0,
     };

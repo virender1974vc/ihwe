@@ -7,6 +7,19 @@ const FloatingVideoSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    name: {
+      type: String,
+      trim: true,
+    },
+    companyName: {
+      type: String,
+      trim: true,
+    },
+    companyNameColor: {
+      type: String,
+      enum: ["green", "orange"],
+      default: "orange",
+    },
     videoUrl: {
       type: String,
       required: true,
