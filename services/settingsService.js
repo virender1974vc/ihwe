@@ -60,6 +60,8 @@ class SettingsService {
         if (companyStamp) settings.companyStamp = companyStamp;
         if (updateData.isMsmeLogoActive !== undefined) settings.isMsmeLogoActive = updateData.isMsmeLogoActive;
         if (updateData.msmeLogos !== undefined) settings.msmeLogos = updateData.msmeLogos;
+        if (updateData.showBrochurePopUp !== undefined) settings.showBrochurePopUp = updateData.showBrochurePopUp;
+        if (updateData.brochurePopUpDelay !== undefined) settings.brochurePopUpDelay = updateData.brochurePopUpDelay;
 
         return await settings.save();
     }
