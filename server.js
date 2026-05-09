@@ -119,6 +119,7 @@ const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
 const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
+const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 
 
@@ -369,6 +370,7 @@ app.use("/api/penalty", require('./routes/penaltyRoutes'));
 app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
 app.use("/api/speaker", require('./routes/speaker'));
 app.use("/api/conference-days", conferenceDayRoutes);
+app.use("/api/conference-tracks", conferenceTrackRoutes);
 app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────

@@ -35,7 +35,11 @@ class ConferenceTestimonialsController {
      */
     async addCard(req, res) {
         try {
-            const data = await conferenceTestimonialsService.addCard(req.body);
+            const cardData = { ...req.body };
+            if (req.file) {
+                cardData.image = `/uploads/conference-testimonials/${req.file.filename}`;
+            }
+            const data = await conferenceTestimonialsService.addCard(cardData);
             await logActivity(req, 'Created', 'Conference Testimonials', `Added new conference testimonial: ${req.body.name || 'Untitled'}`);
             res.status(201).json({ success: true, data });
         } catch (error) {
@@ -48,7 +52,11 @@ class ConferenceTestimonialsController {
      */
     async updateCard(req, res) {
         try {
-            const data = await conferenceTestimonialsService.updateCard(req.params.id, req.body);
+            const cardData = { ...req.body };
+            if (req.file) {
+                cardData.image = `/uploads/conference-testimonials/${req.file.filename}`;
+            }
+            const data = await conferenceTestimonialsService.updateCard(req.params.id, cardData);
             await logActivity(req, 'Updated', 'Conference Testimonials', `Updated conference testimonial: ${req.body.name || 'ID: ' + req.params.id}`);
             res.json({ success: true, data });
         } catch (error) {
