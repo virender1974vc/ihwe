@@ -14,6 +14,7 @@ const msmePmsSchemeSchema = new mongoose.Schema({
         path: String,
         mimetype: String
     }],
+    is_lead: { type: Boolean, default: false },
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
     createdAt: { type: Date, default: Date.now }
 });

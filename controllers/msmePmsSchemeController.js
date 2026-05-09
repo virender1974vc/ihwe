@@ -44,7 +44,7 @@ class MsmePmsSchemeController {
 
     async getAllApplications(req, res) {
         try {
-            const applications = await MsmePmsScheme.find().sort({ createdAt: -1 });
+            const applications = await MsmePmsScheme.find({ is_lead: false }).sort({ createdAt: -1 });
             res.status(200).json({ success: true, data: applications });
         } catch (error) {
             console.error('Error fetching MSME PMS applications:', error);
@@ -67,10 +67,14 @@ class MsmePmsSchemeController {
 
     async updateApplicationStatus(req, res) {
         try {
-            const { status } = req.body;
+            const { status, is_lead } = req.body;
+            const updateFields = {};
+            if (status !== undefined) updateFields.status = status;
+            if (is_lead !== undefined) updateFields.is_lead = is_lead;
+
             const updatedApplication = await MsmePmsScheme.findByIdAndUpdate(
                 req.params.id,
-                { status },
+                updateFields,
                 { new: true }
             );
             if (!updatedApplication) {
