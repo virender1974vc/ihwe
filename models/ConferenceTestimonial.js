@@ -6,6 +6,7 @@ const ConferenceTestimonialCardSchema = new mongoose.Schema({
     company: { type: String },
     initials: { type: String },
     feedback: { type: String, required: true },
+    image: { type: String },
     rating: { type: Number, default: 5 },
     order: { type: Number, default: 0 }
 });

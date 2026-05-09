@@ -15,7 +15,8 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
 
@@ -35,5 +36,9 @@ router.put('/:id', upload.single('image'), (req, res) => exhibitorController.upd
 
 // DELETE exhibitor
 router.delete('/:id', (req, res) => exhibitorController.deleteExhibitor(req, res));
+
+router.post('/bulk', upload.array('images', 100), (req, res) => exhibitorController.bulkAddExhibitors(req, res));
+router.delete('/bulk/delete', (req, res) => exhibitorController.bulkDeleteExhibitors(req, res));
+router.post('/reorder', (req, res) => exhibitorController.reorderExhibitors(req, res));
 
 module.exports = router;

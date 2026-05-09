@@ -60,6 +60,7 @@ const exhibitorRegistrationRoutes = require('./routes/exhibitorRegistration');
 const stallRoutes = require('./routes/stalls');
 const eventRoutes = require('./routes/events');
 const stallRateRoutes = require('./routes/stallRates');
+const msmePmsSchemeRoutes = require('./routes/msmePmsSchemeRoutes');
 const termsAndConditionsRoutes = require('./routes/termsAndConditions');
 const sellerRegistrationRoutes = require('./routes/sellerRegistration');
 const dashboardRoutes = require('./routes/dashboard');
@@ -118,7 +119,8 @@ const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
 const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
-
+const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
+const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 
 
 mongoose
@@ -134,6 +136,29 @@ app.use('/api/payment/webhook', require('./routes/payment'));
 
 // Middleware
 app.use(cors());
+// const allowedOrigins = [
+//   "https://ihwe.in",
+//   "https://www.ihwe.in",
+//   "https://admin.ihwe.in"
+// ];
+
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       // allow requests with no origin (like Postman / mobile apps)
+//       if (!origin) return callback(null, true);
+
+//       if (allowedOrigins.includes(origin)) {
+//         return callback(null, true);
+//       } else {
+//         console.warn(`⚠️ CORS blocked for origin: ${origin}`);
+//         return callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     credentials: true
+//   })
+// );
+
 app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
@@ -235,6 +260,8 @@ app.use("/api/why-visit", require("./routes/whyVisit"));
 app.use("/api/hero-background", require("./routes/heroBackground"));
 app.use("/api/exhibitor-profile", require("./routes/exhibitorProfile"));
 app.use("/api/e-promotion", require("./routes/ePromotion"));
+app.use("/api/e-promotion-packages", require("./routes/e_promotion/EPromotionRoutes"));
+app.use("/api/bsm-testimonials", require("./routes/buyer_saller_meet/BSMTestimonialRoutes"));
 app.use("/api/stall-vendor", stallVendorRoutes);
 app.use("/api/partners", require("./routes/partners"));
 app.use("/api/exhibitor", exhibitorRoutes);
@@ -271,6 +298,7 @@ app.use('/api/policies', require('./routes/policyRoutes'));
 app.use('/api/dashboard-banners', require('./routes/dashboardBannerRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
+app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
 
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
@@ -341,6 +369,9 @@ app.use("/api/our-journey", ourJourneyRoutes);
 app.use("/api/penalty", require('./routes/penaltyRoutes'));
 app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
 app.use("/api/speaker", require('./routes/speaker'));
+app.use("/api/conference-days", conferenceDayRoutes);
+app.use("/api/conference-tracks", conferenceTrackRoutes);
+app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');

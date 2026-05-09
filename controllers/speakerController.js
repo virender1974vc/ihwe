@@ -30,18 +30,16 @@ exports.createSpeaker = async (req, res) => {
         res.status(400).json({ success: false, message: 'Failed to submit speaker application.', error: error.message });
     }
 };
-
-// Get all speakers
 exports.getAllSpeakers = async (req, res) => {
     try {
-        const speakers = await Speaker.find().sort({ createdAt: -1 });
+        const { status } = req.query;
+        const query = status ? { status } : {};
+        const speakers = await Speaker.find(query).sort({ createdAt: -1 });
         res.status(200).json({ success: true, count: speakers.length, data: speakers });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Failed to fetch speakers.', error: error.message });
     }
 };
-
-// Get a single speaker by ID
 exports.getSpeakerById = async (req, res) => {
     try {
         const speaker = await Speaker.findById(req.params.id);
