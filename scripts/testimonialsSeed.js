@@ -91,7 +91,6 @@ const seedTestimonials = async () => {
     await mongoose.connect(MONGO_URI);
     console.log("Connected successfully.");
 
-    // Helper to generate initials
     const generateInitials = (name) => {
       const parts = name.trim().split(" ");
       let initials = parts[0][0].toUpperCase();
@@ -100,8 +99,6 @@ const seedTestimonials = async () => {
       }
       return initials;
     };
-
-    // Add initials to all cards
     const cardsWithInitials = testimonialsData.cards.map(card => ({
       ...card,
       initials: generateInitials(card.name)
@@ -113,7 +110,7 @@ const seedTestimonials = async () => {
     };
 
     console.log("Seeding testimonials data...");
-    await ConferenceTestimonial.deleteMany({}); // Clear existing data
+    await ConferenceTestimonial.deleteMany({});
     await ConferenceTestimonial.create(dataToSeed);
 
     console.log("Seeding complete! 8 high-quality testimonials have been added.");
