@@ -28,5 +28,22 @@ const upload = multer({
 });
 
 router.post('/apply', upload.array('documents', 5), msmePmsSchemeController.submitApplication);
+router.post('/upload-image', upload.single('image'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+        res.json({ success: true, url: req.file.path });
+    } catch (error) {
+        console.error('Error in upload-image:', error);
+        res.status(500).json({ success: false, message: 'Image upload failed' });
+    }
+});
+router.get('/all', msmePmsSchemeController.getAllApplications);
+router.get('/page-content', msmePmsSchemeController.getPageContent);
+router.post('/page-content', msmePmsSchemeController.updatePageContent);
+router.get('/:id', msmePmsSchemeController.getApplicationById);
+router.patch('/:id/status', msmePmsSchemeController.updateApplicationStatus);
+router.delete('/:id', msmePmsSchemeController.deleteApplication);
 
 module.exports = router;

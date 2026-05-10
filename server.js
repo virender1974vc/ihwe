@@ -260,6 +260,8 @@ app.use("/api/why-visit", require("./routes/whyVisit"));
 app.use("/api/hero-background", require("./routes/heroBackground"));
 app.use("/api/exhibitor-profile", require("./routes/exhibitorProfile"));
 app.use("/api/e-promotion", require("./routes/ePromotion"));
+app.use("/api/e-promotion-packages", require("./routes/e_promotion/EPromotionRoutes"));
+app.use("/api/bsm-testimonials", require("./routes/buyer_saller_meet/BSMTestimonialRoutes"));
 app.use("/api/stall-vendor", stallVendorRoutes);
 app.use("/api/partners", require("./routes/partners"));
 app.use("/api/exhibitor", exhibitorRoutes);

@@ -141,6 +141,14 @@ const settingsSchema = new mongoose.Schema({
     floatingVideoTimer: {
         type: Number,
         default: 7
+    },
+    showBrochurePopUp: {
+        type: Boolean,
+        default: true
+    },
+    brochurePopUpDelay: {
+        type: Number,
+        default: 7
     }
 }, { timestamps: true });
 
