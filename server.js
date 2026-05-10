@@ -92,6 +92,7 @@ const corporateVisitorRoutes = require("./routes/visitor/corporateVisitorRoutes"
 const generalVisitorRoutes = require("./routes/visitor/generalVisitorRoutes");
 const freeHealthCampRoutes = require("./routes/visitor/freeHealthCampRoutes");
 const visitorReviewRoutes = require("./routes/visitor/visitorReviewRoutes");
+const groupVisitorRoutes = require("./routes/visitor/groupVisitorRoutes");
 const serviceDetailRoutes = require("./routes/serviceDetail");
 const bookingRoutes = require("./routes/bookingRoutes");
 const contactRoutes = require("./routes/contactRoutes");
@@ -326,6 +327,7 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/creditnotes", creditNoteRoutes);
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
+app.use("/api/group-visitors", groupVisitorRoutes);
 app.use("/api/health-camp-visitors", freeHealthCampRoutes);
 app.use("/api/service-details", serviceDetailRoutes);
 app.use("/api/bookings", bookingRoutes);
