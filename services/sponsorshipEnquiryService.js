@@ -1,4 +1,5 @@
 const SponsorshipEnquiry = require('../models/SponsorshipEnquiry');
+const emailService = require('../utils/emailService');
 
 /**
  * Service to handle Sponsorship Enquiry business logic.
@@ -10,7 +11,23 @@ class SponsorshipEnquiryService {
      */
     async submitEnquiry(enquiryData) {
         const enquiry = new SponsorshipEnquiry(enquiryData);
-        return await enquiry.save();
+        const savedEnquiry = await enquiry.save();
+
+        // Send Notifications (Email + WhatsApp) to User and Admin
+        try {
+            await emailService.sendSponsorshipConfirmation({
+                email: enquiryData.email,
+                name: enquiryData.fullName,
+                company: enquiryData.companyName,
+                phone: enquiryData.phone,
+                category: enquiryData.category,
+                message: enquiryData.message || 'N/A'
+            });
+        } catch (error) {
+            console.error('Error sending sponsorship enquiry notifications:', error);
+        }
+
+        return savedEnquiry;
     }
 
     /**
