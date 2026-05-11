@@ -27,7 +27,7 @@ class AwardsNominationService {
       `• Status: *Pending Review*\n\n` +
       `Our jury team will review your nomination and get back to you shortly.\n\n` +
       `For any queries, contact us at:\n` +
-      `📞 +91 93104 68663\n` +
+      `📞 +91-9654900525\n` +
       `📧 info@ihwe.in\n\n` +
       `– Team IHWE\n` +
       `Namo Gange Wellness Pvt. Ltd.`;
@@ -37,7 +37,7 @@ class AwardsNominationService {
     );
 
     // ── WhatsApp Admin Alert ──
-    const adminMobile = process.env.ADMIN_WHATSAPP_NUMBER || '919310468663';
+    const adminMobile = process.env.ADMIN_WHATSAPP_NUMBER || '91964590052';
     const adminMsg =
       `🔔 *New Awards Nomination Received!*\n\n` +
       `📋 *Details:*\n` +
@@ -133,7 +133,7 @@ class AwardsNominationService {
       `${statusEmoji[status]} *Status: ${status}*\n` +
       `📋 Category: ${nomination.awardCategory}\n` +
       (adminRemarks ? `📝 Remarks: ${adminRemarks}\n` : '') +
-      `\nFor queries, contact us at +91 93104 68663\n\n` +
+      `\nFor queries, contact us at +91-9654900525\n\n` +
       `– Team IHWE\nNamo Gange Wellness Pvt. Ltd.`;
 
     sendWhatsAppMessage(nomination.mobile, statusMsg, nomination.fullName).catch(err =>

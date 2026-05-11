@@ -30,11 +30,11 @@ class ConferenceTestimonialsService {
      * Add a testimonial card.
      */
     async addCard(cardData) {
-        const { name, role, company, feedback, rating } = cardData;
+        const { name, role, company, feedback, rating, image } = cardData;
         const data = await this.getTestimonials();
 
         const initials = this._generateInitials(name);
-        data.cards.push({ name, role, company, initials, feedback, rating });
+        data.cards.push({ name, role, company, initials, feedback, rating, image });
         return await data.save();
     }
 
@@ -42,7 +42,7 @@ class ConferenceTestimonialsService {
      * Update a testimonial card.
      */
     async updateCard(cardId, cardData) {
-        const { name, role, company, feedback, rating } = cardData;
+        const { name, role, company, feedback, rating, image } = cardData;
         const data = await this.getTestimonials();
 
         const card = data.cards.id(cardId);
@@ -56,6 +56,7 @@ class ConferenceTestimonialsService {
         if (company !== undefined) card.company = company;
         if (feedback !== undefined) card.feedback = feedback;
         if (rating !== undefined) card.rating = rating;
+        if (image !== undefined) card.image = image;
 
         return await data.save();
     }
