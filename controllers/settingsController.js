@@ -39,7 +39,6 @@ class SettingsController {
                 exhibitionLinks: exhibitionLinks ? JSON.parse(exhibitionLinks) : undefined,
                 availableTdsRates: availableTdsRates ? (typeof availableTdsRates === 'string' ? JSON.parse(availableTdsRates) : availableTdsRates) : undefined,
                 msmeLogos: msmeLogos ? JSON.parse(msmeLogos) : undefined,
-                isMsmeLogoActive: isMsmeLogoActive === 'true' || isMsmeLogoActive === true,
                 mapIframe,
                 marqueeText,
                 topbarDate,
