@@ -6,7 +6,7 @@ const multer = require('multer');
 const path = require("path");
 const fs = require("fs");
 const cookieParser = require("cookie-parser");
-['uploads', 'uploads/marketing', 'temp', 'uploads/videos'].forEach(dir => {
+['uploads', 'uploads/marketing', 'temp', 'uploads/videos', 'uploads/exhibitor-testimonials'].forEach(dir => {
   const dirPath = path.join(__dirname, dir);
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -117,6 +117,7 @@ const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
 const agendaRoutes = require("./routes/agendaRoutes");
 const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
+const exhibitorTestimonialsRoutes = require("./routes/exhibitorTestimonialsRoutes");
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
 const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
@@ -364,6 +365,7 @@ app.use("/api/chat", require('./routes/chatRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);
 app.use("/api/conference-testimonials", conferenceTestimonialsRoutes);
+app.use("/api/exhibitor-testimonials", exhibitorTestimonialsRoutes);
 app.use("/api/seller-portal", require("./routes/sellerPortalRoutes"));
 app.use("/api/event-overview", eventOverviewRoutes);
 app.use("/api/about-organizer", aboutOrganizerRoutes);

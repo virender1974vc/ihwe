@@ -11,7 +11,8 @@ class OtpController {
      */
     async requestOtp(req, res) {
         try {
-            const { identifier, type, name } = req.body; // identifier: email address or phone number
+            const { identifier, type, name, source } = req.body; // identifier: email address or phone number
+            const context = source || 'BUYER';
 
             if (!identifier || !type) {
                 return res.status(400).json({ success: false, message: 'Identifier and type are required' });
@@ -29,9 +30,9 @@ class OtpController {
 
             // Send via appropriate channel
             if (type === 'email') {
-                await emailService.sendOtpEmail(identifier, otpCode, name || 'Buyer', 'BUYER');
+                await emailService.sendOtpEmail(identifier, otpCode, name || 'User', context);
             } else if (type === 'phone') {
-                await whatsapp.sendWhatsAppOTP(identifier, otpCode, 'BUYER', name || 'Buyer');
+                await whatsapp.sendWhatsAppOTP(identifier, otpCode, context, name || 'User');
             }
 
             res.json({ success: true, message: `OTP sent to ${identifier}` });
