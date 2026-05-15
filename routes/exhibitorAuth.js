@@ -34,6 +34,7 @@ const uploadFields = upload.fields([
 ]);
 
 router.post('/login', (req, res) => exhibitorAuthController.login(req, res));
+router.post('/send-email-otp', (req, res) => exhibitorAuthController.sendEmailOtp(req, res));
 router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobileOtp(req, res));
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
