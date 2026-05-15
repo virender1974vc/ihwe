@@ -281,6 +281,7 @@ app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
 app.use("/api/international-exhibitor", require("./routes/internationalExhibitorRoutes"));
 app.use("/api/international-buyer", require("./routes/internationalBuyerRoutes"));
 app.use("/api/seller-registration", sellerRegistrationRoutes);
+app.use("/api/advisory-nomination", require("./routes/advisoryNomination"));
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
 app.use("/api/verify", require("./routes/verify"));
