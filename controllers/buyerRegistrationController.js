@@ -1,13 +1,9 @@
 const buyerRegistrationService = require('../services/buyerRegistrationService');
 const { logActivity } = require('../utils/logger');
 
-/**
- * Controller to handle Buyer Registration requests.
- */
+
 class BuyerRegistrationController {
-    /**
-     * Create a new registration.
-     */
+
     async createRegistration(req, res) {
         try {
             const files = req.files || {};
@@ -24,9 +20,7 @@ class BuyerRegistrationController {
         }
     }
 
-    /**
-     * Get all registrations.
-     */
+
     async getAllRegistrations(req, res) {
         try {
             const data = await buyerRegistrationService.getAllRegistrations();
