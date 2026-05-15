@@ -83,6 +83,37 @@ class BuyerAuthController {
         }
     }
 
+    async sendEmailOtp(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email)
+                return res.status(400).json({ success: false, message: 'Email address is required' });
+
+            const buyer = await BuyerRegistration.findOne({ emailAddress: email.trim().toLowerCase() })
+                .sort({ createdAt: -1 });
+
+            if (!buyer)
+                return res.status(404).json({ success: false, message: 'Buyer with this email not found' });
+
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            await BuyerRegistration.findByIdAndUpdate(buyer._id, {
+                otp,
+                otpExpiry: new Date(Date.now() + 10 * 60 * 1000)
+            });
+
+            // Send OTP via email
+            await emailService.sendOtpEmail(email.trim().toLowerCase(), otp, buyer.companyName);
+
+            res.status(200).json({
+                success: true,
+                message: 'OTP sent to registered email',
+                buyerId: buyer._id
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     async sendMobileOtp(req, res) {
         try {
             const { mobile } = req.body;
