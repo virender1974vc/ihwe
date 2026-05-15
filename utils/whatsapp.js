@@ -20,6 +20,8 @@ const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) =>
         msg = `${greeting}IHWE Seller Verification Code:\n\n*${otp}*\n\nThis code is required to complete your seller registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'SPONSOR') {
         msg = `${greeting}IHWE Sponsorship Verification Code:\n\n*${otp}*\n\nThis code is required to verify your interest in Sponsorship for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+    } else if (context === 'EXPO_SUPPORT') {
+        msg = `${greeting}IHWE Expo Support Verification Code:\n\n*${otp}*\n\nThis code is required to verify your request for Expo Support Services for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
     }
     
     try {
