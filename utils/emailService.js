@@ -1356,6 +1356,11 @@ class EmailService {
             contextDescription = 'expressing interest in Sponsorship';
             dashboardText = 'IHWE Partner Ecosystem';
             contextGreeting = 'Potential Sponsor';
+        } else if (context === 'MEDIA' || context.includes('media')) {
+            contextTitle = 'Media PR Enquiry';
+            contextDescription = 'submitting a Media PR enquiry';
+            dashboardText = 'IHWE Media Portal';
+            contextGreeting = 'Media Professional';
         }
 
         const subject = `IHWE ${contextTitle} – Email Verification OTP`;

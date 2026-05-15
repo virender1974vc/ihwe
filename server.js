@@ -123,6 +123,7 @@ const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
 const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
 const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
+const mediaRegistrationRoutes = require("./routes/mediaRegistration");
 
 
 mongoose
@@ -223,6 +224,7 @@ app.get("/api/test", (req, res) => {
 
 
 const authRoutes = require("./routes/auth");
+
 app.use("/api", authRoutes);
 app.use("/api/sidebar", sidebarRoutes);
 app.use("/api/roles", rolesRoutes);
@@ -301,6 +303,7 @@ app.use('/api/dashboard-banners', require('./routes/dashboardBannerRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
+app.use("/api/media-registration", mediaRegistrationRoutes);
 
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
