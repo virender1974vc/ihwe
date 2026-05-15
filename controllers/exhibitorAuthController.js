@@ -79,6 +79,36 @@ class ExhibitorAuthController {
         }
     }
 
+    async sendEmailOtp(req, res) {
+        try {
+            const { email } = req.body;
+            if (!email)
+                return res.status(400).json({ success: false, message: 'Email address is required' });
+
+            const exhibitor = await ExhibitorRegistration.findOne({ 'contact1.email': email.trim().toLowerCase() })
+                .sort({ createdAt: -1 });
+
+            if (!exhibitor)
+                return res.status(404).json({ success: false, message: 'Exhibitor with this email not found' });
+
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            exhibitor.otp = otp;
+            exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+            await exhibitor.save();
+
+            // Send OTP via email
+            await emailService.sendOtpEmail(email.trim().toLowerCase(), otp, exhibitor.exhibitorName, 'EXHIBITOR');
+
+            res.status(200).json({
+                success: true,
+                message: 'OTP sent to registered email',
+                exhibitorId: exhibitor._id
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     // Send OTP to mobile
     async sendMobileOtp(req, res) {
         try {
