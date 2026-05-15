@@ -121,6 +121,7 @@ const exhibitorTestimonialsRoutes = require("./routes/exhibitorTestimonialsRoute
 const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
 const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
 const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
+const expoSupportEnquiryRoutes = require("./routes/expoSupportEnquiryRoutes");
 const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 const mediaRegistrationRoutes = require("./routes/mediaRegistration");
@@ -346,6 +347,7 @@ app.use("/api/visitor-auth", visitorAuthRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/floating-videos", floatingVideoRoutes);
 app.use("/api/sponsorship-enquiry", sponsorshipEnquiryRoutes);
+app.use("/api/expo-support-enquiry", expoSupportEnquiryRoutes);
 
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
