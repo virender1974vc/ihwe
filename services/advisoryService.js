@@ -18,13 +18,15 @@ class AdvisoryService {
      * @returns {Promise<Object>}
      */
     async createMember(data) {
-        const { name, role, organization, image, imageAlt } = data;
+        const { name, role, organization, image, imageAlt, linkedin, country } = data;
         const newMember = new AdvisoryMember({
             name,
             role,
             organization,
             image,
-            imageAlt
+            imageAlt,
+            linkedin,
+            country
         });
         return await newMember.save();
     }
@@ -36,10 +38,10 @@ class AdvisoryService {
      * @returns {Promise<Object>}
      */
     async updateMember(id, data) {
-        const { name, role, organization, image, imageAlt } = data;
+        const { name, role, organization, image, imageAlt, linkedin, country } = data;
         const member = await AdvisoryMember.findByIdAndUpdate(
             id,
-            { name, role, organization, image, imageAlt },
+            { name, role, organization, image, imageAlt, linkedin, country },
             { new: true }
         );
         if (!member) {
