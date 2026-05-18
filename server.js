@@ -92,6 +92,7 @@ const corporateVisitorRoutes = require("./routes/visitor/corporateVisitorRoutes"
 const generalVisitorRoutes = require("./routes/visitor/generalVisitorRoutes");
 const freeHealthCampRoutes = require("./routes/visitor/freeHealthCampRoutes");
 const visitorReviewRoutes = require("./routes/visitor/visitorReviewRoutes");
+const groupVisitorRoutes = require("./routes/visitor/groupVisitorRoutes");
 const serviceDetailRoutes = require("./routes/serviceDetail");
 const bookingRoutes = require("./routes/bookingRoutes");
 const contactRoutes = require("./routes/contactRoutes");
@@ -123,6 +124,7 @@ const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
 const expoSupportEnquiryRoutes = require("./routes/expoSupportEnquiryRoutes");
 const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
+const mediaRegistrationRoutes = require("./routes/mediaRegistration");
 
 
 mongoose
@@ -223,6 +225,7 @@ app.get("/api/test", (req, res) => {
 
 
 const authRoutes = require("./routes/auth");
+
 app.use("/api", authRoutes);
 app.use("/api/sidebar", sidebarRoutes);
 app.use("/api/roles", rolesRoutes);
@@ -279,6 +282,7 @@ app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
 app.use("/api/international-exhibitor", require("./routes/internationalExhibitorRoutes"));
 app.use("/api/international-buyer", require("./routes/internationalBuyerRoutes"));
 app.use("/api/seller-registration", sellerRegistrationRoutes);
+app.use("/api/advisory-nomination", require("./routes/advisoryNomination"));
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
 app.use("/api/verify", require("./routes/verify"));
@@ -301,6 +305,7 @@ app.use('/api/dashboard-banners', require('./routes/dashboardBannerRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
+app.use("/api/media-registration", mediaRegistrationRoutes);
 
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
@@ -328,6 +333,7 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/creditnotes", creditNoteRoutes);
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
+app.use("/api/group-visitors", groupVisitorRoutes);
 app.use("/api/health-camp-visitors", freeHealthCampRoutes);
 app.use("/api/service-details", serviceDetailRoutes);
 app.use("/api/bookings", bookingRoutes);
