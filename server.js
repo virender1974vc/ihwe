@@ -28,6 +28,7 @@ const ourJourneyRoutes = require("./routes/ourJourneyRoutes");
 
 const eventHighlightsRoutes = require("./routes/eventHighlights");
 const aboutRoutes = require("./routes/about");
+const chairmanMessageRoutes = require("./routes/chairmanMessage");
 const settingsRoutes = require("./routes/settings");
 const downloadPdfRoutes = require("./routes/downloadPdf");
 const marqueeRoutes = require("./routes/marquee");
@@ -233,6 +234,7 @@ app.use("/api/hero", heroRoutes);
 app.use("/api/admin", adminUsersRoutes);
 app.use("/api/event-highlights", eventHighlightsRoutes);
 app.use("/api/about", aboutRoutes);
+app.use("/api/chairman-message", chairmanMessageRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/download-pdf", downloadPdfRoutes);
 app.use("/api/marquee", marqueeRoutes);
