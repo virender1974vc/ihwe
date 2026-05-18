@@ -144,7 +144,8 @@ app.use(cors());
 // const allowedOrigins = [
 //   "https://ihwe.in",
 //   "https://www.ihwe.in",
-//   "https://admin.ihwe.in"
+//   "https://admin.ihwe.in",
+//   "http://localhost:8080"
 // ];
 
 // app.use(
