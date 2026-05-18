@@ -28,7 +28,7 @@ class SettingsController {
                 quickLinks, exhibitionLinks,
                 companyName, companyAddress, companyGst, companyCin, 
                 fullPaymentDiscount, availableTdsRates, msmeLogoTitle,
-                msmeLogos, showBrochurePopUp, brochurePopUpDelay
+                msmeLogos, showBrochurePopUp, brochurePopUpDelay, showGovtPmsScheme
             } = req.body;
             
             const updateData = {
@@ -39,6 +39,7 @@ class SettingsController {
                 exhibitionLinks: exhibitionLinks ? JSON.parse(exhibitionLinks) : undefined,
                 availableTdsRates: availableTdsRates ? (typeof availableTdsRates === 'string' ? JSON.parse(availableTdsRates) : availableTdsRates) : undefined,
                 msmeLogos: msmeLogos ? JSON.parse(msmeLogos) : undefined,
+                isMsmeLogoActive: req.body.isMsmeLogoActive === 'true' || req.body.isMsmeLogoActive === true,
                 mapIframe,
                 marqueeText,
                 topbarDate,
@@ -51,9 +52,9 @@ class SettingsController {
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
                 fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined,
                 msmeLogoTitle: msmeLogoTitle || undefined,
-                isMsmeLogoActive: req.body.isMsmeLogoActive === 'true' || req.body.isMsmeLogoActive === true,
                 showBrochurePopUp: showBrochurePopUp === 'true' || showBrochurePopUp === true,
-                brochurePopUpDelay: brochurePopUpDelay ? Number(brochurePopUpDelay) : undefined
+                brochurePopUpDelay: brochurePopUpDelay ? Number(brochurePopUpDelay) : undefined,
+                showGovtPmsScheme: showGovtPmsScheme === 'true' || showGovtPmsScheme === true
             };
 
             // Handle file uploads

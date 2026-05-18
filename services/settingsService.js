@@ -62,6 +62,7 @@ class SettingsService {
         if (updateData.msmeLogos !== undefined) settings.msmeLogos = updateData.msmeLogos;
         if (updateData.showBrochurePopUp !== undefined) settings.showBrochurePopUp = updateData.showBrochurePopUp;
         if (updateData.brochurePopUpDelay !== undefined) settings.brochurePopUpDelay = updateData.brochurePopUpDelay;
+        if (updateData.showGovtPmsScheme !== undefined) settings.showGovtPmsScheme = updateData.showGovtPmsScheme;
 
         return await settings.save();
     }

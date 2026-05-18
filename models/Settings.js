@@ -149,6 +149,10 @@ const settingsSchema = new mongoose.Schema({
     brochurePopUpDelay: {
         type: Number,
         default: 7
+    },
+    showGovtPmsScheme: {
+        type: Boolean,
+        default: true
     }
 }, { timestamps: true });
 
