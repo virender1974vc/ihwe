@@ -41,5 +41,6 @@ router.post("/", uploadFields, (req, res) => partnerRegistrationController.submi
 router.get("/", (req, res) => partnerRegistrationController.getAllRegistrations(req, res));
 router.get("/:id", (req, res) => partnerRegistrationController.getRegistrationById(req, res));
 router.patch("/:id/status", (req, res) => partnerRegistrationController.updateStatus(req, res));
+router.delete("/:id", (req, res) => partnerRegistrationController.deleteRegistration(req, res));
 
 module.exports = router;

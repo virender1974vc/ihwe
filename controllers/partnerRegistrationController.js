@@ -219,6 +219,31 @@ class PartnerRegistrationController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  /**
+   * Delete partner registration (for admin)
+   */
+  async deleteRegistration(req, res) {
+    try {
+      const partner = await PartnerRegistration.findByIdAndDelete(req.params.id);
+      if (!partner) {
+        return res.status(404).json({ success: false, message: "Partner registration not found" });
+      }
+      try {
+        await logActivity(
+          req,
+          "Deleted",
+          "Partner Registration",
+          `Deleted Partner registration ID: ${req.params.id}`
+        );
+      } catch (err) {
+        console.error("Logger error:", err);
+      }
+      res.json({ success: true, message: "Partner registration deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 module.exports = new PartnerRegistrationController();
