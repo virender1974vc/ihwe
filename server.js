@@ -309,6 +309,8 @@ app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
 app.use("/api/media-registration", mediaRegistrationRoutes);
+app.use("/api/partner-registration", require("./routes/partnerRegistration"));
+
 
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
