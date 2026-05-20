@@ -265,6 +265,7 @@ app.use("/api/seo", require("./routes/seo"));
 app.use("/api/seo-settings", require("./routes/seoSettings.js"));
 app.use("/api/why-exhibit", require("./routes/whyExhibit"));
 app.use("/api/sponsor-comparison", require("./routes/sponsorComparisonRoutes.js"));
+app.use("/api/partner-categories", require("./routes/partnerCategoriesRoutes.js"));
 app.use("/api/why-visit", require("./routes/whyVisit"));
 app.use("/api/hero-background", require("./routes/heroBackground"));
 app.use("/api/exhibitor-profile", require("./routes/exhibitorProfile"));
