@@ -8,7 +8,6 @@ const seedHotelStayPartner = async () => {
         await mongoose.connect(uri);
         console.log('Connected to MongoDB for Hotel Stay Partner seed');
 
-        // Clear existing collection
         await HotelStayPartner.deleteMany({});
         console.log('Cleared existing Hotel Stay Partner collection.');
 
@@ -42,12 +41,11 @@ const seedHotelStayPartner = async () => {
                 companyCard: {
                     title: "What's in it for your company?",
                     items: [
-                        { text: "Direct access to 8,000+ high-value delegates, speakers & exhibitors", icon: "Star" },
-                        { text: "Increased room bookings during the event period", icon: "Users2" },
-                        { text: "Brand visibility across IHWE 2026 platforms (website, app, emails, social media)", icon: "Megaphone" },
-                        { text: "Promotion of exclusive stay offers to a global audience", icon: "Tag" },
-                        { text: "Networking with global brands, associations & decision makers", icon: "Handshake" },
-                        { text: "Association with a prestigious international health & wellness event", icon: "Star" }
+                        { text: "Direct access to a premium, pre-qualified audience", icon: "Users" },
+                        { text: "High visibility before, during & after the event", icon: "TrendingUp" },
+                        { text: "Be part of a trusted global health & wellness movement", icon: "Shield" },
+                        { text: "Build long-term business relationships", icon: "Handshake" },
+                        { text: "Enhance brand credibility and market leadership", icon: "Award" }
                     ]
                 },
                 ihweCard: {
