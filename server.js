@@ -178,6 +178,7 @@ app.use('/temp', express.static('temp', {
 
 // SEO file serving middleware
 app.use("/sitemap.xml", sitemapRoutes);
+app.use("/sitemap/xml", sitemapRoutes);
 app.use(async (req, res, next) => {
   try {
     const SeoFile = require("./models/SeoFile");
