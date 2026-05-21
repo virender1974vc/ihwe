@@ -3,6 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
 const logisticPartnerController = require('../controllers/logisticPartnerController');
+const path = require('path');
+const fs = require('fs');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -42,26 +44,23 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|webp|svg/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) return cb(null, true);
+        cb(new Error('Only images are allowed'));
+    }
 });
 
 // GET dynamic logistics partner configuration (Public)
-router.get('/', (req, res) => logisticPartnerController.getContent(req, res));
+router.get('/', (req, res) => logisticPartnerController.getData(req, res));
 
-// POST update logistics partner details (Admin Only)
-router.post('/', verifyToken, (req, res) => logisticPartnerController.saveContent(req, res));
+// PUT update logistics partner details (Admin Only)
+router.put('/', verifyToken, (req, res) => logisticPartnerController.updateData(req, res));
 
 // POST upload logistics background/icon (Admin Only)
-router.post('/upload', verifyToken, upload.single('image'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: "No file uploaded" });
-        }
-        const fileUrl = req.file.path;
-        res.json({ success: true, url: fileUrl });
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.post('/upload', verifyToken, upload.single('image'), (req, res) => logisticPartnerController.uploadPhoto(req, res));
 
 module.exports = router;

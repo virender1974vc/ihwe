@@ -25,7 +25,14 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|webp|svg/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) return cb(null, true);
+        cb(new Error('Only images are allowed'));
+    }
 });
 
 const verifyToken = (req, res, next) => {
@@ -40,17 +47,8 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-router.get('/', (req, res) => hospitalityPartnerController.getContent(req, res));
-router.post('/', verifyToken, (req, res) => hospitalityPartnerController.saveContent(req, res));
-router.post('/upload', verifyToken, upload.single('image'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No file uploaded' });
-        }
-        return res.json({ success: true, url: req.file.path });
-    } catch (error) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
-});
+router.get('/', (req, res) => hospitalityPartnerController.getData(req, res));
+router.put('/', verifyToken, (req, res) => hospitalityPartnerController.updateData(req, res));
+router.post('/upload', verifyToken, upload.single('image'), (req, res) => hospitalityPartnerController.uploadPhoto(req, res));
 
 module.exports = router;
