@@ -80,6 +80,9 @@ class SettingsController {
                 if (req.files.companyStamp) {
                     updateData.companyStamp = `/uploads/settings/${req.files.companyStamp[0].filename}`;
                 }
+                if (req.files.downloadBrochurePdf) {
+                    updateData.downloadBrochurePdf = `/uploads/settings/${req.files.downloadBrochurePdf[0].filename}`;
+                }
                 // Handle single MSME logo file upload
                 if (req.files.msmeLogoFile && req.files.msmeLogoFile.length > 0) {
                     // Return the uploaded file path in a special field
