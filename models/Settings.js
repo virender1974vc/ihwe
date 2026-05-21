@@ -153,6 +153,10 @@ const settingsSchema = new mongoose.Schema({
     showGovtPmsScheme: {
         type: Boolean,
         default: true
+    },
+    downloadBrochurePdf: {
+        type: String,
+        default: ""
     }
 }, { timestamps: true });
 

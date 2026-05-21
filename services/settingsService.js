@@ -58,6 +58,7 @@ class SettingsService {
         if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
         if (authorizedSignature) settings.authorizedSignature = authorizedSignature;
         if (companyStamp) settings.companyStamp = companyStamp;
+        if (updateData.downloadBrochurePdf) settings.downloadBrochurePdf = updateData.downloadBrochurePdf;
         if (updateData.isMsmeLogoActive !== undefined) settings.isMsmeLogoActive = updateData.isMsmeLogoActive;
         if (updateData.msmeLogos !== undefined) settings.msmeLogos = updateData.msmeLogos;
         if (updateData.showBrochurePopUp !== undefined) settings.showBrochurePopUp = updateData.showBrochurePopUp;

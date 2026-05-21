@@ -37,6 +37,7 @@ const storage = multer.diskStorage({
         else if (file.fieldname === 'companyStamp') prefix = 'stamp';
         else if (file.fieldname === 'msmeLogo') prefix = 'msme';
         else if (file.fieldname === 'msmeLogoFile') prefix = 'msme-logo';
+        else if (file.fieldname === 'downloadBrochurePdf') prefix = 'download-brochure';
         cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
@@ -58,7 +59,8 @@ router.put('/', verifyToken, upload.fields([
     { name: 'internationalRegistrationFormPdf', maxCount: 1 },
     { name: 'sponsorshipDeckPdf', maxCount: 1 },
     { name: 'authorizedSignature', maxCount: 1 },
-    { name: 'companyStamp', maxCount: 1 }
+    { name: 'companyStamp', maxCount: 1 },
+    { name: 'downloadBrochurePdf', maxCount: 1 }
 ]), (req, res) => settingsController.updateSettings(req, res));
 
 module.exports = router;
