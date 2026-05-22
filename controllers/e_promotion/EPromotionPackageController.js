@@ -1,32 +1,21 @@
 const EPromotionPackage = require('../../models/e_promotion/EPromotionPackage');
+const EPromotionAddon = require('../../models/e_promotion/EPromotionAddon');
+const EPromotionReach = require('../../models/e_promotion/EPromotionReach');
+const EPromotionTestimonial = require('../../models/e_promotion/EPromotionTestimonial');
 
 class EPromotionPackageController {
-    // Get all active packages with pagination
+    // ==========================================
+    // PACKAGES CRUD
+    // ==========================================
+
+    // Get all packages
     async getAllPackages(req, res) {
         try {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const skip = (page - 1) * limit;
-
-            const query = {}; // Add conditions if needed, e.g., { isActive: true }
-            
-            const [packages, total] = await Promise.all([
-                EPromotionPackage.find(query)
-                    .sort({ order: 1 })
-                    .skip(skip)
-                    .limit(limit),
-                EPromotionPackage.countDocuments(query)
-            ]);
-
+            const query = {};
+            const packages = await EPromotionPackage.find(query).sort({ order: 1 });
             res.status(200).json({
                 success: true,
-                data: packages,
-                pagination: {
-                    total,
-                    page,
-                    limit,
-                    totalPages: Math.ceil(total / limit)
-                }
+                data: packages
             });
         } catch (error) {
             res.status(500).json({
@@ -99,9 +88,237 @@ class EPromotionPackageController {
         }
     }
 
-    // Seed initial data based on user request
-    async seedPackages(req, res) {
+    // ==========================================
+    // ADDONS CRUD
+    // ==========================================
+
+    // Get all addons
+    async getAllAddons(req, res) {
         try {
+            const addons = await EPromotionAddon.find({}).sort({ order: 1 });
+            res.status(200).json({
+                success: true,
+                data: addons
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: "Error fetching addons",
+                error: error.message
+            });
+        }
+    }
+
+    // Create a new addon
+    async createAddon(req, res) {
+        try {
+            const newAddon = new EPromotionAddon(req.body);
+            await newAddon.save();
+            res.status(201).json({
+                success: true,
+                data: newAddon
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: "Error creating addon",
+                error: error.message
+            });
+        }
+    }
+
+    // Update an addon
+    async updateAddon(req, res) {
+        try {
+            const updatedAddon = await EPromotionAddon.findByIdAndUpdate(
+                req.params.id,
+                req.body,
+                { new: true, runValidators: true }
+            );
+            if (!updatedAddon) {
+                return res.status(404).json({ success: false, message: "Addon not found" });
+            }
+            res.status(200).json({
+                success: true,
+                data: updatedAddon
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: "Error updating addon",
+                error: error.message
+            });
+        }
+    }
+
+    // Delete an addon
+    async deleteAddon(req, res) {
+        try {
+            const deletedAddon = await EPromotionAddon.findByIdAndDelete(req.params.id);
+            if (!deletedAddon) {
+                return res.status(404).json({ success: false, message: "Addon not found" });
+            }
+            res.status(200).json({
+                success: true,
+                message: "Addon deleted successfully"
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: "Error deleting addon",
+                error: error.message
+            });
+        }
+    }
+
+    // ==========================================
+    // REACH & IMPACT CRUD (Single Record)
+    // ==========================================
+
+    // Get reach
+    async getReach(req, res) {
+        try {
+            let reach = await EPromotionReach.findOne({});
+            if (!reach) {
+                // Return default reach if none exists in DB
+                reach = new EPromotionReach({
+                    tradeVisitors: '20,000+',
+                    exhibitors: '500+',
+                    countries: '25+',
+                    socialMediaReach: '500,000+',
+                    emailReach: '100,000+'
+                });
+                await reach.save();
+            }
+            res.status(200).json({
+                success: true,
+                data: reach
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: "Error fetching reach data",
+                error: error.message
+            });
+        }
+    }
+
+    // Update reach
+    async updateReach(req, res) {
+        try {
+            let reach = await EPromotionReach.findOne({});
+            if (!reach) {
+                reach = new EPromotionReach(req.body);
+            } else {
+                reach.tradeVisitors = req.body.tradeVisitors;
+                reach.exhibitors = req.body.exhibitors;
+                reach.countries = req.body.countries;
+                reach.socialMediaReach = req.body.socialMediaReach;
+                reach.emailReach = req.body.emailReach;
+            }
+            await reach.save();
+            res.status(200).json({
+                success: true,
+                data: reach
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: "Error updating reach data",
+                error: error.message
+            });
+        }
+    }
+
+    // ==========================================
+    // TESTIMONIALS CRUD
+    // ==========================================
+
+    // Get all testimonials
+    async getAllTestimonials(req, res) {
+        try {
+            const testimonials = await EPromotionTestimonial.find({}).sort({ order: 1 });
+            res.status(200).json({
+                success: true,
+                data: testimonials
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: "Error fetching testimonials",
+                error: error.message
+            });
+        }
+    }
+
+    // Create a new testimonial
+    async createTestimonial(req, res) {
+        try {
+            const newTestimonial = new EPromotionTestimonial(req.body);
+            await newTestimonial.save();
+            res.status(201).json({
+                success: true,
+                data: newTestimonial
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: "Error creating testimonial",
+                error: error.message
+            });
+        }
+    }
+
+    // Update a testimonial
+    async updateTestimonial(req, res) {
+        try {
+            const updatedTestimonial = await EPromotionTestimonial.findByIdAndUpdate(
+                req.params.id,
+                req.body,
+                { new: true, runValidators: true }
+            );
+            if (!updatedTestimonial) {
+                return res.status(404).json({ success: false, message: "Testimonial not found" });
+            }
+            res.status(200).json({
+                success: true,
+                data: updatedTestimonial
+            });
+        } catch (error) {
+            res.status(400).json({
+                success: false,
+                message: "Error updating testimonial",
+                error: error.message
+            });
+        }
+    }
+
+    // Delete a testimonial
+    async deleteTestimonial(req, res) {
+        try {
+            const deletedTestimonial = await EPromotionTestimonial.findByIdAndDelete(req.params.id);
+            if (!deletedTestimonial) {
+                return res.status(404).json({ success: false, message: "Testimonial not found" });
+            }
+            res.status(200).json({
+                success: true,
+                message: "Testimonial deleted successfully"
+            });
+        } catch (error) {
+            res.status(500).json({
+                success: false,
+                message: "Error deleting testimonial",
+                error: error.message
+            });
+        }
+    }
+
+    // ==========================================
+    // SEED ALL DEFAULTS
+    // ==========================================
+    async seedAll(req, res) {
+        try {
+            // 1. Seed Packages
             const initialPackages = [
                 {
                     title: "STARTER VISIBILITY PACKAGE",
@@ -163,18 +380,71 @@ class EPromotionPackageController {
                 }
             ];
 
-            await EPromotionPackage.deleteMany({}); // Optional: clear existing
-            const createdPackages = await EPromotionPackage.insertMany(initialPackages);
+            await EPromotionPackage.deleteMany({});
+            const packages = await EPromotionPackage.insertMany(initialPackages);
+
+            // 2. Seed Add-ons
+            const initialAddons = [
+                { name: "Homepage Banner Ad (7 Days)", price: "₹ 15,000", order: 1 },
+                { name: "Category Sponsorship", price: "₹ 25,000", order: 2 },
+                { name: "Featured Brand of the Day", price: "₹ 10,000", order: 3 },
+                { name: "Push Notification Alert (App)", price: "₹ 8,000", order: 4 },
+                { name: "Influencer Collaboration", price: "₹ 20,000", order: 5 },
+                { name: "Additional Email Campaign", price: "₹ 10,000", order: 6 }
+            ];
+
+            await EPromotionAddon.deleteMany({});
+            const addons = await EPromotionAddon.insertMany(initialAddons);
+
+            // 3. Seed Reach & Impact
+            const initialReach = {
+                tradeVisitors: '20,000+',
+                exhibitors: '500+',
+                countries: '25+',
+                socialMediaReach: '500,000+',
+                emailReach: '100,000+'
+            };
+
+            await EPromotionReach.deleteMany({});
+            const reach = new EPromotionReach(initialReach);
+            await reach.save();
+
+            // 4. Seed Testimonials
+            const initialTestimonials = [
+                {
+                    text: "IHWE digital promotion helped us reach the right audience before the event. We generated quality leads even before the exhibition started.",
+                    name: "Exhibitor, IHWE 2025",
+                    order: 1
+                },
+                {
+                    text: "The email campaigns and social media promotions gave our brand excellent visibility across the industry.",
+                    name: "Marketing Partner",
+                    order: 2
+                },
+                {
+                    text: "We received strong visitor engagement and genuine business inquiries through the online promotion package.",
+                    name: "International Exhibitor",
+                    order: 3
+                }
+            ];
+
+            await EPromotionTestimonial.deleteMany({});
+            const testimonials = await EPromotionTestimonial.insertMany(initialTestimonials);
 
             res.status(201).json({
                 success: true,
-                message: "Packages seeded successfully",
-                data: createdPackages
+                message: "All E-Promotion components seeded successfully!",
+                data: {
+                    packages,
+                    addons,
+                    reach,
+                    testimonials
+                }
             });
         } catch (error) {
             res.status(500).json({
                 success: false,
-                message: "Error seeding packages",
+                message: "Error seeding E-Promotion components",
                 error: error.message
             });
         }

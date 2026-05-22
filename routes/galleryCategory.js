@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const GalleryCategory = require('../models/GalleryCategory');
 const GalleryItem = require('../models/GalleryItem');
+const { authMiddleware } = require('../middleware/authMiddleware');
+const { logActivity } = require('../utils/logger');
 
 // Storage for category cover images
 const storage = multer.diskStorage({
@@ -35,7 +37,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST create new category (with optional image)
-router.post('/', upload.single('coverImage'), async (req, res) => {
+router.post('/', authMiddleware, upload.single('coverImage'), async (req, res) => {
     try {
         const { title, heading, coverImageAlt, type } = req.body;
         if (!title) return res.status(400).json({ success: false, message: 'Title is required' });
@@ -50,9 +52,11 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
             coverImage,
             coverImageAlt,
             type: type || 'gallery',
-            order: req.body.order || 0
+            order: req.body.order || 0,
+            updatedBy: req.user?.username || req.user?.name || 'Unknown'
         });
         await category.save();
+        await logActivity(req, 'Created', 'Gallery Category', `Created category: ${title}`);
         res.json({ success: true, data: category });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -60,7 +64,7 @@ router.post('/', upload.single('coverImage'), async (req, res) => {
 });
 
 // PUT update category (with optional image)
-router.put('/:id', upload.single('coverImage'), async (req, res) => {
+router.put('/:id', authMiddleware, upload.single('coverImage'), async (req, res) => {
     try {
         const { title, heading, coverImageAlt, type, order } = req.body;
         
@@ -71,7 +75,10 @@ router.put('/:id', upload.single('coverImage'), async (req, res) => {
         const oldTitle = existingCategory.title;
 
         // 2. Prepare update object
-        const update = { title, heading, coverImageAlt };
+        const update = {
+            title, heading, coverImageAlt,
+            updatedBy: req.user?.username || req.user?.name || 'Unknown'
+        };
         if (order !== undefined) update.order = order;
         if (type) update.type = type;
         if (req.file) update.coverImage = `/uploads/gallery/categories/${req.file.filename}`;
@@ -88,6 +95,7 @@ router.put('/:id', upload.single('coverImage'), async (req, res) => {
             );
         }
 
+        await logActivity(req, 'Updated', 'Gallery Category', `Updated category: ${title || existingCategory.title}`);
         res.json({ success: true, data: category });
     } catch (err) {
         console.error('Category Update Error:', err);
@@ -96,10 +104,11 @@ router.put('/:id', upload.single('coverImage'), async (req, res) => {
 });
 
 // DELETE category
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
     try {
         const category = await GalleryCategory.findByIdAndDelete(req.params.id);
         if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+        await logActivity(req, 'Deleted', 'Gallery Category', `Deleted category: ${category.title}`);
         res.json({ success: true, message: 'Category deleted' });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

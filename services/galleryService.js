@@ -10,13 +10,16 @@ class GalleryService {
      * @param {string} [category] - Optional category filter.
      * @returns {Promise<Array>}
      */
-    async getAllItems(category, title) {
+    async getAllItems(category, title, galleryCategoryId) {
         let query = {};
         if (category) {
             query.category = category;
         }
         if (title) {
             query.title = title;
+        }
+        if (galleryCategoryId) {
+            query.galleryCategoryId = galleryCategoryId;
         }
         return await GalleryItem.find(query).populate('galleryCategoryId').sort({ createdAt: -1 });
     }

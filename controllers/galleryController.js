@@ -10,8 +10,8 @@ class GalleryController {
      */
     async getAllItems(req, res) {
         try {
-            const { category, title } = req.query;
-            const data = await galleryService.getAllItems(category, title);
+            const { category, title, galleryCategoryId } = req.query;
+            const data = await galleryService.getAllItems(category, title, galleryCategoryId);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

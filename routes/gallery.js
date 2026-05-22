@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const galleryController = require('../controllers/galleryController');
+const { authMiddleware } = require('../middleware/authMiddleware');
 
 // Storage for gallery assets
 const storage = multer.diskStorage({
@@ -36,18 +37,18 @@ const upload = multer({
 router.get('/', (req, res) => galleryController.getAllItems(req, res));
 
 // Add new gallery item
-router.post('/', (req, res) => galleryController.createItem(req, res));
+router.post('/', authMiddleware, (req, res) => galleryController.createItem(req, res));
 
 // Update gallery item
-router.put('/:id', (req, res) => galleryController.updateItem(req, res));
+router.put('/:id', authMiddleware, (req, res) => galleryController.updateItem(req, res));
 
 // Delete gallery items by title (grouped deletion)
-router.delete('/delete-by-title/:title', (req, res) => galleryController.deleteByTitle(req, res));
+router.delete('/delete-by-title/:title', authMiddleware, (req, res) => galleryController.deleteByTitle(req, res));
 
 // Delete gallery item
-router.delete('/:id', (req, res) => galleryController.deleteItem(req, res));
+router.delete('/:id', authMiddleware, (req, res) => galleryController.deleteItem(req, res));
 
 // Generic upload endpoint
-router.post('/upload', upload.single('file'), (req, res) => galleryController.uploadFile(req, res));
+router.post('/upload', authMiddleware, upload.single('file'), (req, res) => galleryController.uploadFile(req, res));
 
 module.exports = router;
