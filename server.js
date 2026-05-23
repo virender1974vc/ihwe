@@ -189,7 +189,19 @@ app.use(async (req, res, next) => {
     const SeoFile = require("./models/SeoFile");
     const filename = req.path.substring(1);
     if (filename && !filename.includes("/")) {
-      const seoFile = await SeoFile.findOne({ originalName: filename });
+      let seoFile = await SeoFile.findOne({ originalName: filename });
+      
+      // Fallback matching for common SEO files with custom names (e.g. "ihwe robots.txt")
+      if (!seoFile) {
+        if (filename === "robots.txt") {
+          seoFile = await SeoFile.findOne({ originalName: /robots.*\.txt/i }) || 
+                    await SeoFile.findOne({ originalName: /robots/i });
+        } else if (filename === "sitemap.xml") {
+          seoFile = await SeoFile.findOne({ originalName: /sitemap.*\.xml/i }) || 
+                    await SeoFile.findOne({ originalName: /sitemap/i });
+        }
+      }
+
       if (seoFile) {
         const fs = require("fs");
         const filePath = path.join(
@@ -203,6 +215,13 @@ app.use(async (req, res, next) => {
         }
       }
     }
+    
+    // Dynamic fallback for robots.txt when not uploaded yet
+    if (req.path === "/robots.txt") {
+      res.header("Content-Type", "text/plain");
+      return res.send("User-agent: *\nAllow: /");
+    }
+
     next();
   } catch (error) {
     next();

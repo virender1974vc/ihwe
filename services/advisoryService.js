@@ -9,7 +9,7 @@ class AdvisoryService {
      * @returns {Promise<Array>}
      */
     async getAllMembers() {
-        return await AdvisoryMember.find().sort({ createdAt: -1 });
+        return await AdvisoryMember.find().sort({ displayOrder: 1, createdAt: -1 });
     }
 
     /**
@@ -18,15 +18,16 @@ class AdvisoryService {
      * @returns {Promise<Object>}
      */
     async createMember(data) {
-        const { name, role, organization, image, imageAlt, linkedin, country } = data;
+        const { name, role, organization, image, imageAlt, country, linkedin, displayOrder } = data;
         const newMember = new AdvisoryMember({
             name,
             role,
             organization,
             image,
             imageAlt,
+            country: country || 'India',
             linkedin,
-            country
+            displayOrder: displayOrder !== undefined ? Number(displayOrder) : 0
         });
         return await newMember.save();
     }
@@ -38,10 +39,19 @@ class AdvisoryService {
      * @returns {Promise<Object>}
      */
     async updateMember(id, data) {
-        const { name, role, organization, image, imageAlt, linkedin, country } = data;
+        const { name, role, organization, image, imageAlt, country, linkedin, displayOrder } = data;
         const member = await AdvisoryMember.findByIdAndUpdate(
             id,
-            { name, role, organization, image, imageAlt, linkedin, country },
+            { 
+                name, 
+                role, 
+                organization, 
+                image, 
+                imageAlt,
+                country: country || 'India',
+                linkedin,
+                displayOrder: displayOrder !== undefined ? Number(displayOrder) : 0
+            },
             { new: true }
         );
         if (!member) {
