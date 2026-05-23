@@ -28,6 +28,10 @@ const ourJourneyRoutes = require("./routes/ourJourneyRoutes");
 
 const eventHighlightsRoutes = require("./routes/eventHighlights");
 const aboutRoutes = require("./routes/about");
+const chairmanMessageRoutes = require("./routes/chairmanMessage");
+const hotelStayPartnerRoutes = require("./routes/hotelStayPartner");
+const fabricationPartnerRoutes = require("./routes/fabricationPartner");
+const travelPartnerRoutes = require("./routes/travelPartner");
 const settingsRoutes = require("./routes/settings");
 const downloadPdfRoutes = require("./routes/downloadPdf");
 const marqueeRoutes = require("./routes/marquee");
@@ -143,7 +147,8 @@ app.use(cors());
 // const allowedOrigins = [
 //   "https://ihwe.in",
 //   "https://www.ihwe.in",
-//   "https://admin.ihwe.in"
+//   "https://admin.ihwe.in",
+//   "http://localhost:8080"
 // ];
 
 // app.use(
@@ -253,6 +258,10 @@ app.use("/api/hero", heroRoutes);
 app.use("/api/admin", adminUsersRoutes);
 app.use("/api/event-highlights", eventHighlightsRoutes);
 app.use("/api/about", aboutRoutes);
+app.use("/api/chairman-message", chairmanMessageRoutes);
+app.use("/api/hotel-stay-partner", hotelStayPartnerRoutes);
+app.use("/api/fabrication-partner", fabricationPartnerRoutes);
+app.use("/api/travel-partner", travelPartnerRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/download-pdf", downloadPdfRoutes);
 app.use("/api/marquee", marqueeRoutes);
@@ -281,6 +290,11 @@ app.use("/api/why-exhibit-manage", whyExhibitRoutes);
 app.use("/api/seo", require("./routes/seo"));
 app.use("/api/seo-settings", require("./routes/seoSettings.js"));
 app.use("/api/why-exhibit", require("./routes/whyExhibit"));
+app.use("/api/sponsor-comparison", require("./routes/sponsorComparisonRoutes.js"));
+app.use("/api/partner-categories", require("./routes/partnerCategoriesRoutes.js"));
+app.use("/api/logistic-partner", require("./routes/logisticPartnerRoutes.js"));
+app.use("/api/printing-branding-partner", require("./routes/printingBrandingPartnerRoutes.js"));
+app.use("/api/hospitality-partner", require("./routes/hospitalityPartnerRoutes.js"));
 app.use("/api/why-visit", require("./routes/whyVisit"));
 app.use("/api/hero-background", require("./routes/heroBackground"));
 app.use("/api/exhibitor-profile", require("./routes/exhibitorProfile"));
@@ -326,6 +340,8 @@ app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
 app.use("/api/media-registration", mediaRegistrationRoutes);
+app.use("/api/partner-registration", require("./routes/partnerRegistration"));
+
 
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/banks", bankListRoutes);
