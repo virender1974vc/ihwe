@@ -1,5 +1,8 @@
 const User = require('../models/User');
 
+const cleanString = (value) => (typeof value === 'string' ? value.trim() : '');
+const cleanOptionalImage = (value) => (typeof value === 'string' ? value : '');
+
 /**
  * Service to handle Admin User operations.
  */
@@ -23,7 +26,14 @@ class AdminUsersService {
      * Create a new user with permission checks.
      */
     async createAdmin(data, requester) {
-        const { username, password, role, fullName, designation, email, mobile, altMobile } = data;
+        const { 
+            password, role, fullName, designation, altMobile, status,
+            title, department, hodName, hodMobile, hodEmail, hodDesignation
+        } = data;
+        const username = cleanString(data.username);
+        const email = cleanString(data.email);
+        const mobile = cleanString(data.mobile);
+        const hodImage = cleanOptionalImage(data.hodImage);
 
         const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
         const assignRole = role?.toLowerCase().replace(/\s+/g, '-');
@@ -37,15 +47,32 @@ class AdminUsersService {
         const existingUser = await User.findOne({ username });
         if (existingUser) throw { status: 409, message: 'Username already exists' };
 
+        if (email) {
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) throw { status: 409, message: 'Official Email already exists' };
+        }
+
+        if (mobile) {
+            const existingMobile = await User.findOne({ mobile });
+            if (existingMobile) throw { status: 409, message: 'Official Mobile Number already exists' };
+        }
+
         const newUser = new User({
             username, password,
-            fullName: fullName || '',
-            designation: designation || '',
-            email: email || '',
-            mobile: mobile || '',
-            altMobile: altMobile || '',
+            fullName: cleanString(fullName),
+            title: cleanString(title),
+            department: cleanString(department),
+            designation: cleanString(designation),
+            email,
+            mobile,
+            altMobile: cleanString(altMobile),
+            hodName: cleanString(hodName),
+            hodMobile: cleanString(hodMobile),
+            hodEmail: cleanString(hodEmail),
+            hodDesignation: cleanString(hodDesignation),
+            hodImage,
             role: role || 'employee',
-            status: 'Active',
+            status: status === 'Inactive' ? 'Inactive' : 'Active',
             createdBy: requester.id
         });
 
@@ -59,7 +86,14 @@ class AdminUsersService {
      * Update a user with permission checks.
      */
     async updateAdmin(id, data, requester) {
-        const { username, role, status, password, fullName, designation, email, mobile, altMobile } = data;
+        const { 
+            role, status, password, fullName, designation, altMobile,
+            title, department, hodName, hodMobile, hodEmail, hodDesignation
+        } = data;
+        const username = data.username !== undefined ? cleanString(data.username) : undefined;
+        const email = data.email !== undefined ? cleanString(data.email) : undefined;
+        const mobile = data.mobile !== undefined ? cleanString(data.mobile) : undefined;
+        const hodImage = data.hodImage !== undefined ? cleanOptionalImage(data.hodImage) : undefined;
 
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
@@ -77,6 +111,22 @@ class AdminUsersService {
             userToUpdate.username = username;
         }
 
+        if (email && email !== userToUpdate.email) {
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) throw { status: 409, message: 'Official Email already exists' };
+            userToUpdate.email = email;
+        } else if (email === '') {
+            userToUpdate.email = '';
+        }
+
+        if (mobile && mobile !== userToUpdate.mobile) {
+            const existingMobile = await User.findOne({ mobile });
+            if (existingMobile) throw { status: 409, message: 'Official Mobile Number already exists' };
+            userToUpdate.mobile = mobile;
+        } else if (mobile === '') {
+            userToUpdate.mobile = '';
+        }
+
         if (role) {
             if (reqRole !== 'super-admin' && assignRole !== 'employee') {
                 throw { status: 403, message: 'Cannot assign non-employee roles' };
@@ -86,11 +136,17 @@ class AdminUsersService {
 
         if (status) userToUpdate.status = status;
         if (password) userToUpdate.password = password;
-        if (fullName !== undefined) userToUpdate.fullName = fullName;
-        if (designation !== undefined) userToUpdate.designation = designation;
-        if (email !== undefined) userToUpdate.email = email;
-        if (mobile !== undefined) userToUpdate.mobile = mobile;
-        if (altMobile !== undefined) userToUpdate.altMobile = altMobile;
+        if (fullName !== undefined) userToUpdate.fullName = cleanString(fullName);
+        if (title !== undefined) userToUpdate.title = cleanString(title);
+        if (department !== undefined) userToUpdate.department = cleanString(department);
+        if (designation !== undefined) userToUpdate.designation = cleanString(designation);
+        if (altMobile !== undefined) userToUpdate.altMobile = cleanString(altMobile);
+        
+        if (hodName !== undefined) userToUpdate.hodName = cleanString(hodName);
+        if (hodMobile !== undefined) userToUpdate.hodMobile = cleanString(hodMobile);
+        if (hodEmail !== undefined) userToUpdate.hodEmail = cleanString(hodEmail);
+        if (hodDesignation !== undefined) userToUpdate.hodDesignation = cleanString(hodDesignation);
+        if (hodImage !== undefined) userToUpdate.hodImage = hodImage;
 
         await userToUpdate.save();
         const userData = userToUpdate.toObject();

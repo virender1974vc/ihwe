@@ -2,6 +2,27 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const adminUsersController = require('../controllers/adminUsersController');
+const multer = require('multer');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
+
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Configure Cloudinary storage for HOD image upload
+const hodStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+        folder: 'hod-passport-photos',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    },
+});
+
+const upload = multer({ storage: hodStorage });
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -24,6 +45,48 @@ const verifyToken = (req, res, next) => {
 // @route   GET /api/admin/all
 // @desc    Get all admin users
 router.get('/all', verifyToken, (req, res) => adminUsersController.getAllAdmins(req, res));
+
+// @route   POST /api/admin/verify-email
+// @desc    Verify if official email already exists
+router.post('/verify-email', async (req, res) => {
+    try {
+        const { email, id } = req.body;
+        if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+        const User = require('../models/User');
+        const query = { email: email.trim() };
+        if (id) query._id = { $ne: id };
+
+        const existing = await User.findOne(query);
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'Official Email already exists' });
+        }
+        res.json({ success: true, message: 'Email is available' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// @route   POST /api/admin/verify-mobile
+// @desc    Verify if official mobile already exists
+router.post('/verify-mobile', async (req, res) => {
+    try {
+        const { mobile, id } = req.body;
+        if (!mobile) return res.status(400).json({ success: false, message: 'Mobile number is required' });
+
+        const User = require('../models/User');
+        const query = { mobile: mobile.trim() };
+        if (id) query._id = { $ne: id };
+
+        const existing = await User.findOne(query);
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'Official Mobile Number already registered' });
+        }
+        res.json({ success: true, message: 'Mobile number is available' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // @route   GET /api/admin/public-list
 // @desc    Get minimal public list of active admin users (for dropdowns)
@@ -56,11 +119,11 @@ router.get('/by-username/:username', async (req, res) => {
 
 // @route   POST /api/admin/create
 // @desc    Create a new admin user
-router.post('/create', verifyToken, (req, res) => adminUsersController.createAdmin(req, res));
+router.post('/create', verifyToken, upload.single('hodImage'), (req, res) => adminUsersController.createAdmin(req, res));
 
 // @route   PUT /api/admin/update/:id
 // @desc    Update an admin user
-router.put('/update/:id', verifyToken, (req, res) => adminUsersController.updateAdmin(req, res));
+router.put('/update/:id', verifyToken, upload.single('hodImage'), (req, res) => adminUsersController.updateAdmin(req, res));
 
 // @route   DELETE /api/admin/delete/:id
 // @desc    Delete an admin user

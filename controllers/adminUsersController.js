@@ -1,6 +1,18 @@
 const adminUsersService = require('../services/adminUsersService');
 const { logActivity } = require('../utils/logger');
 
+const normalizeAdminPayload = (req) => {
+    const data = { ...req.body };
+
+    if (req.file) {
+        data.hodImage = req.file.path || req.file.secure_url || req.file.url || '';
+    } else if (data.hodImage && typeof data.hodImage !== 'string') {
+        delete data.hodImage;
+    }
+
+    return data;
+};
+
 /**
  * Controller to handle Admin User requests.
  */
@@ -23,12 +35,13 @@ class AdminUsersController {
      */
     async createAdmin(req, res) {
         try {
-            const { username, password } = req.body;
+            const payload = normalizeAdminPayload(req);
+            const { username, password } = payload;
             if (!username || !password) {
                 return res.status(400).json({ success: false, message: 'Username and password are required' });
             }
 
-            const data = await adminUsersService.createAdmin(req.body, req.user);
+            const data = await adminUsersService.createAdmin(payload, req.user);
             await logActivity(req, 'Created', 'Admin Management', `Created new admin user: ${username}`);
             res.status(201).json({ success: true, message: 'User created successfully', data });
         } catch (error) {
@@ -42,7 +55,8 @@ class AdminUsersController {
      */
     async updateAdmin(req, res) {
         try {
-            const data = await adminUsersService.updateAdmin(req.params.id, req.body, req.user);
+            const payload = normalizeAdminPayload(req);
+            const data = await adminUsersService.updateAdmin(req.params.id, payload, req.user);
             await logActivity(req, 'Updated', 'Admin Management', `Updated admin user: ${req.body.username || data.username}`);
             res.json({ success: true, message: 'User updated successfully', data });
         } catch (error) {
