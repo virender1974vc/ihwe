@@ -1143,15 +1143,18 @@ class EmailService {
         try {
             const Settings = require('../models/Settings');
             const settings = await Settings.findOne().lean();
-            if (settings && settings.logo) {
-                const absLogoPath = path.resolve(__dirname, '..', settings.logo.replace(/^\//, ''));
-                if (fs.existsSync(absLogoPath)) {
-                    attachments.push({
-                        filename: path.basename(absLogoPath),
-                        path: absLogoPath,
-                        cid: 'website_logo_cid'
-                    });
-                    logoUrl = 'cid:website_logo_cid';
+            if (settings) {
+                const logoPath = settings.emailLogo || settings.logo;
+                if (logoPath) {
+                    const absLogoPath = path.resolve(__dirname, '..', logoPath.replace(/^\//, ''));
+                    if (fs.existsSync(absLogoPath)) {
+                        attachments.push({
+                            filename: path.basename(absLogoPath),
+                            path: absLogoPath,
+                            cid: 'website_logo_cid'
+                        });
+                        logoUrl = 'cid:website_logo_cid';
+                    }
                 }
             }
         } catch (settingsErr) {

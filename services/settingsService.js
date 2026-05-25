@@ -33,6 +33,7 @@ class SettingsService {
         } = updateData;
 
         if (logo) settings.logo = logo;
+        if (updateData.emailLogo) settings.emailLogo = updateData.emailLogo;
         if (exhibitorBrochurePdf) settings.exhibitorBrochurePdf = exhibitorBrochurePdf;
         if (updateData.domesticRegistrationFormPdf) settings.domesticRegistrationFormPdf = updateData.domesticRegistrationFormPdf;
         if (updateData.internationalRegistrationFormPdf) settings.internationalRegistrationFormPdf = updateData.internationalRegistrationFormPdf;

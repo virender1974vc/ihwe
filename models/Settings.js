@@ -5,6 +5,10 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    emailLogo: {
+        type: String,
+        default: ""
+    },
     emails: [{
         email: String,
         forTopbar: { type: Boolean, default: false },

@@ -29,6 +29,7 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => {
         let prefix = 'asset';
         if (file.fieldname === 'logo') prefix = 'logo';
+        else if (file.fieldname === 'emailLogo') prefix = 'email-logo';
         else if (file.fieldname === 'exhibitorBrochurePdf') prefix = 'brochure';
         else if (file.fieldname === 'domesticRegistrationFormPdf') prefix = 'domestic-form';
         else if (file.fieldname === 'internationalRegistrationFormPdf') prefix = 'international-form';
@@ -51,7 +52,8 @@ router.get('/', (req, res) => settingsController.getSettings(req, res));
 // @route   PUT /api/settings
 // @desc    Update system settings
 router.put('/', verifyToken, upload.fields([
-    { name: 'logo', maxCount: 1 }, 
+    { name: 'logo', maxCount: 1 },
+    { name: 'emailLogo', maxCount: 1 },
     { name: 'msmeLogo', maxCount: 1 },
     { name: 'msmeLogoFile', maxCount: 1 },
     { name: 'exhibitorBrochurePdf', maxCount: 1 },

@@ -62,6 +62,9 @@ class SettingsController {
                 if (req.files.logo) {
                     updateData.logo = `/uploads/settings/${req.files.logo[0].filename}`;
                 }
+                if (req.files.emailLogo) {
+                    updateData.emailLogo = `/uploads/settings/${req.files.emailLogo[0].filename}`;
+                }
                 if (req.files.exhibitorBrochurePdf) {
                     updateData.exhibitorBrochurePdf = `/uploads/settings/${req.files.exhibitorBrochurePdf[0].filename}`;
                 }
