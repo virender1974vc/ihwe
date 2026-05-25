@@ -1318,10 +1318,15 @@ class EmailService {
                 ? registration.referredBy.trim()
                 : 'Direct';
 
+        const toTitleCase = (str) => {
+            if (!str) return '';
+            return str.toLowerCase().replace(/\b\w/g, s => s.toUpperCase());
+        };
+
         const data = {
             site_url: (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, ''),
             logo_url: logoUrl,
-            exhibitor_name: registration.exhibitorName,          // Company name (for TO card & subject)
+            exhibitor_name: toTitleCase(registration.exhibitorName),          // Company name (for TO card & subject)
             contact_person: contactPersonName,                   // Person name (for Exhibitor Details row)
             designation: registration.contact1.designation || 'N/A',
             registrationId: registration.registrationId,
@@ -1336,7 +1341,7 @@ class EmailService {
             stall_scheme: registration.participation?.stallScheme || 'N/A',
             stall_dimension: registration.participation?.dimension || 'N/A',
             stall_size: registration.participation?.stallSize || 'N/A',
-            exhibitor_address: exhibitorAddress,
+            exhibitor_address: toTitleCase(exhibitorAddress),
             exhibitor_gstin: registration.gstNo || 'N/A',
             exhibitor_cin: registration.businessRegistrationNo || registration.panNo || 'N/A',
             exhibitor_email: registration.contact1.email || 'N/A',

@@ -106,8 +106,8 @@ const emailBodyHtml = `
                             </tr>
                             <tr>
                                 <td style="padding: 10px 12px; background-color: #ffffff; font-size: 11px; color: #334155; line-height: 1.5; font-family: Arial, sans-serif;">
-                                    <div style="font-size: 12px; font-weight: bold; color: #23471d; margin-bottom: 4px;">[[EXHIBITOR_NAME]]</div>
-                                    [[EXHIBITOR_ADDRESS]]<br />
+                                    <div style="font-size: 12px; font-weight: bold; color: #23471d; margin-bottom: 4px; text-transform: capitalize;">[[EXHIBITOR_NAME]]</div>
+                                    <div style="text-transform: capitalize;">[[EXHIBITOR_ADDRESS]]</div>
                                     <div style="margin-top: 5px; border-top: 1px dashed #e2e8f0; padding-top: 4px; font-size: 10px; color: #64748b; line-height: 1.6;">
                                         <strong>GSTIN:</strong> [[EXHIBITOR_GSTIN]]<br />
                                         <strong>Email:</strong> [[EXHIBITOR_EMAIL]]<br />
