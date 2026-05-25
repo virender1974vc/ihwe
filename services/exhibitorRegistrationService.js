@@ -419,8 +419,10 @@ class ExhibitorRegistrationService {
             if (current.participation?.stallNo) {
                 await Stall.findByIdAndUpdate(current.participation.stallNo, { status: 'available', bookedBy: null });
             }
-            // Book new stall
-            await Stall.findByIdAndUpdate(data.participation.stallNo, { status: 'booked', bookedBy: id });
+            const targetStatus = data.status || current.status;
+            if (targetStatus !== 'payment-failed') {
+                await Stall.findByIdAndUpdate(data.participation.stallNo, { status: 'booked', bookedBy: id });
+            }
         }
 
         // --- AUTO-CALCULATE balanceAmount (will be recalculated below if finance recalc runs) ---
@@ -582,7 +584,19 @@ class ExhibitorRegistrationService {
             }
         }
 
+        const statusJustActivated = (data.status && data.status !== 'payment-failed' && current.status === 'payment-failed');
+        if (data.status === 'payment-failed' && current.status !== 'payment-failed') {
+            const stallId = current.participation?.stallNo;
+            if (stallId) {
+                await Stall.findByIdAndUpdate(stallId, { status: 'available', bookedBy: null });
+            }
+        }
+
         const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { new: true });
+
+        if (statusJustActivated) {
+            await this.activateRegistration(id);
+        }
         const newlyReceived = (data.amountPaid != null && data.amountPaid > (current.amountPaid || 0));
         const statusJustChanged = (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status));
 
@@ -763,6 +777,60 @@ class ExhibitorRegistrationService {
         await ExhibitorRegistration.updateMany(query, { $set: { ...update, updatedAt: new Date() } });
         const final = await ExhibitorRegistration.findById(id);
         return { final, count: Object.keys(update).length };
+    }
+
+    async activateRegistration(registrationId, customRawPassword = null) {
+        const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+        const Stall = require('../models/Stall');
+        const emailService = require('../utils/emailService');
+        const pdfGenerator = require('../utils/pdfGenerator');
+        const path = require('path');
+        const crypto = require('crypto');
+        const bcrypt = require('bcryptjs');
+
+        const registration = await ExhibitorRegistration.findById(registrationId);
+        if (!registration) return null;
+
+        // 1. Book the stall in database
+        if (registration.participation?.stallNo) {
+            await Stall.findByIdAndUpdate(registration.participation.stallNo, {
+                status: 'booked',
+                bookedBy: registration._id
+            });
+        }
+
+        // 2. Generate and hash raw password for login credentials
+        let rawPassword = customRawPassword;
+        if (!rawPassword) {
+            rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
+            registration.password = await bcrypt.hash(rawPassword, 10);
+            await registration.save();
+        }
+
+        // 3. Generate registration PDF & dispatch confirmation emails / WhatsApp alerts
+        try {
+            const templateData = await emailService.getExhibitorTemplateData();
+            const pdfOptions = {
+                headerImage: templateData?.headerImage ? path.resolve(__dirname, '..', templateData.headerImage.replace(/^\//, '')) : null,
+                footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
+            };
+
+            const regPdf = await pdfGenerator.generateRegistrationForm(registration, pdfOptions);
+            const pdfPath = regPdf?.filePath || regPdf;
+            if (regPdf?.cloudUrl) {
+                await ExhibitorRegistration.findByIdAndUpdate(registration._id, { registrationPdfUrl: regPdf.cloudUrl });
+            }
+            await emailService.sendRegistrationConfirmation(registration, pdfPath, rawPassword);
+        } catch (err) {
+            console.error('Registration Activation Email Error:', err);
+        }
+
+        // 4. Dispatch Admin Alert notification
+        await emailService.sendExhibitorAdminAlert(registration).catch(err => {
+            console.error('Exhibitor Admin Alert Error:', err);
+        });
+
+        return registration;
     }
 }
 

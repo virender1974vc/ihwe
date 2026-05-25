@@ -68,7 +68,7 @@ class EmailService {
         });
 
         this.emailShell = (body, options = {}) => {
-            const { headerCid, footerCid, headerImage, footerImage } = options;
+            const { headerCid, footerCid, headerImage, footerImage, padding, hideFallbackFooter } = options;
 
             // Use CID if available, else try base64 embed, else fallback to default
             const toBase64 = (imgPath) => {
@@ -120,12 +120,14 @@ class EmailService {
                         <img src="${footerSrc}" alt="Footer" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
                     </td>
                    </tr>`
-                : `<tr>
+                : (hideFallbackFooter
+                    ? ''
+                    : `<tr>
                     <td align="center" style="background: #f9fafb; padding: 20px; border-top: 1px solid #e5e7eb;">
                         <p style="margin:0; font-size: 13px; color: #6b7280; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">&copy; 2026 IHWE. All Rights Reserved.</p>
                         <p style="margin:3px 0 0; font-size: 12px; color: #9ca3af; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
                     </td>
-                   </tr>`;
+                   </tr>`);
 
             return `
         <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -153,7 +155,7 @@ class EmailService {
             <table border="0" cellpadding="0" cellspacing="0" width="800" class="container" style="background-color: #ffffff; border: 1px solid #eeeeee; width: 100%; max-width: 800px;">
                             ${headerSection}
                             <tr>
-                                <td class="content-td">
+                                <td class="content-td" style="padding: ${padding || '30px 20px'}; background-color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; line-height: 1.7; color: #333333; font-size: 16px;">
                                     ${body}
                                 </td>
                             </tr>
@@ -323,7 +325,7 @@ class EmailService {
         return result;
     }
 
-    async sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [] }) {
+    async sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding }) {
         try {
             const template = await this.getTemplate(formType);
             if (!template) {
@@ -397,6 +399,8 @@ class EmailService {
                 footerCid: footerBuf ? 'email_footer_img' : null,
                 headerImage: template.headerImage || null,
                 footerImage: template.footerImage || null,
+                padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : null),
+                hideFallbackFooter: formType === 'exhibitor-payment-receipt'
             });
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
@@ -1102,13 +1106,6 @@ class EmailService {
                 attachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
             }
 
-            if (pdfPath && require('fs').existsSync(pdfPath)) {
-                attachments.push({
-                    filename: `RegistrationForm_${registration.registrationId || registration._id}.pdf`,
-                    path: pdfPath,
-                    contentType: 'application/pdf'
-                });
-            }
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
             const sentToUser = await this.sendEmail({
@@ -1137,33 +1134,239 @@ class EmailService {
     // Static content methods still use emailShell but without double escaping
     async sendPaymentReceipt(registration, pdfPath) {
         const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
-        const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+        const fmt = (n) => `${cur === '$' ? 'USD' : 'INR'} ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        const attachments = [];
+        const fs = require('fs');
+        const path = require('path');
+        let logoUrl = '';
+        try {
+            const Settings = require('../models/Settings');
+            const settings = await Settings.findOne().lean();
+            if (settings && settings.logo) {
+                const absLogoPath = path.resolve(__dirname, '..', settings.logo.replace(/^\//, ''));
+                if (fs.existsSync(absLogoPath)) {
+                    attachments.push({
+                        filename: path.basename(absLogoPath),
+                        path: absLogoPath,
+                        cid: 'website_logo_cid'
+                    });
+                    logoUrl = 'cid:website_logo_cid';
+                }
+            }
+        } catch (settingsErr) {
+            console.error('[sendPaymentReceipt] Settings query/attachment failed:', settingsErr.message);
+        }
+
+        if (!logoUrl) {
+            logoUrl = 'https://www.ihwe.in/logo.png';
+        }
+        const addrParts = [];
+        if (registration.address) addrParts.push(registration.address);
+        if (registration.city) addrParts.push(registration.city);
+        if (registration.state) addrParts.push(registration.state);
+        if (registration.country) addrParts.push(registration.country);
+        if (registration.pincode) addrParts.push(registration.pincode);
+        const exhibitorAddress = addrParts.join(', ') || 'N/A';
+        const paymentDateObj = (() => {
+            const h = registration.paymentHistory || [];
+            const l = h.length > 0 ? h[h.length - 1] : null;
+            return (l && l.paidAt) ? new Date(l.paidAt) : new Date();
+        })();
+        const formattedPaymentDate = (() => {
+            const pad = (n) => String(n).padStart(2, '0');
+            const d = pad(paymentDateObj.getDate());
+            const m = pad(paymentDateObj.getMonth() + 1);
+            const y = paymentDateObj.getFullYear();
+            let hours = paymentDateObj.getHours();
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            const mins = pad(paymentDateObj.getMinutes());
+            return `${d}/${m}/${y} ${pad(hours)}:${mins} ${ampm}`;
+        })();
+        const formattedReceiptDate = (() => {
+            const pad = (n) => String(n).padStart(2, '0');
+            const d = pad(paymentDateObj.getDate());
+            const m = pad(paymentDateObj.getMonth() + 1);
+            const y = paymentDateObj.getFullYear();
+            return `${d}/${m}/${y}`;
+        })();
+
+        // Calculate specific fields for the itemized receipt
+        const rateVal = registration.participation?.rate || 0;
+        const sizeVal = registration.participation?.stallSize || 0;
+        const calculatedAmount = rateVal * sizeVal;
+        const fb = registration.financeBreakdown || {};
+        const p = registration.participation || {};
+        const stallDiscountAmount = fb.stallDiscountAmount || 0;
+        const stallDiscountPercent = fb.stallDiscountPercent || 0;
+        const discountAmount = fb.discountAmount || 0;
+        const discountPercent = fb.discountPercent || 0;
+        const grossAmount = fb.grossAmount || p.amount || calculatedAmount || 0;
+        const subtotalVal = fb.subtotal || grossAmount || 0;
+        const gstAmountVal = fb.gstAmount || Math.round(subtotalVal * 0.18);
+        const tdsPercentVal = fb.tdsPercent || 0;
+        const tdsAmountVal = fb.tdsAmount || 0;
+        const netPayableVal = fb.netPayable || (subtotalVal + gstAmountVal - tdsAmountVal);
+        const amountPaidVal = registration.amountPaid || 0;
+        const balanceAmountVal = registration.balanceAmount || 0;
+
+        let rowsHtml = '';
+
+        // 1. Description, dimensions, rate, amount (gross amount)
+        // NOTE: col widths match template: desc=266, dim=114, scheme=114, rate=114, amount=152
+        rowsHtml += `
+            <tr style="background-color: #ffffff;">
+                <td width="266" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-family: Arial, sans-serif;">
+                    <strong>${p.stallType || 'N/A'}</strong><br/>
+                    <span style="font-size: 10px; color: #64748b;">Stall Booking No: ${p.stallFor || 'N/A'}</span>
+                </td>
+                <td width="114" align="center" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.dimension || 'N/A'}</td>
+                <td width="114" align="center" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.stallScheme || 'N/A'}</td>
+                <td width="114" align="right" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${fmt(rateVal)}</td>
+                <td width="152" align="right" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #0f172a; font-family: Arial, sans-serif;">${fmt(grossAmount)}</td>
+            </tr>
+        `;
+
+        // 2. Stall Discount (if any)
+        if (stallDiscountAmount > 0) {
+            rowsHtml += `
+                <tr>
+                    <td width="266" colspan="2" style="background-color: #ffffff; border: 0;"></td>
+                    <td width="228" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Stall Discount (${stallDiscountPercent}%)</td>
+                    <td width="152" align="right" style="padding: 4px 10px; font-size: 11px; color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(stallDiscountAmount)}</td>
+                </tr>
+            `;
+        }
+
+        // 3. Full Payment Discount (if any)
+        if (discountAmount > 0) {
+            rowsHtml += `
+                <tr>
+                    <td width="266" colspan="2" style="background-color: #ffffff; border: 0;"></td>
+                    <td width="228" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Full Payment Discount (${discountPercent}%)</td>
+                    <td width="152" align="right" style="padding: 4px 10px; font-size: 11px; color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(discountAmount)}</td>
+                </tr>
+            `;
+        }
+
+        // 4. Taxable Value
+        rowsHtml += `
+            <tr>
+                <td width="266" colspan="2" style="background-color: #ffffff; border: 0;"></td>
+                <td width="228" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Taxable Value</td>
+                <td width="152" align="right" style="padding: 4px 10px; font-size: 11px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(subtotalVal)}</td>
+            </tr>
+        `;
+
+        // 5. GST @ 18%
+        rowsHtml += `
+            <tr>
+                <td width="266" colspan="2" style="background-color: #ffffff; border: 0;"></td>
+                <td width="228" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">GST @ 18%</td>
+                <td width="152" align="right" style="padding: 4px 10px; font-size: 11px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(gstAmountVal)}</td>
+            </tr>
+        `;
+
+        // 6. TDS Deduction (if any)
+        if (tdsAmountVal > 0) {
+            rowsHtml += `
+                <tr>
+                    <td width="266" colspan="2" style="background-color: #ffffff; border: 0;"></td>
+                    <td width="228" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">TDS Deduction (${tdsPercentVal}%)</td>
+                    <td width="152" align="right" style="padding: 4px 10px; font-size: 11px; color: #dc2626; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(tdsAmountVal)}</td>
+                </tr>
+            `;
+        }
+
+        // 7. GRAND TOTAL / NET PAYABLE
+        rowsHtml += `
+            <tr style="background-color: #0c2b5c; color: #ffffff;">
+                <td width="266" colspan="2" style="border: 0; background-color: #ffffff;"></td>
+                <td width="228" colspan="2" align="right" style="padding: 6px 10px; font-size: 11px; font-weight: bold; text-transform: uppercase; white-space: nowrap; color: #ffffff; font-family: Arial, sans-serif;">GRAND TOTAL</td>
+                <td width="152" align="right" style="padding: 6px 10px; font-size: 12px; font-weight: bold; white-space: nowrap; color: #ffffff; font-family: Arial, sans-serif;">${fmt(netPayableVal)}</td>
+            </tr>
+        `;
+
+        // 8. PARTIAL PAYMENT SUMMARY (if any balance or if amountPaid is different from netPayable)
+        if (balanceAmountVal > 0 || amountPaidVal < netPayableVal) {
+            rowsHtml += `
+                <tr style="background-color: #f0fdf4;">
+                    <td width="266" colspan="2" style="border: 0; background-color: #ffffff;"></td>
+                    <td width="228" colspan="2" align="right" style="padding: 6px 10px; font-size: 11px; color: #15803d; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Amount Received</td>
+                    <td width="152" align="right" style="padding: 6px 10px; font-size: 11px; color: #15803d; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(amountPaidVal)}</td>
+                </tr>
+                <tr style="background-color: #fef2f2;">
+                    <td width="266" colspan="2" style="border: 0; background-color: #ffffff;"></td>
+                    <td width="228" colspan="2" align="right" style="padding: 6px 10px; font-size: 11px; color: #b91c1c; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Balance Due</td>
+                    <td width="152" align="right" style="padding: 6px 10px; font-size: 11px; color: #b91c1c; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(balanceAmountVal)}</td>
+                </tr>
+            `;
+        }
+
+        // Build contact person name (exhibitor's person name, not company)
+        const contactPersonName = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim() || registration.contact1.firstName || 'N/A';
+
+        // Relationship Manager = spokenWith (admin selected) → referredBy → Direct
+        const relationshipMgr = (registration.spokenWith && registration.spokenWith.trim())
+            ? registration.spokenWith.trim()
+            : (registration.referredBy && registration.referredBy.trim())
+                ? registration.referredBy.trim()
+                : 'Direct';
 
         const data = {
-            exhibitor_name: registration.exhibitorName,
-            contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
+            site_url: (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, ''),
+            logo_url: logoUrl,
+            exhibitor_name: registration.exhibitorName,          // Company name (for TO card & subject)
+            contact_person: contactPersonName,                   // Person name (for Exhibitor Details row)
             designation: registration.contact1.designation || 'N/A',
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
             stall_type: registration.participation?.stallType || 'N/A',
-            total_amount: fmt((registration.financeBreakdown || {}).netPayable || registration.participation?.total),
-            amount_paid: fmt(registration.amountPaid),
-            balance_due: fmt(registration.balanceAmount),
-            payment_mode: registration.paymentMode || 'N/A',
-            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'); })(),
-            transaction_id: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length-1] : null; return (l && (l.transactionId || l.razorpayPaymentId)) || registration.manualPaymentDetails?.transactionId || registration.paymentId || 'N/A'; })(),
+            total_amount: fmt(netPayableVal),
+            amount_paid: fmt(amountPaidVal),
+            balance_due: fmt(balanceAmountVal),
+            payment_mode: registration.paymentMode === 'online' ? 'Online' : 'Manual',
+            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length - 1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'); })(),
+            transaction_id: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length - 1] : null; return (l && (l.transactionId || l.razorpayPaymentId)) || registration.manualPaymentDetails?.transactionId || registration.paymentId || 'N/A'; })(),
             stall_scheme: registration.participation?.stallScheme || 'N/A',
             stall_dimension: registration.participation?.dimension || 'N/A',
             stall_size: registration.participation?.stallSize || 'N/A',
+            exhibitor_address: exhibitorAddress,
+            exhibitor_gstin: registration.gstNo || 'N/A',
+            exhibitor_cin: registration.businessRegistrationNo || registration.panNo || 'N/A',
+            exhibitor_email: registration.contact1.email || 'N/A',
+            exhibitor_contact: registration.contact1.mobile || 'N/A',
+            receipt_no: `IHWE-RCPT-2026-${(registration.registrationId || '').split('-').pop() || '0000'}`,
+            receipt_date: formattedReceiptDate,
+            payment_date: formattedPaymentDate,
+            rate_per_sqm: fmt(rateVal),
+            stall_amount: fmt(grossAmount),
+            taxable_value: fmt(subtotalVal),
+            gst_amount: fmt(gstAmountVal),
+            payment_status: balanceAmountVal <= 0 ? 'Paid' : 'Advance Paid',
+            financial_table_rows: rowsHtml,
+            referred_by: relationshipMgr,
+            exhibitor_company_type: registration.typeOfBusiness || 'Private Ltd. Company'
         };
 
-        const attachments = [];
-        if (pdfPath && require('fs').existsSync(pdfPath)) {
-            attachments.push({
-                filename: `PaymentReceipt_${registration.registrationId || registration._id}.pdf`,
-                path: pdfPath,
-                contentType: 'application/pdf'
-            });
+        if (registration.paymentMode !== 'online') {
+            const rPath = registration.receiptUrl;
+            if (rPath) {
+                const cleanPath = rPath.replace(/^(https?:\/\/[^\/]+)?\/?/, '');
+                if (fs.existsSync(cleanPath)) {
+                    attachments.push({
+                        filename: path.basename(cleanPath),
+                        path: cleanPath
+                    });
+                } else if (fs.existsSync(rPath)) {
+                    attachments.push({
+                        filename: path.basename(rPath),
+                        path: rPath
+                    });
+                }
+            }
         }
 
         return await this.sendDynamicConfirmation({
@@ -1270,7 +1473,7 @@ class EmailService {
         try {
             const subject = `Thank You for Your Sponsorship Interest | IHWE 2026`;
             const name = data.name || data.fullName || 'Partner';
-            
+
             const emailHtml = this.emailShell(`
                 <div style="text-align: left; color: #333;">
                     <p style="font-size: 16px; font-weight: 600;">Namo Gange Namaskar!</p>
@@ -1306,7 +1509,7 @@ class EmailService {
 
             // Send WhatsApp
             const whatsappMsg = `*Namo Gange Namaskar!* 🙏\n\nDear *${name}*,\n\nThank you for your interest in *Sponsoring IHWE 2026*. We have received your enquiry for the *${data.category || 'Sponsorship'}* category.\n\nOur partnership team is reviewing your details and will contact you shortly to discuss how we can elevate your brand at the expo.\n\n*Team IHWE*\nNamo Gange Wellness Pvt. Ltd.`;
-            
+
             if (data.phone) {
                 await whatsapp.sendWhatsAppMessage(data.phone, whatsappMsg, 'Sponsorship Confirmation');
             }
@@ -1326,7 +1529,7 @@ class EmailService {
             const subject = `Expo Support Request Received | IHWE 2026`;
             const name = data.name || data.fullName || 'Exhibitor';
             const servicesText = Array.isArray(data.services) ? data.services.join(', ') : (data.services || 'General Support');
-            
+
             const emailHtml = this.emailShell(`
                 <div style="text-align: left; color: #333;">
                     <p style="font-size: 16px; font-weight: 600;">Namo Gange Namaskar!</p>
@@ -1360,7 +1563,7 @@ class EmailService {
 
             // Send WhatsApp to User
             const whatsappMsg = `*Namo Gange Namaskar!* 🙏\n\nDear *${name}*,\n\nThank you for requesting *Expo Support* for IHWE 2026. We have received your requirements for: *${servicesText}*.\n\nOur team is reviewing your request and will connect you with the right partners shortly to assist you.\n\n*Team IHWE*\nNamo Gange Wellness Pvt. Ltd.`;
-            
+
             if (data.phone) {
                 await whatsapp.sendWhatsAppMessage(data.phone, whatsappMsg, 'Expo Support Confirmation');
             }

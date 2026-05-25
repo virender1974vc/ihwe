@@ -6,6 +6,7 @@ const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
 const whatsappService = require('../utils/whatsappService');
+const Stall = require('../models/Stall');
 const { logActivity } = require('../utils/logger');
 router.post('/create-order/:registrationId', async (req, res) => {
     try {
@@ -106,6 +107,8 @@ router.post('/verify-payment', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Registration not found' });
         }
 
+        const wasPaymentFailed = registration.status === 'payment-failed';
+
         const paidAmount = Number(amountPaid) || 0;
         const previousPaid = registration.amountPaid || 0;
         const newTotalPaid = previousPaid + paidAmount;
@@ -204,6 +207,11 @@ router.post('/verify-payment', async (req, res) => {
         }
 
         await registration.save();
+
+        if (wasPaymentFailed) {
+            const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
+            await exhibitorRegistrationService.activateRegistration(registration._id);
+        }
         try {
             const latestPaymentIdx = registration.paymentHistory.length - 1;
             const pdfResult = await pdfGenerator.generatePaymentSlip(registration, { paymentIndex: latestPaymentIdx });
@@ -452,7 +460,8 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             const orderId = payment.order_id;
             const reg = await ExhibitorRegistration.findOne({ razorpayOrderId: orderId });
 
-            if (reg && reg.status === 'pending') {
+            if (reg && (reg.status === 'pending' || reg.status === 'payment-failed')) {
+                const wasPaymentFailed = reg.status === 'payment-failed';
                 const paidAmount = payment.amount / 100;
                 const netPayable = reg.financeBreakdown?.netPayable || reg.participation?.total || 0;
                 const newBalance = Math.max(0, netPayable - paidAmount);
@@ -474,6 +483,11 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                 });
 
                 await reg.save();
+
+                if (wasPaymentFailed) {
+                    const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
+                    await exhibitorRegistrationService.activateRegistration(reg._id);
+                }
 
                 try {
                     // Generate receipt for the latest payment (the one just added)
