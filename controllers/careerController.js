@@ -59,7 +59,7 @@ exports.updateStatus = async (req, res) => {
     const career = await Career.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true }
+      { returnDocument: 'after' }
     );
     await logActivity(req, 'Updated', 'Career Applications', `Updated application ID: ${req.params.id} status to ${status}`);
     res.json({ success: true, data: career });

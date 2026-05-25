@@ -59,7 +59,7 @@ const updateBankOption = async (req, res) => {
     const updatedOption = await BankOption.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updatedOption)

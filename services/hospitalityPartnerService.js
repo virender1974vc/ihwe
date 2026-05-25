@@ -21,7 +21,7 @@ class HospitalityPartnerService {
                 footer: data.footer,
                 lastUpdated: Date.now()
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 }

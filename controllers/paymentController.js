@@ -54,7 +54,7 @@ const updatePayment = async (req, res) => {
     const updatedPayment = await Payment.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updatedPayment)

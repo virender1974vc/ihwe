@@ -82,7 +82,7 @@ const getHandler = (Model) => async (req, res) => {
 
 const updateHandler = (Model) => async (req, res) => {
     try {
-        const item = await Model.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const item = await Model.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         res.status(200).json({ success: true, data: item });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -149,7 +149,7 @@ exports.updateBannerSettings = async (req, res) => {
     try {
         let settings = await MediaBannerSettings.findOne();
         if (settings) {
-            settings = await MediaBannerSettings.findByIdAndUpdate(settings._id, req.body, { new: true });
+            settings = await MediaBannerSettings.findByIdAndUpdate(settings._id, req.body, { returnDocument: 'after' });
         } else {
             settings = await MediaBannerSettings.create(req.body);
         }

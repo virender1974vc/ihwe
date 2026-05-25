@@ -36,7 +36,7 @@ class VisionMissionService {
         return await VisionMission.findOneAndUpdate(
             {},
             { ...data, lastUpdated: Date.now() },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         );
     }
 }

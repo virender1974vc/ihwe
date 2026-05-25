@@ -123,7 +123,7 @@ router.put('/cards/:id', upload.fields([
       if (req.files.logo) cardData.logo = `/uploads/testimonials/${req.files.logo[0].filename}`;
       if (req.files.bottomImage) cardData.bottomImage = `/uploads/testimonials/${req.files.bottomImage[0].filename}`;
     }
-    const card = await NewTestimonialCard.findByIdAndUpdate(req.params.id, cardData, { new: true });
+    const card = await NewTestimonialCard.findByIdAndUpdate(req.params.id, cardData, { returnDocument: 'after' });
     res.json({ success: true, data: card });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -172,7 +172,7 @@ router.put('/videos/:id', upload.fields([
     if (req.files && req.files.thumbnail) {
       videoData.thumbnail = `/uploads/testimonials/${req.files.thumbnail[0].filename}`;
     }
-    const video = await NewTestimonialVideo.findByIdAndUpdate(req.params.id, videoData, { new: true });
+    const video = await NewTestimonialVideo.findByIdAndUpdate(req.params.id, videoData, { returnDocument: 'after' });
     res.json({ success: true, data: video });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

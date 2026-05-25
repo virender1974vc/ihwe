@@ -144,7 +144,7 @@ const updatePlan = async (req, res) => {
     const updated = await SellerSubscriptionPlan.findByIdAndUpdate(
       req.params.id,
       { $set: updateData },
-      { new: true, runValidators: false }
+      { returnDocument: 'after', runValidators: false }
     );
 
     if (!updated) {

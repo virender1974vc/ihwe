@@ -35,7 +35,7 @@ exports.updateConferenceDay = async (req, res) => {
     const data = await ConferenceDay.findOneAndUpdate(
       { dayNumber: parseInt(dayNumber) },
       { $set: updateData },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
 
     res.status(200).json({ success: true, message: "Content updated successfully", data });

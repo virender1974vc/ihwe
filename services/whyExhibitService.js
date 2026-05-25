@@ -28,7 +28,7 @@ class WhyExhibitService {
         return await WhyExhibit.findOneAndUpdate(
             {},
             { ...data, lastUpdated: Date.now() },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 
@@ -39,7 +39,7 @@ class WhyExhibitService {
         return await WhyExhibit.findOneAndUpdate(
             {},
             { $push: { benefits: benefitData }, lastUpdated: Date.now() },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 
@@ -73,7 +73,7 @@ class WhyExhibitService {
         return await WhyExhibit.findOneAndUpdate(
             {},
             { $pull: { benefits: { _id: benefitId } }, lastUpdated: Date.now() },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
 
@@ -84,7 +84,7 @@ class WhyExhibitService {
         return await WhyExhibit.findOneAndUpdate(
             {},
             { ...ctaData, lastUpdated: Date.now() },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 }

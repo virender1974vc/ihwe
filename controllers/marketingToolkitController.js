@@ -71,7 +71,7 @@ exports.updateTemplate = async (req, res) => {
             templateData.assignedExhibitorId = null;
         }
 
-        const template = await MarketingToolkit.findByIdAndUpdate(req.params.id, templateData, { new: true });
+        const template = await MarketingToolkit.findByIdAndUpdate(req.params.id, templateData, { returnDocument: 'after' });
         res.status(200).json({ success: true, data: template });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

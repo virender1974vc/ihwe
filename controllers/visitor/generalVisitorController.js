@@ -69,7 +69,7 @@ exports.updateGeneralVisitor = async (req, res) => {
     const updated = await GeneralVisitor.findByIdAndUpdate(
       req.params.id,
       normalizedBody,
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
     await logActivity(req, 'Updated', 'Visitor Registrations', `Updated general visitor ID: ${req.params.id}`);

@@ -113,7 +113,7 @@ class AwardsNominationService {
     const nomination = await AwardsNomination.findByIdAndUpdate(
       id,
       { status, adminRemarks: adminRemarks || '', updated_by: updatedBy || 'Admin' },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!nomination) throw { status: 404, message: 'Nomination not found' };

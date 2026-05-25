@@ -120,7 +120,7 @@ class PartnerCategoriesService {
                 cards: data.cards,
                 lastUpdated: Date.now()
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 }

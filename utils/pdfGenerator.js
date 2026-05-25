@@ -393,7 +393,7 @@ class PDFGenerator {
                     const counter = await Counter.findOneAndUpdate(
                         { type: `receipt-ngw-${year}` },
                         { $inc: { seq: 1 } },
-                        { upsert: true, new: true }
+                        { upsert: true, returnDocument: 'after' }
                     );
                     rNo = `NGW/IHWE/${year}/${String(counter.seq).padStart(3, '0')}`;
                     await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });

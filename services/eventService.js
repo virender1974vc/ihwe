@@ -19,7 +19,7 @@ class EventService {
         return await Event.findByIdAndUpdate(
             id,
             { $set: updateData },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
     }
     async deleteEvent(id) {

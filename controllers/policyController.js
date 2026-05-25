@@ -46,7 +46,7 @@ class PolicyController {
             const policy = await LegalPolicy.findOneAndUpdate(
                 { page },
                 { page, title, content },
-                { new: true, upsert: true, runValidators: true }
+                { returnDocument: 'after', upsert: true, runValidators: true }
             );
 
             return res.status(200).json({

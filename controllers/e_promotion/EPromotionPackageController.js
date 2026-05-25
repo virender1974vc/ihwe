@@ -50,7 +50,7 @@ class EPromotionPackageController {
             const updatedPackage = await EPromotionPackage.findByIdAndUpdate(
                 req.params.id,
                 req.body,
-                { new: true, runValidators: true }
+                { returnDocument: 'after', runValidators: true }
             );
             if (!updatedPackage) {
                 return res.status(404).json({ success: false, message: "Package not found" });
@@ -133,7 +133,7 @@ class EPromotionPackageController {
             const updatedAddon = await EPromotionAddon.findByIdAndUpdate(
                 req.params.id,
                 req.body,
-                { new: true, runValidators: true }
+                { returnDocument: 'after', runValidators: true }
             );
             if (!updatedAddon) {
                 return res.status(404).json({ success: false, message: "Addon not found" });
@@ -275,7 +275,7 @@ class EPromotionPackageController {
             const updatedTestimonial = await EPromotionTestimonial.findByIdAndUpdate(
                 req.params.id,
                 req.body,
-                { new: true, runValidators: true }
+                { returnDocument: 'after', runValidators: true }
             );
             if (!updatedTestimonial) {
                 return res.status(404).json({ success: false, message: "Testimonial not found" });

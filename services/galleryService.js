@@ -44,7 +44,7 @@ class GalleryService {
         const item = await GalleryItem.findByIdAndUpdate(
             id,
             data,
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!item) {
             throw { status: 404, message: "Item not found" };

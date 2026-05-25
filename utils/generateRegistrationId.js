@@ -15,7 +15,7 @@ const generateRegistrationId = async (type) => {
   const counter = await Counter.findOneAndUpdate(
     { type },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true },
+    { returnDocument: 'after', upsert: true },
   );
   const paddedSeq = String(counter.seq).padStart(6, '0');
   return `${prefix}/${paddedSeq}`;

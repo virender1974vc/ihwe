@@ -209,7 +209,7 @@ class PartnerRegistrationController {
       const partner = await PartnerRegistration.findByIdAndUpdate(
         req.params.id,
         { status },
-        { new: true }
+        { returnDocument: 'after' }
       );
       if (!partner) {
         return res.status(404).json({ success: false, message: "Partner registration not found" });

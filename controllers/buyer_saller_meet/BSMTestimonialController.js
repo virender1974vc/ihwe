@@ -62,7 +62,7 @@ class BSMTestimonialController {
             const updated = await BSMTestimonial.findByIdAndUpdate(
                 req.params.id,
                 req.body,
-                { new: true, runValidators: true }
+                { returnDocument: 'after', runValidators: true }
             );
             if (!updated) {
                 return res.status(404).json({ success: false, message: "Testimonial not found" });

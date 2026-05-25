@@ -79,7 +79,7 @@ const updateHealthCampVisitor = async (req, res) => {
     const updated = await FreeHealthCamp.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updated) return res.status(404).json({ message: "Visitor not found" });

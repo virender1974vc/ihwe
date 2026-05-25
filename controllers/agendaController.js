@@ -38,7 +38,7 @@ exports.createAgenda = async (req, res) => {
 exports.updateAgenda = async (req, res) => {
   try {
     const agenda = await ConferenceAgenda.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (!agenda) {

@@ -169,7 +169,7 @@ const updateGroupVisitor = async (req, res) => {
         const updated = await GroupVisitor.findByIdAndUpdate(
             req.params.id,
             normalizedBody,
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updated) return res.status(404).json({ success: false, message: "Group not found" });
 

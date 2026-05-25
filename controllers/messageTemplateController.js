@@ -52,7 +52,7 @@ const upsertTemplate = async (req, res) => {
         const template = await MessageTemplate.findOneAndUpdate(
             { formType },
             updateData,
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         );
 
         await logActivity(req, 'Updated', 'Message Templates', `Updated response template for: ${formType}`);

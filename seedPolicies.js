@@ -164,7 +164,7 @@ const seed = async () => {
             await LegalPolicy.findOneAndUpdate(
                 { page: policy.page },
                 policy,
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
             console.log(`✅ Seeded: ${policy.title} (${policy.page})`);
         }

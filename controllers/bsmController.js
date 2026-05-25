@@ -225,7 +225,7 @@ exports.updateMeetingStatus = async (req, res) => {
     const meeting = await BSMMeeting.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!meeting) return res.status(404).json({ success: false, message: "Meeting not found" });

@@ -53,7 +53,7 @@ const updateAccessory = async (req, res) => {
         if (data.sortOrder) data.sortOrder = Number(data.sortOrder);
         if (data.isActive !== undefined) data.isActive = data.isActive === 'true' || data.isActive === true;
 
-        const item = await StallAccessory.findByIdAndUpdate(req.params.id, data, { new: true });
+        const item = await StallAccessory.findByIdAndUpdate(req.params.id, data, { returnDocument: 'after' });
         if (!item) return res.status(404).json({ success: false, message: 'Not found' });
         res.json({ success: true, data: item });
     } catch (err) {
@@ -184,7 +184,7 @@ const createOrder = async (req, res) => {
 
 const updateOrder = async (req, res) => {
     try {
-        const order = await AccessoryOrder.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const order = await AccessoryOrder.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
         res.json({ success: true, data: order });
     } catch (err) {

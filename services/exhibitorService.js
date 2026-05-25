@@ -44,7 +44,7 @@ class ExhibitorService {
         return await newExhibitor.save();
     }
     async updateExhibitor(id, data) {
-        return await Exhibitor.findByIdAndUpdate(id, data, { new: true });
+        return await Exhibitor.findByIdAndUpdate(id, data, { returnDocument: 'after' });
     }
     async deleteExhibitor(id) {
         const result = await Exhibitor.findByIdAndDelete(id);

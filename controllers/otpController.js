@@ -25,7 +25,7 @@ class OtpController {
             await Otp.findOneAndUpdate(
                 { identifier, type },
                 { otp: otpCode, createdAt: new Date() },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
 
             // Send via appropriate channel

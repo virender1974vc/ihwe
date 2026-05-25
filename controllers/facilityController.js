@@ -22,7 +22,7 @@ exports.createFacility = async (req, res) => {
 exports.updateFacility = async (req, res) => {
   try {
     const facility = await Facility.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
     });
     res.json({ success: true, data: facility });
   } catch (err) {

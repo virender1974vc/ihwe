@@ -117,7 +117,7 @@ const updateCompany = async (req, res) => {
     }
 
     const updated = await Company.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
     });
     if (!updated) return res.status(404).json({ message: "Company not found" });
 

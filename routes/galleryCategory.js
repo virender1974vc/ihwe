@@ -84,7 +84,7 @@ router.put('/:id', authMiddleware, upload.single('coverImage'), async (req, res)
         if (req.file) update.coverImage = `/uploads/gallery/categories/${req.file.filename}`;
         
         // 3. Update category
-        const category = await GalleryCategory.findByIdAndUpdate(req.params.id, update, { new: true });
+        const category = await GalleryCategory.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
         
         // 4. CASCADE: If title changed, update all gallery items that used the old title
         if (title && title !== oldTitle) {

@@ -14,7 +14,7 @@ class ConferenceTrackService {
     }
 
     async update(id, data) {
-        return await ConferenceTrack.findByIdAndUpdate(id, data, { new: true });
+        return await ConferenceTrack.findByIdAndUpdate(id, data, { returnDocument: 'after' });
     }
 
     async delete(id) {

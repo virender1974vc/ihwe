@@ -374,7 +374,7 @@ const seedPaymentReceiptTemplate = async () => {
         const updatedTemplate = await MessageTemplate.findOneAndUpdate(
             { formType: 'exhibitor-payment-receipt' },
             templateData,
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         console.log('✅ Outlook-safe payment receipt template seeded successfully! exhibitor-payment-receipt');

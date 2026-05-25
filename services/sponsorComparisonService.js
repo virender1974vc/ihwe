@@ -111,7 +111,7 @@ class SponsorComparisonService {
                 comparisonData: data.comparisonData,
                 lastUpdated: Date.now() 
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 }

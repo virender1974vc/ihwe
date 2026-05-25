@@ -25,7 +25,7 @@ class InternationalExhibitorService {
         return await InternationalExhibitor.findByIdAndUpdate(
             id,
             { $set: data },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
 

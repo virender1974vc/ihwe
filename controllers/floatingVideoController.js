@@ -47,7 +47,7 @@ exports.updateVideo = async (req, res) => {
       updateData.videoUrl = `/uploads/videos/${req.file.filename}`;
     }
     const video = await FloatingVideo.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
+      returnDocument: 'after',
     });
     res.json({ success: true, data: video });
   } catch (error) {
@@ -82,7 +82,7 @@ exports.updateSettings = async (req, res) => {
     const settings = await Settings.findOneAndUpdate(
       {},
       { floatingVideoTimer: Number(timer) },
-      { new: true, upsert: true }
+      { returnDocument: 'after', upsert: true }
     );
     res.json({ success: true, timer: settings.floatingVideoTimer });
   } catch (error) {

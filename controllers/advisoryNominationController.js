@@ -195,7 +195,7 @@ class AdvisoryNominationController {
             const nomination = await AdvisoryNomination.findByIdAndUpdate(
                 req.params.id,
                 { status },
-                { new: true }
+                { returnDocument: 'after' }
             );
             if (!nomination) {
                 return res.status(404).json({ success: false, message: 'Nomination not found' });

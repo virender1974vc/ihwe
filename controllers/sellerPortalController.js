@@ -654,7 +654,7 @@ exports.verifySubscriptionPayment = async (req, res) => {
                 'sellerSubscription.paymentId': razorpay_payment_id,
                 'sellerSubscription.transactionId': razorpay_order_id,
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         if (!updated) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
@@ -695,7 +695,7 @@ exports.markNotificationAsRead = async (req, res) => {
         const notification = await SellerNotification.findOneAndUpdate(
             { _id: id, exhibitorId: req.user.id },
             { read: true },
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!notification) {
@@ -768,7 +768,7 @@ exports.markLeadInterested = async (req, res) => {
         const lead = await StallProductEnquiry.findOneAndUpdate(
             { _id: leadId, exhibitorId: req.user.id },
             { interested: true, interestedAt: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!lead) {
@@ -827,7 +827,7 @@ exports.sendBrochureToLead = async (req, res) => {
         const lead = await StallProductEnquiry.findOneAndUpdate(
             { _id: leadId, exhibitorId: req.user.id },
             { brochureSent: true, brochureSentAt: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!lead) {
@@ -857,7 +857,7 @@ exports.setLeadPriority = async (req, res) => {
         const lead = await StallProductEnquiry.findOneAndUpdate(
             { _id: leadId, exhibitorId: req.user.id },
             { priority, prioritySetAt: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!lead) {
@@ -877,7 +877,7 @@ exports.convertLeadToOpportunity = async (req, res) => {
         const lead = await StallProductEnquiry.findOneAndUpdate(
             { _id: leadId, exhibitorId: req.user.id },
             { status: 'opportunity', convertedAt: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!lead) {
@@ -1037,7 +1037,7 @@ exports.updateSellerProfile = async (req, res) => {
                 ...(kycDocuments && { kycDocuments }),
                 profileUpdatedAt: new Date()
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
         
         if (!updated) {

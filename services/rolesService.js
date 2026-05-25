@@ -41,7 +41,7 @@ class RolesService {
                 ...data,
                 updatedBy: username || 'System'
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         // If the role exists and its name was changed, update all Users using the old name

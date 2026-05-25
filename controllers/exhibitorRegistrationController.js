@@ -124,7 +124,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 req.params.id,
                 { $set: update },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -157,7 +157,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
                 { $unset: { [field]: "" } },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -220,7 +220,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
                 { $push: { specialDocuments: { label, url: req.file.path } } },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -242,7 +242,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
                 { $pull: { specialDocuments: { _id: docId } } },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });

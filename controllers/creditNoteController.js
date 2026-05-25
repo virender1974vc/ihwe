@@ -104,7 +104,7 @@ const updateCreditNote = async (req, res) => {
         ...req.body,
         updated_date: new Date(),
       },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     res.json(updated);

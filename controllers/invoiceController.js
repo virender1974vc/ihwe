@@ -86,7 +86,7 @@ const updateInvoice = async (req, res) => {
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updatedInvoice)

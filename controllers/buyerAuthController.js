@@ -258,7 +258,7 @@ class BuyerAuthController {
             const updated = await BuyerRegistration.findByIdAndUpdate(
                 targetId,
                 { $set: update },
-                { new: true, runValidators: false }
+                { returnDocument: 'after', runValidators: false }
             );
 
             if (!updated)

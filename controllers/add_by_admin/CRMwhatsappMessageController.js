@@ -77,7 +77,7 @@ const updateMessage = async (req, res) => {
     const updatedMsg = await WhatsAppMessage.findByIdAndUpdate(
       req.params.id,
       updatedData,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updatedMsg)

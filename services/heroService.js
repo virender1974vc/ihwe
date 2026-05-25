@@ -23,7 +23,7 @@ class HeroService {
      * Update a hero slide.
      */
     async updateSlide(id, data) {
-        const updatedSlide = await Hero.findByIdAndUpdate(id, data, { new: true });
+        const updatedSlide = await Hero.findByIdAndUpdate(id, data, { returnDocument: 'after' });
         if (!updatedSlide) throw { status: 404, message: 'Slide not found' };
         return updatedSlide;
     }

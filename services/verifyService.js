@@ -22,7 +22,7 @@ class VerifyService {
         await Otp.findOneAndUpdate(
             { identifier: email, type: 'email' },
             { otp, createdAt: new Date() },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         // Determine context-specific text
@@ -179,7 +179,7 @@ class VerifyService {
         await Otp.findOneAndUpdate(
             { identifier: phone, type: 'phone' },
             { otp, createdAt: new Date() },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         return await sendWhatsAppOTP(phone, otp, context, name);

@@ -56,7 +56,7 @@ exports.getSpeakerById = async (req, res) => {
 exports.updateSpeakerStatus = async (req, res) => {
     try {
         const { status } = req.body;
-        const updatedSpeaker = await Speaker.findByIdAndUpdate(req.params.id, { status }, { new: true, runValidators: true });
+        const updatedSpeaker = await Speaker.findByIdAndUpdate(req.params.id, { status }, { returnDocument: 'after', runValidators: true });
         if (!updatedSpeaker) {
             return res.status(404).json({ success: false, message: 'Speaker not found.' });
         }

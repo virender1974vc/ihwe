@@ -175,14 +175,14 @@ class ExhibitorRegistrationService {
             counterRecord = await Counter.findOneAndUpdate(
                 { type: `exhibitor-v2-${year}` },
                 { $setOnInsert: { seq: 8000 } },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
         }
 
         let counter = await Counter.findOneAndUpdate(
             { type: `exhibitor-v2-${year}` },
             { $inc: { seq: 1 } },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         let currentSeq = counter.seq;
@@ -326,7 +326,7 @@ class ExhibitorRegistrationService {
         let saved;
         if (duplicate) {
             // Update existing record
-            saved = await ExhibitorRegistration.findByIdAndUpdate(duplicate._id, data, { new: true });
+            saved = await ExhibitorRegistration.findByIdAndUpdate(duplicate._id, data, { returnDocument: 'after' });
         } else {
             // Create new record
             const newRegistration = new ExhibitorRegistration(data);
@@ -592,7 +592,7 @@ class ExhibitorRegistrationService {
             }
         }
 
-        const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { new: true });
+        const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { returnDocument: 'after' });
 
         if (statusJustActivated) {
             await this.activateRegistration(id);

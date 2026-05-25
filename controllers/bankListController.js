@@ -63,7 +63,7 @@ const updateBank = async (req, res) => {
     const updatedBank = await BankList.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!updatedBank)

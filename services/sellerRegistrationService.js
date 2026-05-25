@@ -135,7 +135,7 @@ class SellerRegistrationService {
     }
 
     async updateRegistration(id, data) {
-        const updated = await SellerRegistration.findByIdAndUpdate(id, data, { new: true });
+        const updated = await SellerRegistration.findByIdAndUpdate(id, data, { returnDocument: 'after' });
         if (!updated) throw { status: 404, message: 'Registration not found' };
         return updated;
     }

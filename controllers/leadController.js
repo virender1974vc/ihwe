@@ -48,7 +48,7 @@ exports.updateIndividualLead = async (req, res) => {
     const lead = await IndividualLead.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (lead) {
@@ -117,7 +117,7 @@ exports.updateCorporateLead = async (req, res) => {
     const lead = await CorporateLead.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
+      { returnDocument: 'after' }
     );
     
     if (lead) {

@@ -36,7 +36,7 @@ const createUnit = async (req, res) => {
 const updateUnit = async (req, res) => {
     try {
         const { unit, status, added_by, updated_by } = req.body;
-        const updatedUnit = await Unit.findByIdAndUpdate(req.params.id, { unit, status, added_by, updated_by }, { new: true });
+        const updatedUnit = await Unit.findByIdAndUpdate(req.params.id, { unit, status, added_by, updated_by }, { returnDocument: 'after' });
         res.status(200).json(updatedUnit);
     } catch (error) {
         res.status(500).json({ message: error.message });

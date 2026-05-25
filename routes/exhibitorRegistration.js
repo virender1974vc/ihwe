@@ -104,7 +104,7 @@ router.put('/:id/msme', msmeUpload.single('udyamCertificate'), async (req, res) 
         const updated = await require('../models/ExhibitorRegistration').findByIdAndUpdate(
             req.params.id,
             { msme: msmeData },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
         res.json({ success: true, data: updated.msme });

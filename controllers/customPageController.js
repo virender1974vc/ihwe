@@ -34,7 +34,7 @@ exports.createPage = async (req, res) => {
 
 exports.updatePage = async (req, res) => {
   try {
-    const page = await CustomPage.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const page = await CustomPage.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!page) return res.status(404).json({ success: false, message: "Page not found" });
     await logActivity(req, 'Updated', 'CustomPage', `Updated page: ${req.body.title || page.title}`);
     res.json({ success: true, data: page });

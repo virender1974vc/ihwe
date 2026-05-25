@@ -34,7 +34,7 @@ class WhyAttendService {
         return await WhyAttend.findOneAndUpdate(
             {},
             { ...data, lastUpdated: Date.now() },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         );
     }
 
@@ -45,7 +45,7 @@ class WhyAttendService {
         return await WhyAttend.findOneAndUpdate(
             {},
             { $push: { cards: data }, lastUpdated: Date.now() },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         );
     }
 
@@ -63,7 +63,7 @@ class WhyAttendService {
                 },
                 lastUpdated: Date.now()
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
 
@@ -74,7 +74,7 @@ class WhyAttendService {
         return await WhyAttend.findOneAndUpdate(
             {},
             { $pull: { cards: { _id: cardId } }, lastUpdated: Date.now() },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
 }

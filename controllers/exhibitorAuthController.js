@@ -288,7 +288,7 @@ class ExhibitorAuthController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 targetId,
                 { $set: update },
-                { new: true, runValidators: false }
+                { returnDocument: 'after', runValidators: false }
             );
 
             if (!updated) {
@@ -345,7 +345,7 @@ class ExhibitorAuthController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 targetId,
                 { $set: updateData },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated)

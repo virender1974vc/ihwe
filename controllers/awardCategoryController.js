@@ -45,7 +45,7 @@ const update = async (req, res) => {
     const updated = await AwardCategory.findByIdAndUpdate(
       req.params.id,
       { name, description, status, order, updated_by: req.body.updated_by || 'Admin' },
-      { new: true }
+      { returnDocument: 'after' }
     );
     if (!updated) return res.status(404).json({ success: false, message: 'Category not found' });
     await logActivity(req, 'Updated', 'Award Category', `Updated category: ${name}`);

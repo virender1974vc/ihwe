@@ -28,7 +28,7 @@ class InternationalExhibitorConfigController {
             const config = await InternationalExhibitorConfig.findOneAndUpdate(
                 {},
                 { $set: req.body },
-                { new: true, upsert: true }
+                { returnDocument: 'after', upsert: true }
             );
             res.json({ success: true, data: config });
         } catch (error) {

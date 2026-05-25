@@ -34,7 +34,7 @@ class PsmClaimController {
 
             let saved;
             if (id) {
-                saved = await Model.findByIdAndUpdate(id, data, { new: true });
+                saved = await Model.findByIdAndUpdate(id, data, { returnDocument: 'after' });
             } else {
                 saved = await new Model(data).save();
             }

@@ -193,7 +193,7 @@ const getEstimateById = async (req, res) => {
 const updateEstimate = async (req, res) => {
   try {
     const updated = await Estimate.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
     });
 
     if (!updated)

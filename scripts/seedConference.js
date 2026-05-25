@@ -310,7 +310,7 @@ const seedDatabase = async () => {
       await ConferenceDay.findOneAndUpdate(
         { dayNumber: dayData.dayNumber },
         { $set: dayData },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
       console.log(`Seeded Day ${dayData.dayNumber} successfully.`);
     }

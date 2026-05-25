@@ -43,7 +43,7 @@ class CountersService {
         };
         if (bg) updateData.bg = bg;
 
-        const updated = await Counter.findByIdAndUpdate(id, updateData, { new: true });
+        const updated = await Counter.findByIdAndUpdate(id, updateData, { returnDocument: 'after' });
         if (!updated) throw { status: 404, message: 'Counter not found' };
         return updated;
     }

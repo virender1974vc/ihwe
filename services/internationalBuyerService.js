@@ -46,7 +46,7 @@ class InternationalBuyerService {
         return await InternationalBuyer.findByIdAndUpdate(
             id,
             { $set: data },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
 

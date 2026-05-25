@@ -52,7 +52,7 @@ router.put('/:id', upload.single('image'), async (req, res) => {
     if (req.file) {
       speakerData.image = `/uploads/speakers/${req.file.filename}`;
     }
-    const speaker = await DistinguishedSpeaker.findByIdAndUpdate(req.params.id, speakerData, { new: true });
+    const speaker = await DistinguishedSpeaker.findByIdAndUpdate(req.params.id, speakerData, { returnDocument: 'after' });
     res.json({ success: true, data: speaker });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

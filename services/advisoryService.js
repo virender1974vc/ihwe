@@ -52,7 +52,7 @@ class AdvisoryService {
                 linkedin,
                 displayOrder: displayOrder !== undefined ? Number(displayOrder) : 0
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!member) {
             throw { status: 404, message: "Member not found" };

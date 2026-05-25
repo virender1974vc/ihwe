@@ -110,7 +110,7 @@ router.patch('/admin/export-inquiries/:id/status', async (req, res) => {
         const updated = await ProductExportInquiry.findByIdAndUpdate(
             req.params.id,
             { status, adminNote, updatedAt: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updated) return res.status(404).json({ success: false, message: 'Inquiry not found' });
         res.json({ success: true, data: updated });
@@ -126,7 +126,7 @@ router.patch('/admin/service-requests/:id/status', async (req, res) => {
         const updated = await SellerServiceRequest.findByIdAndUpdate(
             req.params.id,
             { status, adminNote, updatedAt: new Date() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updated) return res.status(404).json({ success: false, message: 'Request not found' });
         res.json({ success: true, data: updated });

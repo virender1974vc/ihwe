@@ -75,7 +75,7 @@ class MsmePmsSchemeController {
             const updatedApplication = await MsmePmsScheme.findByIdAndUpdate(
                 req.params.id,
                 updateFields,
-                { new: true }
+                { returnDocument: 'after' }
             );
             if (!updatedApplication) {
                 return res.status(404).json({ success: false, message: 'Application not found' });

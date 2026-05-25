@@ -110,7 +110,7 @@ const seedDay1 = async () => {
     await ConferenceDay.findOneAndUpdate(
       { dayNumber: 1 },
       { $set: day1Data },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     console.log("Seeded Day 1 successfully.");
     process.exit(0);

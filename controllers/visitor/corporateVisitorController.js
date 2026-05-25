@@ -104,7 +104,7 @@ const updateCorporateVisitor = async (req, res) => {
     const updated = await CorporateVisitor.findByIdAndUpdate(
       req.params.id,
       normalizedBody,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
