@@ -21,42 +21,43 @@ mongoose.connect(mongoUri)
 
         console.log(`Using registration record for: ${reg.exhibitorName}`);
 
-        // Temporarily set the email address to target recipient
-        const testRecipient = 'manishsirohi023@gmail.com';
-        reg.contact1.email = testRecipient;
-        reg.spokenWith = 'Manish Sirohi';
+        const testRecipients = ['manishsirohi023@gmail.com', 'manishsirohi023@outlook.com'];
+        for (const testRecipient of testRecipients) {
+            reg.contact1.email = testRecipient;
+            reg.spokenWith = 'Manish Sirohi';
 
-        // Simulate highly comprehensive partial/advance payment breakdown matching frontend BookAStand logic
-        reg.amountPaid = 50000;
-        reg.balanceAmount = 65580.70;
-        reg.financeBreakdown = {
-            grossAmount: 118910,
-            stallDiscountPercent: 10,
-            stallDiscountAmount: 11891,
-            discountPercent: 0,
-            discountAmount: 0,
-            subtotal: 107019,
-            gstAmount: 19263.42,
-            tdsPercent: 10,
-            tdsAmount: 10701.90,
-            netPayable: 115580.52
-        };
-        reg.participation = reg.participation || {};
-        reg.participation.rate = 9000;
-        reg.participation.stallSize = 12;
-        reg.participation.stallType = 'Premium Corner Stand';
-        reg.participation.stallFor = 'Stall-908';
-        reg.participation.dimension = '4m x 3m';
-        reg.participation.stallScheme = 'Shell Scheme';
+            // Simulate highly comprehensive partial/advance payment breakdown matching frontend BookAStand logic
+            reg.amountPaid = 50000;
+            reg.balanceAmount = 65580.70;
+            reg.financeBreakdown = {
+                grossAmount: 118910,
+                stallDiscountPercent: 10,
+                stallDiscountAmount: 11891,
+                discountPercent: 0,
+                discountAmount: 0,
+                subtotal: 107019,
+                gstAmount: 19263.42,
+                tdsPercent: 10,
+                tdsAmount: 10701.90,
+                netPayable: 115580.52
+            };
+            reg.participation = reg.participation || {};
+            reg.participation.rate = 9000;
+            reg.participation.stallSize = 12;
+            reg.participation.stallType = 'Premium Corner Stand';
+            reg.participation.stallFor = 'Stall-908';
+            reg.participation.dimension = '4m x 3m';
+            reg.participation.stallScheme = 'Shell Scheme';
 
-        console.log(`Triggering simulated partial payment receipt email to: ${testRecipient}`);
+            console.log(`Triggering simulated partial payment receipt email to: ${testRecipient}`);
 
-        const success = await emailServiceInstance.sendPaymentReceipt(reg, null);
+            const success = await emailServiceInstance.sendPaymentReceipt(reg, null);
 
-        if (success) {
-            console.log('Test payment receipt email successfully dispatched!');
-        } else {
-            console.log('Failed to dispatch test payment receipt email.');
+            if (success) {
+                console.log(`Test payment receipt email successfully dispatched to ${testRecipient}!`);
+            } else {
+                console.log(`Failed to dispatch test payment receipt email to ${testRecipient}.`);
+            }
         }
 
         process.exit(0);
