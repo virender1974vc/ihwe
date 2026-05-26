@@ -244,11 +244,11 @@ const emailBodyHtml = `
                                     <table border="0" cellpadding="0" cellspacing="0" width="316" style="border-collapse: collapse;">
                                         <tr>
                                             <td width="125" style="color: #64748b; padding-bottom: 4px; font-family: Arial, sans-serif;"><strong>Contact Person:</strong></td>
-                                            <td width="191" style="color: #0f172a; padding-bottom: 4px; font-weight: bold; font-family: Arial, sans-serif;">[[CONTACT_PERSON]]</td>
+                                            <td width="191" style="color: #0f172a; padding-bottom: 4px; font-weight: bold; font-family: Arial, sans-serif;">[[CONTACT_PERSON]] / [[EXHIBITOR_CONTACT]]</td>
                                         </tr>
                                         <tr>
-                                            <td style="color: #64748b; padding-bottom: 4px; font-family: Arial, sans-serif;"><strong>Contact Person Mobile:</strong></td>
-                                            <td style="color: #0f172a; padding-bottom: 4px; font-family: Arial, sans-serif;">[[EXHIBITOR_CONTACT]]</td>
+                                            <td style="color: #64748b; padding-bottom: 4px; font-family: Arial, sans-serif;"><strong>Relationship Manager:</strong></td>
+                                            <td style="color: #0f172a; padding-bottom: 4px; font-family: Arial, sans-serif;">[[REFERRED_BY]]</td>
                                         </tr>
                                     </table>
                                 </td>

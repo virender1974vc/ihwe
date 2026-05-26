@@ -1356,7 +1356,7 @@ class EmailService {
             gst_amount: fmt(gstAmountVal),
             payment_status: balanceAmountVal <= 0 ? 'Full Received' : 'Advance Received',
             financial_table_rows: rowsHtml,
-            referred_by: relationshipMgr,
+            referred_by: toTitleCase(relationshipMgr),
             exhibitor_company_type: registration.typeOfBusiness || 'Private Ltd. Company'
         };
 
