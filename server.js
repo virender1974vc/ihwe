@@ -15,7 +15,7 @@ const cookieParser = require("cookie-parser");
 });
 const http = require("http");
 const { Server } = require("socket.io");
-require("dotenv").config();
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 
 const sidebarRoutes = require("./routes/sidebar");
@@ -147,6 +147,7 @@ app.use(cors());
 // const allowedOrigins = [
 //   "https://ihwe.in",
 //   "https://www.ihwe.in",
+//   "https://api.ihwe.in",
 //   "https://admin.ihwe.in",
 //   "http://localhost:8080"
 // ];
@@ -190,15 +191,15 @@ app.use(async (req, res, next) => {
     const filename = req.path.substring(1);
     if (filename && !filename.includes("/")) {
       let seoFile = await SeoFile.findOne({ originalName: filename });
-      
+
       // Fallback matching for common SEO files with custom names (e.g. "ihwe robots.txt")
       if (!seoFile) {
         if (filename === "robots.txt") {
-          seoFile = await SeoFile.findOne({ originalName: /robots.*\.txt/i }) || 
-                    await SeoFile.findOne({ originalName: /robots/i });
+          seoFile = await SeoFile.findOne({ originalName: /robots.*\.txt/i }) ||
+            await SeoFile.findOne({ originalName: /robots/i });
         } else if (filename === "sitemap.xml") {
-          seoFile = await SeoFile.findOne({ originalName: /sitemap.*\.xml/i }) || 
-                    await SeoFile.findOne({ originalName: /sitemap/i });
+          seoFile = await SeoFile.findOne({ originalName: /sitemap.*\.xml/i }) ||
+            await SeoFile.findOne({ originalName: /sitemap/i });
         }
       }
 
@@ -215,7 +216,7 @@ app.use(async (req, res, next) => {
         }
       }
     }
-    
+
     // Dynamic fallback for robots.txt when not uploaded yet
     if (req.path === "/robots.txt") {
       res.header("Content-Type", "text/plain");
