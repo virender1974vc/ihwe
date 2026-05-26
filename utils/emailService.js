@@ -309,6 +309,7 @@ class EmailService {
             'ORDER_NO': data.order_no || 'N/A',
             'GRAND_TOTAL': data.grand_total || 'N/A',
             'ITEM_TABLE': data.item_table || 'N/A',
+            'PAYMENT_STATUS': data.payment_status || 'N/A',
         };
         result = result.replace(/\[\[\s*([a-zA-Z0-9_]+)\s*\]\]/g, (match, key) => {
             const upperKey = key.toUpperCase();
@@ -1221,14 +1222,14 @@ class EmailService {
         // NOTE: col widths match template: desc=230, dim=100, scheme=100, rate=110, amount=160
         rowsHtml += `
             <tr style="background-color: #ffffff;">
-                <td width="230" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-family: Arial, sans-serif;">
+                <td width="230" style="padding: 1px 10px; font-size: 11px; line-height: 1.2; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-family: Arial, sans-serif;">
                     <strong>${p.stallType || 'N/A'}</strong><br/>
-                    <span style="font-size: 10px; color: #64748b;">Stall Booking No: ${p.stallFor || 'N/A'}</span>
+                    <span style="font-size: 9px; color: #64748b;">Stall Booking No: ${p.stallFor || 'N/A'}</span>
                 </td>
-                <td width="100" align="center" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.dimension || 'N/A'}</td>
-                <td width="100" align="center" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.stallScheme || 'N/A'}</td>
-                <td width="110" align="right" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${fmt(rateVal)}</td>
-                <td width="160" align="right" style="padding: 8px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #0f172a; font-family: Arial, sans-serif;">${fmt(grossAmount)}</td>
+                <td width="100" align="center" style="padding: 1px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.dimension || 'N/A'}</td>
+                <td width="100" align="center" style="padding: 1px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.stallScheme || 'N/A'}</td>
+                <td width="110" align="right" style="padding: 1px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${fmt(rateVal)}</td>
+                <td width="160" align="right" style="padding: 1px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #0f172a; font-family: Arial, sans-serif;">${fmt(grossAmount)}</td>
             </tr>
         `;
 
@@ -1237,8 +1238,8 @@ class EmailService {
             rowsHtml += `
                 <tr>
                     <td width="330" colspan="2" style="background-color: #ffffff; border: 0;"></td>
-                    <td width="210" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Stall Discount (${stallDiscountPercent}%)</td>
-                    <td width="160" align="right" style="padding: 4px 10px; font-size: 11px; color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(stallDiscountAmount)}</td>
+                    <td width="210" colspan="2" align="right" style="padding: 1px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Stall Discount (${stallDiscountPercent}%)</td>
+                    <td width="160" align="right" style="padding: 1px 10px; font-size: 11px; color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(stallDiscountAmount)}</td>
                 </tr>
             `;
         }
@@ -1248,8 +1249,8 @@ class EmailService {
             rowsHtml += `
                 <tr>
                     <td width="330" colspan="2" style="background-color: #ffffff; border: 0;"></td>
-                    <td width="210" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Full Payment Discount (${discountPercent}%)</td>
-                    <td width="160" align="right" style="padding: 4px 10px; font-size: 11px; color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(discountAmount)}</td>
+                    <td width="210" colspan="2" align="right" style="padding: 1px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Full Payment Discount (${discountPercent}%)</td>
+                    <td width="160" align="right" style="padding: 1px 10px; font-size: 11px; color: #b45309; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(discountAmount)}</td>
                 </tr>
             `;
         }
@@ -1258,8 +1259,8 @@ class EmailService {
         rowsHtml += `
             <tr>
                 <td width="330" colspan="2" style="background-color: #ffffff; border: 0;"></td>
-                <td width="210" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Taxable Value</td>
-                <td width="160" align="right" style="padding: 4px 10px; font-size: 11px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(subtotalVal)}</td>
+                <td width="210" colspan="2" align="right" style="padding: 1px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #f1f5f9; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Taxable Value</td>
+                <td width="160" align="right" style="padding: 1px 10px; font-size: 11px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #f1f5f9; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(subtotalVal)}</td>
             </tr>
         `;
 
@@ -1267,8 +1268,8 @@ class EmailService {
         rowsHtml += `
             <tr>
                 <td width="330" colspan="2" style="background-color: #ffffff; border: 0;"></td>
-                <td width="210" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">GST @ 18%</td>
-                <td width="160" align="right" style="padding: 4px 10px; font-size: 11px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(gstAmountVal)}</td>
+                <td width="210" colspan="2" align="right" style="padding: 1px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">GST @ 18%</td>
+                <td width="160" align="right" style="padding: 1px 10px; font-size: 11px; color: #0f172a; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(gstAmountVal)}</td>
             </tr>
         `;
 
@@ -1277,8 +1278,8 @@ class EmailService {
             rowsHtml += `
                 <tr>
                     <td width="330" colspan="2" style="background-color: #ffffff; border: 0;"></td>
-                    <td width="210" colspan="2" align="right" style="padding: 4px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">TDS Deduction (${tdsPercentVal}%)</td>
-                    <td width="160" align="right" style="padding: 4px 10px; font-size: 11px; color: #dc2626; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(tdsAmountVal)}</td>
+                    <td width="210" colspan="2" align="right" style="padding: 1px 10px; font-size: 11px; color: #64748b; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">TDS Deduction (${tdsPercentVal}%)</td>
+                    <td width="160" align="right" style="padding: 1px 10px; font-size: 11px; color: #dc2626; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">- ${fmt(tdsAmountVal)}</td>
                 </tr>
             `;
         }
@@ -1287,8 +1288,8 @@ class EmailService {
         rowsHtml += `
             <tr style="background-color: #0c2b5c; color: #ffffff;">
                 <td width="330" colspan="2" style="border: 0; background-color: #ffffff;"></td>
-                <td width="210" colspan="2" align="right" style="padding: 6px 10px; font-size: 11px; font-weight: bold; text-transform: uppercase; white-space: nowrap; color: #ffffff; font-family: Arial, sans-serif;">GRAND TOTAL</td>
-                <td width="160" align="right" style="padding: 6px 10px; font-size: 12px; font-weight: bold; white-space: nowrap; color: #ffffff; font-family: Arial, sans-serif;">${fmt(netPayableVal)}</td>
+                <td width="210" colspan="2" align="right" style="padding: 2px 10px; font-size: 11px; font-weight: bold; text-transform: uppercase; white-space: nowrap; color: #ffffff; font-family: Arial, sans-serif;">GRAND TOTAL</td>
+                <td width="160" align="right" style="padding: 2px 10px; font-size: 12px; font-weight: bold; white-space: nowrap; color: #ffffff; font-family: Arial, sans-serif;">${fmt(netPayableVal)}</td>
             </tr>
         `;
 
@@ -1297,13 +1298,13 @@ class EmailService {
             rowsHtml += `
                 <tr style="background-color: #f0fdf4;">
                     <td width="330" colspan="2" style="border: 0; background-color: #ffffff;"></td>
-                    <td width="210" colspan="2" align="right" style="padding: 6px 10px; font-size: 11px; color: #15803d; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Amount Received</td>
-                    <td width="160" align="right" style="padding: 6px 10px; font-size: 11px; color: #15803d; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(amountPaidVal)}</td>
+                    <td width="210" colspan="2" align="right" style="padding: 2px 10px; font-size: 11px; color: #15803d; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Amount Received</td>
+                    <td width="160" align="right" style="padding: 2px 10px; font-size: 11px; color: #15803d; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(amountPaidVal)}</td>
                 </tr>
                 <tr style="background-color: #fef2f2;">
                     <td width="330" colspan="2" style="border: 0; background-color: #ffffff;"></td>
-                    <td width="210" colspan="2" align="right" style="padding: 6px 10px; font-size: 11px; color: #b91c1c; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Balance Due</td>
-                    <td width="160" align="right" style="padding: 6px 10px; font-size: 11px; color: #b91c1c; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(balanceAmountVal)}</td>
+                    <td width="210" colspan="2" align="right" style="padding: 2px 10px; font-size: 11px; color: #b91c1c; font-weight: bold; border-bottom: 1px solid #cbd5e1; text-transform: uppercase; white-space: nowrap; font-family: Arial, sans-serif;">Balance Due</td>
+                    <td width="160" align="right" style="padding: 2px 10px; font-size: 11px; color: #b91c1c; font-weight: bold; border-bottom: 1px solid #cbd5e1; white-space: nowrap; font-family: Arial, sans-serif;">${fmt(balanceAmountVal)}</td>
                 </tr>
             `;
         }
@@ -1335,8 +1336,8 @@ class EmailService {
             total_amount: fmt(netPayableVal),
             amount_paid: fmt(amountPaidVal),
             balance_due: fmt(balanceAmountVal),
-            payment_mode: registration.paymentMode === 'online' ? 'Online' : 'Manual',
-            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length - 1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Manual'); })(),
+            payment_mode: registration.paymentMode === 'online' ? 'Online' : 'Bank Transfer',
+            payment_method: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length - 1] : null; return (l && l.method) || registration.manualPaymentDetails?.method || (registration.paymentMode === 'online' ? 'Razorpay' : 'Bank Transfer'); })(),
             transaction_id: (() => { const h = registration.paymentHistory || []; const l = h.length > 0 ? h[h.length - 1] : null; return (l && (l.transactionId || l.razorpayPaymentId)) || registration.manualPaymentDetails?.transactionId || registration.paymentId || 'N/A'; })(),
             stall_scheme: registration.participation?.stallScheme || 'N/A',
             stall_dimension: registration.participation?.dimension || 'N/A',
@@ -1353,7 +1354,7 @@ class EmailService {
             stall_amount: fmt(grossAmount),
             taxable_value: fmt(subtotalVal),
             gst_amount: fmt(gstAmountVal),
-            payment_status: balanceAmountVal <= 0 ? 'Paid' : 'Advance Paid',
+            payment_status: balanceAmountVal <= 0 ? 'Full Received' : 'Advance Received',
             financial_table_rows: rowsHtml,
             referred_by: relationshipMgr,
             exhibitor_company_type: registration.typeOfBusiness || 'Private Ltd. Company'

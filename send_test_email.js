@@ -25,8 +25,6 @@ mongoose.connect(mongoUri)
         for (const testRecipient of testRecipients) {
             reg.contact1.email = testRecipient;
             reg.spokenWith = 'Manish Sirohi';
-
-            // Simulate highly comprehensive partial/advance payment breakdown matching frontend BookAStand logic
             reg.amountPaid = 50000;
             reg.balanceAmount = 65580.70;
             reg.financeBreakdown = {
