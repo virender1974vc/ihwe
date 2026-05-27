@@ -94,7 +94,7 @@ router.get('/public-list', async (req, res) => {
     try {
         const User = require('../models/User');
         const users = await User.find({ status: 'Active' })
-            .select('username fullName designation email mobile altMobile role')
+            .select('username fullName designation email mobile altMobile role hodImage')
             .sort({ fullName: 1 });
         res.json({ success: true, data: users });
     } catch (err) {
