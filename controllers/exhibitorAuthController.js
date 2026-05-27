@@ -243,7 +243,7 @@ class ExhibitorAuthController {
                 return res.status(403).json({ success: false, message: 'Access denied.' });
             }
 
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'aadhaarNo', 'registrantType', 'contact1', 'contact2', 'natureOfBusiness'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'aadhaarNo', 'registrantType', 'contact1', 'contact2', 'natureOfBusiness', 'companyDescription', 'productCategories', 'teamMembers', 'certificates', 'brandName', 'companyLogoUrl'];
             const update = {};
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
