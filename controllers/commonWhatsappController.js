@@ -1,9 +1,10 @@
 const CommonWhatsapp = require("../models/CommonWhatsapp");
+const whatsapp = require("../utils/whatsapp");
 
 // ➤ Get all WhatsApp records
 const getWhatsappRecords = async (req, res) => {
   try {
-    const records = await CommonWhatsapp.find();
+    const records = await CommonWhatsapp.find().sort({ added: -1 });
     res.status(200).json({
       message: "WhatsApp records fetched successfully",
       data: records,
@@ -35,7 +36,7 @@ const getWhatsappRecordById = async (req, res) => {
   }
 };
 
-// ➤ Create new record
+// ➤ Create new record (Sends WhatsApp via OPUS API & logs it)
 const createWhatsappRecord = async (req, res) => {
   try {
     const {
@@ -47,12 +48,17 @@ const createWhatsappRecord = async (req, res) => {
       user,
     } = req.body;
 
+    const whatsappResult = await whatsapp.sendWhatsAppMessage(
+      phone_no,
+      whtsapp_desc,
+      whtsapp_title || "CRM Support Msg"
+    );
     const newRecord = new CommonWhatsapp({
       compny_id,
       phone_no,
       whtsapp_title,
       whtsapp_desc,
-      sent_files_img,
+      sent_files_img: sent_files_img || "none",
       user,
       added: new Date(),
     });
@@ -60,8 +66,10 @@ const createWhatsappRecord = async (req, res) => {
     const savedRecord = await newRecord.save();
 
     res.status(201).json({
-      message: "WhatsApp record created successfully",
+      message: "WhatsApp message dispatched & logged successfully",
+      success: true,
       data: savedRecord,
+      whatsappResult
     });
   } catch (err) {
     res.status(500).json({

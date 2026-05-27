@@ -405,6 +405,7 @@ app.use("/api/seller-subscription-plans", sellerSubscriptionPlanRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
+app.use("/api/calls", require('./routes/callRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);
 app.use("/api/conference-testimonials", conferenceTestimonialsRoutes);
