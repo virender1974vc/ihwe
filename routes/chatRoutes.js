@@ -31,8 +31,13 @@ router.get('/rooms', flexAuth, async (req, res) => {
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
         const BuyerRegistration = require('../models/BuyerRegistration');
 
-        // Fetch assigned exhibitors
-        const exFilter = adminUsername ? { spokenWith: adminUsername } : { _id: null };
+        // Fetch assigned exhibitors (Super Admins see all; regular admins see assigned ones case-insensitively)
+        let exFilter = {};
+        if (!isSuperAdmin) {
+            exFilter = adminUsername
+                ? { spokenWith: { $regex: new RegExp(`^${adminUsername.trim()}$`, 'i') } }
+                : { _id: null };
+        }
         const assignedExhibitors = await ExhibitorRegistration.find(exFilter)
             .select('_id exhibitorName registrationId participation spokenWith')
             .sort({ createdAt: -1 });
