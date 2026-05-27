@@ -56,7 +56,29 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const companies = await Company.find().sort({ createdAt: -1 });
+    if (req.query.dashboard === 'true') {
+      const username = req.query.username ? req.query.username.toLowerCase() : null;
+      const role = req.query.role ? req.query.role.toLowerCase().replace(/[^a-z]/g, '') : '';
+      const isSuperAdmin = role === 'superadmin';
+
+      let query = {};
+      if (username && !isSuperAdmin) {
+        query = {
+          $or: [
+            { forwardTo: { $regex: new RegExp(`^${username}$`, 'i') } },
+            { added_by: { $regex: new RegExp(`^${username}$`, 'i') } },
+          ]
+        };
+      }
+
+      const companies = await Company.find(query)
+        .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote')
+        .sort({ createdAt: -1 })
+        .lean();
+      return res.status(200).json(companies);
+    }
+
+    const companies = await Company.find().sort({ createdAt: -1 }).lean();
     res.status(200).json(companies);
   } catch (error) {
     res.status(500).json({
