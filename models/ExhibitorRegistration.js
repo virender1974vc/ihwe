@@ -207,6 +207,20 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     companyDescription: String,
     productCategories: [String],
     businessRegistrationNo: String,
+    teamMembers: [{
+        name: String,
+        designation: String,
+        email: String,
+        mobile: String,
+        photoUrl: String,
+        isPrimary: { type: Boolean, default: false }
+    }],
+    certificates: [{
+        name: String,
+        fileUrl: String,
+        issuedDate: Date,
+        expiryDate: Date
+    }],
     logo: String,
     brochure: String,
     productCatalogue: String,
