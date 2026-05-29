@@ -56,21 +56,28 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    if (req.query.dashboard === 'true') {
-      const username = req.query.username ? req.query.username.toLowerCase() : null;
-      const role = req.query.role ? req.query.role.toLowerCase().replace(/[^a-z]/g, '') : '';
-      const isSuperAdmin = role === 'superadmin';
+    const { 
+      dashboard, username, role, 
+      page, limit, countOnly,
+      search, status, source, industry,
+      startDate, endDate
+    } = req.query;
 
-      let query = {};
-      if (username && !isSuperAdmin) {
-        query = {
-          $or: [
-            { forwardTo: { $regex: new RegExp(`^${username}$`, 'i') } },
-            { added_by: { $regex: new RegExp(`^${username}$`, 'i') } },
-          ]
-        };
-      }
+    let query = {};
+    
+    // Authorization filter
+    const lowerUsername = username ? username.toLowerCase() : null;
+    const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
+    const isSuperAdmin = cleanRole === 'superadmin';
 
+    if (lowerUsername && !isSuperAdmin) {
+      query.$or = [
+        { forwardTo: { $regex: new RegExp(`^${lowerUsername}$`, 'i') } },
+        { added_by: { $regex: new RegExp(`^${lowerUsername}$`, 'i') } },
+      ];
+    }
+
+    if (dashboard === 'true') {
       const companies = await Company.find(query)
         .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote')
         .sort({ createdAt: -1 })
@@ -78,7 +85,70 @@ const getCompanies = async (req, res) => {
       return res.status(200).json(companies);
     }
 
-    const companies = await Company.find().sort({ createdAt: -1 }).lean();
+    // Filters
+    if (status) query.companyStatus = { $regex: new RegExp(`^${escapeRegex(status)}$`, 'i') };
+    if (source) query.dataSource = { $regex: new RegExp(`^${escapeRegex(source)}$`, 'i') };
+    if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
+
+    // Date Range Filter (using createdAt)
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setUTCHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
+
+    // Search
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), 'i');
+      const searchOr = [
+        { companyName: searchRegex },
+        { email: searchRegex },
+        { "contacts.mobile": searchRegex },
+        { "contacts.name": searchRegex }
+      ];
+      
+      if (query.$or) {
+        query.$and = [ { $or: query.$or }, { $or: searchOr } ];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
+    }
+
+    if (countOnly === 'true') {
+      const count = await Company.countDocuments(query);
+      return res.status(200).json({ count });
+    }
+
+    // Pagination
+    if (page) {
+      const pageNum = parseInt(page, 10) || 1;
+      const limitNum = parseInt(limit, 10) || 10;
+      const skip = (pageNum - 1) * limitNum;
+
+      const total = await Company.countDocuments(query);
+      const companies = await Company.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean();
+
+      return res.status(200).json({
+        data: companies,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum)
+        }
+      });
+    }
+
+    const companies = await Company.find(query).sort({ createdAt: -1 }).lean();
     res.status(200).json(companies);
   } catch (error) {
     res.status(500).json({
