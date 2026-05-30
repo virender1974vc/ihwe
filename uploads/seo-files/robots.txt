@@ -1,3 +1,4 @@
 User-agent: *
-Allow: /
-Sitemap: https://www.designhouse.co.in/sitemap.xml
+Disallow: 
+Allow:
+Sitemap: https://ihwe.in/sitemap.xml
