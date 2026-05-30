@@ -56,15 +56,10 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const { 
-      dashboard, username, role, 
-      page, limit, countOnly,
-      search, status, source, industry,
-      startDate, endDate
-    } = req.query;
+    const { search, status, source, industry, page, limit, countOnly, dashboard, username, role, startDate, endDate, forwardTo } = req.query;
 
     let query = {};
-    
+
     // Authorization filter
     const lowerUsername = username ? username.toLowerCase() : null;
     const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
@@ -81,6 +76,7 @@ const getCompanies = async (req, res) => {
       const companies = await Company.find(query)
         .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote')
         .sort({ createdAt: -1 })
+        .limit(3000)
         .lean();
       return res.status(200).json(companies);
     }
@@ -89,6 +85,7 @@ const getCompanies = async (req, res) => {
     if (status) query.companyStatus = { $regex: new RegExp(`^${escapeRegex(status)}$`, 'i') };
     if (source) query.dataSource = { $regex: new RegExp(`^${escapeRegex(source)}$`, 'i') };
     if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
+    if (forwardTo) query.forwardTo = { $regex: new RegExp(`^${escapeRegex(forwardTo)}$`, 'i') };
 
     // Date Range Filter (using createdAt)
     if (startDate || endDate) {
@@ -110,9 +107,9 @@ const getCompanies = async (req, res) => {
         { "contacts.mobile": searchRegex },
         { "contacts.name": searchRegex }
       ];
-      
+
       if (query.$or) {
-        query.$and = [ { $or: query.$or }, { $or: searchOr } ];
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
         delete query.$or;
       } else {
         query.$or = searchOr;
@@ -148,7 +145,7 @@ const getCompanies = async (req, res) => {
       });
     }
 
-    const companies = await Company.find(query).sort({ createdAt: -1 }).lean();
+    const companies = await Company.find(query).sort({ createdAt: -1 }).limit(3000).lean();
     res.status(200).json(companies);
   } catch (error) {
     res.status(500).json({
