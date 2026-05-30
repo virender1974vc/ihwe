@@ -42,4 +42,11 @@ const CompanySchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// Indexes for performance optimization
+CompanySchema.index({ createdAt: -1 });
+CompanySchema.index({ companyStatus: 1, createdAt: -1 });
+CompanySchema.index({ "contacts.mobile": 1 });
+CompanySchema.index({ email: 1 });
+CompanySchema.index({ companyName: 1 });
+
 module.exports = secondaryDB.model("Company", CompanySchema);
