@@ -109,7 +109,7 @@ router.get('/by-username/:username', async (req, res) => {
         const User = require('../models/User');
         const query = req.params.username;
         const user = await User.findOne({ username: query })
-            .select('username fullName designation email mobile altMobile role');
+            .select('username fullName designation email mobile altMobile role hodImage');
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
         res.json({ success: true, data: user });
     } catch (err) {
