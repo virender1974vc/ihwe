@@ -244,10 +244,38 @@ const deleteCompany = async (req, res) => {
   }
 };
 
+// ➤ Upload company logo
+const uploadCompanyLogo = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    const logoUrl = `/uploads/company_logos/${req.file.filename}`;
+    const updated = await Company.findByIdAndUpdate(req.params.id, { companyLogo: logoUrl }, { returnDocument: 'after' });
+    if (!updated) return res.status(404).json({ message: "Company not found" });
+    res.status(200).json({ message: "Logo updated successfully", data: updated });
+  } catch (error) {
+    res.status(500).json({ message: "Error uploading logo", error: error.message });
+  }
+};
+const uploadContactPhoto = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    const photoUrl = `/uploads/contact_photos/${req.file.filename}`;
+    res.status(200).json({ message: "Contact photo uploaded successfully", photoUrl });
+  } catch (error) {
+    res.status(500).json({ message: "Error uploading contact photo", error: error.message });
+  }
+};
+
 module.exports = {
   addCompany,
   getCompanies,
   getCompanyById,
   updateCompany,
   deleteCompany,
+  uploadCompanyLogo,
+  uploadContactPhoto,
 };

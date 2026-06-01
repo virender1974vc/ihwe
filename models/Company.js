@@ -8,6 +8,7 @@ const ContactSchema = new mongoose.Schema({
   email: { type: String, required: true },
   mobile: { type: String, required: true },
   alternate: { type: String, default: "" },
+  photo: { type: String, default: "" },
 });
 
 const CompanySchema = new mongoose.Schema(
@@ -31,12 +32,16 @@ const CompanySchema = new mongoose.Schema(
     added_by: { type: String, trim: true },
     udyamNumber: { type: String },
     gstNumber: { type: String },
+    exhibitorCategory: { type: String },
     updated_by: {
       type: String,
       default: null,
       trim: true,
     },
     forwardTo: { type: String },
+    followUpDate: { type: Date },
+    companyLogo: { type: String },
+    companyDescription: { type: String },
     contacts: [ContactSchema],
   },
   { timestamps: true },

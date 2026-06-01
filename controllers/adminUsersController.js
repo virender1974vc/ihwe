@@ -4,10 +4,22 @@ const { logActivity } = require('../utils/logger');
 const normalizeAdminPayload = (req) => {
     const data = { ...req.body };
 
-    if (req.file) {
+    if (req.files) {
+        if (req.files['hodImage'] && req.files['hodImage'][0]) {
+            data.hodImage = req.files['hodImage'][0].path || req.files['hodImage'][0].secure_url || req.files['hodImage'][0].url || '';
+        }
+        if (req.files['profileImage'] && req.files['profileImage'][0]) {
+            data.profileImage = req.files['profileImage'][0].path || req.files['profileImage'][0].secure_url || req.files['profileImage'][0].url || '';
+        }
+    } else if (req.file) {
         data.hodImage = req.file.path || req.file.secure_url || req.file.url || '';
-    } else if (data.hodImage && typeof data.hodImage !== 'string') {
+    }
+
+    if (data.hodImage && typeof data.hodImage !== 'string') {
         delete data.hodImage;
+    }
+    if (data.profileImage && typeof data.profileImage !== 'string') {
+        delete data.profileImage;
     }
 
     return data;

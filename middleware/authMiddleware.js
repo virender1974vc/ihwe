@@ -19,7 +19,7 @@ const authMiddleware = (req, res, next) => {
 
 const adminMiddleware = (req, res, next) => {
     const userRole = req.user?.role?.toLowerCase().replace(/\s+/g, '-');
-    if (req.user && (userRole === 'admin' || userRole === 'super-admin')) {
+    if (req.user && (userRole === 'admin' || userRole === 'IHWE–Super Administrator')) {
         next();
     } else {
         return res.status(403).json({ success: false, message: 'Admin access only' });
