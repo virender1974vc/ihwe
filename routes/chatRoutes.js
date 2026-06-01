@@ -8,7 +8,7 @@ const flexAuth = (req, res, next) => {
     if (auth && auth.startsWith('Bearer ')) {
         try {
             req.user = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET || 'fallback_secret_key');
-        } catch (_) {}
+        } catch (_) { }
     }
     next();
 };
@@ -26,8 +26,8 @@ router.get('/rooms', flexAuth, async (req, res) => {
     try {
         const adminUsername = req.query.adminUsername || '';
         const adminRole = req.query.adminRole?.toLowerCase().replace(/\s+/g, '-') || '';
-        const isSuperAdmin = adminRole === 'super-admin';
-        
+        const isSuperAdmin = adminRole === 'IHWE–Super Administrator';
+
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
         const BuyerRegistration = require('../models/BuyerRegistration');
 

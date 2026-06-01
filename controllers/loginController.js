@@ -4,10 +4,6 @@ const generateToken = require("../utils/generateToken");
 const { generateOtp, sendOtpWhatsapp } = require("../utils/otpService");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
-
-// ============================
-// LOGIN WITH PASSWORD (OTP)
-// ============================
 const loginWithPassword = async (req, res) => {
   try {
     const { user_name, user_mobile, user_password } = req.body;
@@ -122,6 +118,7 @@ const verifyOtpLogin = async (req, res) => {
       user: {
         id: user._id,
         username: user.user_name,
+        fullName: user.user_fullname,
         email: user.user_email,
         role: user.user_role,
         mobile: user.user_mobile,

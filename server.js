@@ -20,6 +20,8 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const sidebarRoutes = require("./routes/sidebar");
 const rolesRoutes = require("./routes/roles");
+const departmentRoutes = require("./routes/departments");
+const designationRoutes = require("./routes/designations");
 const heroRoutes = require("./routes/hero");
 const adminUsersRoutes = require("./routes/adminUsers");
 const eventOverviewRoutes = require("./routes/eventOverviewRoutes");
@@ -255,6 +257,8 @@ const authRoutes = require("./routes/auth");
 app.use("/api", authRoutes);
 app.use("/api/sidebar", sidebarRoutes);
 app.use("/api/roles", rolesRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/designations", designationRoutes);
 app.use("/api/hero", heroRoutes);
 app.use("/api/admin", adminUsersRoutes);
 app.use("/api/event-highlights", eventHighlightsRoutes);
