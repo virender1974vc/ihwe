@@ -356,6 +356,89 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    async getUpdates(req, res) {
+        try {
+            if (req.user.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+            
+            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id) ? req.query.id : req.user.id;
+            const exhibitor = await ExhibitorRegistration.findById(targetId).populate('eventId', 'startDate endDate');
+            if (!exhibitor)
+                return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 3;
+
+            const updates = [];
+
+            // Payment updates
+            if (exhibitor.balanceAmount > 0) {
+                updates.push({ badge: 'Alert', title: 'Pending Payment', desc: `Please clear your pending balance of INR ${exhibitor.balanceAmount.toLocaleString()}.`, date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            } else if (exhibitor.amountPaid === 0 && exhibitor.participation?.total > 0) {
+                updates.push({ badge: 'Alert', title: 'Payment Required', desc: 'You have not made any payments towards your stall booking.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            }
+
+            // Documents updates
+            if (exhibitor.documentStatus === 'pending') {
+                updates.push({ badge: 'Alert', title: 'Submit Your Documents', desc: 'Please complete remaining mandatory documents.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            }
+            if (exhibitor.kycStatus === 'pending' || exhibitor.kycStatus === 'reupload') {
+                updates.push({ badge: 'Alert', title: 'KYC Pending', desc: 'Please complete your KYC verification process.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            }
+
+            // Profile & MSME
+            if (!exhibitor.companyLogoUrl) {
+                updates.push({ badge: 'Info', title: 'Upload Company Logo', desc: 'Upload your company logo for the exhibitor directory.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            }
+            if (!exhibitor.msme?.udyamRegNo) {
+                updates.push({ badge: 'Info', title: 'Update MSME Details', desc: 'Update your Udyam Details to claim MSME benefits.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            }
+
+            // Event updates
+            if (exhibitor.eventId && exhibitor.eventId.startDate) {
+                const eventStart = new Date(exhibitor.eventId.startDate);
+                const setupStart = new Date(eventStart);
+                setupStart.setDate(setupStart.getDate() - 2); // Assume setup is 2 days prior
+                
+                // Only show if the event is still in the future
+                if (eventStart > new Date()) {
+                    updates.push({ badge: 'New', title: 'Exhibition Dates Approaching', desc: `The event starts on ${eventStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Prepare your team!`, date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+                    updates.push({ badge: 'Info', title: 'Stall Setup Dates', desc: `Stall setup begins from ${setupStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.`, date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+                }
+            }
+
+            // Sort: Alerts first, then New, then Info
+            const badgePriority = { 'Alert': 1, 'New': 2, 'Info': 3 };
+            updates.sort((a, b) => badgePriority[a.badge] - badgePriority[b.badge]);
+
+            // Default updates if empty
+            if (updates.length === 0) {
+                updates.push({ badge: 'Info', title: 'Welcome to IHWE 2026', desc: 'Thank you for exhibiting with us. Your dashboard is ready.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+                updates.push({ badge: 'New', title: 'Buyer Seller Meet', desc: 'Connect with quality buyers. Registrations are open.', date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
+            }
+
+            // Pagination
+            const totalUpdates = updates.length;
+            const totalPages = Math.ceil(totalUpdates / limit);
+            const startIndex = (page - 1) * limit;
+            const endIndex = startIndex + limit;
+            const paginatedUpdates = updates.slice(startIndex, endIndex);
+
+            res.status(200).json({
+                success: true,
+                data: paginatedUpdates,
+                pagination: {
+                    total: totalUpdates,
+                    page,
+                    limit,
+                    totalPages
+                }
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new ExhibitorAuthController();

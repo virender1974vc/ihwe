@@ -38,6 +38,7 @@ router.post('/send-email-otp', (req, res) => exhibitorAuthController.sendEmailOt
 router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobileOtp(req, res));
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
+router.get('/updates', protectExhibitor, (req, res) => exhibitorAuthController.getUpdates(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
 router.put('/update-profile', protectExhibitor, (req, res, next) => {
     uploadFields(req, res, (err) => {

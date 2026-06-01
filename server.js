@@ -129,6 +129,7 @@ const expoSupportEnquiryRoutes = require("./routes/expoSupportEnquiryRoutes");
 const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 const mediaRegistrationRoutes = require("./routes/mediaRegistration");
+const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
 
 
 mongoose
@@ -342,6 +343,8 @@ app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
 app.use("/api/media-registration", mediaRegistrationRoutes);
 app.use("/api/partner-registration", require("./routes/partnerRegistration"));
+app.use("/api/exhibitor-hero-slider", exhibitorHeroSliderRoutes);
+app.use("/api/upcoming-events", require("./routes/upcomingEventRoutes"));
 
 
 app.use("/api/activity-logs", activityLogRoutes);
