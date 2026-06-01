@@ -40,9 +40,9 @@ const uploadCallLog = async (req, res) => {
                 // Upload audio buffer to Cloudinary (audio is treated as video resource type in Cloudinary)
                 const result = await new Promise((resolve, reject) => {
                     const stream = cloudinary.uploader.upload_stream(
-                        { 
-                            resource_type: 'video', 
-                            folder: 'call-recordings', 
+                        {
+                            resource_type: 'video',
+                            folder: 'call-recordings',
                             format: 'webm'
                         },
                         (error, uploadResult) => {
@@ -99,7 +99,7 @@ const getCallHistory = async (req, res) => {
     try {
         const adminUsername = req.query.adminUsername || '';
         const adminRole = req.query.adminRole?.toLowerCase().replace(/\s+/g, '-') || '';
-        const isSuperAdmin = adminRole === 'super-admin';
+        const isSuperAdmin = adminRole === 'IHWE–Super Administrator';
 
         let filter = {};
         // Regular RMs only see their own calls, Super Admin sees all calls

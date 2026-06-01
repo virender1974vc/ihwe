@@ -1,10 +1,25 @@
 const NatureOfBusiness = require("../models/NatureOfBusiness");
+const CrmUser = require("../models/CrmUser.js");
 
 // GET all
 const getAllNatures = async (req, res) => {
   try {
-    const records = await NatureOfBusiness.find();
-    res.json(records);
+    const records = await NatureOfBusiness.find().lean();
+
+    // Fetch all users to map username to full name
+    const users = await CrmUser.find({}, 'user_name user_fullname').lean();
+    const userMap = {};
+    users.forEach(u => {
+        if (u.user_name) userMap[u.user_name] = u.user_fullname || u.user_name;
+    });
+
+    // Map updated_by to full name
+    const mappedRecords = records.map(record => ({
+        ...record,
+        updated_by: userMap[record.updated_by] || record.updated_by
+    }));
+
+    res.json(mappedRecords);
   } catch (err) {
     res.status(500).json({
       message: "Error fetching records",

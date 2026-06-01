@@ -12,7 +12,7 @@ class AuthService {
         const existingUser = await User.findOne({ username });
         if (existingUser) throw { status: 409, message: 'User already exists' };
 
-        const newUser = new User({ username, password, role: 'super-admin' });
+        const newUser = new User({ username, password, role: 'IHWE–Super Administrator' });
         await newUser.save();
         return { username: newUser.username };
     }

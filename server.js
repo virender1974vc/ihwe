@@ -20,6 +20,8 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const sidebarRoutes = require("./routes/sidebar");
 const rolesRoutes = require("./routes/roles");
+const departmentRoutes = require("./routes/departments");
+const designationRoutes = require("./routes/designations");
 const heroRoutes = require("./routes/hero");
 const adminUsersRoutes = require("./routes/adminUsers");
 const eventOverviewRoutes = require("./routes/eventOverviewRoutes");
@@ -84,6 +86,7 @@ const crmStateRoutes = require("./routes/crmStateRoutes");
 const crmUserRoutes = require("./routes/crmUserRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const statusOptionRoutes = require("./routes/add_by_admin/statusOptionRoutes");
+const nextActionRoutes = require("./routes/add_by_admin/nextActionRoutes");
 const whatsappMessageRoutes = require("./routes/add_by_admin/CRMwhatsappMessageRoutes");
 const loginRoutes = require("./routes/loginRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
@@ -129,6 +132,7 @@ const expoSupportEnquiryRoutes = require("./routes/expoSupportEnquiryRoutes");
 const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 const mediaRegistrationRoutes = require("./routes/mediaRegistration");
+const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
 
 
 mongoose
@@ -279,6 +283,8 @@ const authRoutes = require("./routes/auth");
 app.use("/api", authRoutes);
 app.use("/api/sidebar", sidebarRoutes);
 app.use("/api/roles", rolesRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/designations", designationRoutes);
 app.use("/api/hero", heroRoutes);
 app.use("/api/admin", adminUsersRoutes);
 app.use("/api/event-highlights", eventHighlightsRoutes);
@@ -366,6 +372,8 @@ app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
 app.use("/api/media-registration", mediaRegistrationRoutes);
 app.use("/api/partner-registration", require("./routes/partnerRegistration"));
+app.use("/api/exhibitor-hero-slider", exhibitorHeroSliderRoutes);
+app.use("/api/upcoming-events", require("./routes/upcomingEventRoutes"));
 
 
 app.use("/api/activity-logs", activityLogRoutes);
@@ -385,6 +393,7 @@ app.use("/api/crm-states", crmStateRoutes);
 app.use("/api/users", crmUserRoutes);
 app.use("/api/companies", companyRoutes);
 app.use("/api/status-option", statusOptionRoutes);
+app.use("/api/next-action", nextActionRoutes);
 app.use("/api/crm-messages", whatsappMessageRoutes);
 app.use("/api", loginRoutes);
 app.use("/api/payments", paymentRoutes);
@@ -415,6 +424,7 @@ app.use("/api/custom-pages", require("./routes/customPageRoutes"));
 app.use("/api/pdf-manager", require("./routes/pdfManagerRoutes"));
 app.use("/api/portfolio-gallery", require("./routes/portfolioGalleryRoutes"));
 app.use("/api/email-logs", require("./routes/emailLogRoutes"));
+app.use("/api/crm-email", require("./routes/crmEmailRoutes"));
 app.use("/api/whatsapp-logs", require("./routes/whatsAppLogRoutes"));
 app.use("/api/message-templates", require("./routes/messageTemplateRoutes"));
 app.use("/api/business-types", businessTypeRoutes);

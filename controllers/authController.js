@@ -35,9 +35,9 @@ class AuthController {
             }
 
             const data = await authService.login(username, password);
-            req.user = { id: data.admin._id, username: data.admin.username }; 
+            req.user = { id: data.admin._id, username: data.admin.username };
             await logActivity(req, 'Logged In', 'Auth', `Admin logged in: ${username}`);
-            
+
             res.json({
                 success: true,
                 message: 'Login successful',
@@ -88,7 +88,7 @@ class AuthController {
 
             // Security check: only allow users to change their own password (or Super Admin)
             const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
-            if (req.user.id !== adminId && userRole !== 'super-admin') {
+            if (req.user.id !== adminId && userRole !== 'IHWE–Super Administrator') {
                 return res.status(403).json({ success: false, message: 'Unauthorized to change this password' });
             }
 

@@ -1,10 +1,25 @@
 const CrmExhibitorCategory = require("../models/CrmExhibitorCategory.js");
+const CrmUser = require("../models/CrmUser.js");
 
 // GET all categories
 const getAllCategories = async (req, res) => {
   try {
-    const categories = await CrmExhibitorCategory.find();
-    res.json(categories);
+    const categories = await CrmExhibitorCategory.find().lean();
+    
+    // Fetch all users to map username to full name
+    const users = await CrmUser.find({}, 'user_name user_fullname').lean();
+    const userMap = {};
+    users.forEach(u => {
+        if (u.user_name) userMap[u.user_name] = u.user_fullname || u.user_name;
+    });
+
+    // Map updated_by to full name
+    const mappedCategories = categories.map(cat => ({
+        ...cat,
+        updated_by: userMap[cat.updated_by] || cat.updated_by
+    }));
+
+    res.json(mappedCategories);
   } catch (err) {
     res
       .status(500)
@@ -47,7 +62,7 @@ const updateCategory = async (req, res) => {
     if (!category)
       return res.status(404).json({ message: "Category not found" });
 
-    const allowedFields = ["cat_id", "cat_name", "cat_status"];
+    const allowedFields = ["cat_id", "cat_name", "cat_status", "updated_by"];
     allowedFields.forEach((key) => {
       if (updates[key] !== undefined) category[key] = updates[key];
     });

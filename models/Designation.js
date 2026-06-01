@@ -1,19 +1,19 @@
 const mongoose = require('mongoose');
 
-const roleSchema = new mongoose.Schema({
+const designationSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
-        unique: true,
         trim: true
     },
-    description: {
+    department: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department',
+        required: true
+    },
+    reportTo: {
         type: String,
         default: ''
-    },
-    permissions: {
-        type: Object,
-        default: {}
     },
     status: {
         type: String,
@@ -30,4 +30,4 @@ const roleSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Role', roleSchema);
+module.exports = mongoose.model('Designation', designationSchema);

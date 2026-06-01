@@ -23,8 +23,8 @@ class RolesController {
      */
     async createRole(req, res) {
         try {
-            const { name, description, createdBy } = req.body;
-            const data = await rolesService.createRole({ name, description }, createdBy || req.user?.username);
+            const { name, description, status, createdBy } = req.body;
+            const data = await rolesService.createRole({ name, description, status }, createdBy || req.user?.username);
             await logActivity(req, 'Created', 'Roles', `Created new role: ${name}`);
             res.status(201).json({ success: true, data, message: 'Role created successfully' });
         } catch (error) {
@@ -38,8 +38,8 @@ class RolesController {
      */
     async updateRole(req, res) {
         try {
-            const { name, description, permissions, updatedBy } = req.body;
-            const data = await rolesService.updateRole(req.params.id, { name, description, permissions }, updatedBy || req.user?.username);
+            const { name, description, permissions, status, updatedBy } = req.body;
+            const data = await rolesService.updateRole(req.params.id, { name, description, permissions, status }, updatedBy || req.user?.username);
             await logActivity(req, 'Updated', 'Roles', `Updated role: ${name}`);
             res.json({ success: true, data, message: 'Role updated successfully' });
         } catch (error) {

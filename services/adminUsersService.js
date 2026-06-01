@@ -12,8 +12,8 @@ class AdminUsersService {
      */
     async getAllAdmins(requester) {
         let filter = {};
-        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
-        if (reqRole !== 'super-admin') {
+        const reqRole = requester.role;
+        if (reqRole !== 'IHWE–Super Administrator') {
             filter = { createdBy: requester.id };
         }
         return await User.find(filter)
@@ -26,20 +26,23 @@ class AdminUsersService {
      * Create a new user with permission checks.
      */
     async createAdmin(data, requester) {
-        const { 
+        const {
             password, role, fullName, designation, altMobile, status,
-            title, department, hodName, hodMobile, hodEmail, hodDesignation
+            title, department, hodName, hodMobile, hodEmail, hodDesignation,
+            reportingToName, reportingToMobile, reportingToEmail, reportingToDesignation
         } = data;
         const username = cleanString(data.username);
         const email = cleanString(data.email);
         const mobile = cleanString(data.mobile);
         const hodImage = cleanOptionalImage(data.hodImage);
+        const profileImage = cleanOptionalImage(data.profileImage);
+        const reportingToImage = cleanOptionalImage(data.reportingToImage);
 
-        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
-        const assignRole = role?.toLowerCase().replace(/\s+/g, '-');
+        const reqRole = requester.role;
+        const assignRole = role;
 
-        if (reqRole !== 'super-admin') {
-            if (role && assignRole !== 'employee') {
+        if (reqRole !== 'IHWE–Super Administrator') {
+            if (role && assignRole !== 'Employee' && assignRole !== 'employee') {
                 throw { status: 403, message: 'You only have permission to create employees' };
             }
         }
@@ -71,6 +74,12 @@ class AdminUsersService {
             hodEmail: cleanString(hodEmail),
             hodDesignation: cleanString(hodDesignation),
             hodImage,
+            reportingToName: cleanString(reportingToName),
+            reportingToMobile: cleanString(reportingToMobile),
+            reportingToEmail: cleanString(reportingToEmail),
+            reportingToDesignation: cleanString(reportingToDesignation),
+            reportingToImage,
+            profileImage,
             role: role || 'employee',
             status: status === 'Inactive' ? 'Inactive' : 'Active',
             createdBy: requester.id
@@ -86,22 +95,25 @@ class AdminUsersService {
      * Update a user with permission checks.
      */
     async updateAdmin(id, data, requester) {
-        const { 
+        const {
             role, status, password, fullName, designation, altMobile,
-            title, department, hodName, hodMobile, hodEmail, hodDesignation
+            title, department, hodName, hodMobile, hodEmail, hodDesignation,
+            reportingToName, reportingToMobile, reportingToEmail, reportingToDesignation
         } = data;
         const username = data.username !== undefined ? cleanString(data.username) : undefined;
         const email = data.email !== undefined ? cleanString(data.email) : undefined;
         const mobile = data.mobile !== undefined ? cleanString(data.mobile) : undefined;
         const hodImage = data.hodImage !== undefined ? cleanOptionalImage(data.hodImage) : undefined;
+        const profileImage = data.profileImage !== undefined ? cleanOptionalImage(data.profileImage) : undefined;
+        const reportingToImage = data.reportingToImage !== undefined ? cleanOptionalImage(data.reportingToImage) : undefined;
 
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
 
-        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
-        const assignRole = role?.toLowerCase().replace(/\s+/g, '-');
+        const reqRole = requester.role;
+        const assignRole = role;
 
-        if (reqRole !== 'super-admin' && userToUpdate.createdBy?.toString() !== requester.id) {
+        if (reqRole !== 'IHWE–Super Administrator' && userToUpdate.createdBy?.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to update this user' };
         }
 
@@ -128,7 +140,7 @@ class AdminUsersService {
         }
 
         if (role) {
-            if (reqRole !== 'super-admin' && assignRole !== 'employee') {
+            if (reqRole !== 'IHWE–Super Administrator' && assignRole !== 'Employee' && assignRole !== 'employee') {
                 throw { status: 403, message: 'Cannot assign non-employee roles' };
             }
             userToUpdate.role = role;
@@ -141,12 +153,19 @@ class AdminUsersService {
         if (department !== undefined) userToUpdate.department = cleanString(department);
         if (designation !== undefined) userToUpdate.designation = cleanString(designation);
         if (altMobile !== undefined) userToUpdate.altMobile = cleanString(altMobile);
-        
+
         if (hodName !== undefined) userToUpdate.hodName = cleanString(hodName);
         if (hodMobile !== undefined) userToUpdate.hodMobile = cleanString(hodMobile);
         if (hodEmail !== undefined) userToUpdate.hodEmail = cleanString(hodEmail);
         if (hodDesignation !== undefined) userToUpdate.hodDesignation = cleanString(hodDesignation);
         if (hodImage !== undefined) userToUpdate.hodImage = hodImage;
+
+        if (reportingToName !== undefined) userToUpdate.reportingToName = cleanString(reportingToName);
+        if (reportingToMobile !== undefined) userToUpdate.reportingToMobile = cleanString(reportingToMobile);
+        if (reportingToEmail !== undefined) userToUpdate.reportingToEmail = cleanString(reportingToEmail);
+        if (reportingToDesignation !== undefined) userToUpdate.reportingToDesignation = cleanString(reportingToDesignation);
+        if (reportingToImage !== undefined) userToUpdate.reportingToImage = reportingToImage;
+        if (profileImage !== undefined) userToUpdate.profileImage = profileImage;
 
         await userToUpdate.save();
         const userData = userToUpdate.toObject();
@@ -161,10 +180,10 @@ class AdminUsersService {
         const userToDelete = await User.findById(id);
         if (!userToDelete) throw { status: 404, message: 'User not found' };
 
-        const reqRole = requester.role?.toLowerCase().replace(/\s+/g, '-');
+        const reqRole = requester.role;
 
         // Permission check
-        if (reqRole !== 'super-admin' && userToDelete.createdBy?.toString() !== requester.id) {
+        if (reqRole !== 'IHWE–Super Administrator' && userToDelete.createdBy?.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to delete this user' };
         }
 
