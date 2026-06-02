@@ -556,4 +556,8 @@ io.on('connection', (socket) => {
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} with Socket.io`);
+
+  // Start IMAP email reply poller
+  const { startImapPoller } = require("./services/imapPollerService");
+  startImapPoller();
 });
