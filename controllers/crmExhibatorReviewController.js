@@ -16,10 +16,8 @@ const getAllReviews = async (req, res) => {
 // GET review by ID
 const getReviewById = async (req, res) => {
   try {
-    const review = await CrmExhibatorReview2023.findById(req.params.id);
-    if (!review) return res.status(404).json({ message: "Review not found" });
-
-    res.json(review);
+    const reviews = await CrmExhibatorReview2023.find({ cmpny_id: req.params.id }).sort({ re_added: -1 });
+    res.json(reviews);
   } catch (err) {
     res.status(500).json({
       message: "Error fetching review",
