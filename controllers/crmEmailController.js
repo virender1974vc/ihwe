@@ -19,10 +19,21 @@ const sendCrmEmail = async (req, res) => {
       return res.status(400).json({ success: false, message: "to, subject and content are required" });
     }
 
-    const attachments = (req.files || []).map((file) => ({
+    const uploadedAttachments = (req.files || []).map((file) => ({
       filename: file.originalname,
       content: file.buffer,
     }));
+
+    let existingAttachments = [];
+    if (req.body.existingAttachments) {
+      try {
+        existingAttachments = JSON.parse(req.body.existingAttachments);
+      } catch (e) {
+        console.error("Failed to parse existingAttachments:", e);
+      }
+    }
+
+    const attachments = [...uploadedAttachments, ...existingAttachments];
 
     const mailOptions = {
       from: `"${process.env.FROM_NAME || "IHWE CRM"}" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
