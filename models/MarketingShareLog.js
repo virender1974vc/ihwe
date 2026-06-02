@@ -1,0 +1,39 @@
+const mongoose = require("mongoose");
+const { secondaryDB } = require("../config/secondaryDb");
+
+const marketingShareLogSchema = new mongoose.Schema(
+  {
+    cmpny_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmExhibatorNew",
+      required: true,
+    },
+    materials: [
+      {
+        material_id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "MarketingMaterial",
+        },
+        title: String,
+        category: String,
+      },
+    ],
+    sentVia: {
+      type: String,
+      enum: ["Email", "WhatsApp", "Link"],
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["Sent", "Viewed", "Downloaded"],
+      default: "Sent",
+    },
+    sentBy: {
+      type: String,
+      default: "Admin",
+    },
+  },
+  { timestamps: true }
+);
+
+module.exports = secondaryDB.model("MarketingShareLog", marketingShareLogSchema);

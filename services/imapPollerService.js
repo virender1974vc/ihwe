@@ -80,13 +80,20 @@ const pollInbox = async () => {
     const existingReplies = await CrmReview.find({ type: "email_reply" }).select("message_id").lean();
     const processedIds = new Set(existingReplies.map((r) => r.message_id).filter(Boolean));
 
-    // Fetch recent messages with envelope + source
-    const messages = [];
-    for await (const msg of client.fetch("1:*", { envelope: true, source: true })) {
-      messages.push(msg);
+    // Search for emails in the last 30 days to avoid scanning the entire inbox
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const searchResult = await client.search({ since: thirtyDaysAgo });
+
+    if (!searchResult || (Array.isArray(searchResult) && searchResult.length === 0)) {
+      await client.logout();
+      isPolling = false;
+      return;
     }
 
-    for (const msg of messages) {
+    const matchingItems = [];
+
+    // Fetch ONLY envelopes first (very fast)
+    for await (const msg of client.fetch(searchResult, { envelope: true })) {
       const inReplyTo = msg.envelope?.inReplyTo;
       const msgId = msg.envelope?.messageId;
 
@@ -101,32 +108,41 @@ const pollInbox = async () => {
         return cleanInReplyTo.includes(cleanSentId) || cleanSentId.includes(cleanInReplyTo);
       });
 
-      if (!matched) continue;
+      if (matched) {
+        matchingItems.push({ seq: msg.seq, matched, msgId, envelope: msg.envelope });
+      }
+    }
 
-      // Extract body from source
+    // Now fetch the full source ONLY for the matched items
+    for (const item of matchingItems) {
+      const msg = await client.fetchOne(item.seq, { source: true });
+      if (!msg) continue;
+
       const bodyText = extractTextFromSource(msg.source) || "(Could not read email body)";
 
-      const fromAddress = msg.envelope?.from?.[0]?.address || "Unknown";
-      const fromName = msg.envelope?.from?.[0]?.name || fromAddress;
-      const subject = msg.envelope?.subject || "(No Subject)";
+      const fromAddress = item.envelope?.from?.[0]?.address || "Unknown";
+      const fromName = item.envelope?.from?.[0]?.name || fromAddress;
+      const subject = item.envelope?.subject || "(No Subject)";
 
       // Save reply to DB
       await CrmReview.create({
-        cmpny_id: matched.cmpny_id,
+        cmpny_id: item.matched.cmpny_id,
         type: "email_reply",
         re_msg: bodyText,
         email_subject: subject.startsWith("Re:") ? subject : `Re: ${subject}`,
-        message_id: msgId,
+        message_id: item.msgId,
         email_content: bodyText,
         updated_by: fromName,
       });
 
-      console.log(`[IMAP] ✅ Reply saved for company ${matched.cmpny_id} from ${fromAddress}`);
+      console.log(`[IMAP] ✅ Reply saved for company ${item.matched.cmpny_id} from ${fromAddress}`);
     }
 
     await client.logout();
   } catch (err) {
-    console.error("[IMAP Poller]", err.message);
+    if (!err.message.includes("Connection not available")) {
+      console.error("[IMAP Poller]", err.message);
+    }
     try { await client.logout(); } catch (_) {}
   } finally {
     isPolling = false;
