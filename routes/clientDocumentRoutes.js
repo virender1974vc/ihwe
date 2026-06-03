@@ -17,7 +17,8 @@ const storage = new CloudinaryStorage({
     cloudinary,
     params: async (req, file) => {
         const ext = file.originalname.split('.').pop().toLowerCase();
-        const isRaw = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'].includes(ext);
+        // Remove 'pdf' from isRaw so it is handled as 'auto' (image) to allow public iframe viewing
+        const isRaw = ['doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'].includes(ext);
 
         if (isRaw) {
             return {
@@ -29,8 +30,8 @@ const storage = new CloudinaryStorage({
             return {
                 folder: 'client-documents',
                 resource_type: 'auto',
-                allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-                format: ext,
+                allowed_formats: ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'], // Added pdf
+                format: ext === 'pdf' ? undefined : ext, // Let Cloudinary auto-detect or keep original format for pdf
             };
         }
     },

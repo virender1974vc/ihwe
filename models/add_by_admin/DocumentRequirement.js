@@ -11,6 +11,7 @@ const DocumentRequirementSchema = new mongoose.Schema(
     },
     order: { type: Number, default: 0 },
     status: { type: String, default: "Active" },
+    showOnDashboard: { type: Boolean, default: false },
     added_by: { type: String, required: true },
     updated_by: {
       type: String,

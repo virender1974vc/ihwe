@@ -37,6 +37,7 @@ exports.createDocumentRequirement = async (req, res) => {
             category,
             order: order || 0,
             status: status || "Active",
+            showOnDashboard: req.body.showOnDashboard || false,
             added_by: added_by || "admin"
         });
 
@@ -60,6 +61,7 @@ exports.updateDocumentRequirement = async (req, res) => {
                 category,
                 order: order !== undefined ? order : 0,
                 status,
+                showOnDashboard: req.body.showOnDashboard !== undefined ? req.body.showOnDashboard : false,
                 updated_by: added_by || "admin",
                 updated: Date.now()
             },
