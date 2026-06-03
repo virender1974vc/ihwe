@@ -84,7 +84,10 @@ const getCompanies = async (req, res) => {
     }
 
     // Filters
-    if (status) query.companyStatus = { $regex: new RegExp(`^${escapeRegex(status)}$`, 'i') };
+    if (status) {
+      const statuses = status.split(',').map(s => new RegExp(`^${escapeRegex(s.trim())}$`, 'i'));
+      query.companyStatus = { $in: statuses };
+    }
     if (source) query.dataSource = { $regex: new RegExp(`^${escapeRegex(source)}$`, 'i') };
     if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
     if (forwardTo) query.forwardTo = { $regex: new RegExp(`^${escapeRegex(forwardTo)}$`, 'i') };
