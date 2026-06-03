@@ -42,7 +42,7 @@ exports.updateEvent = async (req, res) => {
         const updatedEvent = await UpcomingEvent.findByIdAndUpdate(
             id,
             updateData,
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedEvent) {

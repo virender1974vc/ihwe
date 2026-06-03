@@ -111,7 +111,7 @@ exports.updateMaterial = async (req, res) => {
     if (finalFileUrl) updateData.fileUrl = finalFileUrl;
     if (fileSize || req.file) updateData.fileSize = fileSize || (req.file.size / (1024 * 1024)).toFixed(2) + " MB";
 
-    const material = await MarketingMaterial.findByIdAndUpdate(id, updateData, { new: true });
+    const material = await MarketingMaterial.findByIdAndUpdate(id, updateData, { returnDocument: 'after' });
     if (!material) return res.status(404).json({ success: false, message: "Material not found" });
 
     res.json({ success: true, data: material });
@@ -133,63 +133,134 @@ exports.deleteMaterial = async (req, res) => {
 
 exports.shareMaterials = async (req, res) => {
   try {
-    const { cmpny_id, material_ids, sentVia, sentBy, clientEmail, clientMobile, clientName } = req.body;
+    const { cmpny_id, material_ids, sentVia, clientMobile, clientEmail, clientName, sentBy } = req.body;
 
-    if (!material_ids || !material_ids.length) {
+    if (!material_ids || !Array.isArray(material_ids) || material_ids.length === 0) {
       return res.status(400).json({ success: false, message: "No materials selected" });
     }
 
     const materials = await MarketingMaterial.find({ _id: { $in: material_ids } });
 
-    let contentMessage = `Dear ${clientName || "Sir/Ma'am"},\n\nPlease find the requested marketing materials below:\n`;
-    materials.forEach((m) => {
-      contentMessage += `- ${m.title}: ${m.fileUrl}\n`;
+    // --- VALIDATION LIMITS ---
+    let counts = { Video: 0, Image: 0, PDF: 0, Word: 0, PPT: 0 };
+    materials.forEach(m => {
+      if (counts[m.fileType] !== undefined) counts[m.fileType]++;
     });
-    contentMessage += `\nBest Regards,\nIHWE Team`;
+
+    if (sentVia === "WhatsApp") {
+      if (counts.Video > 1) return res.status(400).json({ success: false, message: "You can only send 1 Video at a time on WhatsApp." });
+      if (counts.Image > 1) return res.status(400).json({ success: false, message: "You can only send 1 Image at a time on WhatsApp." });
+      if (counts.PDF > 1) return res.status(400).json({ success: false, message: "You can only send 1 PDF at a time on WhatsApp." });
+      if (counts.Word > 1) return res.status(400).json({ success: false, message: "You can only send 1 Word document at a time on WhatsApp." });
+      if (counts.PPT > 1) return res.status(400).json({ success: false, message: "You can only send 1 PPT at a time on WhatsApp." });
+    } else if (sentVia === "Email") {
+      if (counts.Video > 1) return res.status(400).json({ success: false, message: "You can only send 1 Video at a time via Email." });
+      if (counts.Image > 3) return res.status(400).json({ success: false, message: "You can only send up to 3 Images at a time via Email." });
+      if (counts.PDF > 2) return res.status(400).json({ success: false, message: "You can only send up to 2 PDFs at a time via Email." });
+      if (counts.Word > 2) return res.status(400).json({ success: false, message: "You can only send up to 2 Word documents at a time via Email." });
+      if (counts.PPT > 2) return res.status(400).json({ success: false, message: "You can only send up to 2 PPTs at a time via Email." });
+    }
+    // -------------------------
+
+    let clientNameVar = clientName;
+    let clientEmailVar = clientEmail;
+    let clientMobileVar = clientMobile;
+
+    if (!clientMobileVar || !clientEmailVar || !clientNameVar) {
+      const Company = require("../models/Company");
+      const company = await Company.findById(cmpny_id);
+      if (company) {
+        if (!clientNameVar) clientNameVar = company.companyName;
+        if (!clientEmailVar) clientEmailVar = company.email || (company.contacts?.length > 0 ? company.contacts[0].email : "");
+        if (!clientMobileVar) clientMobileVar = company.contacts?.length > 0 ? company.contacts[0].mobile : "";
+      }
+    }
+
+    let hasAttachedMedia = materials.some(m => 
+      ["Image", "Video", "PDF"].includes(m.fileType) && 
+      !m.fileUrl.includes("youtube.com") && 
+      !m.fileUrl.includes("youtu.be") &&
+      !m.fileUrl.includes("localhost") && 
+      !m.fileUrl.includes("127.0.0.1")
+    );
+    
+    let contentMessage = `IHWE Namaskar!\n\nDear ${clientNameVar || "Sir/Ma'am"},\n\nPlease find the requested marketing materials${hasAttachedMedia ? " attached" : ""}:\n\n`;
+    
+    let textItems = [];
+    
+    materials.forEach((m) => {
+      let icon = "📄";
+      let isMediaOnly = false; // Files that Opus API can send as direct attachments
+
+      if (m.fileType === "Video") {
+        icon = "🎥";
+        if (!m.fileUrl.includes("youtube.com") && !m.fileUrl.includes("youtu.be")) {
+          isMediaOnly = true;
+        }
+      }
+      else if (m.fileType === "Image") { 
+        icon = "🖼️"; 
+        isMediaOnly = true; 
+      }
+      else if (m.fileType === "PDF") { 
+        icon = "📕"; 
+        // Opus API supports PDF attachment, but only if it's a live public URL
+        if (!m.fileUrl.includes("localhost") && !m.fileUrl.includes("127.0.0.1")) {
+          isMediaOnly = true;
+        }
+      }
+      else if (m.fileType === "PPT") { icon = "📊"; }
+      else if (m.fileType === "Word") { icon = "📝"; }
+      else if (m.fileType === "Location") { icon = "📍"; }
+      else if (m.fileType === "Link") { icon = "🔗"; }
+
+      if (!isMediaOnly) {
+        textItems.push(`${icon} *${m.title}*\n${m.fileUrl}`);
+      }
+    });
+    
+    if (textItems.length > 0) {
+      contentMessage += textItems.join("\n\n") + "\n\n";
+    }
+
+    contentMessage += `For any queries, feel free to contact us.\n\nBest Regards,\n*IHWE Team*\nNamo Gange Wellness Pvt. Ltd.`;
 
     // Send logic
     if (sentVia === "Email" && !req.body.logOnly) {
-      if (!clientEmail) return res.status(400).json({ success: false, message: "Client email is required" });
+      if (!clientEmailVar) return res.status(400).json({ success: false, message: "Client email is required" });
 
+      const emailHtmlContent = `<ul>${materials.map(m => `<li><strong>${m.title}:</strong> <a href="${m.fileUrl}">View/Download</a></li>`).join("")}</ul>`;
       const mailOptions = {
         from: `"${process.env.FROM_NAME || "IHWE CRM"}" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
-        to: clientEmail,
+        to: clientEmailVar,
         replyTo: process.env.FROM_EMAIL || process.env.SMTP_USER,
         subject: "Marketing Materials from IHWE",
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: #1a3516; padding: 20px; text-align: center;">
-              <h2 style="color: white; margin: 0;">IHWE 2026 Marketing Materials</h2>
-            </div>
-            <div style="padding: 24px; background: #f9f9f9; line-height: 1.6;">
-              <p>Dear ${clientName || "Sir/Ma'am"},</p>
-              <p>Please find the requested marketing materials below:</p>
-              <ul>
-                ${materials.map(m => `<li><strong>${m.title}:</strong> <a href="${m.fileUrl}">View/Download</a></li>`).join("")}
-              </ul>
-              <p>Best Regards,<br/>IHWE Team</p>
-            </div>
-          </div>
-        `,
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+            <p>Namaskar,</p>
+            <p>Dear ${clientNameVar || "Sir/Ma'am"},</p>
+            <p>Please find the requested marketing materials below:</p>
+            
+            ${emailHtmlContent}
+            
+            <p>For any queries, feel free to contact us.</p>
+            <br/>
+            <p>Best Regards,</p>
+            <p><strong>IHWE Team</strong></p>
+            <p>Namo Gange Wellness Pvt. Ltd.</p>
+        </div>
+        `
       };
       await transporter.sendMail(mailOptions);
 
     } else if (sentVia === "WhatsApp") {
-      if (!clientMobile) return res.status(400).json({ success: false, message: "Client mobile is required" });
+      if (!clientMobileVar) return res.status(400).json({ success: false, message: "Client mobile is required" });
 
-      // Sending Whatsapp via Opus
-      const opusUrl = process.env.WHATSAPP_API_URL || "https://api.opus.in/send";
-      const opusToken = process.env.WHATSAPP_API_TOKEN || "test_token";
-
+      const whatsapp = require("../utils/whatsapp");
       try {
-        await axios.post(opusUrl, {
-          phone: clientMobile,
-          message: contentMessage,
-          token: opusToken
-        });
+        await whatsapp.sendWhatsAppRichMessage(clientMobileVar, contentMessage, materials, "Marketing Materials Share");
       } catch (waErr) {
         console.error("WhatsApp sending error:", waErr.message);
-        // Continue to log even if it fails, or throw error depending on requirements.
       }
     }
 
