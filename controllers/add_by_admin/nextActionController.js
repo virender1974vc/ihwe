@@ -31,7 +31,7 @@ const getNextActionById = async (req, res) => {
 
 const updateNextAction = async (req, res) => {
   try {
-    const updated = await NextAction.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const updated = await NextAction.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!updated) return res.status(404).json({ message: "Not found" });
     res.status(200).json({ message: "Next Action updated", data: updated });
   } catch (err) {

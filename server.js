@@ -132,8 +132,9 @@ const expoSupportEnquiryRoutes = require("./routes/expoSupportEnquiryRoutes");
 const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
 const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
 const mediaRegistrationRoutes = require("./routes/mediaRegistration");
+const documentRequirementRoutes = require("./routes/add_by_admin/documentRequirementRoutes");
 const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
-
+const clientDocumentRoutes = require("./routes/clientDocumentRoutes");
 
 mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -301,6 +302,7 @@ app.use("/api/featured-services", featuredServicesRoutes);
 app.use("/api/healthcare-sectors", healthcareSectorsRoutes);
 app.use("/api/faq", faqRoutes);
 app.use("/api/glimpse", glimpseRoutes);
+app.use("/api/client-documents", clientDocumentRoutes);
 app.use("/api/supported-by", supportedByRoutes);
 app.use("/api/introduction", introductionRoutes);
 app.use("/api/national-expo", nationalExpoRoutes);
@@ -435,6 +437,8 @@ app.use("/api/secondary-products", secondaryProductRoutes);
 app.use("/api/stall-accessories", stallAccessoryRoutes);
 app.use("/api/stall-products", require('./routes/stallProductRoutes'));
 app.use("/api/units", unitRoutes);
+app.use("/api/document-requirements", documentRequirementRoutes);
+app.use("/api/client-documents", clientDocumentRoutes);
 app.use("/api/seller-subscription-plans", sellerSubscriptionPlanRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
@@ -454,6 +458,7 @@ app.use("/api/speaker", require('./routes/speaker'));
 app.use("/api/conference-days", conferenceDayRoutes);
 app.use("/api/conference-tracks", conferenceTrackRoutes);
 app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
+app.use("/api/marketing-materials", require('./routes/marketingMaterialRoutes'));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
@@ -580,4 +585,8 @@ io.on('connection', (socket) => {
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT} with Socket.io`);
+
+  // Start IMAP email reply poller
+  const { startImapPoller } = require("./services/imapPollerService");
+  startImapPoller();
 });

@@ -1,4 +1,5 @@
 const nodemailer = require("nodemailer");
+const { secondaryDB } = require("../config/secondaryDb");
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -12,21 +13,32 @@ const transporter = nodemailer.createTransport({
 
 const sendCrmEmail = async (req, res) => {
   try {
-    const { to, subject, content, companyName, sentBy } = req.body;
+    const { to, subject, content, companyName, sentBy, cmpny_id } = req.body;
 
     if (!to || !subject || !content) {
       return res.status(400).json({ success: false, message: "to, subject and content are required" });
     }
 
-    // Build attachments array from uploaded files
-    const attachments = (req.files || []).map((file) => ({
+    const uploadedAttachments = (req.files || []).map((file) => ({
       filename: file.originalname,
       content: file.buffer,
     }));
 
+    let existingAttachments = [];
+    if (req.body.existingAttachments) {
+      try {
+        existingAttachments = JSON.parse(req.body.existingAttachments);
+      } catch (e) {
+        console.error("Failed to parse existingAttachments:", e);
+      }
+    }
+
+    const attachments = [...uploadedAttachments, ...existingAttachments];
+
     const mailOptions = {
       from: `"${process.env.FROM_NAME || "IHWE CRM"}" <${process.env.FROM_EMAIL || process.env.SMTP_USER}>`,
       to,
+      replyTo: process.env.FROM_EMAIL || process.env.SMTP_USER,
       subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -44,9 +56,26 @@ const sendCrmEmail = async (req, res) => {
       attachments,
     };
 
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
+    const messageId = info.messageId;
+    if (cmpny_id && messageId) {
+      try {
+        const CrmReview = secondaryDB.model("CrmExhibatorReview2023");
+        await CrmReview.create({
+          cmpny_id,
+          type: "email",
+          re_msg: content,
+          email_subject: subject,
+          email_content: content,
+          message_id: messageId,
+          forward_to: to,
+        });
+      } catch (e) {
+        console.error("[CRM Email] Failed to save log:", e.message);
+      }
+    }
 
-    res.status(200).json({ success: true, message: "Email sent successfully" });
+    res.status(200).json({ success: true, message: "Email sent successfully", messageId });
   } catch (err) {
     console.error("[CRM Email]", err.message);
     res.status(500).json({ success: false, message: err.message || "Failed to send email" });

@@ -12,7 +12,7 @@ const CrmExhibatorReviewSchema = new mongoose.Schema(
     re_msg: { type: String },
     type: {
       type: String,
-      enum: ["status", "whatsapp", "call", "email", "log"],
+      enum: ["status", "whatsapp", "call", "email", "email_reply", "log"],
       default: "status",
     },
     email_subject: { type: String },
@@ -20,6 +20,7 @@ const CrmExhibatorReviewSchema = new mongoose.Schema(
     attachments: [{ type: String }],
     call_duration: { type: String },
     follow_up_date: { type: String },
+    message_id: { type: String },
     updated_by: { type: String, trim: true },
   },
   { timestamps: true }
