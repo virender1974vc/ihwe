@@ -2,6 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const upload = require("../middlewares/upload.js");
 const {
   addCompany,
   getCompanies,
@@ -10,6 +11,7 @@ const {
   deleteCompany,
   uploadCompanyLogo,
   uploadContactPhoto,
+  uploadCompanies,
 } = require("../controllers/companyController.js");
 
 const router = express.Router();
@@ -46,5 +48,9 @@ router.put("/:id", updateCompany);
 router.delete("/:id", deleteCompany);
 router.post("/:id/logo", upload.single("companyLogo"), uploadCompanyLogo);
 router.post("/:id/contact-photo", contactUpload.single("contactPhoto"), uploadContactPhoto);
-
+router.post(
+  "/upload-companies",
+  upload.single("file"),
+  uploadCompanies
+);
 module.exports = router;
