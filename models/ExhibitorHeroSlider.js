@@ -9,6 +9,14 @@ const ExhibitorHeroSliderSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    order: {
+        type: Number,
+        default: 0
+    },
+    path: {
+        type: String,
+        default: ''
+    },
     createdBy: {
         type: String,
         default: 'System'
