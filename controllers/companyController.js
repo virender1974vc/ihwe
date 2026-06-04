@@ -1,3 +1,5 @@
+const XLSX = require("xlsx");
+const fs = require("fs");
 const Company = require("../models/Company.js");
 const { logActivity } = require("../utils/logger");
 
@@ -82,7 +84,10 @@ const getCompanies = async (req, res) => {
     }
 
     // Filters
-    if (status) query.companyStatus = { $regex: new RegExp(`^${escapeRegex(status)}$`, 'i') };
+    if (status) {
+      const statuses = status.split(',').map(s => new RegExp(`^${escapeRegex(s.trim())}$`, 'i'));
+      query.companyStatus = { $in: statuses };
+    }
     if (source) query.dataSource = { $regex: new RegExp(`^${escapeRegex(source)}$`, 'i') };
     if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
     if (forwardTo) query.forwardTo = { $regex: new RegExp(`^${escapeRegex(forwardTo)}$`, 'i') };
@@ -270,6 +275,213 @@ const uploadContactPhoto = async (req, res) => {
   }
 };
 
+const uploadCompanies = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file required",
+      });
+    }
+
+    // Read uploaded excel file
+    const workbook = XLSX.readFile(req.file.path);
+
+    const sheetName = workbook.SheetNames[0];
+
+    const rows = XLSX.utils.sheet_to_json(
+      workbook.Sheets[sheetName],
+      {
+        defval: "",
+      }
+    );
+
+    if (!rows.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty",
+      });
+    }
+
+    const companyMap = new Map();
+
+    // Group same companies from excel
+    for (const row of rows) {
+      const companyName = String(
+        row.companyName || ""
+      ).trim();
+
+      if (!companyName) continue;
+
+      const key = companyName.toLowerCase();
+
+      const contact = {
+        title: row.contactTitle || "",
+        firstName: row.contactFirstName || "",
+        surname: row.contactSurname || "",
+        designation: row.contactDesignation || "",
+        email: String(
+          row.contactEmail || ""
+        ).toLowerCase(),
+        mobile: String(
+          row.contactMobile || ""
+        ).trim(),
+        alternate: String(
+          row.contactAlternate || ""
+        ).trim(),
+      };
+
+      if (!companyMap.has(key)) {
+        companyMap.set(key, {
+          companyName,
+          category: row.category || "",
+          businessNature: row.businessNature || "",
+          address: row.address || "",
+          country: row.country || "",
+          state: row.state || "",
+          city: row.city || "",
+          clientType: row.clientType || "",
+          pincode: row.pincode || "",
+          website: row.website || "",
+          landline: row.landline || "",
+          email: row.email || "",
+          dataSource: row.dataSource || "",
+          eventName: row.eventName || "",
+          reminder: row.reminder || null,
+          companyStatus:
+            row.companyStatus || "New Lead",
+          added_by: row.added_by || "",
+          udyamNumber:
+            row.udyamNumber || "",
+          gstNumber: row.gstNumber || "",
+          updated_by: null,
+          forwardTo: "",
+          contacts: [],
+        });
+      }
+
+      const company = companyMap.get(key);
+
+      const contactExists =
+        company.contacts.some(
+          (c) =>
+            (contact.email &&
+              c.email === contact.email) ||
+            (contact.mobile &&
+              c.mobile === contact.mobile)
+        );
+
+      if (!contactExists) {
+        company.contacts.push(contact);
+      }
+    }
+
+    const operations = [];
+
+    for (const company of companyMap.values()) {
+      operations.push({
+        updateOne: {
+          filter: {
+            companyName: company.companyName,
+          },
+          update: {
+            $setOnInsert: {
+              companyName:
+                company.companyName,
+              category: company.category,
+              businessNature:
+                company.businessNature,
+              address: company.address,
+              country: company.country,
+              state: company.state,
+              city: company.city,
+              clientType:
+                company.clientType,
+              pincode: company.pincode,
+              website: company.website,
+              landline: company.landline,
+              email: company.email,
+              dataSource:
+                company.dataSource,
+              eventName:
+                company.eventName,
+              reminder:
+                company.reminder,
+              companyStatus:
+                company.companyStatus,
+              added_by:
+                company.added_by,
+              udyamNumber:
+                company.udyamNumber,
+              gstNumber:
+                company.gstNumber,
+              forwardTo:
+                company.forwardTo,
+            },
+
+            $addToSet: {
+              contacts: {
+                $each: company.contacts,
+              },
+            },
+          },
+          upsert: true,
+        },
+      });
+    }
+
+    let result = {
+      upsertedCount: 0,
+      modifiedCount: 0,
+    };
+
+    if (operations.length) {
+      result = await Company.bulkWrite(
+        operations,
+        {
+          ordered: false,
+        }
+      );
+    }
+
+    // Delete uploaded file
+    if (
+      req.file &&
+      fs.existsSync(req.file.path)
+    ) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    return res.status(200).json({
+      success: true,
+      excelRows: rows.length,
+      uniqueCompanies:
+        companyMap.size,
+      inserted:
+        result.upsertedCount || 0,
+      updated:
+        result.modifiedCount || 0,
+      message:
+        "Companies imported successfully",
+    });
+  } catch (error) {
+    console.error(error);
+
+    // Delete uploaded file if error
+    if (
+      req.file?.path &&
+      fs.existsSync(req.file.path)
+    ) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
   addCompany,
   getCompanies,
@@ -278,4 +490,5 @@ module.exports = {
   deleteCompany,
   uploadCompanyLogo,
   uploadContactPhoto,
+  uploadCompanies,
 };
