@@ -42,6 +42,7 @@ const CompanySchema = new mongoose.Schema(
     followUpDate: { type: Date },
     companyLogo: { type: String },
     companyDescription: { type: String },
+    exhibitorRegistrationId: { type: String, default: null },
     contacts: [ContactSchema],
   },
   { timestamps: true },
