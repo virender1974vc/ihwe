@@ -615,7 +615,7 @@ const getSalesLeaderboard = async (req, res) => {
     
     leaderboard.sort((a, b) => b.revenue - a.revenue);
     
-    res.status(200).json({ success: true, leaderboard: leaderboard.slice(0, 5) });
+    res.status(200).json({ success: true, leaderboard });
   } catch (err) {
     console.error("Error in getSalesLeaderboard:", err);
     res.status(500).json({ success: false, message: "Error fetching leaderboard" });
