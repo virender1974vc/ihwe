@@ -31,13 +31,14 @@ const getBankById = async (req, res) => {
 // Add new bank
 const createBank = async (req, res) => {
   try {
-    const { bankname, bankbranch, accountno, ifsccode, status, added_by } =
+    const { bankname, accountname, bankbranch, accountno, ifsccode, status, added_by } =
       req.body;
 
     console.log("Creating bank with data:", req.body);
 
     const newBank = new BankList({
       bankname,
+      accountname,
       bankbranch,
       accountno,
       ifsccode,

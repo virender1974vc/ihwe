@@ -51,6 +51,7 @@ const upload = multer({
 // Routes
 router.get('/', exhibitorHeroSliderController.getImages);
 router.post('/', verifyToken, exhibitorHeroSliderController.addImage);
+router.put('/:id', verifyToken, exhibitorHeroSliderController.updateImage);
 router.delete('/:id', verifyToken, exhibitorHeroSliderController.deleteImage);
 router.post('/image', verifyToken, upload.single('image'), exhibitorHeroSliderController.uploadImage);
 
