@@ -12,9 +12,10 @@ class ExhibitorAuthController {
             if (!email || !password)
                 return res.status(400).json({ success: false, message: 'Email and password are required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 'contact1.email': email })
-                .sort({ createdAt: -1 })
-                .select('+password');
+            const exhibitor = await ExhibitorRegistration.findOne({ 
+                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+            }).sort({ createdAt: -1 })
+              .select('+password');
 
             if (!exhibitor)
                 return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -85,8 +86,9 @@ class ExhibitorAuthController {
             if (!email)
                 return res.status(400).json({ success: false, message: 'Email address is required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 'contact1.email': email.trim().toLowerCase() })
-                .sort({ createdAt: -1 });
+            const exhibitor = await ExhibitorRegistration.findOne({ 
+                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+            }).sort({ createdAt: -1 });
 
             if (!exhibitor)
                 return res.status(404).json({ success: false, message: 'Exhibitor with this email not found' });

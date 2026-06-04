@@ -12,6 +12,7 @@ const createPerformaInvoice = async (req, res) => {
     const pi_no = await PerformaInvoice.generateNextPINumber();
 
     const invoice = new PerformaInvoice({
+      ...req.body,
       est_no,
       companyId,
       pi_no,

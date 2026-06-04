@@ -32,6 +32,10 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         ref: 'Event',
         required: true
     },
+    clientId: {
+        type: String,
+        default: null
+    },
     registrationId: { type: String, unique: true, sparse: true },
     exhibitorName: { type: String, required: true },
     typeOfBusiness: String,
