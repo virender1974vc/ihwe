@@ -135,6 +135,7 @@ const mediaRegistrationRoutes = require("./routes/mediaRegistration");
 const documentRequirementRoutes = require("./routes/add_by_admin/documentRequirementRoutes");
 const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
 const clientDocumentRoutes = require("./routes/clientDocumentRoutes");
+const referralRoutes = require("./routes/referralRoutes");
 
 mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -396,6 +397,7 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/floating-videos", floatingVideoRoutes);
 app.use("/api/sponsorship-enquiry", sponsorshipEnquiryRoutes);
 app.use("/api/expo-support-enquiry", expoSupportEnquiryRoutes);
+app.use("/api/referrals", referralRoutes);
 
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
