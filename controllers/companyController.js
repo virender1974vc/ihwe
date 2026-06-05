@@ -68,10 +68,23 @@ const getCompanies = async (req, res) => {
     const isSuperAdmin = cleanRole === 'superadmin';
 
     if (lowerUsername && !isSuperAdmin) {
+      let lowerFullName = lowerUsername;
+      try {
+        const User = require('../models/User');
+        const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } });
+        if (adminUser && adminUser.fullName) {
+          lowerFullName = adminUser.fullName.toLowerCase();
+        }
+      } catch (e) { console.error(e); }
+
       query.$or = [
-        { forwardTo: { $regex: new RegExp(`^${lowerUsername}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${lowerUsername}$`, 'i') } },
+        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
+        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
       ];
+      if (lowerFullName !== lowerUsername) {
+        query.$or.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        query.$or.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+      }
     }
 
     if (dashboard === 'true') {
@@ -515,17 +528,32 @@ const getAchievementRevenue = async (req, res) => {
     if (!username) return res.status(400).json({ success: false, message: "Username required" });
 
     const lowerUsername = username.toLowerCase();
-    
+
+    let lowerFullName = lowerUsername;
+    try {
+      const User = require('../models/User');
+      const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } });
+      if (adminUser && adminUser.fullName) {
+        lowerFullName = adminUser.fullName.toLowerCase();
+      }
+    } catch (e) { console.error(e); }
+
+    const orConditions = [
+      { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
+      { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } }
+    ];
+    if (lowerFullName !== lowerUsername) {
+      orConditions.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+      orConditions.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+    }
+
     // 1. Find all CRM companies mapped to this user
     const userCompanies = await Company.find({
-      $or: [
-        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } }
-      ]
+      $or: orConditions
     }).select('_id');
-    
+
     const companyIds = userCompanies.map(c => c._id.toString());
-    
+
     if (companyIds.length === 0) {
       return res.status(200).json({ success: true, revenue: 0 });
     }
@@ -536,7 +564,7 @@ const getAchievementRevenue = async (req, res) => {
       clientId: { $in: companyIds },
       status: { $in: ['confirmed', 'paid', 'advance-paid'] }
     };
-    
+
     // Date filtering
     const now = new Date();
     if (period === 'current_month') {
@@ -550,12 +578,11 @@ const getAchievementRevenue = async (req, res) => {
     }
 
     // 3. Find converted registrations and calculate total revenue
-    const convertedRegistrations = await ExhibitorRegistration.find(query).select('financeBreakdown participation');
-    
+    const convertedRegistrations = await ExhibitorRegistration.find(query).select('financeBreakdown participation amountPaid');
+
     let totalRevenue = 0;
     convertedRegistrations.forEach(reg => {
-      // Use subtotal (pre-tax, pre-discount amount if available) or participation total
-      const revenue = reg.financeBreakdown?.subtotal || reg.participation?.total || 0;
+      const revenue = reg.amountPaid || reg.financeBreakdown?.subtotal || reg.participation?.total || 0;
       totalRevenue += revenue;
     });
 
@@ -570,41 +597,45 @@ const getAchievementRevenue = async (req, res) => {
 const getSalesLeaderboard = async (req, res) => {
   try {
     const { period } = req.query;
-    
+
     // 1. Fetch all admins
     const User = require('../models/User');
     const admins = await User.find({ status: 'Active' }).select('username fullName profileImage');
 
     // 2. Fetch all CRM companies to map them to admins
     const allCompanies = await Company.find({}).select('_id forwardTo added_by');
-    
+
     // 3. Build query for ExhibitorRegistration
     const ExhibitorRegistration = require('../models/ExhibitorRegistration');
     const query = { status: { $in: ['confirmed', 'paid', 'advance-paid'] } };
-    
+
     const now = new Date();
     if (period === 'current_month') {
       query.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth(), 1), $lte: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) };
     } else if (period === 'previous_month') {
       query.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth() - 1, 1), $lte: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59) };
     }
-    
-    const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation');
-    
+
+    const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation amountPaid');
+
     const leaderboard = admins.map(admin => {
       const u = admin.username.toLowerCase();
+      const f = admin.fullName ? admin.fullName.toLowerCase() : u;
       // Find companies belonging to this admin
       const adminCompanyIds = allCompanies
-        .filter(c => (c.forwardTo && c.forwardTo.toLowerCase() === u) || (c.added_by && c.added_by.toLowerCase() === u))
+        .filter(c =>
+          (c.forwardTo && (c.forwardTo.toLowerCase() === u || c.forwardTo.toLowerCase() === f)) ||
+          (c.added_by && (c.added_by.toLowerCase() === u || c.added_by.toLowerCase() === f))
+        )
         .map(c => c._id.toString());
-        
+
       const adminRegs = allConverted.filter(reg => reg.clientId && adminCompanyIds.includes(reg.clientId));
-      
+
       let revenue = 0;
       adminRegs.forEach(reg => {
-        revenue += reg.financeBreakdown?.subtotal || reg.participation?.total || 0;
+        revenue += reg.amountPaid || reg.financeBreakdown?.subtotal || reg.participation?.total || 0;
       });
-      
+
       return {
         name: admin.fullName || admin.username,
         username: admin.username,
@@ -612,10 +643,10 @@ const getSalesLeaderboard = async (req, res) => {
         profileImage: admin.profileImage || null
       };
     });
-    
+
     leaderboard.sort((a, b) => b.revenue - a.revenue);
-    
-    res.status(200).json({ success: true, leaderboard: leaderboard.slice(0, 5) });
+
+    res.status(200).json({ success: true, leaderboard });
   } catch (err) {
     console.error("Error in getSalesLeaderboard:", err);
     res.status(500).json({ success: false, message: "Error fetching leaderboard" });
