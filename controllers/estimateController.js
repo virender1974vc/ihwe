@@ -424,9 +424,33 @@ const sendEmailEstimate = async (req, res) => {
 
         const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
         
-        const totalTaxable = estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0).toFixed(2);
-        
+        let totalTaxable = 0;
+        let totalCgst = 0;
+        let totalSgst = 0;
+        let totalIgst = 0;
+        let totalDiscountAmt = 0;
+
         let itemsHtml = estimate.items.map((i, index) => {
+            const qty = parseFloat(i.qty) || 1;
+            const rate = parseFloat(i.rate) || 0;
+            const amount = qty * rate;
+            const discPct = parseFloat(i.disc) || 0;
+            const discAmt = (amount * discPct) / 100;
+            const taxable = amount - discAmt;
+
+            totalTaxable += taxable;
+            totalDiscountAmt += discAmt;
+
+            const igstPer = parseFloat(i.igst_per) || 0;
+            const cgstPer = parseFloat(i.cgst_per) || 0;
+
+            if (igstPer > 0) {
+                totalIgst += (taxable * igstPer) / 100;
+            } else if (cgstPer > 0) {
+                totalCgst += (taxable * cgstPer) / 100;
+                totalSgst += (taxable * cgstPer) / 100;
+            }
+
             return `
             <tr>
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${index + 1}</td>
@@ -435,10 +459,10 @@ const sendEmailEstimate = async (req, res) => {
                     ${i.subDesc ? `<div style="font-size: 12px; color: #64748b; margin-top: 4px;">${i.subDesc.replace(/\n/g, '<br>')}</div>` : ''}
                     <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">HSN/SAC: ${i.hsn || 'N/A'}</div>
                 </td>
-                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${i.qty} ${i.unit}</td>
-                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; color: #475569; font-size: 13px;">₹${i.rate}</td>
-                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; color: #475569; font-size: 13px;">₹${i.taxable || i.amount}</td>
-                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold; color: #1e293b; font-size: 13px;">₹${i.finalAmount}</td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${qty} ${i.unit || 'Nos'}</td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; color: #475569; font-size: 13px;">₹${rate.toFixed(2)}</td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; color: #475569; font-size: 13px;">₹${taxable.toFixed(2)}</td>
+                <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold; color: #1e293b; font-size: 13px;">₹${parseFloat(i.finalAmount).toFixed(2)}</td>
             </tr>
             `;
         }).join('');
@@ -446,39 +470,39 @@ const sendEmailEstimate = async (req, res) => {
         let totalsHtml = `
             <tr>
                 <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>Total Taxable Value:</strong></td>
-                <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalTaxable}</td>
+                <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalTaxable.toFixed(2)}</td>
             </tr>
         `;
 
-        if (estimate.igst > 0) {
+        if (totalDiscountAmt > 0) {
+            totalsHtml += `
+            <tr>
+                <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #e53e3e;"><strong>Total Discount:</strong></td>
+                <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #e53e3e;">-₹${totalDiscountAmt.toFixed(2)}</td>
+            </tr>`;
+        }
+
+        if (totalIgst > 0) {
             totalsHtml += `
             <tr>
                 <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>IGST:</strong></td>
-                <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${parseFloat(estimate.igst).toFixed(2)}</td>
+                <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalIgst.toFixed(2)}</td>
             </tr>`;
         } else {
-            if (estimate.cgst > 0) {
+            if (totalCgst > 0) {
                 totalsHtml += `
                 <tr>
                     <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>CGST:</strong></td>
-                    <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${parseFloat(estimate.cgst).toFixed(2)}</td>
+                    <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalCgst.toFixed(2)}</td>
                 </tr>`;
             }
-            if (estimate.sgst > 0) {
+            if (totalSgst > 0) {
                 totalsHtml += `
                 <tr>
                     <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>SGST:</strong></td>
-                    <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${parseFloat(estimate.sgst).toFixed(2)}</td>
+                    <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalSgst.toFixed(2)}</td>
                 </tr>`;
             }
-        }
-
-        if (estimate.discount > 0) {
-            totalsHtml += `
-            <tr>
-                <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #e53e3e;"><strong>Discount:</strong></td>
-                <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #e53e3e;">-₹${parseFloat(estimate.discount).toFixed(2)}</td>
-            </tr>`;
         }
 
         const htmlContent = `
