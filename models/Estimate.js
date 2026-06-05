@@ -24,7 +24,7 @@ const estimateSchema = new mongoose.Schema(
     est_type: { type: String },
     companyId: { type: String, required: true },
     est_no: { type: String, required: true, unique: true },
-    gst_no: { type: String, required: true },
+    gst_no: { type: String },
     supply_date: { type: String },
     consignee_name: { type: String, required: true },
     consignee_addr: { type: String, required: true },

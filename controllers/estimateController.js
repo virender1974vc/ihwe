@@ -1,52 +1,10 @@
 const Estimate = require("../models/Estimate");
 
-// --- NEW HELPER FUNCTIONS ---
-
-const getFiscalYear = () => {
-  const date = new Date();
-  const currentYear = date.getFullYear();
-  const month = date.getMonth() + 1;
-
-  let startYear = month >= 4 ? currentYear : currentYear - 1;
-  let endYear = month >= 4 ? currentYear + 1 : currentYear;
-
-  const startYearShort = startYear.toString().slice(-2);
-  const endYearShort = endYear.toString().slice(-2);
-
-  return `${startYearShort}-${endYearShort}`;
-};
-
-/**
- * Generates next estimate number
- */
-const generateNextEstimateNo = async () => {
-  const fiscalYear = getFiscalYear();
-  const prefix = `NGW/${fiscalYear}/EST/`;
-
-  const lastEstimate = await Estimate.findOne({
-    est_no: { $regex: new RegExp(`^NGW/${fiscalYear}/EST/`) },
-  }).sort({ added: -1 });
-
-  let nextSequentialNumber = 1;
-
-  if (lastEstimate) {
-    const parts = lastEstimate.est_no.split("/");
-    const lastNumber = parseInt(parts[parts.length - 1], 10);
-
-    if (!isNaN(lastNumber)) {
-      nextSequentialNumber = lastNumber + 1;
-    }
-  }
-
-  const paddedNumber = String(nextSequentialNumber).padStart(3, "0");
-
-  return `${prefix}${paddedNumber}`;
-};
 
 // Add estimate
 const addEstimate = async (req, res) => {
   try {
-    const newEstimateNo = await generateNextEstimateNo();
+    const newEstimateNo = await Estimate.generateNextEstimateNo();
 
     const estimateBody = {
       ...req.body,
@@ -137,6 +95,14 @@ const getGroupedEstimateData = async (req, res) => {
           _id: 1,
           companyId: 1,
           est_no: 1,
+          est_type: 1,
+          gst_no: 1,
+          consignee_name: 1,
+          consignee_addr: 1,
+          country: 1,
+          state: 1,
+          city: 1,
+          pincode: 1,
           added_by: 1,
           updated: 1,
           items: 1,
@@ -167,6 +133,95 @@ const getGroupedEstimateData = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error fetching data",
+      error: error.message,
+    });
+  }
+};
+const getAllEstimates = async (req, res) => {
+  try {
+    const data = await Estimate.aggregate([
+      {
+        $lookup: {
+          from: "performainvoices",
+          let: { est_no: "$est_no", companyId: "$companyId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$companyId", "$$companyId"] },
+                    { $eq: ["$est_no", "$$est_no"] },
+                  ],
+                },
+              },
+            },
+            { $project: { _id: 1, pi_no: 1, updated: 1, finalAmount: 1 } },
+          ],
+          as: "performaInvoice",
+        },
+      },
+      {
+        $lookup: {
+          from: "invoices",
+          let: { est_no: "$est_no", companyId: "$companyId" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$companyId", "$$companyId"] },
+                    { $eq: ["$estimate_no", "$$est_no"] },
+                  ],
+                },
+              },
+            },
+            { $project: { _id: 1, invoice_no: 1, added: 1 } },
+          ],
+          as: "invoice",
+        },
+      },
+      {
+        $project: {
+          _id: 1,
+          companyId: 1,
+          est_no: 1,
+          est_type: 1,
+          gst_no: 1,
+          consignee_name: 1,
+          consignee_addr: 1,
+          country: 1,
+          state: 1,
+          city: 1,
+          pincode: 1,
+          added_by: 1,
+          updated: 1,
+          items: 1,
+          supply_date: 1,
+          finalAmount: {
+            $cond: {
+              if: { $isArray: "$items" },
+              then: { $sum: "$items.finalAmount" },
+              else: 0,
+            },
+          },
+          added: 1,
+          performaInvoice: 1,
+          invoice: 1,
+        },
+      },
+      { $sort: { added: -1 } },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching all estimates:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching all estimates",
       error: error.message,
     });
   }
@@ -233,7 +288,7 @@ const deleteEstimate = async (req, res) => {
 // Get next estimate number
 const getNextEstimateNumber = async (req, res) => {
   try {
-    const nextNo = await generateNextEstimateNo();
+    const nextNo = await Estimate.generateNextEstimateNo();
     res.status(200).json({ est_no: nextNo });
   } catch (error) {
     res.status(500).json({
@@ -247,6 +302,7 @@ const getNextEstimateNumber = async (req, res) => {
 module.exports = {
   addEstimate,
   getGroupedEstimateData,
+  getAllEstimates,
   getEstimateById,
   updateEstimate,
   deleteEstimate,

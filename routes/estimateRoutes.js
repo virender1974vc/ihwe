@@ -2,6 +2,7 @@ const express = require("express");
 const {
   addEstimate,
   getGroupedEstimateData,
+  getAllEstimates,
   getEstimateById,
   updateEstimate,
   deleteEstimate,
@@ -12,6 +13,7 @@ const router = express.Router();
 
 router.get("/next-number", getNextEstimateNumber);
 router.get("/grouped/:companyId", getGroupedEstimateData);
+router.get("/", getAllEstimates);
 
 router.post("/", addEstimate);
 
