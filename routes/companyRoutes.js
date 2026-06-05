@@ -43,6 +43,8 @@ const contactUpload = multer({ storage: contactPhotoStorage });
 
 router.post("/", addCompany);
 router.get("/", getCompanies);
+router.get("/achievement-revenue", require("../controllers/companyController.js").getAchievementRevenue);
+router.get("/leaderboard", require("../controllers/companyController.js").getSalesLeaderboard);
 router.get("/:id", getCompanyById);
 router.put("/:id", updateCompany);
 router.delete("/:id", deleteCompany);

@@ -333,6 +333,207 @@ class ExhibitorRegistrationService {
             saved = await newRegistration.save();
         }
 
+        if (data.clientId) {
+            try {
+                const Company = require('../models/Company');
+                const companyUpdate = {
+                    exhibitorRegistrationId: saved._id,
+                    companyStatus: 'Closed - Won'
+                };
+
+                if (data.exhibitorName) companyUpdate.companyName = data.exhibitorName;
+                if (data.website) companyUpdate.website = data.website;
+                if (data.address) companyUpdate.address = data.address;
+                if (data.country) companyUpdate.country = data.country;
+                if (data.state) companyUpdate.state = data.state;
+                if (data.city) companyUpdate.city = data.city;
+                if (data.pincode) companyUpdate.pincode = data.pincode;
+                if (data.landlineNo) companyUpdate.landline = data.landlineNo;
+                if (data.gstNo) companyUpdate.gstNumber = data.gstNo;
+                if (data.aboutCompany) companyUpdate.companyDescription = data.aboutCompany;
+                if (data.typeOfBusiness) companyUpdate.category = data.typeOfBusiness;
+                if (data.natureOfBusiness) companyUpdate.businessNature = data.natureOfBusiness;
+                if (data.participation && data.participation.stallCategory) {
+                    companyUpdate.exhibitorCategory = data.participation.stallCategory;
+                }
+
+                const existingCompany = await Company.findById(data.clientId);
+                let newContacts = [];
+                if (data.contact1 && data.contact1.firstName) {
+                    newContacts.push({
+                        title: data.contact1.title,
+                        firstName: data.contact1.firstName,
+                        surname: data.contact1.lastName,
+                        email: data.contact1.email,
+                        designation: data.contact1.designation,
+                        mobile: data.contact1.mobile,
+                        alternate: data.contact1.alternateNo,
+                        photo: existingCompany?.contacts?.[0]?.photo || ""
+                    });
+                }
+                if (data.contact2 && data.contact2.firstName) {
+                    newContacts.push({
+                        title: data.contact2.title,
+                        firstName: data.contact2.firstName,
+                        surname: data.contact2.lastName,
+                        email: data.contact2.email,
+                        designation: data.contact2.designation,
+                        mobile: data.contact2.mobile,
+                        alternate: data.contact2.alternateNo,
+                        photo: existingCompany?.contacts?.[1]?.photo || ""
+                    });
+                }
+                if (newContacts.length > 0) {
+                    companyUpdate.contacts = newContacts;
+                }
+
+                if (existingCompany) {
+                    await Company.findByIdAndUpdate(data.clientId, companyUpdate);
+                }
+                const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
+                const adminName = data.spokenWith || data.filledByFullName || 'System Admin';
+                await CrmExhibatorReview2023.create({
+                    cmpny_id: data.clientId,
+                    status_short: 'Closed - Won',
+                    re_msg: `Lead successfully converted to confirmed Exhibitor Registration. Stall booked: ${data.participation?.stallFor || 'N/A'}.`,
+                    type: 'status',
+                    updated_by: adminName
+                });
+
+            } catch (err) {
+                console.error('Failed to link registration to company:', err);
+            }
+        } else {
+            try {
+                const Company = require('../models/Company');
+                const adminName = data.spokenWith || data.filledByFullName || 'Website Direct Booking';
+                
+                const newCompanyData = {
+                    companyName: data.exhibitorName || 'Unknown Company',
+                    email: data.contact1?.email || 'N/A', // Required field
+                    website: data.website || '',
+                    address: data.address || '',
+                    country: data.country || '',
+                    state: data.state || '',
+                    city: data.city || '',
+                    pincode: data.pincode || '',
+                    landline: data.landlineNo || '',
+                    gstNumber: data.gstNo || '',
+                    companyDescription: data.aboutCompany || '',
+                    category: data.typeOfBusiness || '',
+                    businessNature: data.natureOfBusiness || '',
+                    exhibitorCategory: (data.participation && data.participation.stallCategory) ? data.participation.stallCategory : "General Category",
+                    companyStatus: 'Closed - Won',
+                    exhibitorRegistrationId: saved._id,
+                    added_by: adminName,
+                    forwardTo: adminName,
+                    contacts: []
+                };
+
+                if (data.contact1 && data.contact1.firstName) {
+                    newCompanyData.contacts.push({
+                        title: data.contact1.title,
+                        firstName: data.contact1.firstName,
+                        surname: data.contact1.lastName,
+                        email: data.contact1.email,
+                        designation: data.contact1.designation,
+                        mobile: data.contact1.mobile,
+                        alternate: data.contact1.alternateNo,
+                        photo: ""
+                    });
+                }
+                if (data.contact2 && data.contact2.firstName) {
+                    newCompanyData.contacts.push({
+                        title: data.contact2.title,
+                        firstName: data.contact2.firstName,
+                        surname: data.contact2.lastName,
+                        email: data.contact2.email,
+                        designation: data.contact2.designation,
+                        mobile: data.contact2.mobile,
+                        alternate: data.contact2.alternateNo,
+                        photo: ""
+                    });
+                }
+
+                const newCompany = await Company.create(newCompanyData);
+                saved.clientId = newCompany._id;
+                await ExhibitorRegistration.findByIdAndUpdate(saved._id, { clientId: newCompany._id });
+
+                const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
+                await CrmExhibatorReview2023.create({
+                    cmpny_id: newCompany._id,
+                    status_short: 'Closed - Won',
+                    re_msg: `Lead successfully created and converted to confirmed Exhibitor Registration from Website. Stall booked: ${data.participation?.stallFor || 'N/A'}.`,
+                    type: 'status',
+                    updated_by: adminName
+                });
+            } catch (err) {
+                console.error('Failed to create company for website registration:', err);
+            }
+        }
+
+        // ── Auto-Generate Estimate (instead of Performa Invoice) ──
+        try {
+            if (saved.clientId) {
+                const Estimate = require('../models/Estimate');
+                const nextEstNo = await Estimate.generateNextEstimateNo();
+
+                
+                let parsedParticipation = data.participation;
+                if (typeof parsedParticipation === 'string') {
+                    try { parsedParticipation = JSON.parse(parsedParticipation); } catch (e) {}
+                }
+                let parsedFinance = data.financeBreakdown;
+                if (typeof parsedFinance === 'string') {
+                    try { parsedFinance = JSON.parse(parsedFinance); } catch (e) {}
+                }
+
+                const estData = {
+                    companyId: saved.clientId,
+                    est_no: nextEstNo,
+                    gst_no: data.gstNo || "N/A",
+                    supply_date: new Date().toISOString().split('T')[0],
+                    consignee_name: data.exhibitorName || 'Unknown Company',
+                    consignee_addr: data.address || 'N/A',
+                    country: data.country || 'N/A',
+                    state: data.state || 'N/A',
+                    city: data.city || 'N/A',
+                    pincode: data.pincode || 0,
+                    finalAmount: parsedFinance?.netPayable || 0,
+                    added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
+                    items: []
+                };
+
+                if (parsedParticipation && parsedParticipation.stallFor) {
+                    const rate = Number(parsedParticipation.rate) || 0;
+                    const size = Number(parsedParticipation.stallSize) || 0;
+                    const baseAmount = rate * size;
+                    
+                    estData.items.push({
+                        description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
+                        hsn: "998596",
+                        qty: 1,
+                        size: size,
+                        unit: "Sqm",
+                        rate: rate,
+                        amount: baseAmount,
+                        disc: Number(parsedFinance?.discountAmount) || 0,
+                        tax: Number(parsedFinance?.gstAmount) || 0,
+                        gstRate: "18%",
+                        cgst_per: "9",
+                        igst_per: "9",
+                        finalAmount: Number(parsedFinance?.netPayable) || 0,
+                    });
+                }
+                
+                if (estData.items.length > 0) {
+                    await Estimate.create(estData);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to auto-generate Estimate:', err);
+        }
+
         // Only book stall and send emails if payment is NOT failed
         if (data.status !== 'payment-failed') {
             if (data.participation?.stallNo) {

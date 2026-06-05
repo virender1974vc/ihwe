@@ -215,6 +215,32 @@ const updateCompany = async (req, res) => {
     });
     if (!updated) return res.status(404).json({ message: "Company not found" });
 
+    if (req.body.contacts) {
+      try {
+        const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+        const exhibitor = await ExhibitorRegistration.findOne({ clientId: req.params.id });
+        if (exhibitor) {
+          const payload = { contact1: null, contact2: null };
+          const mapContact = (c) => c ? {
+            title: c.title,
+            firstName: c.firstName,
+            lastName: c.surname,
+            email: c.email,
+            designation: c.designation,
+            mobile: c.mobile,
+            alternateNo: c.alternate,
+            photo: c.photo
+          } : null;
+
+          if (updated.contacts[0]) payload.contact1 = mapContact(updated.contacts[0]);
+          if (updated.contacts[1]) payload.contact2 = mapContact(updated.contacts[1]);
+          await ExhibitorRegistration.updateOne({ _id: exhibitor._id }, { $set: payload });
+        }
+      } catch (err) {
+        console.error("Failed to sync contacts to ExhibitorRegistration", err);
+      }
+    }
+
     await logActivity(req, "Updated", "Client Data", `Updated company: ${updated.companyName}`);
 
     res.status(200).json({
@@ -482,6 +508,120 @@ const uploadCompanies = async (req, res) => {
   }
 };
 
+// ➤ Get Achievement Revenue for Dashboard
+const getAchievementRevenue = async (req, res) => {
+  try {
+    const { username, period } = req.query;
+    if (!username) return res.status(400).json({ success: false, message: "Username required" });
+
+    const lowerUsername = username.toLowerCase();
+    
+    // 1. Find all CRM companies mapped to this user
+    const userCompanies = await Company.find({
+      $or: [
+        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
+        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } }
+      ]
+    }).select('_id');
+    
+    const companyIds = userCompanies.map(c => c._id.toString());
+    
+    if (companyIds.length === 0) {
+      return res.status(200).json({ success: true, revenue: 0 });
+    }
+
+    // 2. Build the query for ExhibitorRegistration
+    const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+    const query = {
+      clientId: { $in: companyIds },
+      status: { $in: ['confirmed', 'paid', 'advance-paid'] }
+    };
+    
+    // Date filtering
+    const now = new Date();
+    if (period === 'current_month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      query.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
+    } else if (period === 'previous_month') {
+      const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      query.createdAt = { $gte: startOfPrevMonth, $lte: endOfPrevMonth };
+    }
+
+    // 3. Find converted registrations and calculate total revenue
+    const convertedRegistrations = await ExhibitorRegistration.find(query).select('financeBreakdown participation');
+    
+    let totalRevenue = 0;
+    convertedRegistrations.forEach(reg => {
+      // Use subtotal (pre-tax, pre-discount amount if available) or participation total
+      const revenue = reg.financeBreakdown?.subtotal || reg.participation?.total || 0;
+      totalRevenue += revenue;
+    });
+
+    res.status(200).json({ success: true, revenue: totalRevenue, convertedCount: convertedRegistrations.length });
+  } catch (err) {
+    console.error("Error in getAchievementRevenue:", err);
+    res.status(500).json({ success: false, message: "Error calculating revenue" });
+  }
+};
+
+// ➤ Get Sales Leaderboard
+const getSalesLeaderboard = async (req, res) => {
+  try {
+    const { period } = req.query;
+    
+    // 1. Fetch all admins
+    const User = require('../models/User');
+    const admins = await User.find({ status: 'Active' }).select('username fullName profileImage');
+
+    // 2. Fetch all CRM companies to map them to admins
+    const allCompanies = await Company.find({}).select('_id forwardTo added_by');
+    
+    // 3. Build query for ExhibitorRegistration
+    const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+    const query = { status: { $in: ['confirmed', 'paid', 'advance-paid'] } };
+    
+    const now = new Date();
+    if (period === 'current_month') {
+      query.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth(), 1), $lte: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) };
+    } else if (period === 'previous_month') {
+      query.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth() - 1, 1), $lte: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59) };
+    }
+    
+    const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation');
+    
+    const leaderboard = admins.map(admin => {
+      const u = admin.username.toLowerCase();
+      // Find companies belonging to this admin
+      const adminCompanyIds = allCompanies
+        .filter(c => (c.forwardTo && c.forwardTo.toLowerCase() === u) || (c.added_by && c.added_by.toLowerCase() === u))
+        .map(c => c._id.toString());
+        
+      const adminRegs = allConverted.filter(reg => reg.clientId && adminCompanyIds.includes(reg.clientId));
+      
+      let revenue = 0;
+      adminRegs.forEach(reg => {
+        revenue += reg.financeBreakdown?.subtotal || reg.participation?.total || 0;
+      });
+      
+      return {
+        name: admin.fullName || admin.username,
+        username: admin.username,
+        revenue,
+        profileImage: admin.profileImage || null
+      };
+    });
+    
+    leaderboard.sort((a, b) => b.revenue - a.revenue);
+    
+    res.status(200).json({ success: true, leaderboard });
+  } catch (err) {
+    console.error("Error in getSalesLeaderboard:", err);
+    res.status(500).json({ success: false, message: "Error fetching leaderboard" });
+  }
+};
+
 module.exports = {
   addCompany,
   getCompanies,
@@ -491,4 +631,6 @@ module.exports = {
   uploadCompanyLogo,
   uploadContactPhoto,
   uploadCompanies,
+  getAchievementRevenue,
+  getSalesLeaderboard,
 };
