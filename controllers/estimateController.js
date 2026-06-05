@@ -21,15 +21,15 @@ const addEstimate = async (req, res) => {
 
     // Log the creation in the chat/communication
     try {
-        const review = new CrmExhibatorReview2023({
-            cmpny_id: estimate.companyId.toString(),
-            type: 'log',
-            re_msg: `[PROFORMA INVOICE CREATED] Proforma Invoice (${estimate.est_no}) has been generated. Amount: ₹${estimate.finalAmount}`,
-            updated_by: req.body.added_by || 'System'
-        });
-        await review.save();
+      const review = new CrmExhibatorReview2023({
+        cmpny_id: estimate.companyId.toString(),
+        type: 'log',
+        re_msg: `[PROFORMA INVOICE CREATED] Proforma Invoice (${estimate.est_no}) has been generated. Amount: ₹${estimate.finalAmount}`,
+        updated_by: req.body.added_by || 'System'
+      });
+      await review.save();
     } catch (chatErr) {
-        console.error("Error creating chat message for estimate creation:", chatErr);
+      console.error("Error creating chat message for estimate creation:", chatErr);
     }
 
     res.status(201).json({
@@ -318,140 +318,140 @@ const getNextEstimateNumber = async (req, res) => {
 
 // Send Estimate via WhatsApp
 const sendWhatsAppEstimate = async (req, res) => {
-    try {
-        const estimate = await Estimate.findById(req.params.id);
-        if (!estimate) return res.status(404).json({ message: "Estimate not found" });
+  try {
+    const estimate = await Estimate.findById(req.params.id);
+    if (!estimate) return res.status(404).json({ message: "Estimate not found" });
 
-        let phone = req.body.phone;
-        if (!phone) {
-            let company = await Company.findById(estimate.companyId);
-            if (!company) {
-                company = await ExhibitorRegistration.findById(estimate.companyId);
-            }
-            phone = company?.contact1?.mobile || company?.mobile || company?.contact2?.mobile;
-        }
-        if (!phone) return res.status(400).json({ message: "Phone number is required and not found in company data" });
-
-        const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
-
-        const totalTaxable = estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0).toFixed(2);
-        
-        let itemsText = estimate.items.map((i, index) => {
-            let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
-                          `      Qty: ${i.qty} ${i.unit} | Rate: ₹${i.rate}\n` +
-                          `      Amount: ₹${i.amount}\n`;
-            
-            if (i.discount > 0) itemStr += `      Discount: ₹${i.discount}\n`;
-            if (i.taxable > 0) itemStr += `      Taxable Value: ₹${i.taxable}\n`;
-
-            if (i.gstRate && i.gstRate.includes('IGST')) {
-                itemStr += `      IGST: ₹${i.tax} (${i.gstRate})\n`;
-            } else if (i.gstRate) {
-                const halfTax = (parseFloat(i.tax) / 2).toFixed(2);
-                itemStr += `      CGST: ₹${halfTax} | SGST: ₹${halfTax}\n`;
-            } else if (i.tax > 0) {
-                 itemStr += `      Tax: ₹${i.tax}\n`;
-            }
-
-            itemStr += `      *Item Total: ₹${i.finalAmount}*`;
-            return itemStr;
-        }).join('\n\n');
-
-        let totalsText = ``;
-        totalsText += `      *Total Taxable Value:* ₹${totalTaxable}\n`;
-        
-        if (estimate.igst > 0) {
-            totalsText += `      *IGST:* ₹${parseFloat(estimate.igst).toFixed(2)}\n`;
-        } else {
-            if (estimate.cgst > 0) totalsText += `      *CGST:* ₹${parseFloat(estimate.cgst).toFixed(2)}\n`;
-            if (estimate.sgst > 0) totalsText += `      *SGST:* ₹${parseFloat(estimate.sgst).toFixed(2)}\n`;
-        }
-        
-        if (estimate.discount > 0) {
-             totalsText += `      *Discount:* ₹${parseFloat(estimate.discount).toFixed(2)}\n`;
-        }
-
-        const message = `✨ *PROFORMA INVOICE DETAILS* ✨\n\n`
-            + `Namo Gange Namaskar! 🙏\n\n`
-            + `Dear *${estimate.consignee_name || 'Client'}*,\n\n`
-            + `Thank you for choosing *International Health & Wellness Expo*. We are pleased to share the details of your Proforma Invoice.\n\n`
-            + `📄 *Invoice No:* ${estimate.est_no}\n`
-            + `📅 *Date:* ${dateStr}\n`
-            + `🏢 *Company:* ${estimate.consignee_name}\n`
-            + `📍 *Location:* ${estimate.city || 'N/A'}, ${estimate.state || 'N/A'}\n`
-            + `📝 *GSTIN:* ${estimate.gst_no || 'N/A'}\n\n`
-            + `📋 *ITEM DETAILS:*\n`
-            + `-------------------------------\n`
-            + `${itemsText}\n`
-            + `-------------------------------\n\n`
-            + `📊 *INVOICE SUMMARY:*\n`
-            + `${totalsText}\n`
-            + `💰 *GRAND TOTAL:* *₹${estimate.finalAmount}*\n\n`
-            + `If you have any queries or require further clarification, please feel free to reach out to us. We look forward to a successful collaboration! 🤝\n\n`
-            + `🌐 *Website:* https://www.ihwe.in\n`
-            + `📧 *Email:* info@ihwe.in\n`
-            + `📞 *Contact:* +91 9654900525\n\n`
-            + `Warm Regards,\n`
-            + `*Namo Gange Wellness Pvt. Ltd.* 🌿`;
-
-        const result = await sendWhatsAppMessage(phone, message, estimate.consignee_name);
-        
-        if (result.success) {
-            res.status(200).json({ message: "WhatsApp message sent successfully" });
-        } else {
-            res.status(500).json({ message: "Failed to send WhatsApp message", error: result.error });
-        }
-    } catch (error) {
-        res.status(500).json({ message: "Error sending WhatsApp", error: error.message });
+    let phone = req.body.phone;
+    if (!phone) {
+      let company = await Company.findById(estimate.companyId);
+      if (!company) {
+        company = await ExhibitorRegistration.findById(estimate.companyId);
+      }
+      phone = company?.contact1?.mobile || company?.mobile || company?.contact2?.mobile;
     }
+    if (!phone) return res.status(400).json({ message: "Phone number is required and not found in company data" });
+
+    const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+
+    const totalTaxable = estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0).toFixed(2);
+
+    let itemsText = estimate.items.map((i, index) => {
+      let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
+        `      Qty: ${i.qty} ${i.unit} | Rate: ₹${i.rate}\n` +
+        `      Amount: ₹${i.amount}\n`;
+
+      if (i.discount > 0) itemStr += `      Discount: ₹${i.discount}\n`;
+      if (i.taxable > 0) itemStr += `      Taxable Value: ₹${i.taxable}\n`;
+
+      if (i.gstRate && i.gstRate.includes('IGST')) {
+        itemStr += `      IGST: ₹${i.tax} (${i.gstRate})\n`;
+      } else if (i.gstRate) {
+        const halfTax = (parseFloat(i.tax) / 2).toFixed(2);
+        itemStr += `      CGST: ₹${halfTax} | SGST: ₹${halfTax}\n`;
+      } else if (i.tax > 0) {
+        itemStr += `      Tax: ₹${i.tax}\n`;
+      }
+
+      itemStr += `      *Item Total: ₹${i.finalAmount}*`;
+      return itemStr;
+    }).join('\n\n');
+
+    let totalsText = ``;
+    totalsText += `      *Total Taxable Value:* ₹${totalTaxable}\n`;
+
+    if (estimate.igst > 0) {
+      totalsText += `      *IGST:* ₹${parseFloat(estimate.igst).toFixed(2)}\n`;
+    } else {
+      if (estimate.cgst > 0) totalsText += `      *CGST:* ₹${parseFloat(estimate.cgst).toFixed(2)}\n`;
+      if (estimate.sgst > 0) totalsText += `      *SGST:* ₹${parseFloat(estimate.sgst).toFixed(2)}\n`;
+    }
+
+    if (estimate.discount > 0) {
+      totalsText += `      *Discount:* ₹${parseFloat(estimate.discount).toFixed(2)}\n`;
+    }
+
+    const message = `✨ *PROFORMA INVOICE DETAILS* ✨\n\n`
+      + `Namo Gange Namaskar! 🙏\n\n`
+      + `Dear *${estimate.consignee_name || 'Client'}*,\n\n`
+      + `Thank you for choosing *International Health & Wellness Expo*. We are pleased to share the details of your Proforma Invoice.\n\n`
+      + `📄 *Invoice No:* ${estimate.est_no}\n`
+      + `📅 *Date:* ${dateStr}\n`
+      + `🏢 *Company:* ${estimate.consignee_name}\n`
+      + `📍 *Location:* ${estimate.city || 'N/A'}, ${estimate.state || 'N/A'}\n`
+      + `📝 *GSTIN:* ${estimate.gst_no || 'N/A'}\n\n`
+      + `📋 *ITEM DETAILS:*\n`
+      + `-------------------------------\n`
+      + `${itemsText}\n`
+      + `-------------------------------\n\n`
+      + `📊 *INVOICE SUMMARY:*\n`
+      + `${totalsText}\n`
+      + `💰 *GRAND TOTAL:* *₹${estimate.finalAmount}*\n\n`
+      + `If you have any queries or require further clarification, please feel free to reach out to us. We look forward to a successful collaboration! 🤝\n\n`
+      + `🌐 *Website:* https://www.ihwe.in\n`
+      + `📧 *Email:* info@ihwe.in\n`
+      + `📞 *Contact:* +91 9654900525\n\n`
+      + `Warm Regards,\n`
+      + `*Namo Gange Wellness Pvt. Ltd.* 🌿`;
+
+    const result = await sendWhatsAppMessage(phone, message, estimate.consignee_name);
+
+    if (result.success) {
+      res.status(200).json({ message: "WhatsApp message sent successfully" });
+    } else {
+      res.status(500).json({ message: "Failed to send WhatsApp message", error: result.error });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Error sending WhatsApp", error: error.message });
+  }
 };
 
 // Send Estimate via Email
 const sendEmailEstimate = async (req, res) => {
-    try {
-        const estimate = await Estimate.findById(req.params.id);
-        if (!estimate) return res.status(404).json({ message: "Estimate not found" });
+  try {
+    const estimate = await Estimate.findById(req.params.id);
+    if (!estimate) return res.status(404).json({ message: "Estimate not found" });
 
-        let email = req.body.email;
-        if (!email) {
-            let company = await Company.findById(estimate.companyId);
-            if (!company) {
-                company = await ExhibitorRegistration.findById(estimate.companyId);
-            }
-            email = company?.contact1?.email || company?.email;
-        }
-        if (!email) return res.status(400).json({ message: "Email is required and not found in company data" });
+    let email = req.body.email;
+    if (!email) {
+      let company = await Company.findById(estimate.companyId);
+      if (!company) {
+        company = await ExhibitorRegistration.findById(estimate.companyId);
+      }
+      email = company?.contact1?.email || company?.email;
+    }
+    if (!email) return res.status(400).json({ message: "Email is required and not found in company data" });
 
-        const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
-        
-        let totalTaxable = 0;
-        let totalCgst = 0;
-        let totalSgst = 0;
-        let totalIgst = 0;
-        let totalDiscountAmt = 0;
+    const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
 
-        let itemsHtml = estimate.items.map((i, index) => {
-            const qty = parseFloat(i.qty) || 1;
-            const rate = parseFloat(i.rate) || 0;
-            const amount = qty * rate;
-            const discPct = parseFloat(i.disc) || 0;
-            const discAmt = (amount * discPct) / 100;
-            const taxable = amount - discAmt;
+    let totalTaxable = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalIgst = 0;
+    let totalDiscountAmt = 0;
 
-            totalTaxable += taxable;
-            totalDiscountAmt += discAmt;
+    let itemsHtml = estimate.items.map((i, index) => {
+      const qty = parseFloat(i.qty) || 1;
+      const rate = parseFloat(i.rate) || 0;
+      const amount = qty * rate;
+      const discPct = parseFloat(i.disc) || 0;
+      const discAmt = (amount * discPct) / 100;
+      const taxable = amount - discAmt;
 
-            const igstPer = parseFloat(i.igst_per) || 0;
-            const cgstPer = parseFloat(i.cgst_per) || 0;
+      totalTaxable += taxable;
+      totalDiscountAmt += discAmt;
 
-            if (igstPer > 0) {
-                totalIgst += (taxable * igstPer) / 100;
-            } else if (cgstPer > 0) {
-                totalCgst += (taxable * cgstPer) / 100;
-                totalSgst += (taxable * cgstPer) / 100;
-            }
+      const igstPer = parseFloat(i.igst_per) || 0;
+      const cgstPer = parseFloat(i.cgst_per) || 0;
 
-            return `
+      if (igstPer > 0) {
+        totalIgst += (taxable * igstPer) / 100;
+      } else if (cgstPer > 0) {
+        totalCgst += (taxable * cgstPer) / 100;
+        totalSgst += (taxable * cgstPer) / 100;
+      }
+
+      return `
             <tr>
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${index + 1}</td>
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee;">
@@ -465,47 +465,47 @@ const sendEmailEstimate = async (req, res) => {
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold; color: #1e293b; font-size: 13px;">₹${parseFloat(i.finalAmount).toFixed(2)}</td>
             </tr>
             `;
-        }).join('');
+    }).join('');
 
-        let totalsHtml = `
+    let totalsHtml = `
             <tr>
                 <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>Total Taxable Value:</strong></td>
                 <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalTaxable.toFixed(2)}</td>
             </tr>
         `;
 
-        if (totalDiscountAmt > 0) {
-            totalsHtml += `
+    if (totalDiscountAmt > 0) {
+      totalsHtml += `
             <tr>
                 <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #e53e3e;"><strong>Total Discount:</strong></td>
                 <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #e53e3e;">-₹${totalDiscountAmt.toFixed(2)}</td>
             </tr>`;
-        }
+    }
 
-        if (totalIgst > 0) {
-            totalsHtml += `
+    if (totalIgst > 0) {
+      totalsHtml += `
             <tr>
                 <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>IGST:</strong></td>
                 <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalIgst.toFixed(2)}</td>
             </tr>`;
-        } else {
-            if (totalCgst > 0) {
-                totalsHtml += `
+    } else {
+      if (totalCgst > 0) {
+        totalsHtml += `
                 <tr>
                     <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>CGST:</strong></td>
                     <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalCgst.toFixed(2)}</td>
                 </tr>`;
-            }
-            if (totalSgst > 0) {
-                totalsHtml += `
+      }
+      if (totalSgst > 0) {
+        totalsHtml += `
                 <tr>
                     <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>SGST:</strong></td>
                     <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalSgst.toFixed(2)}</td>
                 </tr>`;
-            }
-        }
+      }
+    }
 
-        const htmlContent = `
+    const htmlContent = `
             <div style="font-family: Arial, sans-serif; background-color: #f4f7f6; padding: 20px 10px;">
                 <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 700px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
                     
@@ -535,13 +535,13 @@ const sendEmailEstimate = async (req, res) => {
                                     <td width="48%" valign="top">
                                         <h3 style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #94a3b8; border-bottom: 1px solid #eee; padding-bottom: 5px;">From</h3>
                                         <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: bold; color: #1e293b;">Namo Gange Wellness Pvt. Ltd.</p>
-                                        <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.4;">12/52 Site-2, Sunrise Industrial Area,<br>Mohan Nagar, Ghaziabad, UP - 201007</p>
+                                        <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.4;">12/52 Site-2, Sunrise Industrial Area,<br>Mohan Nagar, Ghaziabad, UP - 201007, Bharat</p>
                                     </td>
                                     <td width="4%"></td>
                                     <td width="48%" valign="top">
                                         <h3 style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; color: #94a3b8; border-bottom: 1px solid #eee; padding-bottom: 5px;">Billed To</h3>
-                                        <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: bold; color: #1e3c72;">${estimate.consignee_name}</p>
-                                        <p style="margin: 0 0 4px 0; font-size: 13px; color: #475569; line-height: 1.4;">${estimate.consignee_addr}<br>${estimate.city || ''}, ${estimate.state || ''} - ${estimate.pincode || ''}</p>
+                                        <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: bold; color: #1e3c72; text-transform: capitalize;">${estimate.consignee_name}</p>
+                                        <p style="margin: 0 0 4px 0; font-size: 13px; color: #475569; line-height: 1.4; text-transform: capitalize;">${estimate.consignee_addr}<br>${estimate.city || ''}, ${estimate.state || ''} - ${estimate.pincode || ''}</p>
                                         <p style="margin: 5px 0 0 0; font-size: 12px; color: #475569; background-color: #f1f5f9; display: inline-block; padding: 3px 8px; border-radius: 4px;"><strong>GSTIN:</strong> ${estimate.gst_no || 'N/A'}</p>
                                     </td>
                                 </tr>
@@ -595,19 +595,19 @@ const sendEmailEstimate = async (req, res) => {
             </div>
         `;
 
-        const subject = `Proforma Invoice Details - ${estimate.est_no}`;
+    const subject = `Proforma Invoice Details - ${estimate.est_no}`;
 
-        await emailService.sendEmail({
-            to: email,
-            subject: subject,
-            html: htmlContent,
-            profile: 'DEFAULT'
-        });
+    await emailService.sendEmail({
+      to: email,
+      subject: subject,
+      html: htmlContent,
+      profile: 'DEFAULT'
+    });
 
-        res.status(200).json({ message: "Email sent successfully" });
-    } catch (error) {
-        res.status(500).json({ message: "Error sending Email", error: error.message });
-    }
+    res.status(200).json({ message: "Email sent successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error sending Email", error: error.message });
+  }
 };
 
 // ✅ EXPORT
