@@ -11,8 +11,7 @@ const CallLogSchema = new mongoose.Schema({
         trim: true
     },
     companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Company',
+        type: String,
         required: true
     },
     companyName: {
@@ -31,7 +30,7 @@ const CallLogSchema = new mongoose.Schema({
         trim: true
     },
     duration: {
-        type: Number, // duration in seconds
+        type: Number,
         required: true,
         default: 0
     },

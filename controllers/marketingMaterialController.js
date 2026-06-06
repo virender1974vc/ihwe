@@ -1,5 +1,6 @@
 const MarketingMaterial = require("../models/MarketingMaterial");
 const MarketingShareLog = require("../models/MarketingShareLog");
+const EmailLog = require("../models/EmailLog");
 const nodemailer = require("nodemailer");
 const { sendWhatsappMessage } = require("./commonWhatsappController");
 const axios = require("axios");
@@ -133,7 +134,7 @@ exports.deleteMaterial = async (req, res) => {
 
 exports.shareMaterials = async (req, res) => {
   try {
-    const { cmpny_id, material_ids, sentVia, clientMobile, clientEmail, clientName, sentBy } = req.body;
+    let { cmpny_id, material_ids, sentVia, sentBy, senderId, senderName, clientMobile, clientEmail, clientName } = req.body;
 
     if (!material_ids || !Array.isArray(material_ids) || material_ids.length === 0) {
       return res.status(400).json({ success: false, message: "No materials selected" });
@@ -252,13 +253,32 @@ exports.shareMaterials = async (req, res) => {
         `
       };
       await transporter.sendMail(mailOptions);
+      try {
+        await EmailLog.create({
+          recipient: clientEmailVar,
+          subject: "Marketing Materials from IHWE",
+          message: emailHtmlContent,
+          status: "success",
+          senderId: senderId || null,
+          senderName: senderName || sentBy || null,
+          companyId: cmpny_id || null,
+          companyName: clientNameVar || null
+        });
+      } catch (err) {
+        console.error("EmailLog (Marketing Material) failed:", err.message);
+      }
 
     } else if (sentVia === "WhatsApp") {
       if (!clientMobileVar) return res.status(400).json({ success: false, message: "Client mobile is required" });
 
       const whatsapp = require("../utils/whatsapp");
       try {
-        await whatsapp.sendWhatsAppRichMessage(clientMobileVar, contentMessage, materials, "Marketing Materials Share");
+        await whatsapp.sendWhatsAppRichMessage(clientMobileVar, contentMessage, materials, "Marketing Materials Share", {
+          senderId,
+          senderName,
+          companyId: cmpny_id,
+          companyName: clientNameVar
+        });
       } catch (waErr) {
         console.error("WhatsApp sending error:", waErr.message);
       }

@@ -1,6 +1,6 @@
 const PerformaInvoice = require("../models/PerformaInvoice");
 
-// ✅ Create new Performa Invoice
+// ✅ Create new PROFORMA Invoice
 const createPerformaInvoice = async (req, res) => {
   try {
     const { est_no, companyId, finalAmount } = req.body;
@@ -23,18 +23,18 @@ const createPerformaInvoice = async (req, res) => {
     await invoice.save();
 
     res.status(201).json({
-      message: "✅ Performa Invoice Created",
+      message: "✅ PROFORMA Invoice Created",
       data: invoice,
     });
   } catch (error) {
     res.status(500).json({
-      message: "Error creating Performa Invoice",
+      message: "Error creating PROFORMA Invoice",
       error: error.message,
     });
   }
 };
 
-// ✅ Get all Performa Invoices
+// ✅ Get all PROFORMA Invoices
 const getAllPerformaInvoices = async (req, res) => {
   try {
     const invoices = await PerformaInvoice.find().sort({ added: -1 });
@@ -48,7 +48,7 @@ const getAllPerformaInvoices = async (req, res) => {
   }
 };
 
-// ✅ Get single Performa Invoice by ID
+// ✅ Get single PROFORMA Invoice by ID
 const getPerformaInvoiceById = async (req, res) => {
   try {
     const invoice = await PerformaInvoice.findById(req.params.id);
@@ -64,7 +64,7 @@ const getPerformaInvoiceById = async (req, res) => {
   }
 };
 
-// ✅ Update Performa Invoice
+// ✅ Update PROFORMA Invoice
 const updatePerformaInvoice = async (req, res) => {
   try {
     const updatedInvoice = await PerformaInvoice.findByIdAndUpdate(
@@ -77,7 +77,7 @@ const updatePerformaInvoice = async (req, res) => {
       return res.status(404).json({ message: "Invoice not found" });
 
     res.json({
-      message: "✅ Performa Invoice Updated",
+      message: "✅ PROFORMA Invoice Updated",
       data: updatedInvoice,
     });
   } catch (error) {
@@ -88,7 +88,7 @@ const updatePerformaInvoice = async (req, res) => {
   }
 };
 
-// ✅ Delete Performa Invoice
+// ✅ Delete PROFORMA Invoice
 const deletePerformaInvoice = async (req, res) => {
   try {
     const deletedInvoice = await PerformaInvoice.findByIdAndDelete(
@@ -99,7 +99,7 @@ const deletePerformaInvoice = async (req, res) => {
       return res.status(404).json({ message: "Invoice not found" });
 
     res.json({
-      message: "🗑️ Performa Invoice Deleted",
+      message: "🗑️ PROFORMA Invoice Deleted",
     });
   } catch (error) {
     res.status(500).json({

@@ -35,21 +35,14 @@ const createInvoice = async (req, res) => {
     // Required fields check
     const requiredFields = [
       "companyId",
-      "estimate_no",
       "type_of_invoice",
-      "gst_no",
-      "supply_date",
       "consignee_name",
-      "consignee_addr",
-      "country",
-      "state",
-      "city",
-      "pincode",
-      "added_by",
+      "items",
+      "finalAmount",
     ];
 
     for (const field of requiredFields) {
-      if (!req.body[field]) {
+      if (req.body[field] === undefined || req.body[field] === null || req.body[field] === "") {
         return res.status(400).json({
           message: `Missing required field: ${field}`,
         });

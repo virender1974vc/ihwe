@@ -472,7 +472,7 @@ class ExhibitorRegistrationService {
             }
         }
 
-        // ── Auto-Generate Estimate (instead of Performa Invoice) ──
+        // ── Auto-Generate Estimate (instead of PROFORMA Invoice) ──
         try {
             if (saved.clientId) {
                 const Estimate = require('../models/Estimate');

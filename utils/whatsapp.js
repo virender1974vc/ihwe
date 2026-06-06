@@ -66,7 +66,7 @@ const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) =>
     }
 };
 
-const sendWhatsAppMessage = async (mobile, msg, name = null) => {
+const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
     let status = 'failed';
     let errorMsg = null;
 
@@ -95,18 +95,21 @@ const sendWhatsAppMessage = async (mobile, msg, name = null) => {
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        // Log the message attempt
         WhatsAppLog.create({
             recipient: mobile,
             message: msg,
             name: name || 'System Notification',
             status,
-            error: errorMsg
+            error: errorMsg,
+            senderId: options.senderId || null,
+            senderName: options.senderName || null,
+            companyId: options.companyId || null,
+            companyName: options.companyName || null
         }).catch(err => console.error('Error saving WhatsApp log:', err));
     }
 };
 
-const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null) => {
+const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, options = {}) => {
     let status = 'failed';
     let errorMsg = null;
 
@@ -186,7 +189,11 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null) => 
             message: msg + " [RICH MEDIA]",
             name: name || 'System Notification',
             status,
-            error: errorMsg
+            error: errorMsg,
+            senderId: options.senderId || null,
+            senderName: options.senderName || null,
+            companyId: options.companyId || null,
+            companyName: options.companyName || null
         }).catch(err => console.error('Error saving WhatsApp log:', err));
     }
 };
