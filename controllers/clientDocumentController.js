@@ -129,9 +129,9 @@ exports.deleteClientDocument = async (req, res) => {
                         publicId = publicId.replace(/^v\d+\//, '');
                     }
                     publicId = publicId.substring(0, publicId.lastIndexOf('.')) || publicId;
-                    
-                    await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => {});
-                    await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => {});
+
+                    await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => { });
+                    await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => { });
                 }
             } catch (cloudErr) {
                 console.error("Cloudinary deletion error:", cloudErr);
@@ -142,5 +142,72 @@ exports.deleteClientDocument = async (req, res) => {
         res.status(200).json({ message: "Document deleted successfully", id: req.params.id });
     } catch (error) {
         res.status(500).json({ message: "Error deleting document", error: error.message });
+    }
+};
+
+// Proxy download for Cloudinary files to avoid CORS
+exports.downloadProxy = async (req, res) => {
+    try {
+        const { url, download } = req.query;
+        if (!url) {
+            return res.status(400).json({ message: "URL is required" });
+        }
+
+        let targetUrl = url;
+
+        if (url.includes('cloudinary.com')) {
+            const urlParts = url.split('/upload/');
+            if (urlParts.length > 1) {
+                let publicIdWithExt = urlParts[1];
+                // Remove version
+                if (publicIdWithExt.match(/^v\d+\//)) {
+                    publicIdWithExt = publicIdWithExt.replace(/^v\d+\//, '');
+                }
+                const isRaw = url.includes('/raw/upload/');
+
+                const cloudinary = require('cloudinary').v2;
+                
+                // For raw files, the public_id must include the extension and format should be empty.
+                // For image/auto files, the public_id should not include the extension.
+                const format = (!isRaw && publicIdWithExt.includes('.')) ? publicIdWithExt.split('.').pop() : '';
+                const publicId = (!isRaw && publicIdWithExt.includes('.')) ? publicIdWithExt.substring(0, publicIdWithExt.lastIndexOf('.')) : publicIdWithExt;
+
+                // For Strict Delivery, we must use the private_download_url to access the file securely.
+                // We use type 'upload' because the files were uploaded as 'upload' but are blocked by strict delivery.
+                targetUrl = cloudinary.utils.private_download_url(
+                    publicId,
+                    format,
+                    {
+                        resource_type: isRaw ? 'raw' : 'image',
+                        type: 'upload'
+                    }
+                );
+            }
+        }
+
+        // Fallback or Proxy for Cloudinary URLs
+        const axios = require('axios');
+        const response = await axios({
+            url: targetUrl,
+            method: 'GET',
+            responseType: 'stream'
+        });
+
+        const contentType = response.headers['content-type'];
+        if (contentType) {
+            res.setHeader('Content-Type', contentType);
+        }
+
+        if (download === 'true') {
+            const fileName = url.split('/').pop().split('?')[0] || 'document';
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        } else {
+            res.setHeader('Content-Disposition', 'inline');
+        }
+
+        response.data.pipe(res);
+    } catch (error) {
+        console.error("Proxy download error:", error.message);
+        res.status(500).json({ message: "Error downloading file", error: error.message });
     }
 };
