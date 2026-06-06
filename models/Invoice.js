@@ -11,24 +11,56 @@ const getFiscalYear = () => {
   return `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
 };
 
+const invoiceItemSchema = new mongoose.Schema({
+  description: { type: String, required: true },
+  hsn: { type: String, default: "" },
+  qty: { type: Number, required: true },
+  unit: { type: String, required: true },
+  rate: { type: Number, required: true },
+  amount: { type: Number, required: true },
+  discountPct: { type: Number, default: 0 },
+  taxableValue: { type: Number, required: true },
+  gstPct: { type: String, required: true },
+  gstAmount: { type: Number, required: true },
+  total: { type: Number, required: true },
+});
+
 const InvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
-    estimate_no: { type: String, required: true },
-    invoice_no: { type: String, required: true }, // यह फील्ड अब ऑटो-जेनरेट होगी
+    estimate_no: { type: String, default: "" }, // Optional now
+    invoice_no: { type: String, required: true, unique: true }, 
     type_of_invoice: { type: String, required: true },
-    gst_no: { type: String, required: true },
-    supply_date: { type: String, required: true },
+    invoice_date: { type: String },
+    due_date: { type: String },
+    po_no: { type: String },
+    currency: { type: String },
+    
+    gst_no: { type: String },
+    supply_date: { type: String }, // Can be used as invoice date if not separate
+    
     consignee_name: { type: String, required: true },
-    consignee_addr: { type: String, required: true },
-    country: { type: String, required: true },
-    state: { type: String, required: true },
-    city: { type: String, required: true },
-    pincode: { type: String, required: true },
+    consignee_addr: { type: String }, // Shipping
+    billing_address: { type: String },
+    billing_state: { type: String },
+    billing_pincode: { type: String },
+    
+    country: { type: String },
+    state: { type: String },
+    city: { type: String },
+    pincode: { type: String },
+    place_of_supply: { type: String },
     stateCode: { type: String },
-    added_by: { type: String, required: true },
+    
+    items: { type: [invoiceItemSchema], required: true },
+    finalAmount: { type: Number, required: true },
+    remarks: { type: String, default: "" },
+    terms: { type: String, default: "" },
+    
+    added_by: { type: String },
     status: { type: String, default: "active" },
     added: { type: Date, default: Date.now },
+    updated: { type: Date, default: null },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );
