@@ -15,6 +15,7 @@ const invoiceItemSchema = new mongoose.Schema({
   description: { type: String, required: true },
   hsn: { type: String, default: "" },
   qty: { type: Number, required: true },
+  size: { type: String, default: "" },
   unit: { type: String, required: true },
   rate: { type: Number, required: true },
   amount: { type: Number, required: true },
