@@ -38,10 +38,78 @@ const getActorInfo = async (req) => {
     }
 };
 
+const formatTargetMonth = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
+
+const getCurrentMonth = () => formatTargetMonth(new Date());
+
+const normalizeTargetMonth = (value) => {
+    if (typeof value === 'string' && /^\d{4}-\d{2}$/.test(value)) return value;
+    return getCurrentMonth();
+};
+
+const getMonthRange = (targetMonth) => {
+    const month = normalizeTargetMonth(targetMonth);
+    const [year, monthIndex] = month.split('-').map(Number);
+    const start = new Date(year, monthIndex - 1, 1, 0, 0, 0, 0);
+    const end = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+    return { month, start, end };
+};
+
+const resolveMonthFromPeriod = (period, targetMonth) => {
+    if (targetMonth) return normalizeTargetMonth(targetMonth);
+    const now = new Date();
+    if (period === 'previous_month') {
+        return formatTargetMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    }
+    return getCurrentMonth();
+};
+
+let monthWiseIndexReady = false;
+const ensureMonthWiseIndexes = async () => {
+    if (monthWiseIndexReady) return;
+    try {
+        await UserTarget.updateMany(
+            { $or: [{ targetMonth: { $exists: false } }, { targetMonth: null }, { targetMonth: '' }] },
+            { $set: { targetMonth: getCurrentMonth() } }
+        );
+    } catch (error) {
+        console.error('UserTarget month backfill skipped:', error.message);
+    }
+    try {
+        const indexes = await UserTarget.collection.indexes();
+        const usernameOnlyIndex = indexes.find((idx) =>
+            idx.name === 'username_1' &&
+            idx.unique &&
+            idx.key &&
+            Object.keys(idx.key).length === 1 &&
+            idx.key.username === 1
+        );
+        if (usernameOnlyIndex) {
+            await UserTarget.collection.dropIndex(usernameOnlyIndex.name);
+        }
+    } catch (error) {
+        console.error('UserTarget index cleanup skipped:', error.message);
+    }
+    try {
+        await UserTarget.collection.createIndex({ username: 1, targetMonth: 1 }, { unique: true });
+    } catch (error) {
+        console.error('UserTarget month-wise index creation skipped:', error.message);
+    }
+    monthWiseIndexReady = true;
+};
+
 class UserTargetController {
     async getAllTargets(req, res) {
         try {
-            const targets = await UserTarget.find().sort({ createdAt: -1 });
+            await ensureMonthWiseIndexes();
+            const { month, targetMonth } = req.query;
+            const query = {};
+            if (month || targetMonth) query.targetMonth = normalizeTargetMonth(month || targetMonth);
+            const targets = await UserTarget.find(query).sort({ targetMonth: -1, createdAt: -1 });
             res.status(200).json({ success: true, data: targets });
         } catch (error) {
             console.error("Error fetching targets:", error);
@@ -51,7 +119,8 @@ class UserTargetController {
 
     async getTargetByUsername(req, res) {
         try {
-            const target = await UserTarget.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') } });
+            const targetMonth = normalizeTargetMonth(req.query.month || req.query.targetMonth);
+            const target = await UserTarget.findOne({ username: { $regex: new RegExp(`^${req.params.username}$`, 'i') }, targetMonth });
             if (!target) {
                 return res.status(404).json({ success: false, message: 'Target not found' });
             }
@@ -64,14 +133,16 @@ class UserTargetController {
 
     async createOrUpdateTarget(req, res) {
         try {
+            await ensureMonthWiseIndexes();
             const { username, callTarget, whatsappTarget, emailTarget, meetingTarget, revenueTarget, status } = req.body;
+            const targetMonth = normalizeTargetMonth(req.body.targetMonth || req.body.month);
 
             if (!username) {
                 return res.status(400).json({ success: false, message: 'Username is required' });
             }
 
             const { actorId, actorName } = await getActorInfo(req);
-            let target = await UserTarget.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+            let target = await UserTarget.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') }, targetMonth });
 
             if (target) {
                 target.callTarget = callTarget !== undefined ? callTarget : target.callTarget;
@@ -87,6 +158,7 @@ class UserTargetController {
             } else {
                 target = await UserTarget.create({
                     username,
+                    targetMonth,
                     callTarget,
                     whatsappTarget,
                     emailTarget,
@@ -108,21 +180,18 @@ class UserTargetController {
 
     async getDashboardStats(req, res) {
         try {
-            const { username, userId } = req.query;
+            const { username, userId, period } = req.query;
             if (!username) {
                 return res.status(400).json({ success: false, message: 'username is required' });
             }
 
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
+            const targetMonth = resolveMonthFromPeriod(period, req.query.month || req.query.targetMonth);
+            const { start, end } = getMonthRange(targetMonth);
 
             const userFilter = userId ? { senderId: userId } : {};
             const callFilter = userId ? { callerId: userId } : {};
 
-            const target = await UserTarget.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+            const target = await UserTarget.findOne({ username: { $regex: new RegExp(`^${username}$`, 'i') }, targetMonth });
             const targets = {
                 call: target ? target.callTarget : 0,
                 whatsapp: target ? target.whatsappTarget : 0,
@@ -142,12 +211,12 @@ class UserTargetController {
             };
 
             if (userId && userId !== 'undefined' && userId !== 'null') {
-                completed.call = await CallLog.countDocuments({ ...callFilter, callDate: { $gte: today, $lt: tomorrow } });
-                completed.whatsapp = await WhatsAppLog.countDocuments({ ...userFilter, sentAt: { $gte: today, $lt: tomorrow } });
-                completed.email = await EmailLog.countDocuments({ ...userFilter, sentAt: { $gte: today, $lt: tomorrow } });
+                completed.call = await CallLog.countDocuments({ ...callFilter, callDate: { $gte: start, $lt: end } });
+                completed.whatsapp = await WhatsAppLog.countDocuments({ ...userFilter, sentAt: { $gte: start, $lt: end } });
+                completed.email = await EmailLog.countDocuments({ ...userFilter, sentAt: { $gte: start, $lt: end } });
             }
 
-            res.status(200).json({ success: true, targets, completed });
+            res.status(200).json({ success: true, targetMonth, targets, completed });
         } catch (error) {
             console.error("Error fetching dashboard stats:", error);
             res.status(500).json({ success: false, message: 'Server error' });
