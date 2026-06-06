@@ -437,6 +437,7 @@ app.use("/api/conference-days", conferenceDayRoutes);
 app.use("/api/conference-tracks", conferenceTrackRoutes);
 app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
 app.use("/api/marketing-materials", require('./routes/marketingMaterialRoutes'));
+app.use("/api/user-targets", require("./routes/userTargetRoutes"));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');

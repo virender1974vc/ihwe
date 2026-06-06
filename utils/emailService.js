@@ -540,7 +540,11 @@ class EmailService {
                 status: 'success',
                 name: logData.name || null,
                 phone: logData.phone || null,
-                message: logData.message || null
+                message: logData.message || null,
+                senderId: logData.senderId || null,
+                senderName: logData.senderName || null,
+                companyId: logData.companyId || null,
+                companyName: logData.companyName || null
             }).catch(err => console.error("EmailLog (success) failed:", err.message));
 
             return true;
@@ -553,7 +557,11 @@ class EmailService {
                 error: error.message,
                 name: logData.name || null,
                 phone: logData.phone || null,
-                message: logData.message || null
+                message: logData.message || null,
+                senderId: logData.senderId || null,
+                senderName: logData.senderName || null,
+                companyId: logData.companyId || null,
+                companyName: logData.companyName || null
             }).catch(err => console.error("EmailLog (failed) failed:", err.message));
             return false;
         }
