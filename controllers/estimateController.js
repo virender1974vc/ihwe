@@ -163,7 +163,14 @@ const getGroupedEstimateData = async (req, res) => {
 };
 const getAllEstimates = async (req, res) => {
   try {
+    const { type } = req.query;
+    let matchStage = {};
+    if (type) {
+      matchStage = { est_type: { $regex: new RegExp(`^${type}$`, "i") } };
+    }
+
     const data = await Estimate.aggregate([
+      { $match: matchStage },
       {
         $lookup: {
           from: "performainvoices",
@@ -349,61 +356,61 @@ const sendWhatsAppEstimate = async (req, res) => {
     const totalTaxable = estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0).toFixed(2);
 
     let itemsText = estimate.items.map((i, index) => {
-      let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
-        `      Qty: ${i.qty} ${i.unit} | Rate: ₹${i.rate}\n` +
-        `      Amount: ₹${i.amount}\n`;
+      let itemStr = `🔹 *${index + 1}. ${i.description}*n` +
+        `      Qty: ${i.qty} ${i.unit} | Rate: ₹${i.rate}n` +
+        `      Amount: ₹${i.amount}n`;
 
-      if (i.discount > 0) itemStr += `      Discount: ₹${i.discount}\n`;
-      if (i.taxable > 0) itemStr += `      Taxable Value: ₹${i.taxable}\n`;
+      if (i.discount > 0) itemStr += `      Discount: ₹${i.discount}n`;
+      if (i.taxable > 0) itemStr += `      Taxable Value: ₹${i.taxable}n`;
 
       if (i.gstRate && i.gstRate.includes('IGST')) {
-        itemStr += `      IGST: ₹${i.tax} (${i.gstRate})\n`;
+        itemStr += `      IGST: ₹${i.tax} (${i.gstRate})n`;
       } else if (i.gstRate) {
         const halfTax = (parseFloat(i.tax) / 2).toFixed(2);
-        itemStr += `      CGST: ₹${halfTax} | SGST: ₹${halfTax}\n`;
+        itemStr += `      CGST: ₹${halfTax} | SGST: ₹${halfTax}n`;
       } else if (i.tax > 0) {
-        itemStr += `      Tax: ₹${i.tax}\n`;
+        itemStr += `      Tax: ₹${i.tax}n`;
       }
 
       itemStr += `      *Item Total: ₹${i.finalAmount}*`;
       return itemStr;
-    }).join('\n\n');
+    }).join('nn');
 
     let totalsText = ``;
-    totalsText += `      *Total Taxable Value:* ₹${totalTaxable}\n`;
+    totalsText += `      *Total Taxable Value:* ₹${totalTaxable}n`;
 
     if (estimate.igst > 0) {
-      totalsText += `      *IGST:* ₹${parseFloat(estimate.igst).toFixed(2)}\n`;
+      totalsText += `      *IGST:* ₹${parseFloat(estimate.igst).toFixed(2)}n`;
     } else {
-      if (estimate.cgst > 0) totalsText += `      *CGST:* ₹${parseFloat(estimate.cgst).toFixed(2)}\n`;
-      if (estimate.sgst > 0) totalsText += `      *SGST:* ₹${parseFloat(estimate.sgst).toFixed(2)}\n`;
+      if (estimate.cgst > 0) totalsText += `      *CGST:* ₹${parseFloat(estimate.cgst).toFixed(2)}n`;
+      if (estimate.sgst > 0) totalsText += `      *SGST:* ₹${parseFloat(estimate.sgst).toFixed(2)}n`;
     }
 
     if (estimate.discount > 0) {
-      totalsText += `      *Discount:* ₹${parseFloat(estimate.discount).toFixed(2)}\n`;
+      totalsText += `      *Discount:* ₹${parseFloat(estimate.discount).toFixed(2)}n`;
     }
 
-    const message = `✨ *PROFORMA INVOICE DETAILS* ✨\n\n`
-      + `Namo Gange Namaskar! 🙏\n\n`
-      + `Dear *${estimate.consignee_name || 'Client'}*,\n\n`
-      + `Thank you for choosing *International Health & Wellness Expo*. We are pleased to share the details of your Proforma Invoice.\n\n`
-      + `📄 *Invoice No:* ${estimate.est_no}\n`
-      + `📅 *Date:* ${dateStr}\n`
-      + `🏢 *Company:* ${estimate.consignee_name}\n`
-      + `📍 *Location:* ${estimate.city || 'N/A'}, ${estimate.state || 'N/A'}\n`
-      + `📝 *GSTIN:* ${estimate.gst_no || 'N/A'}\n\n`
-      + `📋 *ITEM DETAILS:*\n`
-      + `-------------------------------\n`
-      + `${itemsText}\n`
-      + `-------------------------------\n\n`
-      + `📊 *INVOICE SUMMARY:*\n`
-      + `${totalsText}\n`
-      + `💰 *GRAND TOTAL:* *₹${estimate.finalAmount}*\n\n`
-      + `If you have any queries or require further clarification, please feel free to reach out to us. We look forward to a successful collaboration! 🤝\n\n`
-      + `🌐 *Website:* https://www.ihwe.in\n`
-      + `📧 *Email:* info@ihwe.in\n`
-      + `📞 *Contact:* +91 9654900525\n\n`
-      + `Warm Regards,\n`
+    const message = `✨ *PROFORMA INVOICE DETAILS* ✨nn`
+      + `Namo Gange Namaskar! 🙏nn`
+      + `Dear *${estimate.consignee_name || 'Client'}*,nn`
+      + `Thank you for choosing *International Health & Wellness Expo*. We are pleased to share the details of your Proforma Invoice.nn`
+      + `📄 *Invoice No:* ${estimate.est_no}n`
+      + `📅 *Date:* ${dateStr}n`
+      + `🏢 *Company:* ${estimate.consignee_name}n`
+      + `📍 *Location:* ${estimate.city || 'N/A'}, ${estimate.state || 'N/A'}n`
+      + `📝 *GSTIN:* ${estimate.gst_no || 'N/A'}nn`
+      + `📋 *ITEM DETAILS:*n`
+      + `-------------------------------n`
+      + `${itemsText}n`
+      + `-------------------------------nn`
+      + `📊 *INVOICE SUMMARY:*n`
+      + `${totalsText}n`
+      + `💰 *GRAND TOTAL:* *₹${estimate.finalAmount}*nn`
+      + `If you have any queries or require further clarification, please feel free to reach out to us. We look forward to a successful collaboration! 🤝nn`
+      + `🌐 *Website:* https://www.ihwe.inn`
+      + `📧 *Email:* info@ihwe.inn`
+      + `📞 *Contact:* +91 9654900525nn`
+      + `Warm Regards,n`
       + `*Namo Gange Wellness Pvt. Ltd.* 🌿`;
 
     const result = await sendWhatsAppMessage(phone, message, estimate.consignee_name);
@@ -468,7 +475,7 @@ const sendEmailEstimate = async (req, res) => {
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${index + 1}</td>
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee;">
                     <div style="font-weight: bold; color: #1e293b; font-size: 14px;">${i.description}</div>
-                    ${i.subDesc ? `<div style="font-size: 12px; color: #64748b; margin-top: 4px;">${i.subDesc.replace(/\n/g, '<br>')}</div>` : ''}
+                    ${i.subDesc ? `<div style="font-size: 12px; color: #64748b; margin-top: 4px;">${i.subDesc.replace(/n/g, '<br>')}</div>` : ''}
                     <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">HSN/SAC: ${i.hsn || 'N/A'}</div>
                 </td>
                 <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${qty} ${i.unit || 'Nos'}</td>
