@@ -34,6 +34,8 @@ const estimateSchema = new mongoose.Schema(
     supply_date: { type: String },
     consignee_name: { type: String, required: true },
     consignee_addr: { type: String, required: true },
+    consignee_person: { type: String, default: "" },
+    consignee_phone: { type: String, default: "" },
     country: { type: String, required: true },
     state: { type: String, required: true },
     city: { type: String, required: true },
