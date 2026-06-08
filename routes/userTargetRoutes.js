@@ -8,6 +8,7 @@ router.get('/stats/dashboard', authToken, userTargetController.getDashboardStats
 router.get('/logs/recent', authToken, userTargetController.getRecentLogs);
 router.get('/logs/table', authToken, userTargetController.getTableLogs);
 router.get('/:username', authToken, userTargetController.getTargetByUsername);
+router.get('/:username/history', authToken, userTargetController.getTargetHistory);
 router.post('/', authToken, userTargetController.createOrUpdateTarget);
 router.delete('/:id', authToken, userTargetController.deleteTarget);
 

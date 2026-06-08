@@ -567,10 +567,26 @@ const getAchievementRevenue = async (req, res) => {
 
     // Date filtering
     const now = new Date();
-    if (period === 'current_month') {
+    if (period === 'today') {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (period === 'this_week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday start
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startOfWeek, $lte: endOfWeek };
+    } else if (period === 'this_month' || period === 'current_month') {
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       query.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
+    } else if (period === 'this_year') {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      query.createdAt = { $gte: startOfYear, $lte: endOfYear };
     } else if (period === 'previous_month') {
       const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
@@ -610,10 +626,30 @@ const getSalesLeaderboard = async (req, res) => {
     const query = { status: { $in: ['confirmed', 'paid', 'advance-paid'] } };
 
     const now = new Date();
-    if (period === 'current_month') {
-      query.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth(), 1), $lte: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) };
+    if (period === 'today') {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (period === 'this_week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday start
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+      query.createdAt = { $gte: startOfWeek, $lte: endOfWeek };
+    } else if (period === 'this_month' || period === 'current_month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      query.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
+    } else if (period === 'this_year') {
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+      query.createdAt = { $gte: startOfYear, $lte: endOfYear };
     } else if (period === 'previous_month') {
-      query.createdAt = { $gte: new Date(now.getFullYear(), now.getMonth() - 1, 1), $lte: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59) };
+      const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      query.createdAt = { $gte: startOfPrevMonth, $lte: endOfPrevMonth };
     }
 
     const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation amountPaid');
