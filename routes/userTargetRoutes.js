@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userTargetController = require('../controllers/userTargetController');
-const { authToken } = require('../middlewares/authToken');
+const { authToken } = require('../middleware/authToken');
 
 router.get('/', authToken, userTargetController.getAllTargets);
 router.get('/stats/dashboard', authToken, userTargetController.getDashboardStats);

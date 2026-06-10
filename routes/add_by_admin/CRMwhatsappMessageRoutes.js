@@ -6,7 +6,7 @@ const {
   updateMessage,
   deleteMessage,
 } = require("../../controllers/add_by_admin/CRMwhatsappMessageController.js");
-const upload = require("../../middlewares/upload.js");
+const upload = require("../../middleware/upload.js");
 
 const router = express.Router();
 

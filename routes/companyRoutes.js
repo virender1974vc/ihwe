@@ -2,7 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const uploadMiddleware = require("../middlewares/upload.js");
+const uploadMiddleware = require("../middleware/upload.js");
 const {
   addCompany,
   getCompanies,
