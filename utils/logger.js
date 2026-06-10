@@ -1,4 +1,4 @@
-const ActivityLog = require("../models/activity/activityLogModel");
+const ActivityLog = require('../models/misc/activityLogModel');
 const logActivity = async (req, action, module, details) => {
   try {
     const user_id = req.user?.id || req.user?._id;

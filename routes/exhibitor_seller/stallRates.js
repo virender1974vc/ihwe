@@ -1,0 +1,12 @@
+const express = require('express');
+const router = express.Router();
+const stallRateController = require('../../controllers/exhibitor_seller/stallRateController');
+
+router.get('/', stallRateController.getAllRates);
+router.get('/event/:eventId', stallRateController.getStoreRates);
+router.get('/find', stallRateController.getRate);
+router.post('/', stallRateController.addRate);
+router.put('/:id', stallRateController.updateRate);
+router.delete('/:id', stallRateController.deleteRate);
+
+module.exports = router;

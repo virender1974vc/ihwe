@@ -2,8 +2,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
-const ExhibitorRegistration = require('../models/ExhibitorRegistration');
-require('../models/Event');
+const ExhibitorRegistration = require('../models/exhibitor_seller/ExhibitorRegistration');
+require('../models/event_conference/Event');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
 

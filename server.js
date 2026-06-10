@@ -28,7 +28,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Webhook requires raw body, so define it before body parser
-app.use('/api/payment/webhook', require('./routes/payment'));
+app.use('/api/payment/webhook', require('./routes/finance/payment'));
 
 // Middleware setup
 app.use(cors());
@@ -73,13 +73,13 @@ app.use('/temp', express.static('temp', {
 }));
 
 // SEO file serving middleware
-const sitemapRoutes = require("./routes/sitemap");
+const sitemapRoutes = require('./routes/misc/sitemap');
 app.use("/sitemap.xml", sitemapRoutes);
 app.use("/sitemap/xml", sitemapRoutes);
 
 app.use(async (req, res, next) => {
     try {
-        const SeoFile = require("./models/SeoFile");
+        const SeoFile = require('./models/cms/SeoFile');
         const filename = req.path.substring(1);
         if (filename && !filename.includes("/")) {
             let seoFile = await SeoFile.findOne({ originalName: filename });
@@ -130,7 +130,7 @@ app.use((err, req, res, next) => {
 
 // ── Initialize Server & Socket.io ──────────────────────────────────────────────
 const httpServer = http.createServer(app);
-const { initSocket } = require('./services/socketService');
+const { initSocket } = require('./services/misc/socketService');
 initSocket(httpServer);
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
@@ -140,6 +140,6 @@ initPaymentWarningCron();
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT} with Socket.io`);
     // Start IMAP email reply poller
-    const { startImapPoller } = require("./services/imapPollerService");
+    const { startImapPoller } = require('./services/misc/imapPollerService');
     startImapPoller();
 });

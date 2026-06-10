@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const QRCode = require('qrcode');
-const EmailLog = require('../models/EmailLog');
+const EmailLog = require('../models/crm/EmailLog');
 const whatsapp = require('./whatsapp');
 const { getResponsiveVisitorAlertTemplate } = require('./emailTemplates/responsiveVisitorAlert');
 const { getBuyerInterestAlertTemplate } = require('./emailTemplates/buyerInterestAlert');
@@ -227,7 +227,7 @@ class EmailService {
 
     async getTemplate(formType) {
         try {
-            const MessageTemplate = require('../models/MessageTemplate');
+            const MessageTemplate = require('../models/crm/MessageTemplate');
             return await MessageTemplate.findOne({ formType });
         } catch (error) {
             console.error('Error fetching template for ' + formType + ':', error);
@@ -1051,7 +1051,7 @@ class EmailService {
         let eventName = '9th Edition of International Health & Wellness Expo 2026 (IHWE Global Edition)';
         try {
             if (registration.eventId) {
-                const Event = require('../models/Event');
+                const Event = require('../models/event_conference/Event');
                 const event = await Event.findById(registration.eventId).select('name');
                 if (event?.name) eventName = event.name;
             }
@@ -1150,7 +1150,7 @@ class EmailService {
         const path = require('path');
         let logoUrl = '';
         try {
-            const Settings = require('../models/Settings');
+            const Settings = require('../models/admin_settings/Settings');
             const settings = await Settings.findOne().lean();
             if (settings) {
                 const logoPath = settings.emailLogo || settings.logo;

@@ -1,0 +1,215 @@
+const BuyerRegistration = require('../../models/exhibitor_seller/BuyerRegistration');
+const emailService = require('../../utils/emailService');
+const whatsapp = require('../../utils/whatsapp');
+const Razorpay = require('razorpay');
+
+/**
+ * Service to handle Buyer Registration operations.
+ */
+class BuyerRegistrationService {
+    constructor() {
+        this.razorpay = new Razorpay({
+            key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_placeholder',
+            key_secret: process.env.RAZORPAY_KEY_SECRET || 'secret_placeholder'
+        });
+    }
+
+    /**
+     * Create a new buyer registration.
+     * @param {Object} data - Registration data.
+     * @returns {Promise<Object>} - Created registration.
+     */
+    async createRegistration(data) {
+        // Validation (simplified for now, frontend handles most)
+        const required = ['companyName', 'emailAddress', 'mobileNumber', 'registrationCategory'];
+        for (const field of required) {
+            if (!data[field]) throw { status: 400, message: `${field} is required` };
+        }
+
+        // Handle Array fields from FormData (parsing JSON strings if needed)
+        const arrayFields = ['secondaryProductCategories', 'preferredSupplierRegion', 'preferredState', 'preferredSupplierType', 'requiredCertifications', 'preferredPaymentMethods'];
+        arrayFields.forEach(field => {
+            if (data[field] && typeof data[field] === 'string') {
+                try {
+                    data[field] = JSON.parse(data[field]);
+                } catch (e) {
+                    // If not valid JSON, treat as comma-separated or keep as is if it fails
+                    if (data[field].includes(',')) data[field] = data[field].split(',').map(s => s.trim());
+                }
+            }
+        });
+
+        // 1. Calculate Buyer Tag (CRM Logic)
+        data.buyerTag = this.calculateBuyerTag(data);
+
+        // 2. Generate registrationId & transactionId
+        const year = new Date().getFullYear();
+        const randBuyer = Math.floor(100 + Math.random() * 899); // 3-digit random for a suffix
+        const randTxn = Math.floor(1000 + Math.random() * 8999); // 4-digit random for txn
+
+        if (!data.registrationId) {
+            data.registrationId = `IHWE/${year}/BYR-${randBuyer}`;
+        }
+
+        if (!data.transactionId) {
+            data.transactionId = `IHWE/${year}/TXN-${randTxn}`;
+        }
+
+        // 3. Ensure registrationFee is set (or default to 0)
+        if (!data.registrationFee) {
+            data.registrationFee = "0"; // Default or lookup based on category
+        }
+
+        const newRegistration = new BuyerRegistration(data);
+        const saved = await newRegistration.save();
+
+        // 2. Send Notifications if payment didn't fail
+        if (saved.paymentStatus !== 'Failed') {
+            this.sendNotifications(saved).catch(err => {
+                console.error("Error sending buyer notifications:", err.message);
+            });
+        }
+
+        return saved;
+    }
+
+    /**
+     * Calculate CRM Tag based on Budget (if applicable), Timeline, and Priority
+     */
+    calculateBuyerTag(data) {
+        let score = 0;
+
+        // Timeline Score
+        const timeline = data.purchaseTimeline || '';
+        if (timeline.includes('Immediate')) score += 3;
+        else if (timeline.includes('1–3')) score += 2;
+        else if (timeline.includes('3–6')) score += 1;
+
+        // Priority Score
+        const priority = data.meetingPriorityLevel || '';
+        if (priority.includes('High')) score += 3;
+        else if (priority.includes('Medium')) score += 2;
+        else if (priority.includes('General')) score += 1;
+
+        // Budget Score
+        const budget = data.budgetRange || '';
+        if (budget.includes('> 50') || budget.includes('1 - 5') || budget.includes('Core')) score += 3;
+        else if (budget.includes('10 - 25') || budget.includes('25 - 50')) score += 2;
+        else score += 1;
+
+        if (score >= 7) return 'Hot';
+        if (score >= 4) return 'Warm';
+        return 'Cold';
+    }
+
+    /**
+     * Send Email and WhatsApp notifications
+     */
+    async sendNotifications(saved) {
+        const notificationData = {
+            name: saved.companyName,
+            company: saved.companyName,
+            email: saved.emailAddress,
+            phone: saved.mobileNumber,
+            city: saved.city,
+            country: saved.country,
+            category: saved.registrationCategory,
+            tag: saved.buyerTag,
+            registrationId: saved.registrationId,
+        };
+
+        // 1. Send Professional Confirmation to User (with QR)
+        emailService.sendVisitorConfirmationOnly(saved, 'buyer-registration').catch(err => {
+            console.error("User email fail:", err.message);
+        });
+
+        // 2. Send Detailed Alert to Admin
+        emailService.sendDetailedBuyerNotification(saved).catch(err => {
+            console.error("Admin notification fail:", err.message);
+        });
+    }
+
+    /**
+     * Create Razorpay Order
+     */
+    async createOrder(amount, currency = 'INR') {
+        const options = {
+            amount: amount * 100,
+            currency,
+            receipt: `buyer_reg_${Date.now()}`
+        };
+        return await this.razorpay.orders.create(options);
+    }
+
+    /**
+     * Verifies Payment and updates registration
+     */
+    async verifyPayment(regId, paymentDetails) {
+        const registration = await BuyerRegistration.findById(regId);
+        if (!registration) throw { status: 404, message: 'Registration not found' };
+
+        registration.paymentStatus = 'Completed';
+        registration.razorpayPaymentId = paymentDetails.razorpay_payment_id;
+        registration.razorpaySignature = paymentDetails.razorpay_signature;
+
+        return await registration.save();
+    }
+
+    /**
+     * Get all buyer registrations.
+     */
+    async getAllRegistrations() {
+        return await BuyerRegistration.find().sort({ createdAt: -1 });
+    }
+
+    async getRegistrationById(id) {
+        const registration = await BuyerRegistration.findById(id);
+        if (!registration) throw { status: 404, message: 'Registration not found' };
+        return registration;
+    }
+
+    async updateRegistration(id, data) {
+        const updated = await BuyerRegistration.findByIdAndUpdate(id, data, { returnDocument: 'after' });
+        if (!updated) throw { status: 404, message: 'Registration not found' };
+        return updated;
+    }
+
+    async deleteRegistration(id) {
+        const registration = await BuyerRegistration.findById(id);
+        if (!registration) throw { status: 404, message: 'Registration not found' };
+        await registration.deleteOne();
+    }
+
+    /**
+     * Login for Buyer Dashboard
+     * @param {string} emailAddress 
+     * @param {string} registrationId 
+     */
+    async login(emailAddress, registrationId) {
+        if (!emailAddress || !registrationId) {
+            throw { status: 400, message: 'Email and Registration ID are required' };
+        }
+
+        const buyer = await BuyerRegistration.findOne({
+            emailAddress: emailAddress.trim().toLowerCase(),
+            registrationId: registrationId.trim()
+        });
+
+        if (!buyer) {
+            throw { status: 404, message: 'Invalid credentials or registration not found' };
+        }
+
+        return buyer;
+    }
+
+    /**
+     * Get global registration stats
+     */
+    async getStats() {
+        const totalBuyers = await BuyerRegistration.countDocuments();
+        const completedPayments = await BuyerRegistration.countDocuments({ paymentStatus: 'Completed' });
+        return { totalBuyers, completedPayments };
+    }
+}
+
+module.exports = new BuyerRegistrationService();

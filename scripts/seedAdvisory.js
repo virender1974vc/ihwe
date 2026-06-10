@@ -1,7 +1,7 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
-const AdvisoryMember = require('../models/AdvisoryMember');
+const AdvisoryMember = require('../models/misc/AdvisoryMember');
 
 const members = [
     {

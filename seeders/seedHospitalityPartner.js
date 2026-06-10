@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const HospitalityPartner = require('../models/HospitalityPartner');
+const HospitalityPartner = require('../models/exhibitor_seller/HospitalityPartner');
 
 const defaultData = {
     hero: {

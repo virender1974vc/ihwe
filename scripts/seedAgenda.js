@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
-const ConferenceAgenda = require("../models/ConferenceAgenda");
+const ConferenceAgenda = require('../models/event_conference/ConferenceAgenda');
 
 const agendaData = [
   {

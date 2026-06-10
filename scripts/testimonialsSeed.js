@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const ConferenceTestimonial = require("../models/ConferenceTestimonial");
+const ConferenceTestimonial = require('../models/cms/ConferenceTestimonial');
 require("dotenv").config();
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/arogyasangosti";

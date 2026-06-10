@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
-const Role = require('../models/Role');
+const Role = require('../models/admin_settings/Role');
 
 const roles = [
     { name: 'Super Admin', description: 'Full system access' },

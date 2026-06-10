@@ -2,7 +2,7 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
-const Settings = require('../models/Settings');
+const Settings = require('../models/admin_settings/Settings');
 
 const TEMP_DIR = path.join(__dirname, '..', 'temp');
 if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -177,7 +177,7 @@ class PDFGenerator {
                 const colW = (pageW - 100) / 2;
                 const lx = 40, rx = 60 + colW;
 
-                const Settings = require('../models/Settings');
+                const Settings = require('../models/admin_settings/Settings');
                 const settings = await Settings.findOne();
 
                 // Left box - IHWE / FROM
@@ -386,7 +386,7 @@ class PDFGenerator {
                 const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
                 const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
                 // --- Generate Receipt Number ---
-                const Counter = require('../models/visitor/CounterModel');
+                const Counter = require('../models/cms/CounterModel');
                 const year = new Date().getFullYear();
                 let rNo = registration.customReceiptNo;
                 if (!rNo) {

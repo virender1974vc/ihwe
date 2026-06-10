@@ -5,7 +5,7 @@
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
 const mongoose = require('mongoose');
-const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const ExhibitorRegistration = require('../models/exhibitor_seller/ExhibitorRegistration');
 
 async function fixInstallments() {
     await mongoose.connect(process.env.MONGO_URI_MAIN || process.env.MONGO_URI);

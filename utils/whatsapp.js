@@ -1,4 +1,4 @@
-const WhatsAppLog = require('../models/WhatsAppLog');
+const WhatsAppLog = require('../models/crm/WhatsAppLog');
 
 const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) => {
     let status = 'failed';

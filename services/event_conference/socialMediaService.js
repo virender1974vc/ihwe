@@ -1,0 +1,39 @@
+const SocialMedia = require('../../models/event_conference/SocialMedia');
+
+/**
+ * Service to handle Social Media operations.
+ */
+class SocialMediaService {
+    /**
+     * Get social media links.
+     */
+    async getSocialMedia() {
+        let socialMedia = await SocialMedia.findOne();
+        if (!socialMedia) {
+            return {
+                facebook: "",
+                instagram: "",
+                twitter: "",
+                linkedin: "",
+                youtube: "",
+                whatsappNumber: "",
+                whatsappMessage: "",
+                callNumber: ""
+            };
+        }
+        return socialMedia;
+    }
+
+    /**
+     * Update social media links.
+     */
+    async updateSocialMedia(updateData) {
+        return await SocialMedia.findOneAndUpdate(
+            {},
+            updateData,
+            { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
+        );
+    }
+}
+
+module.exports = new SocialMediaService();

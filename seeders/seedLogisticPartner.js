@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const LogisticPartner = require('../models/LogisticPartner');
+const LogisticPartner = require('../models/exhibitor_seller/LogisticPartner');
 
 const defaultData = {
     hero: {

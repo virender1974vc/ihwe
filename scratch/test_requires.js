@@ -8,7 +8,7 @@ try {
 
 try {
     console.log('Testing ExhibitorRegistration model...');
-    require('../models/ExhibitorRegistration');
+    require('../models/exhibitor_seller/ExhibitorRegistration');
     console.log('✅ ExhibitorRegistration model found');
 } catch (e) {
     console.log('❌ ExhibitorRegistration model NOT found:', e.message);

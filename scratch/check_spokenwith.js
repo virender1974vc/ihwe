@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const ExhibitorRegistration = require('../models/exhibitor_seller/ExhibitorRegistration');
 require('dotenv').config();
 
 async function run() {

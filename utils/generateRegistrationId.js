@@ -1,4 +1,4 @@
-const Counter = require("../models/visitor/CounterModel.js");
+const Counter = require('../models/cms/CounterModel');
 
 const generateRegistrationId = async (type) => {
   const prefixMap = {

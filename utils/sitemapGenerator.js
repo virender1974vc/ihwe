@@ -1,8 +1,8 @@
 const { SitemapStream, streamToPromise } = require('sitemap');
 const { Readable } = require('stream');
-const Blog = require('../models/Blog');
-const CustomPage = require('../models/CustomPage');
-const ServiceDetail = require('../models/ServiceDetail');
+const Blog = require('../models/cms/Blog');
+const CustomPage = require('../models/misc/CustomPage');
+const ServiceDetail = require('../models/misc/ServiceDetail');
 
 const generateSitemap = async (hostname = 'https://ihwe.in') => {
     // Static routes matching active pages in pagesList.js

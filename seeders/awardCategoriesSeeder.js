@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const AwardCategory = require('../models/AwardCategory');
+const AwardCategory = require('../models/misc/AwardCategory');
 
 const defaultCategories = [
   {

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const ConferenceTrack = require('../models/ConferenceTrack');
+const ConferenceTrack = require('../models/event_conference/ConferenceTrack');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 

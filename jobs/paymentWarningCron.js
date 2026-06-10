@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const ExhibitorRegistration = require('../models/exhibitor_seller/ExhibitorRegistration');
 const emailService = require('../utils/emailService');
 const whatsappService = require('../utils/whatsappService');
 

@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const MessageTemplate = require('../models/MessageTemplate');
+const MessageTemplate = require('../models/crm/MessageTemplate');
 const path = require('path');
 
 dotenv.config({ path: path.join(__dirname, '../.env') });

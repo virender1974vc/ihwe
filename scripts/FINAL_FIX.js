@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const ExhibitorRegistration = require('../models/ExhibitorRegistration');
-const Event = require('../models/Event');
+const ExhibitorRegistration = require('../models/exhibitor_seller/ExhibitorRegistration');
+const Event = require('../models/event_conference/Event');
 require('dotenv').config();
 async function finalFix() {
     try {
