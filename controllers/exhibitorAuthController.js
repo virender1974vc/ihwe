@@ -12,10 +12,10 @@ class ExhibitorAuthController {
             if (!email || !password)
                 return res.status(400).json({ success: false, message: 'Email and password are required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 
-                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+            const exhibitor = await ExhibitorRegistration.findOne({
+                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') }
             }).sort({ createdAt: -1 })
-              .select('+password');
+                .select('+password');
 
             if (!exhibitor)
                 return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -86,8 +86,8 @@ class ExhibitorAuthController {
             if (!email)
                 return res.status(400).json({ success: false, message: 'Email address is required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 
-                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+            const exhibitor = await ExhibitorRegistration.findOne({
+                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') }
             }).sort({ createdAt: -1 });
 
             if (!exhibitor)
@@ -155,10 +155,18 @@ class ExhibitorAuthController {
             const email = req.user.email;
             const mobile = req.user.mobile;
 
+            // Normalize mobile to handle leading 0s
+            let strippedMobile = mobile;
+            if (mobile && mobile.startsWith('0')) {
+                strippedMobile = mobile.substring(1);
+            }
+
             const rawRegistrations = await ExhibitorRegistration.find({
                 $or: [
                     { 'contact1.email': email },
-                    { 'contact1.mobile': mobile }
+                    { 'contact1.mobile': mobile },
+                    { 'contact1.mobile': strippedMobile },
+                    { 'contact1.mobile': '0' + strippedMobile }
                 ]
             })
                 .populate('eventId', 'name date location venue startDate endDate')
@@ -176,11 +184,22 @@ class ExhibitorAuthController {
                 selectedRegistration = registrations[0];
             }
 
+            let plainReg = selectedRegistration.toObject ? selectedRegistration.toObject() : Object.assign({}, selectedRegistration);
+
+            let bestRMVal = plainReg.filledBy;
+            if (!bestRMVal || bestRMVal === 'User') {
+                const regWithRM = registrations.find(r => r.filledBy && r.filledBy !== 'User');
+                if (regWithRM) {
+                    bestRMVal = regWithRM.filledBy;
+                    plainReg.filledBy = bestRMVal;
+                }
+            }
+
             // Resolve filledByFullName from User DB
-            if (selectedRegistration && selectedRegistration.filledBy && selectedRegistration.filledBy !== 'User') {
+            if (bestRMVal && bestRMVal !== 'User') {
                 try {
                     const User = require('../models/User');
-                    const filledByVal = (selectedRegistration.filledBy || '').trim();
+                    const filledByVal = bestRMVal.trim();
                     let adminUser = await User.findOne({ username: filledByVal }).select('fullName username').lean();
                     if (!adminUser) {
                         adminUser = await User.findOne({ username: { $regex: new RegExp(`^${filledByVal}`, 'i') } }).select('fullName username').lean();
@@ -188,17 +207,60 @@ class ExhibitorAuthController {
                     if (!adminUser) {
                         adminUser = await User.findOne({ fullName: { $regex: new RegExp(filledByVal, 'i') } }).select('fullName username').lean();
                     }
-                    const plain = selectedRegistration.toObject ? selectedRegistration.toObject() : Object.assign({}, selectedRegistration);
-                    plain.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
-                    selectedRegistration = plain;
+                    plainReg.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
+                    // Ensure the frontend RM fetching logic works even if it uses filledBy
+                    if (adminUser?.username) {
+                        plainReg.filledBy = adminUser.username;
+                    }
                 } catch (err) {
                     console.error('filledByFullName lookup error:', err);
                 }
             }
+            // Fetch Estimate & Invoice
+            let estimateDoc = null;
+            let invoiceDoc = null;
+            if (registrations && registrations.length > 0) {
+                try {
+                    const Estimate = require('../models/Estimate');
+                    const Invoice = require('../models/Invoice');
 
+                    const companyIds = registrations.map(r => r._id.toString());
+
+                    // Fetch latest estimate for any of this user's registrations
+                    estimateDoc = await Estimate.findOne({ companyId: { $in: companyIds } })
+                        .sort({ added: -1 }).lean();
+
+                    // Fetch latest invoice for any of this user's registrations
+                    invoiceDoc = await Invoice.findOne({ companyId: { $in: companyIds } })
+                        .sort({ added: -1 }).lean();
+                } catch (err) {
+                    console.error('Error fetching Estimate/Invoice:', err);
+                }
+            }
+            let mappedEstimate = null;
+            if (estimateDoc) {
+                mappedEstimate = {
+                    id: estimateDoc._id,
+                    estimateNo: estimateDoc.est_no,
+                    date: estimateDoc.added
+                };
+            }
+
+            let mappedInvoice = null;
+            if (invoiceDoc) {
+                mappedInvoice = {
+                    id: invoiceDoc._id,
+                    invoiceNo: invoiceDoc.inv_no,
+                    date: invoiceDoc.added
+                };
+            }
             res.status(200).json({
                 success: true,
-                data: selectedRegistration,
+                data: {
+                    ...plainReg,
+                    estimate: mappedEstimate,
+                    invoice: mappedInvoice
+                },
                 allRegistrations: registrations
             });
         } catch (error) {
@@ -312,12 +374,12 @@ class ExhibitorAuthController {
                 return res.status(403).json({ success: false, message: 'Access denied.' });
 
             const { sellerDetails } = req.body;
-            
+
             // Check for required bank info
             if (!sellerDetails || !sellerDetails.bankName || !sellerDetails.accountNumber || !sellerDetails.ifscCode) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Bank Name, Account Number, and IFSC Code are required' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bank Name, Account Number, and IFSC Code are required'
                 });
             }
 
@@ -363,7 +425,7 @@ class ExhibitorAuthController {
         try {
             if (req.user.role !== 'exhibitor')
                 return res.status(403).json({ success: false, message: 'Access denied.' });
-            
+
             const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id) ? req.query.id : req.user.id;
             const exhibitor = await ExhibitorRegistration.findById(targetId).populate('eventId', 'startDate endDate');
             if (!exhibitor)
@@ -402,7 +464,7 @@ class ExhibitorAuthController {
                 const eventStart = new Date(exhibitor.eventId.startDate);
                 const setupStart = new Date(eventStart);
                 setupStart.setDate(setupStart.getDate() - 2); // Assume setup is 2 days prior
-                
+
                 // Only show if the event is still in the future
                 if (eventStart > new Date()) {
                     updates.push({ badge: 'New', title: 'Exhibition Dates Approaching', desc: `The event starts on ${eventStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Prepare your team!`, date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
