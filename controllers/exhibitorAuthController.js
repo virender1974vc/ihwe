@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
+const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -498,6 +499,36 @@ class ExhibitorAuthController {
                     limit,
                     totalPages
                 }
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async requestPass(req, res) {
+        try {
+            const exhibitorId = req.exhibitor.id; // from protectExhibitor middleware
+            const { passType, quantity, vehicles, personnel } = req.body;
+
+            if (!passType || !quantity) {
+                return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
+            }
+
+            // Create new pass request
+            const newRequest = new ExhibitorPassRequest({
+                exhibitorId,
+                passType,
+                quantity,
+                vehicles: passType === 'vehicle' ? vehicles : undefined,
+                personnel: passType !== 'vehicle' ? personnel : undefined
+            });
+
+            await newRequest.save();
+
+            res.status(201).json({
+                success: true,
+                message: `${passType} pass request submitted successfully.`,
+                data: newRequest
             });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
