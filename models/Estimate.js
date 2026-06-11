@@ -5,6 +5,7 @@ const estimateItemSchema = new mongoose.Schema({
   hsn: { type: String, required: true, default: "998596" },
   qty: { type: Number, required: true },
   size: { type: Number, required: true },
+  area: { type: String, default: "" },
   unit: { type: String, required: true },
   depth: { type: String, default: "" },
   rate: { type: Number, required: true },
