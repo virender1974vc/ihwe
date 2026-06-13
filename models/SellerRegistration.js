@@ -90,6 +90,7 @@ const sellerRegistrationSchema = new mongoose.Schema(
 
     // CRM / System Internal Fields
     registrationId: { type: String, unique: true, sparse: true },
+    qrCode: { type: String },
     sellerTag: { type: String, enum: ['Hot', 'Warm', 'Cold'], default: 'Cold' },
     otpVerifiedEmail: { type: Boolean, default: false },
     otpVerifiedMobile: { type: Boolean, default: false },

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const exhibitorPassRequestSchema = new mongoose.Schema({
     exhibitorId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Exhibitor',
+        ref: 'ExhibitorRegistration',
         required: true
     },
     passType: {
@@ -32,10 +32,6 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
         phone: { type: String, trim: true },
         gender: { type: String, enum: ['male', 'female', 'other'] }
     }],
-    createdAt: {
-        type: Date,
-        default: Date.now
-    }
-});
+}, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorPassRequest', exhibitorPassRequestSchema);
