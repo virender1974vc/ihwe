@@ -2,6 +2,7 @@ const BuyerRegistration = require('../../models/exhibitor_seller/BuyerRegistrati
 const emailService = require('../../utils/emailService');
 const whatsapp = require('../../utils/whatsapp');
 const Razorpay = require('razorpay');
+const qrcode = require('qrcode');
 
 /**
  * Service to handle Buyer Registration operations.
@@ -58,6 +59,12 @@ class BuyerRegistrationService {
         // 3. Ensure registrationFee is set (or default to 0)
         if (!data.registrationFee) {
             data.registrationFee = "0"; // Default or lookup based on category
+        }
+        try {
+            const qrPayload = JSON.stringify({ registrationId: data.registrationId });
+            data.qrCode = await qrcode.toDataURL(qrPayload);
+        } catch (err) {
+            console.error("Failed to generate QR code for buyer", err);
         }
 
         const newRegistration = new BuyerRegistration(data);

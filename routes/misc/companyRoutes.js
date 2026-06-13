@@ -45,6 +45,7 @@ router.post("/", addCompany);
 router.get("/", getCompanies);
 router.get("/achievement-revenue", require('../../controllers/misc/companyController').getAchievementRevenue);
 router.get("/leaderboard", require('../../controllers/misc/companyController').getSalesLeaderboard);
+router.get("/lookup/:id", require("../../controllers/misc/companyController.js").lookupCompanyOrExhibitor);
 router.get("/:id", getCompanyById);
 router.put("/:id", updateCompany);
 router.delete("/:id", deleteCompany);

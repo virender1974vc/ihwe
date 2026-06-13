@@ -187,6 +187,29 @@ const getCompanyById = async (req, res) => {
   }
 };
 
+// ➤ Lookup Company or Exhibitor Registration by ID (to avoid frontend 404 fallback errors)
+const lookupCompanyOrExhibitor = async (req, res) => {
+  try {
+    let client = await Company.findById(req.params.id);
+    if (client) {
+      return res.status(200).json({ ...client.toObject(), _source: 'company' });
+    }
+
+    const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+    client = await ExhibitorRegistration.findById(req.params.id);
+    if (client) {
+      return res.status(200).json({ ...client.toObject(), _source: 'exhibitor' });
+    }
+
+    return res.status(404).json({ message: "Client not found" });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching client",
+      error: error.message,
+    });
+  }
+};
+
 // ➤ Update company
 const updateCompany = async (req, res) => {
   try {
@@ -693,6 +716,7 @@ module.exports = {
   addCompany,
   getCompanies,
   getCompanyById,
+  lookupCompanyOrExhibitor,
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,

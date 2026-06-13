@@ -248,11 +248,12 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     documentStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
     paymentVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
     bankVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
-    specialDocuments: [{
+  specialDocuments: [{
         label: String,
         url: String,
         uploadedAt: { type: Date, default: Date.now }
-    }]
+    }],
+    expoPushTokens: [{ type: String }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

@@ -136,6 +136,8 @@ initSocket(httpServer);
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
 initPaymentWarningCron();
+const { initReminderCron } = require('./jobs/reminderCron');
+initReminderCron();
 
 httpServer.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT} with Socket.io`);

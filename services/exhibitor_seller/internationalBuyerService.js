@@ -1,6 +1,7 @@
 const InternationalBuyer = require('../../models/exhibitor_seller/InternationalBuyer');
 const emailService = require('../../utils/emailService');
 const whatsapp = require('../../utils/whatsapp');
+const qrcode = require('qrcode');
 
 class InternationalBuyerService {
     async getAllRegistrations() {
@@ -15,10 +16,23 @@ class InternationalBuyerService {
         // Generate a unique registration ID
         const count = await InternationalBuyer.countDocuments();
         const registrationId = `INTL-BUY-${2026}-${(count + 1).toString().padStart(4, '0')}`;
-        
+
+        let qrCodeDataURI = '';
+        try {
+            qrCodeDataURI = await qrcode.toDataURL(registrationId, {
+                errorCorrectionLevel: 'M',
+                margin: 2,
+                width: 200,
+                color: { dark: '#000000', light: '#ffffff' }
+            });
+        } catch (err) {
+            console.error("QR Code Generation failed:", err.message);
+        }
+
         const registration = new InternationalBuyer({
             ...data,
-            registrationId
+            registrationId,
+            qrCode: qrCodeDataURI
         });
         const saved = await registration.save();
 

@@ -138,6 +138,7 @@ const internationalBuyerSchema = new mongoose.Schema(
       interested: { type: String, enum: ['Yes', 'No'], default: 'No' }
     },
 
+    qrCode: { type: String },
     registrationId: { type: String, unique: true, sparse: true },
     paymentStatus: { type: String, enum: ['Pending', 'Completed', 'Failed'], default: 'Pending' }
   },

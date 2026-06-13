@@ -180,4 +180,11 @@ router.use('/distinguished-speakers', require('./event_conference/distinguishedS
 router.use('/marketing-materials', require('./cms/marketingMaterialRoutes'));
 router.use('/user-targets', require('./crm/userTargetRoutes'));
 
+// Mobile app control
+router.use('/api/exhibitor-leads', require('./exhibitor_seller/exhibitorLeadCaptureRoutes'));
+router.use('/api/exhibitor-feedback', require('./exhibitor_seller/exhibitorFeedbackRoutes'));
+router.use('/api/exhibitor-pass-requests', require('./exhibitor_seller/exhibitorPassRequestRoutes'));
+router.use('/api/exhibitor-pass-config', require('./exhibitor_seller/exhibitorPassConfigRoutes'));
+router.use('/api/reminders', require('./reminderRoutes'));
+
 module.exports = router;
