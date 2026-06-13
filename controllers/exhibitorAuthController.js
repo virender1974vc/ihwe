@@ -507,7 +507,7 @@ class ExhibitorAuthController {
 
     async requestPass(req, res) {
         try {
-            const exhibitorId = req.exhibitor.id; // from protectExhibitor middleware
+            const exhibitorId = req.user.id; // from protectExhibitor middleware
             const { passType, quantity, vehicles, personnel } = req.body;
 
             if (!passType || !quantity) {
