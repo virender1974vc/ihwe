@@ -25,6 +25,11 @@ const exhibitorLeadCaptureSchema = new mongoose.Schema({
     country: { type: String, trim: true },
     interest: { type: String, trim: true },
     notes: { type: String, trim: true },
+    temperature: {
+        type: String,
+        enum: ['Hot', 'Warm', 'Cold', 'Uncategorized'],
+        default: 'Uncategorized'
+    },
     rawPayload: mongoose.Schema.Types.Mixed,
     scannedAt: { type: Date, default: Date.now }
 }, { timestamps: true });

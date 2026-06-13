@@ -442,10 +442,13 @@ app.use("/api/conference-tracks", conferenceTrackRoutes);
 app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
 app.use("/api/marketing-materials", require('./routes/marketingMaterialRoutes'));
 app.use("/api/user-targets", require("./routes/userTargetRoutes"));
+app.use("/api/reminders", require("./routes/reminderRoutes"));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
 initPaymentWarningCron();
+const { initReminderCron } = require('./jobs/reminderCron');
+initReminderCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);

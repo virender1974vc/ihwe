@@ -3,6 +3,7 @@ const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
 const path = require('path');
+const qrcode = require('qrcode');
 
 class ExhibitorRegistrationService {
     async getAllRegistrations() {
@@ -322,6 +323,14 @@ class ExhibitorRegistrationService {
             'participation.stallNo': data.participation?.stallNo,
             status: { $in: ['pending', 'payment-failed'] }
         });
+        try {
+            if (data.registrationId) {
+                const qrPayload = JSON.stringify({ registrationId: data.registrationId });
+                data.qrCode = await qrcode.toDataURL(qrPayload);
+            }
+        } catch (err) {
+            console.error("Failed to generate QR code for exhibitor", err);
+        }
 
         let saved;
         if (duplicate) {
@@ -407,7 +416,7 @@ class ExhibitorRegistrationService {
             try {
                 const Company = require('../models/Company');
                 const adminName = data.spokenWith || data.filledByFullName || 'Website Direct Booking';
-                
+
                 const newCompanyData = {
                     companyName: data.exhibitorName || 'Unknown Company',
                     email: data.contact1?.email || 'N/A', // Required field
@@ -478,14 +487,14 @@ class ExhibitorRegistrationService {
                 const Estimate = require('../models/Estimate');
                 const nextEstNo = await Estimate.generateNextEstimateNo();
 
-                
+
                 let parsedParticipation = data.participation;
                 if (typeof parsedParticipation === 'string') {
-                    try { parsedParticipation = JSON.parse(parsedParticipation); } catch (e) {}
+                    try { parsedParticipation = JSON.parse(parsedParticipation); } catch (e) { }
                 }
                 let parsedFinance = data.financeBreakdown;
                 if (typeof parsedFinance === 'string') {
-                    try { parsedFinance = JSON.parse(parsedFinance); } catch (e) {}
+                    try { parsedFinance = JSON.parse(parsedFinance); } catch (e) { }
                 }
 
                 const estData = {
@@ -508,7 +517,7 @@ class ExhibitorRegistrationService {
                     const rate = Number(parsedParticipation.rate) || 0;
                     const size = Number(parsedParticipation.stallSize) || 0;
                     const baseAmount = rate * size;
-                    
+
                     estData.items.push({
                         description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
                         hsn: "998596",
@@ -525,7 +534,7 @@ class ExhibitorRegistrationService {
                         finalAmount: Number(parsedFinance?.netPayable) || 0,
                     });
                 }
-                
+
                 if (estData.items.length > 0) {
                     await Estimate.create(estData);
                 }
