@@ -176,8 +176,15 @@ const getCompanies = async (req, res) => {
 // ➤ Get single company
 const getCompanyById = async (req, res) => {
   try {
-    const company = await Company.findById(req.params.id);
-    if (!company) return res.status(404).json({ message: "Company not found" });
+    let company = await Company.findById(req.params.id);
+    if (!company) {
+      const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+      company = await ExhibitorRegistration.findById(req.params.id);
+      if (company) {
+        return res.status(200).json({ ...company.toObject(), _source: 'exhibitorRegistration' });
+      }
+      return res.status(404).json({ message: "Company not found" });
+    }
     res.status(200).json(company);
   } catch (error) {
     res.status(500).json({
@@ -265,7 +272,7 @@ const updateCompany = async (req, res) => {
             designation: c.designation,
             mobile: c.mobile,
             alternateNo: c.alternate,
-            photo: c.photo
+            photoUrl: c.photo
           } : null;
 
           if (updated.contacts[0]) payload.contact1 = mapContact(updated.contacts[0]);

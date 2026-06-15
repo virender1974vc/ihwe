@@ -267,10 +267,20 @@ const getAllEstimates = async (req, res) => {
 // Get by ID
 const getEstimateById = async (req, res) => {
   try {
-    const estimate = await Estimate.findById(req.params.id);
+    const estimate = await Estimate.findById(req.params.id).lean();
 
     if (!estimate)
       return res.status(404).json({ message: "Estimate not found" });
+
+    if (estimate.companyId) {
+      let company = await Company.findById(estimate.companyId).lean();
+      if (!company) {
+        company = await ExhibitorRegistration.findById(estimate.companyId).lean();
+      }
+      if (company) {
+        estimate.exhibitor = company;
+      }
+    }
 
     res.status(200).json(estimate);
   } catch (error) {

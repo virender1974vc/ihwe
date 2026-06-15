@@ -22,6 +22,7 @@ const CorporateVisitorSchema = new mongoose.Schema(
     subscribe: { type: Boolean, default: false },
     purposeOfVisit: [{ type: String }],
     areaOfInterest: [{ type: String }],
+    qrCode: { type: String },
     status: { type: String, default: "New Reg." },
     created_by: { type: String, default: null },
     updated_by: { type: String, default: null },
