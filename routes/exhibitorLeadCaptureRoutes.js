@@ -4,6 +4,9 @@ const { protectExhibitor } = require('../middleware/auth');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const ExhibitorLeadCapture = require('../models/ExhibitorLeadCapture');
 const BuyerRegistration = require('../models/BuyerRegistration');
+const CorporateVisitorModel = require('../models/visitor/CorporateVisitorModel');
+const GeneralVisitorModel = require('../models/visitor/GeneralVisitorModel');
+const FreeHealthCampModel = require('../models/visitor/FreeHealthCampModel');
 
 const router = express.Router();
 
@@ -98,14 +101,23 @@ router.post('/resolve-scan', protectExhibitor, async (req, res) => {
         }
 
         let buyer = null;
-        if (normalized.registrationId || normalized.email || normalized.phone) {
-            buyer = await BuyerRegistration.findOne({
-                $or: [
-                    normalized.registrationId ? { registrationId: normalized.registrationId } : null,
-                    normalized.email ? { emailAddress: normalized.email.toLowerCase() } : null,
-                    normalized.phone ? { mobileNumber: normalized.phone } : null
-                ].filter(Boolean)
-            }).select('companyName companyFirmName fullName designation mobileNumber emailAddress country primaryProductInterest registrationId');
+        let visitor = null;
+
+        const lookupConditions = [
+            normalized.registrationId ? { registrationId: normalized.registrationId } : null,
+            normalized.email ? { emailAddress: normalized.email.toLowerCase() } : null,
+            normalized.phone ? { mobileNumber: normalized.phone } : null
+        ].filter(Boolean);
+
+        const visitorLookupConditions = [
+            normalized.registrationId ? { registrationId: normalized.registrationId } : null,
+            normalized.email ? { email: normalized.email.toLowerCase() } : null,
+            normalized.phone ? { mobile: normalized.phone } : null
+        ].filter(Boolean);
+
+        if (lookupConditions.length > 0) {
+            buyer = await BuyerRegistration.findOne({ $or: lookupConditions })
+                .select('companyName companyFirmName fullName designation mobileNumber emailAddress country primaryProductInterest registrationId');
         }
 
         if (buyer) {
@@ -122,6 +134,41 @@ router.post('/resolve-scan', protectExhibitor, async (req, res) => {
                     email: buyer.emailAddress || '',
                     country: buyer.country || '',
                     interest: buyer.primaryProductInterest || '',
+                    rawPayload: parsed
+                }
+            });
+        }
+
+        if (visitorLookupConditions.length > 0) {
+            visitor = await CorporateVisitorModel.findOne({ $or: visitorLookupConditions })
+                .select('companyName firstName lastName designation mobile email country areaOfInterest registrationId');
+
+            if (!visitor) {
+                visitor = await GeneralVisitorModel.findOne({ $or: visitorLookupConditions })
+                    .select('companyName firstName lastName designation mobile email country areaOfInterest registrationId');
+            }
+
+            if (!visitor) {
+                visitor = await FreeHealthCampModel.findOne({ $or: visitorLookupConditions })
+                    .select('firstName lastName mobile email country specificHealthConcerns registrationId');
+            }
+        }
+
+        if (visitor) {
+            const visitorName = `${visitor.firstName || ''} ${visitor.lastName || ''}`.trim();
+            return res.json({
+                success: true,
+                data: {
+                    sourceType: 'visitor',
+                    linkedBuyerId: visitor._id,
+                    registrationId: visitor.registrationId,
+                    name: visitorName,
+                    company: visitor.companyName || '',
+                    designation: visitor.designation || '',
+                    phone: visitor.mobile || '',
+                    email: visitor.email || '',
+                    country: visitor.country || '',
+                    interest: (visitor.areaOfInterest && visitor.areaOfInterest.length > 0) ? visitor.areaOfInterest.join(', ') : (visitor.specificHealthConcerns || ''),
                     rawPayload: parsed
                 }
             });

@@ -8,6 +8,7 @@ const { logActivity } = require("../../utils/logger");
 const {
   normalizeVisitorMultiSelectFields,
 } = require("../../utils/visitorSelectionNormalizer");
+const qrcode = require('qrcode');
 
 exports.getAllGeneralVisitors = async (req, res) => {
   try {
@@ -34,6 +35,8 @@ exports.createGeneralVisitor = async (req, res) => {
     const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
     const visitor = new GeneralVisitor({ ...normalizedBody, registrationId });
+    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    visitor.qrCode = await qrcode.toDataURL(qrPayload);
     const saved = await visitor.save();
 
     const emailData = {
