@@ -73,6 +73,17 @@ const kycFields = kycUpload.fields([
 ]);
 
 router.put('/:id/kyc-doc', requireAdminAuth, kycFields, (req, res) => exhibitorRegistrationController.updateKycDocs(req, res));
+router.post('/:id/contact-photo', requireAdminAuth, kycUpload.single('contactPhoto'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+        const photoUrl = req.file.path.replace(/\\/g, '/').replace(/^uploads\//, '/uploads/');
+        res.status(200).json({ success: true, message: 'Contact photo uploaded successfully', photoUrl });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 router.delete('/:id/kyc-doc/:field', requireAdminAuth, (req, res) => exhibitorRegistrationController.deleteKycDoc(req, res));
 router.post('/bulk-cleanup-docs', requireAdminAuth, (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
 router.post('/:id/special-docs', kycUpload.single('file'), (req, res) => exhibitorRegistrationController.addSpecialDoc(req, res));
@@ -81,7 +92,7 @@ router.post('/upload-receipt', requireAdminAuth, kycUpload.single('receipt'), (r
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
-    res.status(200).json({ success: true, url: req.file.path });
+    res.status(200).json({ success: true, url: req.file.path.replace(/\\/g, '/').replace(/^uploads\//, '/uploads/') });
 });
 // MSME Certificate upload (exhibitor or admin)
 const msmeStorage = new CloudinaryStorage({

@@ -19,6 +19,7 @@ const GeneralVisitorSchema = new mongoose.Schema(
     city: { type: String },
     purposeOfVisit: [{ type: String }],
     areaOfInterest: [{ type: String }],
+    qrCode: { type: String },
     status: { type: String, default: "New Reg." },
     subscribe: { type: Boolean, default: false },
     created_by: { type: String, default: null },

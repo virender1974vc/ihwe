@@ -200,6 +200,12 @@ exports.exhibitorRequestMeeting = async (req, res) => {
     res.status(201).json({ success: true, data: meeting });
   } catch (error) {
     console.error("Exhibitor Request Error:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Meeting request could not be created because a conflicting request already exists. Please refresh and check your meetings."
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -207,7 +213,17 @@ exports.exhibitorRequestMeeting = async (req, res) => {
 exports.updateMeetingStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const fields = ['status', 'adminNotes', 'location', 'date', 'timeSlot'];
+    const fields = [
+      'buyerId',
+      'exhibitorId',
+      'status',
+      'adminNotes',
+      'location',
+      'date',
+      'timeSlot',
+      'buyerApproval',
+      'exhibitorApproval',
+    ];
     const updateData = {};
     
     fields.forEach(field => {
@@ -221,6 +237,46 @@ exports.updateMeetingStatus = async (req, res) => {
         }
       }
     });
+
+    const currentMeeting = await BSMMeeting.findById(id);
+    if (!currentMeeting) return res.status(404).json({ success: false, message: "Meeting not found" });
+
+    const nextBuyerId = updateData.buyerId || currentMeeting.buyerId;
+    const nextExhibitorId = updateData.exhibitorId || currentMeeting.exhibitorId;
+    const nextDate = updateData.date !== undefined ? updateData.date : currentMeeting.date;
+    const nextTimeSlot = updateData.timeSlot !== undefined ? updateData.timeSlot : currentMeeting.timeSlot;
+
+    if (nextDate && nextTimeSlot) {
+      const existing = await BSMMeeting.findOne({
+        _id: { $ne: id },
+        date: nextDate,
+        timeSlot: nextTimeSlot,
+        status: { $ne: "Cancelled" },
+        $or: [
+          { buyerId: nextBuyerId },
+          { exhibitorId: nextExhibitorId },
+        ],
+      });
+
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: "Conflict: Buyer or exhibitor already has a meeting in this slot."
+        });
+      }
+    }
+
+    const nextBuyerApproval = updateData.buyerApproval || currentMeeting.buyerApproval;
+    const nextExhibitorApproval = updateData.exhibitorApproval || currentMeeting.exhibitorApproval;
+    if (updateData.status === undefined) {
+      if (nextBuyerApproval === "Rejected" || nextExhibitorApproval === "Rejected") {
+        updateData.status = "Rejected";
+      } else if (nextBuyerApproval === "Approved" && nextExhibitorApproval === "Approved") {
+        updateData.status = "Approved";
+      } else {
+        updateData.status = "Pending";
+      }
+    }
 
     const meeting = await BSMMeeting.findByIdAndUpdate(
       id,
@@ -339,6 +395,12 @@ exports.buyerRequestMeeting = async (req, res) => {
     res.status(201).json({ success: true, data: meeting });
   } catch (error) {
     console.error("Buyer Request Error:", error);
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Meeting request could not be created because a conflicting request already exists. Please refresh and check your meetings."
+      });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -1,4 +1,6 @@
 const PerformaInvoice = require('../../models/finance/PerformaInvoice');
+const ExhibitorRegistration = require("../../models/exhibitor_seller/ExhibitorRegistration");
+const Company = require("../../models/misc/Company");
 
 // ✅ Create new PROFORMA Invoice
 const createPerformaInvoice = async (req, res) => {
@@ -48,12 +50,21 @@ const getAllPerformaInvoices = async (req, res) => {
   }
 };
 
-// ✅ Get single PROFORMA Invoice by ID
 const getPerformaInvoiceById = async (req, res) => {
   try {
-    const invoice = await PerformaInvoice.findById(req.params.id);
+    const invoice = await PerformaInvoice.findById(req.params.id).lean();
 
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+    if (invoice.companyId) {
+      let company = await Company.findById(invoice.companyId).lean();
+      if (!company) {
+        company = await ExhibitorRegistration.findById(invoice.companyId).lean();
+      }
+      if (company) {
+        invoice.exhibitor = company;
+      }
+    }
 
     res.json(invoice);
   } catch (error) {

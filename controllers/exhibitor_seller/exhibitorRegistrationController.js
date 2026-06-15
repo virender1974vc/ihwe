@@ -1,5 +1,13 @@
 const exhibitorRegistrationService = require('../../services/exhibitor_seller/exhibitorRegistrationService');
 const { logActivity } = require('../../utils/logger');
+const ExhibitorRegistration = require('../../models/exhibitor_seller/ExhibitorRegistration');
+
+const toPublicUploadPath = (filePath = '') => {
+    const normalized = String(filePath).replace(/\\/g, '/');
+    if (normalized.startsWith('/uploads/')) return normalized;
+    if (normalized.startsWith('uploads/')) return `/${normalized}`;
+    return normalized;
+};
 
 /**
  * Controller for handling Exhibitor Registration requests.
@@ -19,6 +27,14 @@ class ExhibitorRegistrationController {
 
     async getRegistrationById(req, res) {
         try {
+            if (req.query.light === 'true') {
+                const registration = await ExhibitorRegistration.findById(req.params.id)
+                    .populate('eventId', 'name startDate endDate location venue paymentPlans')
+                    .lean();
+                if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
+                return res.status(200).json({ success: true, data: registration });
+            }
+
             const registration = await exhibitorRegistrationService.getRegistrationById(req.params.id);
             if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
             res.status(200).json({ success: true, data: registration });
@@ -99,7 +115,7 @@ class ExhibitorRegistrationController {
 
                 Object.keys(fileFields).forEach(field => {
                     if (req.files[field] && req.files[field][0]) {
-                        update[fileFields[field]] = req.files[field][0].path;
+                        update[fileFields[field]] = toPublicUploadPath(req.files[field][0].path);
                     }
                 });
             }
@@ -213,13 +229,13 @@ class ExhibitorRegistrationController {
             const ExhibitorRegistration = require('../../models/exhibitor_seller/ExhibitorRegistration');
             const { id } = req.params;
             const { label } = req.body;
-            
+
             if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
             if (!label) return res.status(400).json({ success: false, message: 'Label is required' });
 
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
-                { $push: { specialDocuments: { label, url: req.file.path } } },
+                { $push: { specialDocuments: { label, url: toPublicUploadPath(req.file.path) } } },
                 { returnDocument: 'after' }
             );
 

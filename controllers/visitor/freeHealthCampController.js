@@ -5,6 +5,7 @@ const {
   generateRegistrationId,
 } = require("../../utils/generateRegistrationId");
 const { logActivity } = require("../../utils/logger");
+const qrcode = require('qrcode');
 
 // ➤ Get all health camp visitors
 const getAllHealthCampVisitors = async (req, res) => {
@@ -42,6 +43,9 @@ const createHealthCampVisitor = async (req, res) => {
       ...req.body,
       registrationId,
     });
+
+    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    visitor.qrCode = await qrcode.toDataURL(qrPayload);
 
     const saved = await visitor.save();
 
