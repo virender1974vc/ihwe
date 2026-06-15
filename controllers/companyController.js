@@ -265,7 +265,7 @@ const updateCompany = async (req, res) => {
             designation: c.designation,
             mobile: c.mobile,
             alternateNo: c.alternate,
-            photo: c.photo
+            photoUrl: c.photo
           } : null;
 
           if (updated.contacts[0]) payload.contact1 = mapContact(updated.contacts[0]);

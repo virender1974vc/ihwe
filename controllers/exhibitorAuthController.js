@@ -187,6 +187,32 @@ class ExhibitorAuthController {
 
             let plainReg = selectedRegistration.toObject ? selectedRegistration.toObject() : Object.assign({}, selectedRegistration);
 
+            if (plainReg.clientId) {
+                try {
+                    const Company = require('../models/Company');
+                    const crmCompany = await Company.findById(plainReg.clientId).lean();
+                    const mapCrmContact = (contact, existing = {}) => contact ? {
+                        title: existing.title || contact.title || '',
+                        firstName: existing.firstName || contact.firstName || '',
+                        lastName: existing.lastName || contact.surname || contact.lastName || '',
+                        email: existing.email || contact.email || '',
+                        designation: existing.designation || contact.designation || '',
+                        mobile: existing.mobile || contact.mobile || '',
+                        alternateNo: existing.alternateNo || contact.alternate || '',
+                        photoUrl: existing.photoUrl || contact.photo || contact.photoUrl || '',
+                    } : existing;
+
+                    if (crmCompany?.contacts?.[0]) {
+                        plainReg.contact1 = mapCrmContact(crmCompany.contacts[0], plainReg.contact1 || {});
+                    }
+                    if (crmCompany?.contacts?.[1]) {
+                        plainReg.contact2 = mapCrmContact(crmCompany.contacts[1], plainReg.contact2 || {});
+                    }
+                } catch (err) {
+                    console.error('CRM contact enrichment error:', err);
+                }
+            }
+
             let bestRMVal = plainReg.filledBy;
             if (!bestRMVal || bestRMVal === 'User') {
                 const regWithRM = registrations.find(r => r.filledBy && r.filledBy !== 'User');
@@ -325,6 +351,43 @@ class ExhibitorAuthController {
                     }
                 }
             });
+
+            if (update.teamMembers !== undefined) {
+                if (!Array.isArray(update.teamMembers)) {
+                    return res.status(400).json({ success: false, message: 'Team members must be an array' });
+                }
+
+                let primaryAssigned = false;
+                update.teamMembers = update.teamMembers.slice(0, 50).map((member) => {
+                    const sanitized = {
+                        name: String(member?.name || '').trim(),
+                        designation: String(member?.designation || '').trim(),
+                        email: String(member?.email || '').trim().toLowerCase(),
+                        mobile: String(member?.mobile || '').trim(),
+                        photoUrl: String(member?.photoUrl || '').trim(),
+                        isPrimary: Boolean(member?.isPrimary) && !primaryAssigned,
+                    };
+                    if (sanitized.isPrimary) primaryAssigned = true;
+                    return sanitized;
+                }).filter((member) => member.name && member.designation && member.email && member.mobile);
+            }
+
+            ['contact1', 'contact2'].forEach((contactKey) => {
+                if (update[contactKey] !== undefined) {
+                    const current = update[contactKey] || {};
+                    update[contactKey] = {
+                        title: String(current.title || '').trim(),
+                        firstName: String(current.firstName || '').trim(),
+                        lastName: String(current.lastName || '').trim(),
+                        email: String(current.email || '').trim().toLowerCase(),
+                        designation: String(current.designation || '').trim(),
+                        mobile: String(current.mobile || '').trim(),
+                        alternateNo: String(current.alternateNo || '').trim(),
+                        photoUrl: String(current.photoUrl || '').trim(),
+                    };
+                }
+            });
+
             if (req.files) {
                 const fileFields = {
                     companyLogo: 'companyLogoUrl',
@@ -365,6 +428,27 @@ class ExhibitorAuthController {
             res.status(200).json({ success: true, message: 'Profile updated and synced successfully', data: updated });
         } catch (error) {
             console.error('CRITICAL: Update profile error:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async uploadTeamMemberPhoto(req, res) {
+        try {
+            if (req.user?.role !== 'exhibitor') {
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+            }
+
+            if (!req.file) {
+                return res.status(400).json({ success: false, message: 'Please upload a team member photo' });
+            }
+
+            const photoUrl = req.file.path || req.file.secure_url || req.file.url;
+            res.status(200).json({
+                success: true,
+                message: 'Team member photo uploaded',
+                photoUrl,
+            });
+        } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
     }
