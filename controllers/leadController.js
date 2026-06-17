@@ -21,7 +21,7 @@ exports.getIndividualLeads = async (req, res) => {
       query.status = status;
     }
 
-    const leads = await IndividualLead.find(query).sort({ createdAt: -1 });
+    const leads = await IndividualLead.find(query).sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: leads });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -90,7 +90,7 @@ exports.getCorporateLeads = async (req, res) => {
     }
     if (status !== "all") query.status = status;
 
-    const leads = await CorporateLead.find(query).sort({ createdAt: -1 });
+    const leads = await CorporateLead.find(query).sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: leads });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

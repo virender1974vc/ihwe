@@ -3,7 +3,7 @@ const BankList = require("../models/BankList");
 // @route  GET /api/banks
 const getBanks = async (req, res) => {
   try {
-    const banks = await BankList.find();
+    const banks = await BankList.find().lean();
     res.json(banks);
   } catch (err) {
     res.status(500).json({

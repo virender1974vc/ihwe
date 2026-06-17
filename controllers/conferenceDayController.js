@@ -3,7 +3,7 @@ const ConferenceDay = require("../models/ConferenceDay");
 // Get data for all days
 exports.getAllConferenceDays = async (req, res) => {
   try {
-    const conferenceDays = await ConferenceDay.find({ isActive: true }).sort({ dayNumber: 1 });
+    const conferenceDays = await ConferenceDay.find({ isActive: true }).sort({ dayNumber: 1 }).lean();
     res.status(200).json({ success: true, data: conferenceDays });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -4,7 +4,7 @@ const fs = require('fs');
 
 exports.getImages = async (req, res) => {
     try {
-        const images = await ExhibitorHeroSlider.find().sort({ order: 1, createdAt: -1 });
+        const images = await ExhibitorHeroSlider.find().sort({ order: 1, createdAt: -1 }).lean();
         res.json({ success: true, data: images });
     } catch (error) {
         console.error('Error fetching exhibitor hero slider images:', error);

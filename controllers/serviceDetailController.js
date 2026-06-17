@@ -8,7 +8,7 @@ class ServiceDetailController {
      */
     async getAll(req, res) {
         try {
-            const details = await ServiceDetail.find().sort({ updatedAt: -1 });
+            const details = await ServiceDetail.find().sort({ updatedAt: -1 }).lean();
             res.json({ success: true, data: details });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Server error' });

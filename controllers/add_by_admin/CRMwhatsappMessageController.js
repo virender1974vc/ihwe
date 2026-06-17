@@ -4,7 +4,7 @@ const path = require("path");
 // 🟢 Get all messages
 const getAllMessages = async (req, res) => {
   try {
-    const messages = await WhatsAppMessage.find().sort({ msg_added: -1 });
+    const messages = await WhatsAppMessage.find().sort({ msg_added: -1 }).lean();
     res.json(messages);
   } catch (err) {
     res.status(500).json({

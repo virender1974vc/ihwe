@@ -67,7 +67,7 @@ const createCreditNote = async (req, res) => {
 // GET ALL CREDIT NOTES
 const getCreditNotes = async (req, res) => {
   try {
-    const notes = await CreditNote.find().sort({ created_at: -1 });
+    const notes = await CreditNote.find().sort({ created_at: -1 }).lean();
     res.json(notes);
   } catch (error) {
     res.status(500).json({

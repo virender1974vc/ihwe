@@ -50,7 +50,7 @@ exports.createReminder = async (req, res) => {
 
 exports.getAdminReminders = async (req, res) => {
     try {
-        const reminders = await Reminder.find().sort({ added: -1 });
+        const reminders = await Reminder.find().sort({ added: -1 }).lean();
         res.status(200).json({ success: true, data: reminders });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -133,7 +133,7 @@ const dispatchPushNotifications = async (reminder) => {
             query = { _id: { $in: reminder.targetUsers } };
         }
 
-        const users = await ExhibitorRegistration.find(query).select('expoPushTokens');
+        const users = await ExhibitorRegistration.find(query).select('expoPushTokens').lean();
         let pushTokens = [];
         users.forEach(u => {
             if (u.expoPushTokens && u.expoPushTokens.length > 0) {

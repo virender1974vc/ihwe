@@ -15,7 +15,7 @@ const createVisitorReview = async (req, res) => {
 // GET ALL
 const getAllVisitorReviews = async (req, res) => {
   try {
-    const reviews = await VisitorReview.find().sort({ added: -1 });
+    const reviews = await VisitorReview.find().sort({ added: -1 }).lean();
     res.json({ data: reviews });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -2,7 +2,7 @@ const Facility = require("../models/Facility");
 
 exports.getFacilities = async (req, res) => {
   try {
-    const facilities = await Facility.find().sort({ createdAt: -1 });
+    const facilities = await Facility.find().sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: facilities });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

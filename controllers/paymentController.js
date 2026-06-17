@@ -21,7 +21,7 @@ const addPayment = async (req, res) => {
 // ➤ Get all payments
 const getAllPayments = async (req, res) => {
   try {
-    const payments = await Payment.find().sort({ added: -1 });
+    const payments = await Payment.find().sort({ added: -1 }).lean();
 
     res.status(200).json(payments);
   } catch (error) {

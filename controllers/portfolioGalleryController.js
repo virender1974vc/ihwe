@@ -3,7 +3,7 @@ const { logActivity } = require("../utils/logger");
 
 exports.getAllGallery = async (req, res) => {
   try {
-    const items = await GalleryItem.find().sort({ createdAt: -1 });
+    const items = await GalleryItem.find().sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: items });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

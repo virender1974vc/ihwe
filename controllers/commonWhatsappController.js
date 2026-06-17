@@ -4,7 +4,7 @@ const whatsapp = require("../utils/whatsapp");
 // ➤ Get all WhatsApp records
 const getWhatsappRecords = async (req, res) => {
   try {
-    const records = await CommonWhatsapp.find().sort({ added: -1 });
+    const records = await CommonWhatsapp.find().sort({ added: -1 }).lean();
     res.status(200).json({
       message: "WhatsApp records fetched successfully",
       data: records,

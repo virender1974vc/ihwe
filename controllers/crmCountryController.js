@@ -3,7 +3,7 @@ const CrmCountry = require("../models/CrmCountry");
 // GET all countries
 const getAllCountries = async (req, res) => {
   try {
-    const countries = await CrmCountry.find();
+    const countries = await CrmCountry.find().lean();
     res.status(200).json({
       message: "Countries fetched successfully",
       data: countries,

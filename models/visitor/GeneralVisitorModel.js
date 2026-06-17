@@ -28,4 +28,9 @@ const GeneralVisitorSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+GeneralVisitorSchema.index({ mobile: 1 });
+GeneralVisitorSchema.index({ email: 1 });
+GeneralVisitorSchema.index({ status: 1 });
+
 module.exports = secondaryDB.model("GeneralVisitor", GeneralVisitorSchema);
+

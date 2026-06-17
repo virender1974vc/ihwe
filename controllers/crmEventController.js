@@ -3,7 +3,7 @@ const CrmEvent = require("../models/CrmEvent.js");
 // 📍 GET All Events
 const getAllEvents = async (req, res) => {
   try {
-    const events = await CrmEvent.find().sort({ added: -1 });
+    const events = await CrmEvent.find().sort({ added: -1 }).lean();
     res.json(events);
   } catch (err) {
     res

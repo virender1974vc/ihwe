@@ -3,7 +3,7 @@ const CrmUser = require("../models/CrmUser.js");
 // GET all users
 const getAllUsers = async (req, res) => {
   try {
-    const users = await CrmUser.find().select("-user_password");
+    const users = await CrmUser.find().select("-user_password").lean();
     res.json(users);
   } catch (err) {
     res

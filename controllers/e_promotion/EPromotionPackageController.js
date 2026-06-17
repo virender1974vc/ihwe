@@ -12,7 +12,7 @@ class EPromotionPackageController {
     async getAllPackages(req, res) {
         try {
             const query = {};
-            const packages = await EPromotionPackage.find(query).sort({ order: 1 });
+            const packages = await EPromotionPackage.find(query).sort({ order: 1 }).lean();
             res.status(200).json({
                 success: true,
                 data: packages
@@ -95,7 +95,7 @@ class EPromotionPackageController {
     // Get all addons
     async getAllAddons(req, res) {
         try {
-            const addons = await EPromotionAddon.find({}).sort({ order: 1 });
+            const addons = await EPromotionAddon.find({}).sort({ order: 1 }).lean();
             res.status(200).json({
                 success: true,
                 data: addons
@@ -237,7 +237,7 @@ class EPromotionPackageController {
     // Get all testimonials
     async getAllTestimonials(req, res) {
         try {
-            const testimonials = await EPromotionTestimonial.find({}).sort({ order: 1 });
+            const testimonials = await EPromotionTestimonial.find({}).sort({ order: 1 }).lean();
             res.status(200).json({
                 success: true,
                 data: testimonials

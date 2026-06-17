@@ -44,7 +44,7 @@ class MsmePmsSchemeController {
 
     async getAllApplications(req, res) {
         try {
-            const applications = await MsmePmsScheme.find({ is_lead: false }).sort({ createdAt: -1 });
+            const applications = await MsmePmsScheme.find({ is_lead: false }).sort({ createdAt: -1 }).lean();
             res.status(200).json({ success: true, data: applications });
         } catch (error) {
             console.error('Error fetching MSME PMS applications:', error);

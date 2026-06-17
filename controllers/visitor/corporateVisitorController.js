@@ -13,7 +13,7 @@ const qrcode = require('qrcode');
 // ➤ Get all corporate visitors
 const getAllCorporateVisitors = async (req, res) => {
   try {
-    const visitors = await CorporateVisitor.find().sort({ createdAt: -1 });
+    const visitors = await CorporateVisitor.find().sort({ createdAt: -1 }).lean();
     res.json({ data: visitors });
   } catch (err) {
     res.status(500).json({

@@ -34,7 +34,7 @@ exports.getAllSpeakers = async (req, res) => {
     try {
         const { status } = req.query;
         const query = status ? { status } : {};
-        const speakers = await Speaker.find(query).sort({ createdAt: -1 });
+        const speakers = await Speaker.find(query).sort({ createdAt: -1 }).lean();
         res.status(200).json({ success: true, count: speakers.length, data: speakers });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Failed to fetch speakers.', error: error.message });

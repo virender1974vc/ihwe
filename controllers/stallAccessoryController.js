@@ -8,7 +8,7 @@ const emailService = require('../utils/emailService');
 
 const getAllAccessories = async (req, res) => {
     try {
-        const items = await StallAccessory.find().sort({ type: 1, sortOrder: 1, createdAt: -1 });
+        const items = await StallAccessory.find().sort({ type: 1, sortOrder: 1, createdAt: -1 }).lean();
         res.json({ success: true, data: items });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

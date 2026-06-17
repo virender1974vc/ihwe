@@ -3,7 +3,7 @@ const DataSource = require("../models/DataSource");
 // GET all
 const getAllSources = async (req, res) => {
   try {
-    const records = await DataSource.find();
+    const records = await DataSource.find().lean();
     res.json(records);
   } catch (err) {
     res.status(500).json({

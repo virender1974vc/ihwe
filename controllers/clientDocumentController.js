@@ -54,7 +54,7 @@ exports.uploadClientDocument = async (req, res) => {
 // Get all documents for a client
 exports.getClientDocuments = async (req, res) => {
     try {
-        const documents = await ClientDocument.find({ client_id: req.params.client_id }).sort({ added: -1 });
+        const documents = await ClientDocument.find({ client_id: req.params.client_id }).sort({ added: -1 }).lean();
         res.status(200).json(documents);
     } catch (error) {
         res.status(500).json({ message: "Failed to fetch client documents", error: error.message });

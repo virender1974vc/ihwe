@@ -12,7 +12,7 @@ const qrcode = require('qrcode');
 
 exports.getAllGeneralVisitors = async (req, res) => {
   try {
-    const visitors = await GeneralVisitor.find().sort({ createdAt: -1 });
+    const visitors = await GeneralVisitor.find().sort({ createdAt: -1 }).lean();
     res.json({ data: visitors });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -35,7 +35,7 @@ class BrochureLeadController {
      */
     async getAllLeads(req, res) {
         try {
-            const data = await BrochureLead.find().sort({ createdAt: -1 });
+            const data = await BrochureLead.find().sort({ createdAt: -1 }).lean();
             res.json({ success: true, data });
         } catch (error) {
             console.error('Fetch brochure leads error:', error);

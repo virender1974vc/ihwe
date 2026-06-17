@@ -257,4 +257,11 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     expoPushTokens: [{ type: String }]
 }, { timestamps: true });
 
+ExhibitorRegistrationSchema.index({ 'contact1.mobile': 1 });
+ExhibitorRegistrationSchema.index({ 'contact1.email': 1 });
+ExhibitorRegistrationSchema.index({ status: 1 });
+ExhibitorRegistrationSchema.index({ filledBy: 1 });
+ExhibitorRegistrationSchema.index({ isSeller: 1 });
+ExhibitorRegistrationSchema.index({ clientId: 1 });
+
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

@@ -179,7 +179,7 @@ class AdvisoryNominationController {
      */
     async getAllNominations(req, res) {
         try {
-            const nominations = await AdvisoryNomination.find().sort({ createdAt: -1 });
+            const nominations = await AdvisoryNomination.find().sort({ createdAt: -1 }).lean();
             res.json({ success: true, data: nominations });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

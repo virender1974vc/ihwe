@@ -4,7 +4,7 @@ const { logActivity } = require('../utils/logger');
 class AwardsGalleryController {
     async getAll(req, res) {
         try {
-            const items = await AwardsGallery.find({ status: 'Active' }).sort({ order: 1, createdAt: -1 });
+            const items = await AwardsGallery.find({ status: 'Active' }).sort({ order: 1, createdAt: -1 }).lean();
             res.json({ success: true, data: items });
         } catch (error) {
             console.error('Fetch gallery error:', error);
@@ -15,7 +15,7 @@ class AwardsGalleryController {
     // GET all for admin (including inactive)
     async getAllAdmin(req, res) {
         try {
-            const items = await AwardsGallery.find().sort({ order: 1, createdAt: -1 });
+            const items = await AwardsGallery.find().sort({ order: 1, createdAt: -1 }).lean();
             res.json({ success: true, data: items });
         } catch (error) {
             console.error('Fetch gallery error:', error);

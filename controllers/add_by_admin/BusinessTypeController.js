@@ -3,7 +3,7 @@ const BusinessType = require("../../models/add_by_admin/BusinessType.js");
 // GET all
 const getAllBusinessTypes = async (req, res) => {
     try {
-        const records = await BusinessType.find();
+        const records = await BusinessType.find().lean();
         res.json(records);
     } catch (err) {
         res.status(500).json({

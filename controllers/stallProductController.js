@@ -9,7 +9,7 @@ const deleteFile = (filePath) => {
 exports.getMyProducts = async (req, res) => {
     try {
         const exhibitorId = req.query.regId || req.user.id;
-        const products = await StallProduct.find({ exhibitorId }).sort({ createdAt: -1 });
+        const products = await StallProduct.find({ exhibitorId }).sort({ createdAt: -1 }).lean();
         res.json({ success: true, data: products });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -111,7 +111,7 @@ exports.getProductEnquiries = async (req, res) => {
         const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId });
         if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
-        const enquiries = await StallProductEnquiry.find({ productId: req.params.id }).sort({ createdAt: -1 });
+        const enquiries = await StallProductEnquiry.find({ productId: req.params.id }).sort({ createdAt: -1 }).lean();
         res.json({ success: true, data: enquiries });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -152,7 +152,7 @@ exports.getAnalytics = async (req, res) => {
 const getExhibitorProductsAdmin = async (req, res) => {
     try {
         const { exhibitorId } = req.params;
-        const products = await StallProduct.find({ exhibitorId }).sort({ createdAt: -1 });
+        const products = await StallProduct.find({ exhibitorId }).sort({ createdAt: -1 }).lean();
         res.json({ success: true, data: products });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -162,7 +162,7 @@ const getExhibitorProductsAdmin = async (req, res) => {
 const getExhibitorAnalyticsAdmin = async (req, res) => {
     try {
         const { exhibitorId } = req.params;
-        const products = await StallProduct.find({ exhibitorId });
+        const products = await StallProduct.find({ exhibitorId }).lean();
         const totalViews = products.reduce((s, p) => s + p.views, 0);
         const totalEnquiries = products.reduce((s, p) => s + p.enquiryCount, 0);
         res.json({

@@ -3,7 +3,7 @@ const BankOption = require("../models/BankOption.js");
 // ➤ Get all bank options
 const getBankOptions = async (req, res) => {
   try {
-    const options = await BankOption.find();
+    const options = await BankOption.find().lean();
     res
       .status(200)
       .json({ message: "Bank options fetched successfully", data: options });

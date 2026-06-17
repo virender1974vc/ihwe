@@ -5,7 +5,7 @@ const getAllCities = async (req, res) => {
   try {
     const { stateCode } = req.query;
     const filter = stateCode ? { stateCode: Number(stateCode) } : {};
-    const cities = await CrmCity.find(filter);
+    const cities = await CrmCity.find(filter).lean();
     res
       .status(200)
       .json({ message: "Cities fetched successfully", data: cities });

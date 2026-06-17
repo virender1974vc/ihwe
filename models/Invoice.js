@@ -90,4 +90,9 @@ InvoiceSchema.statics.generateNextInvoiceNumber = async function () {
   return `${prefix}${padded}`;
 };
 
+InvoiceSchema.index({ companyId: 1 });
+InvoiceSchema.index({ invoice_no: 1 });
+InvoiceSchema.index({ consignee_name: 1 });
+
 module.exports = secondaryDB.model("Invoice", InvoiceSchema);
+

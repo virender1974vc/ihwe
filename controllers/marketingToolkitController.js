@@ -17,7 +17,7 @@ exports.getAllTemplates = async (req, res) => {
             query.assignedExhibitorId = null;
         }
 
-        const templates = await MarketingToolkit.find(query).sort({ createdAt: -1 });
+        const templates = await MarketingToolkit.find(query).sort({ createdAt: -1 }).lean();
         res.status(200).json({ success: true, data: templates });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -27,7 +27,7 @@ exports.getAllTemplates = async (req, res) => {
 // Admin: Get all templates including inactive
 exports.adminGetAllTemplates = async (req, res) => {
     try {
-        const templates = await MarketingToolkit.find().sort({ createdAt: -1 });
+        const templates = await MarketingToolkit.find().sort({ createdAt: -1 }).lean();
         res.status(200).json({ success: true, data: templates });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

@@ -3,7 +3,7 @@ const ConferenceAgenda = require("../models/ConferenceAgenda");
 // Get all agenda items
 exports.getAgendas = async (req, res) => {
   try {
-    const agendas = await ConferenceAgenda.find({ isActive: true }).sort({ order: 1, createdAt: 1 });
+    const agendas = await ConferenceAgenda.find({ isActive: true }).sort({ order: 1, createdAt: 1 }).lean();
     res.status(200).json({
       success: true,
       data: agendas,

@@ -3,7 +3,7 @@ const Unit = require("../../models/add_by_admin/Unit.js");
 // GET all
 const getAllUnits = async (req, res) => {
     try {
-        const units = await Unit.find();
+        const units = await Unit.find().lean();
         res.status(200).json(units);
     } catch (error) {
         res.status(500).json({ message: error.message });

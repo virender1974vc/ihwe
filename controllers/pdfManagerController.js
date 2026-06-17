@@ -2,7 +2,7 @@ const PdfManager = require("../models/PdfManager");
 
 exports.getAllPdfs = async (req, res) => {
   try {
-    const pdfs = await PdfManager.find().sort({ createdAt: -1 });
+    const pdfs = await PdfManager.find().sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: pdfs });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

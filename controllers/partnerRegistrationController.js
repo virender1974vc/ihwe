@@ -178,7 +178,7 @@ class PartnerRegistrationController {
    */
   async getAllRegistrations(req, res) {
     try {
-      const partners = await PartnerRegistration.find().sort({ createdAt: -1 });
+      const partners = await PartnerRegistration.find().sort({ createdAt: -1 }).lean();
       res.json({ success: true, data: partners });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });

@@ -81,7 +81,7 @@ class ReferralController {
    */
   async getReferrals(req, res) {
     try {
-      const referrals = await Referral.find().sort({ createdAt: -1 });
+      const referrals = await Referral.find().sort({ createdAt: -1 }).lean();
       res.json({ success: true, data: referrals });
     } catch (error) {
       console.error('Error fetching referrals:', error);

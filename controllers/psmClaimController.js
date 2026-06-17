@@ -50,7 +50,7 @@ class PsmClaimController {
             const exhibitorId = req.user?.id;
             const allResults = await Promise.all(
                 Object.entries(models).map(async ([type, Model]) => {
-                    const reports = await Model.find({ exhibitorId }).sort({ createdAt: -1 });
+                    const reports = await Model.find({ exhibitorId }).sort({ createdAt: -1 }).lean();
                     return reports.map(r => ({ ...r.toObject(), reportType: type }));
                 })
             );

@@ -12,7 +12,7 @@ const createNextAction = async (req, res) => {
 
 const getNextActions = async (req, res) => {
   try {
-    const records = await NextAction.find().sort({ name: 1 });
+    const records = await NextAction.find().sort({ name: 1 }).lean();
     res.status(200).json(records);
   } catch (err) {
     res.status(500).json({ message: "Error fetching Next Actions", error: err.message });

@@ -14,8 +14,8 @@ exports.getMediaPageData = async (req, res) => {
             MediaCoverage.find({ isActive: true }).sort({ order: 1, createdAt: -1 }),
             MediaPartner.find({ isActive: true }).sort({ order: 1, createdAt: -1 })
         ]);
-        const resources = await MediaResource.find({ isActive: true }).sort({ order: 1 });
-        const bannerLogos = await MediaBannerLogo.find({ isActive: true }).sort({ order: 1 });
+        const resources = await MediaResource.find({ isActive: true }).sort({ order: 1 }).lean();
+        const bannerLogos = await MediaBannerLogo.find({ isActive: true }).sort({ order: 1 }).lean();
         let bannerSettings = await MediaBannerSettings.findOne();
         
         if (!bannerSettings) {
@@ -73,7 +73,7 @@ const createHandler = (Model) => async (req, res) => {
 
 const getHandler = (Model) => async (req, res) => {
     try {
-        const items = await Model.find().sort({ order: 1, createdAt: -1 });
+        const items = await Model.find().sort({ order: 1, createdAt: -1 }).lean();
         res.status(200).json({ success: true, data: items });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

@@ -5,7 +5,7 @@ const getAllStates = async (req, res) => {
   try {
     const { countryCode } = req.query;
     const filter = countryCode ? { countryCode: Number(countryCode) } : {};
-    const states = await CrmState.find(filter);
+    const states = await CrmState.find(filter).lean();
     res.status(200).json({
       message: "States fetched successfully",
       data: states,

@@ -144,7 +144,7 @@ const createGroupVisitor = async (req, res) => {
 // ─── Get All Group Registrations ─────────────────────────────────────────────
 const getAllGroupVisitors = async (req, res) => {
     try {
-        const groups = await GroupVisitor.find().sort({ createdAt: -1 });
+        const groups = await GroupVisitor.find().sort({ createdAt: -1 }).lean();
         res.json({ success: true, data: groups });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

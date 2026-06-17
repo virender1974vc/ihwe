@@ -10,7 +10,7 @@ const deleteFile = (filePath) => {
 // Get all banners (Admin)
 exports.getAllBanners = async (req, res) => {
     try {
-        const banners = await DashboardBanner.find().sort({ type: 1, pageId: 1 });
+        const banners = await DashboardBanner.find().sort({ type: 1, pageId: 1 }).lean();
         res.json({ success: true, data: banners });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

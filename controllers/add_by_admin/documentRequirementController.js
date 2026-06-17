@@ -3,7 +3,7 @@ const DocumentRequirement = require("../../models/add_by_admin/DocumentRequireme
 // Get all document requirements
 exports.getAllDocumentRequirements = async (req, res) => {
     try {
-        const requirements = await DocumentRequirement.find().sort({ category: 1, order: 1, added: -1 });
+        const requirements = await DocumentRequirement.find().sort({ category: 1, order: 1, added: -1 }).lean();
         res.status(200).json(requirements);
     } catch (error) {
         res.status(500).json({ message: "Failed to fetch document requirements", error: error.message });

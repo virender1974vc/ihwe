@@ -6,7 +6,7 @@ const fs = require('fs');
 // ➤ Get all templates
 const getAllTemplates = async (req, res) => {
     try {
-        const templates = await MessageTemplate.find().populate('lastUpdatedBy', 'username');
+        const templates = await MessageTemplate.find().populate('lastUpdatedBy', 'username').lean();
         res.json({ success: true, data: templates });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

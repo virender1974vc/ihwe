@@ -51,7 +51,7 @@ const getPlans = async (req, res) => {
     const query = {};
     if (status) query.status = status;
 
-    const plans = await SellerSubscriptionPlan.find(query).sort({ displayOrder: 1, price: 1 });
+    const plans = await SellerSubscriptionPlan.find(query).sort({ displayOrder: 1, price: 1 }).lean();
     res.status(200).json({
       success: true,
       data: plans,

@@ -71,19 +71,19 @@ const getCompanies = async (req, res) => {
       let lowerFullName = lowerUsername;
       try {
         const User = require('../models/User');
-        const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } });
+        const adminUser = await User.findOne({ username: lowerUsername }).collation({ locale: 'en', strength: 2 }).lean();
         if (adminUser && adminUser.fullName) {
           lowerFullName = adminUser.fullName.toLowerCase();
         }
       } catch (e) { console.error(e); }
 
       query.$or = [
-        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
+        { forwardTo: lowerUsername },
+        { added_by: lowerUsername },
       ];
       if (lowerFullName !== lowerUsername) {
-        query.$or.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-        query.$or.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        query.$or.push({ forwardTo: lowerFullName });
+        query.$or.push({ added_by: lowerFullName });
       }
     }
 
@@ -562,19 +562,19 @@ const getAchievementRevenue = async (req, res) => {
     let lowerFullName = lowerUsername;
     try {
       const User = require('../models/User');
-      const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } });
+      const adminUser = await User.findOne({ username: lowerUsername }).collation({ locale: 'en', strength: 2 }).lean();
       if (adminUser && adminUser.fullName) {
         lowerFullName = adminUser.fullName.toLowerCase();
       }
     } catch (e) { console.error(e); }
 
     const orConditions = [
-      { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-      { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } }
+      { forwardTo: lowerUsername },
+      { added_by: lowerUsername }
     ];
     if (lowerFullName !== lowerUsername) {
-      orConditions.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-      orConditions.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+      orConditions.push({ forwardTo: lowerFullName });
+      orConditions.push({ added_by: lowerFullName });
     }
 
     // 1. Find all CRM companies mapped to this user
@@ -624,7 +624,7 @@ const getAchievementRevenue = async (req, res) => {
     }
 
     // 3. Find converted registrations and calculate total revenue
-    const convertedRegistrations = await ExhibitorRegistration.find(query).select('financeBreakdown participation amountPaid');
+    const convertedRegistrations = await ExhibitorRegistration.find(query).select('financeBreakdown participation amountPaid').lean();
 
     let totalRevenue = 0;
     convertedRegistrations.forEach(reg => {
@@ -646,10 +646,10 @@ const getSalesLeaderboard = async (req, res) => {
 
     // 1. Fetch all admins
     const User = require('../models/User');
-    const admins = await User.find({ status: 'Active' }).select('username fullName profileImage');
+    const admins = await User.find({ status: 'Active' }).select('username fullName profileImage').lean();
 
     // 2. Fetch all CRM companies to map them to admins
-    const allCompanies = await Company.find({}).select('_id forwardTo added_by');
+    const allCompanies = await Company.find({}).select('_id forwardTo added_by').lean();
 
     // 3. Build query for ExhibitorRegistration
     const ExhibitorRegistration = require('../models/ExhibitorRegistration');
@@ -682,7 +682,7 @@ const getSalesLeaderboard = async (req, res) => {
       query.createdAt = { $gte: startOfPrevMonth, $lte: endOfPrevMonth };
     }
 
-    const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation amountPaid');
+    const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation amountPaid').lean();
 
     const leaderboard = admins.map(admin => {
       const u = admin.username.toLowerCase();

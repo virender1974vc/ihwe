@@ -3,7 +3,7 @@ const Settings = require("../models/Settings");
 
 exports.getAllVideos = async (req, res) => {
   try {
-    const videos = await FloatingVideo.find().sort({ order: 1 });
+    const videos = await FloatingVideo.find().sort({ order: 1 }).lean();
     res.json({ success: true, data: videos });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

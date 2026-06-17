@@ -357,7 +357,7 @@ exports.getSellerStats = async (req, res) => {
         const displayLeads = maxLeads > 0 ? Math.min(totalLeads, maxLeads) : totalLeads;
 
         // Views from product enquiries
-        const productEnquiries = await StallProductEnquiry.find({ exhibitorId }).populate('productId', 'views enquiryCount');
+        const productEnquiries = await StallProductEnquiry.find({ exhibitorId }).populate('productId', 'views enquiryCount').lean();
         let totalViews = 0;
         productEnquiries.forEach(enq => {
             if (enq.productId) totalViews += (enq.productId.views || 0);
@@ -486,7 +486,7 @@ exports.getConferenceSessions = async (req, res) => {
         let sessions = [];
         try {
             const ConferenceSession = require('../models/ConferenceSession');
-            sessions = await ConferenceSession.find({ isActive: true }).sort({ date: 1, time: 1 });
+            sessions = await ConferenceSession.find({ isActive: true }).sort({ date: 1, time: 1 }).lean();
         } catch (_) {
             // Model doesn't exist yet - return empty
             sessions = [];
@@ -567,7 +567,7 @@ exports.getAccessories = async (req, res) => {
 
         // Delegate to stall accessories
         const StallAccessory = require('../models/StallAccessory');
-        const accessories = await StallAccessory.find({ isActive: true }).sort({ category: 1, name: 1 });
+        const accessories = await StallAccessory.find({ isActive: true }).sort({ category: 1, name: 1 }).lean();
 
         res.json({ success: true, data: accessories });
     } catch (error) {

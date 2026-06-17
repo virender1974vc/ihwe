@@ -3,7 +3,7 @@ const CrmLpu2018 = require("../models/CrmLpu2018.js");
 // GET all
 const getAllLpu = async (req, res) => {
   try {
-    const records = await CrmLpu2018.find();
+    const records = await CrmLpu2018.find().lean();
     res.json(records);
   } catch (err) {
     res

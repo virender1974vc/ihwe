@@ -7,7 +7,7 @@ const emailService = require('../utils/emailService');
 // 📍 GET all invoices
 const getAllInvoices = async (req, res) => {
   try {
-    const invoices = await Invoice.find().sort({ added: -1 });
+    const invoices = await Invoice.find().sort({ added: -1 }).lean();
     res.status(200).json(invoices);
   } catch (error) {
     res.status(500).json({

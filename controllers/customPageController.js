@@ -3,7 +3,7 @@ const { logActivity } = require("../utils/logger");
 
 exports.getAllPages = async (req, res) => {
   try {
-    const pages = await CustomPage.find().sort({ createdAt: -1 });
+    const pages = await CustomPage.find().sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: pages });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

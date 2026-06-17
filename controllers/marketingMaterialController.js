@@ -29,7 +29,7 @@ exports.getAllMaterials = async (req, res) => {
   try {
     const { includeInactive } = req.query;
     const query = includeInactive === "true" ? {} : { isActive: true };
-    const materials = await MarketingMaterial.find(query).sort({ createdAt: -1 });
+    const materials = await MarketingMaterial.find(query).sort({ createdAt: -1 }).lean();
 
     // Group by category for frontend convenience
     const grouped = materials.reduce((acc, curr) => {
@@ -140,7 +140,7 @@ exports.shareMaterials = async (req, res) => {
       return res.status(400).json({ success: false, message: "No materials selected" });
     }
 
-    const materials = await MarketingMaterial.find({ _id: { $in: material_ids } });
+    const materials = await MarketingMaterial.find({ _id: { $in: material_ids } }).lean();
 
     // --- VALIDATION LIMITS ---
     let counts = { Video: 0, Image: 0, PDF: 0, Word: 0, PPT: 0 };
@@ -303,7 +303,7 @@ exports.shareMaterials = async (req, res) => {
 exports.getShareHistory = async (req, res) => {
   try {
     const { cmpny_id } = req.params;
-    const history = await MarketingShareLog.find({ cmpny_id }).sort({ createdAt: -1 });
+    const history = await MarketingShareLog.find({ cmpny_id }).sort({ createdAt: -1 }).lean();
     res.json({ success: true, data: history });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -3,7 +3,7 @@ const CrmLoginLog = require("../models/CrmLoginLog");
 // GET all login logs
 const getAllLoginLogs = async (req, res) => {
   try {
-    const logs = await CrmLoginLog.find();
+    const logs = await CrmLoginLog.find().lean();
     res.json(logs);
   } catch (err) {
     res.status(500).json({

@@ -3,7 +3,7 @@ const CrmExhibatorReview2023 = require("../models/CrmExhibatorReview2023");
 // GET all reviews
 const getAllReviews = async (req, res) => {
   try {
-    const reviews = await CrmExhibatorReview2023.find().sort({ re_added: -1 });
+    const reviews = await CrmExhibatorReview2023.find().sort({ re_added: -1 }).lean();
     res.json(reviews);
   } catch (err) {
     res.status(500).json({

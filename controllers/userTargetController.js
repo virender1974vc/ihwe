@@ -42,7 +42,7 @@ class UserTargetController {
     async getAllTargets(req, res) {
         try {
             // Only fetch active targets
-            const targets = await UserTarget.find({ validTo: null }).sort({ createdAt: -1 });
+            const targets = await UserTarget.find({ validTo: null }).sort({ createdAt: -1 }).lean();
             res.status(200).json({ success: true, data: targets });
         } catch (error) {
             console.error("Error fetching targets:", error);
@@ -259,13 +259,13 @@ class UserTargetController {
 
             if (type === 'calls') {
                 total = await CallLog.countDocuments(callFilter);
-                logs = await CallLog.find(callFilter).sort({ createdAt: -1 }).skip(skip).limit(limitNum);
+                logs = await CallLog.find(callFilter).sort({ createdAt: -1 }).skip(skip).limit(limitNum).lean();
             } else if (type === 'whatsapp') {
                 total = await WhatsAppLog.countDocuments(userFilter);
-                logs = await WhatsAppLog.find(userFilter).sort({ sentAt: -1 }).skip(skip).limit(limitNum);
+                logs = await WhatsAppLog.find(userFilter).sort({ sentAt: -1 }).skip(skip).limit(limitNum).lean();
             } else if (type === 'emails') {
                 total = await EmailLog.countDocuments(userFilter);
-                logs = await EmailLog.find(userFilter).sort({ sentAt: -1 }).skip(skip).limit(limitNum);
+                logs = await EmailLog.find(userFilter).sort({ sentAt: -1 }).skip(skip).limit(limitNum).lean();
             }
 
             res.status(200).json({

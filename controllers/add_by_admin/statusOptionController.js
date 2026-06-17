@@ -21,7 +21,7 @@ const createStatusOption = async (req, res) => {
 // ➤ Get all status options
 const getStatusOptions = async (req, res) => {
   try {
-    const statuses = await StatusOption.find();
+    const statuses = await StatusOption.find().lean();
     res.status(200).json(statuses);
   } catch (error) {
     res.status(500).json({

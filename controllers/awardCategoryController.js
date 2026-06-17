@@ -5,7 +5,7 @@ const { logActivity } = require('../utils/logger');
 const getAll = async (req, res) => {
   try {
     const filter = req.query.all === 'true' ? {} : { status: 'Active' };
-    const categories = await AwardCategory.find(filter).sort({ order: 1, createdAt: 1 });
+    const categories = await AwardCategory.find(filter).sort({ order: 1, createdAt: 1 }).lean();
     res.json({ success: true, data: categories });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

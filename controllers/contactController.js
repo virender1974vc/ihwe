@@ -35,7 +35,7 @@ const getAllContacts = async (req, res) => {
         }
 
         const skip = (page - 1) * limit;
-        const contacts = await ContactEnquiry.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit));
+        const contacts = await ContactEnquiry.find(query).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)).lean();
         const total = await ContactEnquiry.countDocuments(query);
         const stats = await getStats();
 
