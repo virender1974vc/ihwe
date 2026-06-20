@@ -108,6 +108,7 @@ const buyerRegistrationSchema = new mongoose.Schema(
 
 
     registrationId: { type: String, unique: true, sparse: true },
+    qrCode: { type: String },
     buyerTag: { type: String, enum: ['Hot', 'Warm', 'Cold'], default: 'Cold' },
     otpVerifiedEmail: { type: Boolean, default: false },
     otpVerifiedMobile: { type: Boolean, default: false },

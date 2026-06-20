@@ -8,6 +8,7 @@ const { logActivity } = require("../../utils/logger");
 const {
   normalizeVisitorMultiSelectFields,
 } = require("../../utils/visitorSelectionNormalizer");
+const qrcode = require('qrcode');
 
 // ➤ Get all corporate visitors
 const getAllCorporateVisitors = async (req, res) => {
@@ -46,6 +47,9 @@ const createCorporateVisitor = async (req, res) => {
       ...normalizedBody,
       registrationId,
     });
+
+    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    visitor.qrCode = await qrcode.toDataURL(qrPayload);
 
     const saved = await visitor.save();
 

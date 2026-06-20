@@ -40,6 +40,8 @@ router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, 
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
 router.get('/updates', protectExhibitor, (req, res) => exhibitorAuthController.getUpdates(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
+router.post('/pass-request', protectExhibitor, (req, res) => exhibitorAuthController.requestPass(req, res));
+router.post('/team-member-photo', protectExhibitor, upload.single('photo'), (req, res) => exhibitorAuthController.uploadTeamMemberPhoto(req, res));
 router.put('/update-profile', protectExhibitor, (req, res, next) => {
     uploadFields(req, res, (err) => {
         if (err) {

@@ -7,7 +7,8 @@ const ContactPersonSchema = new mongoose.Schema({
     email: String,
     designation: String,
     mobile: String,
-    alternateNo: String
+    alternateNo: String,
+    photoUrl: String
 });
 
 const ParticipationSchema = new mongoose.Schema({
@@ -248,11 +249,12 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     documentStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
     paymentVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
     bankVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
-    specialDocuments: [{
+  specialDocuments: [{
         label: String,
         url: String,
         uploadedAt: { type: Date, default: Date.now }
-    }]
+    }],
+    expoPushTokens: [{ type: String }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

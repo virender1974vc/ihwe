@@ -107,9 +107,17 @@ router.get('/public-list', async (req, res) => {
 router.get('/by-username/:username', async (req, res) => {
     try {
         const User = require('../models/User');
-        const query = req.params.username;
-        const user = await User.findOne({ username: query })
-            .select('username fullName designation email mobile altMobile role hodImage profileImage');
+        const query = (req.params.username || '').trim();
+        let user = await User.findOne({ username: query })
+            .select('username fullName designation email mobile altMobile role hodImage profileImage hodName hodMobile hodEmail hodDesignation reportingToName reportingToMobile reportingToEmail reportingToDesignation reportingToImage');
+        if (!user) {
+            user = await User.findOne({ username: { $regex: new RegExp(`^${query}`, 'i') } })
+                .select('username fullName designation email mobile altMobile role hodImage profileImage hodName hodMobile hodEmail hodDesignation reportingToName reportingToMobile reportingToEmail reportingToDesignation reportingToImage');
+        }
+        if (!user) {
+            user = await User.findOne({ fullName: { $regex: new RegExp(query, 'i') } })
+                .select('username fullName designation email mobile altMobile role hodImage profileImage hodName hodMobile hodEmail hodDesignation reportingToName reportingToMobile reportingToEmail reportingToDesignation reportingToImage');
+        }
         if (!user) return res.status(404).json({ success: false, message: 'User not found' });
         res.json({ success: true, data: user });
     } catch (err) {

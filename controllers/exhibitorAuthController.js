@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
+const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -12,10 +13,10 @@ class ExhibitorAuthController {
             if (!email || !password)
                 return res.status(400).json({ success: false, message: 'Email and password are required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 
-                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+            const exhibitor = await ExhibitorRegistration.findOne({
+                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') }
             }).sort({ createdAt: -1 })
-              .select('+password');
+                .select('+password');
 
             if (!exhibitor)
                 return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -86,8 +87,8 @@ class ExhibitorAuthController {
             if (!email)
                 return res.status(400).json({ success: false, message: 'Email address is required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 
-                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') } 
+            const exhibitor = await ExhibitorRegistration.findOne({
+                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') }
             }).sort({ createdAt: -1 });
 
             if (!exhibitor)
@@ -155,10 +156,18 @@ class ExhibitorAuthController {
             const email = req.user.email;
             const mobile = req.user.mobile;
 
+            // Normalize mobile to handle leading 0s
+            let strippedMobile = mobile;
+            if (mobile && mobile.startsWith('0')) {
+                strippedMobile = mobile.substring(1);
+            }
+
             const rawRegistrations = await ExhibitorRegistration.find({
                 $or: [
                     { 'contact1.email': email },
-                    { 'contact1.mobile': mobile }
+                    { 'contact1.mobile': mobile },
+                    { 'contact1.mobile': strippedMobile },
+                    { 'contact1.mobile': '0' + strippedMobile }
                 ]
             })
                 .populate('eventId', 'name date location venue startDate endDate')
@@ -176,11 +185,48 @@ class ExhibitorAuthController {
                 selectedRegistration = registrations[0];
             }
 
+            let plainReg = selectedRegistration.toObject ? selectedRegistration.toObject() : Object.assign({}, selectedRegistration);
+
+            if (plainReg.clientId) {
+                try {
+                    const Company = require('../models/Company');
+                    const crmCompany = await Company.findById(plainReg.clientId).lean();
+                    const mapCrmContact = (contact, existing = {}) => contact ? {
+                        title: existing.title || contact.title || '',
+                        firstName: existing.firstName || contact.firstName || '',
+                        lastName: existing.lastName || contact.surname || contact.lastName || '',
+                        email: existing.email || contact.email || '',
+                        designation: existing.designation || contact.designation || '',
+                        mobile: existing.mobile || contact.mobile || '',
+                        alternateNo: existing.alternateNo || contact.alternate || '',
+                        photoUrl: existing.photoUrl || contact.photo || contact.photoUrl || '',
+                    } : existing;
+
+                    if (crmCompany?.contacts?.[0]) {
+                        plainReg.contact1 = mapCrmContact(crmCompany.contacts[0], plainReg.contact1 || {});
+                    }
+                    if (crmCompany?.contacts?.[1]) {
+                        plainReg.contact2 = mapCrmContact(crmCompany.contacts[1], plainReg.contact2 || {});
+                    }
+                } catch (err) {
+                    console.error('CRM contact enrichment error:', err);
+                }
+            }
+
+            let bestRMVal = plainReg.filledBy;
+            if (!bestRMVal || bestRMVal === 'User') {
+                const regWithRM = registrations.find(r => r.filledBy && r.filledBy !== 'User');
+                if (regWithRM) {
+                    bestRMVal = regWithRM.filledBy;
+                    plainReg.filledBy = bestRMVal;
+                }
+            }
+
             // Resolve filledByFullName from User DB
-            if (selectedRegistration && selectedRegistration.filledBy && selectedRegistration.filledBy !== 'User') {
+            if (bestRMVal && bestRMVal !== 'User') {
                 try {
                     const User = require('../models/User');
-                    const filledByVal = (selectedRegistration.filledBy || '').trim();
+                    const filledByVal = bestRMVal.trim();
                     let adminUser = await User.findOne({ username: filledByVal }).select('fullName username').lean();
                     if (!adminUser) {
                         adminUser = await User.findOne({ username: { $regex: new RegExp(`^${filledByVal}`, 'i') } }).select('fullName username').lean();
@@ -188,17 +234,60 @@ class ExhibitorAuthController {
                     if (!adminUser) {
                         adminUser = await User.findOne({ fullName: { $regex: new RegExp(filledByVal, 'i') } }).select('fullName username').lean();
                     }
-                    const plain = selectedRegistration.toObject ? selectedRegistration.toObject() : Object.assign({}, selectedRegistration);
-                    plain.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
-                    selectedRegistration = plain;
+                    plainReg.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
+                    // Ensure the frontend RM fetching logic works even if it uses filledBy
+                    if (adminUser?.username) {
+                        plainReg.filledBy = adminUser.username;
+                    }
                 } catch (err) {
                     console.error('filledByFullName lookup error:', err);
                 }
             }
+            // Fetch Estimate & Invoice
+            let estimateDoc = null;
+            let invoiceDoc = null;
+            if (registrations && registrations.length > 0) {
+                try {
+                    const Estimate = require('../models/Estimate');
+                    const Invoice = require('../models/Invoice');
 
+                    const companyIds = registrations.map(r => r._id.toString());
+
+                    // Fetch latest estimate for any of this user's registrations
+                    estimateDoc = await Estimate.findOne({ companyId: { $in: companyIds } })
+                        .sort({ added: -1 }).lean();
+
+                    // Fetch latest invoice for any of this user's registrations
+                    invoiceDoc = await Invoice.findOne({ companyId: { $in: companyIds } })
+                        .sort({ added: -1 }).lean();
+                } catch (err) {
+                    console.error('Error fetching Estimate/Invoice:', err);
+                }
+            }
+            let mappedEstimate = null;
+            if (estimateDoc) {
+                mappedEstimate = {
+                    id: estimateDoc._id,
+                    estimateNo: estimateDoc.est_no,
+                    date: estimateDoc.added
+                };
+            }
+
+            let mappedInvoice = null;
+            if (invoiceDoc) {
+                mappedInvoice = {
+                    id: invoiceDoc._id,
+                    invoiceNo: invoiceDoc.inv_no,
+                    date: invoiceDoc.added
+                };
+            }
             res.status(200).json({
                 success: true,
-                data: selectedRegistration,
+                data: {
+                    ...plainReg,
+                    estimate: mappedEstimate,
+                    invoice: mappedInvoice
+                },
                 allRegistrations: registrations
             });
         } catch (error) {
@@ -262,6 +351,43 @@ class ExhibitorAuthController {
                     }
                 }
             });
+
+            if (update.teamMembers !== undefined) {
+                if (!Array.isArray(update.teamMembers)) {
+                    return res.status(400).json({ success: false, message: 'Team members must be an array' });
+                }
+
+                let primaryAssigned = false;
+                update.teamMembers = update.teamMembers.slice(0, 50).map((member) => {
+                    const sanitized = {
+                        name: String(member?.name || '').trim(),
+                        designation: String(member?.designation || '').trim(),
+                        email: String(member?.email || '').trim().toLowerCase(),
+                        mobile: String(member?.mobile || '').trim(),
+                        photoUrl: String(member?.photoUrl || '').trim(),
+                        isPrimary: Boolean(member?.isPrimary) && !primaryAssigned,
+                    };
+                    if (sanitized.isPrimary) primaryAssigned = true;
+                    return sanitized;
+                }).filter((member) => member.name && member.designation && member.email && member.mobile);
+            }
+
+            ['contact1', 'contact2'].forEach((contactKey) => {
+                if (update[contactKey] !== undefined) {
+                    const current = update[contactKey] || {};
+                    update[contactKey] = {
+                        title: String(current.title || '').trim(),
+                        firstName: String(current.firstName || '').trim(),
+                        lastName: String(current.lastName || '').trim(),
+                        email: String(current.email || '').trim().toLowerCase(),
+                        designation: String(current.designation || '').trim(),
+                        mobile: String(current.mobile || '').trim(),
+                        alternateNo: String(current.alternateNo || '').trim(),
+                        photoUrl: String(current.photoUrl || '').trim(),
+                    };
+                }
+            });
+
             if (req.files) {
                 const fileFields = {
                     companyLogo: 'companyLogoUrl',
@@ -306,18 +432,39 @@ class ExhibitorAuthController {
         }
     }
 
+    async uploadTeamMemberPhoto(req, res) {
+        try {
+            if (req.user?.role !== 'exhibitor') {
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+            }
+
+            if (!req.file) {
+                return res.status(400).json({ success: false, message: 'Please upload a team member photo' });
+            }
+
+            const photoUrl = req.file.path || req.file.secure_url || req.file.url;
+            res.status(200).json({
+                success: true,
+                message: 'Team member photo uploaded',
+                photoUrl,
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     async registerSeller(req, res) {
         try {
             if (req.user?.role !== 'exhibitor')
                 return res.status(403).json({ success: false, message: 'Access denied.' });
 
             const { sellerDetails } = req.body;
-            
+
             // Check for required bank info
             if (!sellerDetails || !sellerDetails.bankName || !sellerDetails.accountNumber || !sellerDetails.ifscCode) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Bank Name, Account Number, and IFSC Code are required' 
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bank Name, Account Number, and IFSC Code are required'
                 });
             }
 
@@ -363,7 +510,7 @@ class ExhibitorAuthController {
         try {
             if (req.user.role !== 'exhibitor')
                 return res.status(403).json({ success: false, message: 'Access denied.' });
-            
+
             const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id) ? req.query.id : req.user.id;
             const exhibitor = await ExhibitorRegistration.findById(targetId).populate('eventId', 'startDate endDate');
             if (!exhibitor)
@@ -402,7 +549,7 @@ class ExhibitorAuthController {
                 const eventStart = new Date(exhibitor.eventId.startDate);
                 const setupStart = new Date(eventStart);
                 setupStart.setDate(setupStart.getDate() - 2); // Assume setup is 2 days prior
-                
+
                 // Only show if the event is still in the future
                 if (eventStart > new Date()) {
                     updates.push({ badge: 'New', title: 'Exhibition Dates Approaching', desc: `The event starts on ${eventStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}. Prepare your team!`, date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) });
@@ -436,6 +583,36 @@ class ExhibitorAuthController {
                     limit,
                     totalPages
                 }
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async requestPass(req, res) {
+        try {
+            const exhibitorId = req.user.id; // from protectExhibitor middleware
+            const { passType, quantity, vehicles, personnel } = req.body;
+
+            if (!passType || !quantity) {
+                return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
+            }
+
+            // Create new pass request
+            const newRequest = new ExhibitorPassRequest({
+                exhibitorId,
+                passType,
+                quantity,
+                vehicles: passType === 'vehicle' ? vehicles : undefined,
+                personnel: passType !== 'vehicle' ? personnel : undefined
+            });
+
+            await newRequest.save();
+
+            res.status(201).json({
+                success: true,
+                message: `${passType} pass request submitted successfully.`,
+                data: newRequest
             });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });

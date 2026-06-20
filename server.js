@@ -178,7 +178,7 @@ app.use(cors());
 app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use('/temp', express.static('temp', {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -421,6 +421,10 @@ app.use("/api/seller-subscription-plans", sellerSubscriptionPlanRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
+app.use("/api/exhibitor-leads", require('./routes/exhibitorLeadCaptureRoutes'));
+app.use("/api/exhibitor-feedback", require('./routes/exhibitorFeedbackRoutes'));
+app.use("/api/exhibitor-pass-requests", require('./routes/exhibitorPassRequestRoutes'));
+app.use("/api/exhibitor-pass-config", require('./routes/exhibitorPassConfigRoutes'));
 app.use("/api/calls", require('./routes/callRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);
@@ -438,10 +442,13 @@ app.use("/api/conference-tracks", conferenceTrackRoutes);
 app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
 app.use("/api/marketing-materials", require('./routes/marketingMaterialRoutes'));
 app.use("/api/user-targets", require("./routes/userTargetRoutes"));
+app.use("/api/reminders", require("./routes/reminderRoutes"));
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
 initPaymentWarningCron();
+const { initReminderCron } = require('./jobs/reminderCron');
+initReminderCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);

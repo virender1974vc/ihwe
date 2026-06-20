@@ -20,9 +20,19 @@ const getAllInvoices = async (req, res) => {
 // 📍 GET single invoice by ID
 const getInvoiceById = async (req, res) => {
   try {
-    const invoice = await Invoice.findById(req.params.id);
+    const invoice = await Invoice.findById(req.params.id).lean();
 
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+
+    if (invoice.companyId) {
+      let company = await Company.findById(invoice.companyId).lean();
+      if (!company) {
+        company = await ExhibitorRegistration.findById(invoice.companyId).lean();
+      }
+      if (company) {
+        invoice.exhibitor = company;
+      }
+    }
 
     res.status(200).json(invoice);
   } catch (error) {

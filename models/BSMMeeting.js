@@ -62,7 +62,8 @@ bsmMeetingSchema.index(
     unique: true, 
     name: "buyer_slot_unique",
     partialFilterExpression: { 
-      date: { $gt: new Date(0) }
+      date: { $type: "date" },
+      timeSlot: { $type: "string" }
     } 
   }
 );
@@ -73,7 +74,8 @@ bsmMeetingSchema.index(
     unique: true, 
     name: "exhibitor_slot_unique",
     partialFilterExpression: { 
-      date: { $gt: new Date(0) }
+      date: { $type: "date" },
+      timeSlot: { $type: "string" }
     } 
   }
 );
