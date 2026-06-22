@@ -43,6 +43,10 @@ const messageTemplateSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    smallLogo: {
+        type: String,
+        default: null
+    },
     lastUpdatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
