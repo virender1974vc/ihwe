@@ -93,7 +93,7 @@ class EmailService {
             const headerSection = headerSrc
                 ? `<tr>
                     <td align="center" style="line-height:0; padding-top: 10px;">
-                        <img src="${headerSrc}" alt="Header" width="800" style="display:block; width:100%; max-width:800px; height:auto; border:0;" />
+                        <img src="${headerSrc}" alt="Header" width="800" style="display:block; max-width:100%; height:auto; border:0;" />
                     </td>
                    </tr>`
                 : `<tr>
@@ -152,15 +152,25 @@ class EmailService {
             <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; background-color: #f4f4f4;">
                 <tr>
                     <td align="center" style="padding: 20px 0;">
-            <table border="0" cellpadding="0" cellspacing="0" width="800" class="container" style="background-color: #ffffff; border: 1px solid #eeeeee; width: 100%; max-width: 800px;">
+                        <!--[if (gte mso 9)|(IE)]>
+                        <table align="center" border="0" cellspacing="0" cellpadding="0" width="800">
+                        <tr>
+                        <td align="center" valign="top" width="800">
+                        <![endif]-->
+                        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border: 1px solid #eeeeee; max-width: 800px;">
                             ${headerSection}
                             <tr>
-                                <td class="content-td" style="padding: ${padding || '30px 20px'}; background-color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; line-height: 1.7; color: #333333; font-size: 16px;">
+                                <td style="padding: ${padding || '30px 20px'}; background-color: #ffffff; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; line-height: 1.7; color: #333333; font-size: 16px;">
                                     ${body}
                                 </td>
                             </tr>
                             ${footerSection}
                         </table>
+                        <!--[if (gte mso 9)|(IE)]>
+                        </td>
+                        </tr>
+                        </table>
+                        <![endif]-->
                     </td>
                 </tr>
             </table>
@@ -349,6 +359,26 @@ class EmailService {
             const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
+
+            const getImageBuffer = (imgPath) => {
+                try {
+                    if (!imgPath) return null;
+                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
+                    if (!fs.existsSync(absPath)) { console.error('[getImageBuffer] Not found:', absPath); return null; }
+                    return fs.readFileSync(absPath);
+                } catch (e) { console.error('[getImageBuffer] error:', e.message); return null; }
+            };
+
+            const headerBuf = getImageBuffer(template.headerImage);
+            const footerBuf = getImageBuffer(template.footerImage);
+            const smallLogoBuf = getImageBuffer(template.smallLogo);
+
+            // Insert small logo at the very bottom of the email (after Warm Regards)
+            if (template.smallLogo && smallLogoBuf) {
+                const smallLogoHtml = `<div style="text-align: left; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eeeeee;"><img src="cid:email_small_logo_img@ihwe.in" alt="Logo" width="150" style="display:block; max-width:150px; height:auto; border:0;" /></div>`;
+                bodyContent += smallLogoHtml;
+            }
+
             if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
@@ -360,13 +390,12 @@ class EmailService {
                         color: { dark: '#000000', light: '#ffffff' }
                     });
                     const qrBlock = `
-                        <div class="qr-section">
+                        <div style="text-align: center; margin: 25px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
                             <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
                             <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
-                        </div>
-                    `;
+                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                        </div>`;
                     if (bodyContent.includes(QR_TOKEN)) {
                         bodyContent = bodyContent.replace(QR_TOKEN, qrBlock);
                     } else {
@@ -382,24 +411,15 @@ class EmailService {
                 bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
             }
 
-            // Build CID attachments for header/footer images
-            const getImageBuffer = (imgPath) => {
-                try {
-                    if (!imgPath) return null;
-                    const absPath = require('path').resolve(__dirname, '..', imgPath.replace(/^\//, ''));
-                    if (!fs.existsSync(absPath)) { console.error('[getImageBuffer] Not found:', absPath); return null; }
-                    return fs.readFileSync(absPath);
-                } catch (e) { console.error('[getImageBuffer] error:', e.message); return null; }
-            };
 
-            const headerBuf = getImageBuffer(template.headerImage);
-            const footerBuf = getImageBuffer(template.footerImage);
 
             const html = this.emailShell(bodyContent, {
-                headerCid: headerBuf ? 'email_header_img' : null,
-                footerCid: footerBuf ? 'email_footer_img' : null,
+                headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
+                footerCid: footerBuf ? 'email_footer_img@ihwe.in' : null,
+                smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
                 headerImage: template.headerImage || null,
                 footerImage: template.footerImage || null,
+                smallLogoImage: template.smallLogo || null,
                 padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : null),
                 hideFallbackFooter: formType === 'exhibitor-payment-receipt'
             });
@@ -412,16 +432,20 @@ class EmailService {
                 emailAttachments.push({
                     filename: 'entry-qr.png',
                     content: data.__qrBuffer,
-                    cid: 'qrcode_entry'
+                    cid: 'qrcode_entry@ihwe.in'
                 });
             }
             if (headerBuf) {
                 const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
-                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });
+                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img@ihwe.in' });
             }
             if (footerBuf) {
                 const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
-                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
+                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img@ihwe.in' });
+            }
+            if (smallLogoBuf) {
+                const sExt = (template.smallLogo || '').split('.').pop().toLowerCase() || 'webp';
+                emailAttachments.push({ filename: `smallLogo.${sExt}`, content: smallLogoBuf, cid: 'email_small_logo_img@ihwe.in' });
             }
             const sentToUser = await this.sendEmail({
                 to,
@@ -480,13 +504,13 @@ class EmailService {
         }
 
         // For Admin Notifications, we ALWAYS use the DEFAULT transporter to ensure delivery
-        return await this.sendEmail({
-            to: targetAdmin,
-            subject: `NEW LEAD ALERT: ${originalSubject}`,
-            html: adminHtml,
-            profile: 'DEFAULT',
-            logData: { name: "System Admin Notification", message: `Lead alert for ${formType}` }
-        });
+        // return await this.sendEmail({
+        //     to: targetAdmin,
+        //     subject: `NEW LEAD ALERT: ${originalSubject}`,
+        //     html: adminHtml,
+        //     profile: 'DEFAULT',
+        //     logData: { name: "System Admin Notification", message: `Lead alert for ${formType}` }
+        // });
     }
 
     getAdminEmailForProfile(profile) {
@@ -595,28 +619,7 @@ class EmailService {
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
             const emailAttachments = [];
-            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
-                try {
-                    const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
-                    const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
-                    const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
-                    const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 150, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
-                    const qrBlock = `
-                        <div class="qr-section">
-                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
-                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
-                        </div>`;
-                    bodyContent = bodyContent.includes(QR_TOKEN) ? bodyContent.replace(QR_TOKEN, qrBlock) : bodyContent + qrBlock;
-                    emailAttachments.push({ filename: 'entry-qr.png', content: qrBuffer, cid: 'qrcode_entry' });
-                } catch (qrErr) {
-                    console.error('[QR] Failed to generate QR code:', qrErr.message);
-                    bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
-                }
-            } else {
-                bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
-            }
+
             const getImageBuffer = (imgPath) => {
                 try {
                     if (!imgPath) return null;
@@ -627,20 +630,57 @@ class EmailService {
             };
             const headerBuf = getImageBuffer(template.headerImage);
             const footerBuf = getImageBuffer(template.footerImage);
+            const smallLogoBuf = getImageBuffer(template.smallLogo);
+
+            // Add small logo at the very bottom of the email (after Warm Regards)
+            if (template.smallLogo && smallLogoBuf) {
+                const smallLogoHtml = `<div style="text-align: left; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eeeeee;"><img src="cid:email_small_logo_img@ihwe.in" alt="Logo" width="150" style="display:block; max-width:150px; height:auto; border:0;" /></div>`;
+                bodyContent += smallLogoHtml;
+            }
+
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
+                try {
+                    const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+                    const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
+                    const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
+                    const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 150, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+                    const qrBlock = `
+                        <div style="text-align: center; margin: 25px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                            <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
+                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                        </div>`;
+                    bodyContent = bodyContent.includes(QR_TOKEN) ? bodyContent.replace(QR_TOKEN, qrBlock) : bodyContent + qrBlock;
+                    emailAttachments.push({ filename: 'entry-qr.png', content: qrBuffer, cid: 'qrcode_entry@ihwe.in' });
+                } catch (qrErr) {
+                    console.error('[QR] Failed to generate QR code:', qrErr.message);
+                    bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+                }
+            } else {
+                bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+            }
+
             if (headerBuf) {
                 const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
-                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });
+                emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img@ihwe.in' });
             }
             if (footerBuf) {
                 const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
-                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img' });
+                emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img@ihwe.in' });
+            }
+            if (smallLogoBuf) {
+                const sExt = (template.smallLogo || '').split('.').pop().toLowerCase() || 'webp';
+                emailAttachments.push({ filename: `smallLogo.${sExt}`, content: smallLogoBuf, cid: 'email_small_logo_img@ihwe.in' });
             }
 
             const html = this.emailShell(bodyContent, {
-                headerCid: headerBuf ? 'email_header_img' : null,
-                footerCid: footerBuf ? 'email_footer_img' : null,
+                headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
+                footerCid: footerBuf ? 'email_footer_img@ihwe.in' : null,
+                smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
                 headerImage: template.headerImage || null,
                 footerImage: template.footerImage || null,
+                smallLogoImage: template.smallLogo || null,
             });
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
