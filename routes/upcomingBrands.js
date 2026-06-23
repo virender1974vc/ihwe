@@ -44,6 +44,7 @@ router.get('/', async (req, res) => {
     let totalPages = 1;
     let total = items.length;
     let currentPage = 1;
+    let maxOrder = items.reduce((max, item) => Math.max(max, item.order || 0), 0);
 
     if (page && limit) {
       currentPage = page;
@@ -61,7 +62,8 @@ router.get('/', async (req, res) => {
         items: paginatedItems,
         total,
         totalPages,
-        currentPage
+        currentPage,
+        maxOrder
       }
     });
   } catch (error) {
