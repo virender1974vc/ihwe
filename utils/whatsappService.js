@@ -131,8 +131,7 @@ const sendPaymentDelayWarning = async (phone, data, customMessage = null) => {
                 data.stallNo || 'N/A',
                 (data.balanceAmount || 0).toLocaleString('en-IN'),
                 (data.penaltyAmount || 0).toLocaleString('en-IN'),
-                (data.totalPayable || 0).toLocaleString('en-IN'),
-                data.supportPhone || 'Support'
+                (data.totalPayable || 0).toLocaleString('en-IN')
             ],
             media: process.env.AISENSY_BANNER_PAYMENT_REMINDER ? { url: process.env.AISENSY_BANNER_PAYMENT_REMINDER, filename: 'payment-reminder.jpg' } : null
         });
