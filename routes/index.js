@@ -94,7 +94,7 @@ router.use('/bsm', require('./misc/bsmRoutes'));
 router.use('/psm-claim', require('./misc/psmClaimRoutes'));
 router.use('/msme-pms-scheme', require('./misc/msmePmsSchemeRoutes'));
 
-router.use('/upcoming-brands', require("/upcomingBrands"));
+router.use('/upcoming-brands', require("./upcomingBrands"));
 
 router.use('/media-registration', require('./exhibitor_seller/mediaRegistration'));
 router.use('/partner-registration', require('./exhibitor_seller/partnerRegistration'));
