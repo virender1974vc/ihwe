@@ -44,10 +44,15 @@ const upsertTemplate = async (req, res) => {
         if (req.files?.footerImage?.[0]) {
             updateData.footerImage = `/uploads/email-templates/${req.files.footerImage[0].filename}`;
         }
+        // Handle small logo upload
+        if (req.files?.smallLogo?.[0]) {
+            updateData.smallLogo = `/uploads/email-templates/${req.files.smallLogo[0].filename}`;
+        }
 
         // If removeHeaderImage flag is set, clear it
         if (req.body.removeHeaderImage === 'true') updateData.headerImage = null;
         if (req.body.removeFooterImage === 'true') updateData.footerImage = null;
+        if (req.body.removeSmallLogo === 'true') updateData.smallLogo = null;
 
         const template = await MessageTemplate.findOneAndUpdate(
             { formType },

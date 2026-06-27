@@ -17,8 +17,13 @@ const generateRegistrationId = async (type) => {
     { $inc: { seq: 1 } },
     { returnDocument: 'after', upsert: true },
   );
-  const paddedSeq = String(counter.seq).padStart(6, '0');
-  return `${prefix}/${paddedSeq}`;
+  // const paddedSeq = String(counter.seq).padStart(6, '0');
+  // return `${prefix}/${paddedSeq}`;
+  const currentYear = new Date().getFullYear().toString().slice(-2);
+  const seriesNum = counter.seq > 100000 ? (counter.seq % 100000) : counter.seq;
+  const paddedSeq = String(seriesNum).padStart(4, '0');
+
+  return `${prefix}/${currentYear}/${paddedSeq}`;
 };
 
 module.exports = { generateRegistrationId };

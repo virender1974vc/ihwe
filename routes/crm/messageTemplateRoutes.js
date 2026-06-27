@@ -36,7 +36,8 @@ router.get('/:type', verifyToken, messageTemplateController.getTemplateByType);
 // ➤ Update or Create template (with optional header/footer image upload)
 router.post('/upsert', verifyToken, upload.fields([
     { name: 'headerImage', maxCount: 1 },
-    { name: 'footerImage', maxCount: 1 }
+    { name: 'footerImage', maxCount: 1 },
+    { name: 'smallLogo', maxCount: 1 }
 ]), messageTemplateController.upsertTemplate);
 
 // ➤ Delete template
