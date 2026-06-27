@@ -168,9 +168,14 @@ const createOrder = async (req, res) => {
             // Send email
             const email = reg.contact1?.email;
             if (email) {
-                await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-                order.emailSent = true;
+                const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+                order.emailSent = !!sent;
                 await order.save();
+                if (!sent) {
+                    console.error('Accessory order email failed for order:', order.orderNo, 'to:', email);
+                }
+            } else {
+                console.warn('Accessory order email skipped, exhibitor email missing for order:', order.orderNo);
             }
         } catch (emailErr) {
             console.error('Accessory receipt/email error:', emailErr.message);

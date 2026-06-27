@@ -29,6 +29,14 @@ const AccessoryOrderSchema = new mongoose.Schema({
     paymentStatus: { type: String, enum: ['pending', 'paid', 'complimentary'], default: 'pending' },
     paymentMode: { type: String, default: '' },
     transactionId: { type: String, default: '' },
+    bankTransferDetails: {
+        beneficiaryName: { type: String, default: '' },
+        beneficiaryAccountNumber: { type: String, default: '' },
+        ifscCode: { type: String, default: '' },
+        bankName: { type: String, default: '' },
+        amount: { type: Number, default: 0 },
+        accountType: { type: String, enum: ['', 'Savings', 'Current'], default: '' },
+    },
     paidAt: { type: Date },
     // Admin who processed
     processedBy: { type: String, default: 'Admin' },
