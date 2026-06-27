@@ -27,24 +27,24 @@ async function cleanupDuplicates() {
             const regs = groups[key];
             if (regs.length > 1) {
                 console.log(`Found ${regs.length} records for ${key}`);
-                
-                // Sort by status priority: confirmed > paid > pending > failed
+
+
                 regs.sort((a, b) => {
                     const priority = { 'confirmed': 1, 'paid': 2, 'advance-paid': 3, 'approved': 4, 'pending': 5, 'payment-failed': 6 };
                     const scoreA = priority[a.status] || 99;
                     const scoreB = priority[b.status] || 99;
-                    
+
                     if (scoreA !== scoreB) return scoreA - scoreB;
-                    return new Date(b.createdAt) - new Date(a.createdAt); // newest first
+                    return new Date(b.createdAt) - new Date(a.createdAt);
                 });
 
                 const keep = regs[0];
                 const toDelete = regs.slice(1);
 
                 console.log(`+ Keeping: ${keep._id} [Status: ${keep.status}]`);
-                
+
                 for (const d of toDelete) {
-                    // Only delete IF it's not a successful one
+
                     if (!['paid', 'confirmed', 'advance-paid'].includes(d.status)) {
                         await ExhibitorRegistration.findByIdAndDelete(d._id);
                         console.log(`- Deleted duplicate: ${d._id} [Status: ${d.status}]`);
