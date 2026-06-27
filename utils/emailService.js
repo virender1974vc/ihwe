@@ -520,6 +520,25 @@ class EmailService {
                 const sExt = (template.smallLogo || '').split('.').pop().toLowerCase() || 'webp';
                 emailAttachments.push({ filename: `smallLogo.${sExt}`, content: smallLogoBuf, cid: 'email_small_logo_img@ihwe.in' });
             }
+
+            // Accessory approvals should dispatch mail and WhatsApp in the same flow,
+            // instead of firing WhatsApp after the response has already moved on.
+            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
+            const sendDynamicWhatsapp = async () => {
+                if (!mobile || !whatsappContent) {
+                    return { success: false, skipped: true, reason: 'Mobile number or WhatsApp content missing' };
+                }
+
+                const result = await this.trySendAisensyForFormType(formType, mobile, template, data);
+                if (!result.success) {
+                    return whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Dynamic: ${formType}`);
+                }
+                return result;
+            };
+            const accessoryWhatsappPromise = formType === 'exhibitor-accessory-order'
+                ? sendDynamicWhatsapp().catch(err => ({ success: false, error: err.message }))
+                : null;
+
             const sentToUser = await this.sendEmail({
                 to,
                 subject,
@@ -530,13 +549,13 @@ class EmailService {
             });
 
             // 2. Send WhatsApp to USER (if available)
-            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
-            if (mobile && whatsappContent) {
-                this.trySendAisensyForFormType(formType, mobile, template, data).then(result => {
-                    if (!result.success) {
-                        return whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Dynamic: ${formType}`);
-                    }
-                }).catch(err => {
+            if (formType === 'exhibitor-accessory-order') {
+                const whatsappResult = await accessoryWhatsappPromise;
+                if (!whatsappResult?.success) {
+                    console.error(`[WhatsApp] Accessory order msg failed for ${mobile || 'missing mobile'}:`, whatsappResult?.error || whatsappResult?.reason || 'Unknown error');
+                }
+            } else if (mobile && whatsappContent) {
+                sendDynamicWhatsapp().catch(err => {
                     console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
                 });
             }
@@ -1841,6 +1860,9 @@ class EmailService {
                 exhibitor_name: registration.exhibitorName,
                 contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
                 designation: registration.contact1.designation || 'N/A',
+                mobile: registration.contact1.mobile || registration.contact1.whatsapp || registration.contact1.alternateNo || '',
+                phone: registration.contact1.mobile || registration.contact1.whatsapp || registration.contact1.alternateNo || '',
+                whatsapp: registration.contact1.whatsapp || registration.contact1.mobile || registration.contact1.alternateNo || '',
                 registrationId: registration.registrationId,
                 order_no: order.orderNo,
                 stall_no: registration.participation?.stallFor || 'N/A',
@@ -2105,4 +2127,3 @@ class EmailService {
 }
 
 module.exports = new EmailService();
-

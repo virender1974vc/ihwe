@@ -163,9 +163,14 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             }
             const email = reg.contact1?.email;
             if (email) {
-                await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-                order.emailSent = true;
+                const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+                order.emailSent = !!sent;
                 await order.save();
+                if (!sent) {
+                    console.error('Accessory receipt email failed for order:', order.orderNo, 'to:', email);
+                }
+            } else {
+                console.warn('Accessory receipt email skipped, exhibitor email missing for order:', order.orderNo);
             }
         } catch (e) {
             console.error('Accessory receipt/email error:', e.message);
@@ -174,6 +179,168 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
         res.json({ success: true, data: order });
     } catch (err) {
         console.error('Accessory verify error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ── Exhibitor self-purchase: submit NEFT details for admin approval ──────────
+router.post('/neft-order', requireExhibitor, async (req, res) => {
+    try {
+        const { exhibitorRegistrationId, items, bankTransferDetails, notes } = req.body;
+
+        if (!exhibitorRegistrationId) {
+            return res.status(400).json({ success: false, message: 'Registration is required' });
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'No cart items found' });
+        }
+
+        const details = bankTransferDetails || {};
+        const required = [
+            'beneficiaryName',
+            'beneficiaryAccountNumber',
+            'ifscCode',
+            'bankName',
+            'amount',
+            'accountType',
+        ];
+        for (const key of required) {
+            if (!details[key]) {
+                return res.status(400).json({ success: false, message: `${key} is required` });
+            }
+        }
+
+        const amount = Number(details.amount);
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ success: false, message: 'Valid NEFT amount is required' });
+        }
+        if (!['Savings', 'Current'].includes(details.accountType)) {
+            return res.status(400).json({ success: false, message: 'Invalid account type' });
+        }
+
+        const reg = await ExhibitorRegistration.findById(exhibitorRegistrationId);
+        if (!reg) {
+            return res.status(404).json({ success: false, message: 'Registration not found' });
+        }
+
+        let subtotal = 0;
+        let totalGst = 0;
+        const enrichedItems = items.map((item) => {
+            const unitPrice = Number(item.unitPrice || 0);
+            const qty = Number(item.qty || 1);
+            const gstPercent = Number(item.gstPercent || 0);
+            const base = unitPrice * qty;
+            const gst = Math.round((base * gstPercent) * 100) / 10000;
+            const total = base + gst;
+            subtotal += base;
+            totalGst += gst;
+            return { ...item, unitPrice, qty, gstPercent, gstAmount: gst, totalPrice: total };
+        });
+
+        const grandTotal = Math.round((subtotal + totalGst) * 100) / 100;
+        if (Math.abs(amount - grandTotal) > 1) {
+            return res.status(400).json({ success: false, message: 'NEFT amount must match cart total' });
+        }
+
+        const orderNo = await AccessoryOrder.generateOrderNo();
+        const order = new AccessoryOrder({
+            exhibitorRegistrationId,
+            registrationId: reg.registrationId,
+            exhibitorName: reg.exhibitorName,
+            stallNo: reg.participation?.stallFor || '',
+            orderNo,
+            items: enrichedItems,
+            subtotal,
+            totalGst,
+            grandTotal,
+            paymentStatus: 'pending',
+            paymentMode: 'neft',
+            transactionId: '',
+            bankTransferDetails: {
+                beneficiaryName: String(details.beneficiaryName).trim(),
+                beneficiaryAccountNumber: String(details.beneficiaryAccountNumber).trim(),
+                ifscCode: String(details.ifscCode).trim().toUpperCase(),
+                bankName: String(details.bankName).trim(),
+                amount,
+                accountType: details.accountType,
+            },
+            paidAt: null,
+            processedBy: reg.exhibitorName,
+            notes: notes || 'NEFT payment submitted by exhibitor. Awaiting admin approval.',
+        });
+
+        await order.save();
+
+        try {
+            for (const item of items) {
+                if (item.accessoryId) {
+                    await StallAccessory.updateOne(
+                        { _id: item.accessoryId },
+                        { $inc: { availableQty: -Math.abs(Number(item.qty || 1)) } }
+                    );
+                }
+            }
+        } catch (stockErr) {
+            console.error('Stock update error:', stockErr.message);
+        }
+
+        res.status(201).json({ success: true, data: order });
+    } catch (err) {
+        console.error('Accessory NEFT order error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ── Admin: approve pending NEFT payment and generate receipt ─────────────────
+router.put('/orders/:id/approve-neft', flexAuth, async (req, res) => {
+    try {
+        const order = await AccessoryOrder.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        if (order.paymentStatus === 'paid') {
+            return res.json({ success: true, data: order, message: 'Order already paid' });
+        }
+        if (order.paymentMode !== 'neft') {
+            return res.status(400).json({ success: false, message: 'Only NEFT orders can be approved here' });
+        }
+
+        const reg = await ExhibitorRegistration.findById(order.exhibitorRegistrationId);
+        if (!reg) {
+            return res.status(404).json({ success: false, message: 'Registration not found' });
+        }
+
+        order.paymentStatus = 'paid';
+        order.paidAt = new Date();
+        order.transactionId = req.body?.transactionId || `NEFT-${Date.now()}`;
+        order.processedBy = req.body?.processedBy || req.user?.name || req.user?.email || 'Admin';
+        if (req.body?.notes) order.notes = req.body.notes;
+        await order.save();
+
+        try {
+            const pdfResult = await pdfGenerator.generateAccessoryReceipt(order, reg);
+            if (pdfResult?.cloudUrl) {
+                order.receiptUrl = pdfResult.cloudUrl;
+                await order.save();
+            }
+            const email = reg.contact1?.email;
+            if (email) {
+                const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+                order.emailSent = !!sent;
+                await order.save();
+                if (!sent) {
+                    console.error('Accessory NEFT approval email failed for order:', order.orderNo, 'to:', email);
+                }
+            } else {
+                console.warn('Accessory NEFT approval email skipped, exhibitor email missing for order:', order.orderNo);
+            }
+        } catch (e) {
+            console.error('Accessory NEFT approval receipt/email error:', e.message);
+        }
+
+        res.json({ success: true, data: order });
+    } catch (err) {
+        console.error('Accessory NEFT approval error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });
