@@ -4,11 +4,23 @@ const ContactSchema = new mongoose.Schema({
   title: { type: String },
   firstName: { type: String },
   surname: { type: String },
+  name: { type: String },
   designation: { type: String },
+  department: { type: String, default: "" },
   email: { type: String, required: true },
   mobile: { type: String, required: true },
   alternate: { type: String, default: "" },
   photo: { type: String, default: "" },
+  photoUrl: { type: String, default: "" },
+  isPrimary: { type: Boolean, default: false },
+  roleAtExhibition: { type: String, default: "" },
+  passes: {
+    exhibitor: { type: Boolean, default: false },
+    vehicle: { type: Boolean, default: false },
+    service: { type: Boolean, default: false },
+    visitor: { type: Boolean, default: false }
+  },
+  verificationStatus: { type: String, enum: ['Pending', 'Verified', 'Rejected'], default: 'Pending' }
 });
 
 const CompanySchema = new mongoose.Schema(

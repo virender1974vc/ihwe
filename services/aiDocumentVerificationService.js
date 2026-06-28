@@ -101,7 +101,8 @@ or
 The uploaded file is supposed to be: "${documentName}".
 
 Check the image for these things, in this priority order:
-1. NUDITY/EXPLICIT OR MINOR: Does the image contain nudity, sexual content, or sexually suggestive imagery of any kind (partial or full)? Also check separately: does the image appear to show a child or minor (anyone who looks under 18) in any photo, regardless of nudity? Both of these come first and override everything else - you MUST report them regardless of what the image otherwise looks like.${genderCheck}
+1. NUDITY/EXPLICIT OR MINOR: Does the image contain nudity, sexual content, or sexually suggestive imagery of any kind (partial or full)? Also check separately: does the image appear to show a child or minor (anyone who looks under 18)? Both of these come first and override everything else - you MUST report them regardless of what the image otherwise looks like.
+   **CRITICAL EXCEPTION FOR MINORS ON ID PROOFS:** If the uploaded document is a government ID card (Aadhar, PAN, Passport, Driving License, etc.), DO NOT reject it for being a "minor" just because the photo on the ID was taken when they were a child/minor. Many adults have IDs issued when they were minors. ONLY reject an ID card for being a minor if the Date of Birth on the ID explicitly proves they are CURRENTLY under 18 years of age (today's year is 2026, so born after 2008).${genderCheck}
 ${expectedGender ? '3' : '2'}. MISMATCH: If none of the above, does the image clearly fail to match the expected document type "${documentName}" (e.g. a random photo, selfie, screenshot, or unrelated picture instead of the actual document)?
 ${expectedGender ? '4' : '3'}. UNREADABLE: If none of the above, is the image too blurry, blank, cropped, or low-quality to verify at all?
 
@@ -109,7 +110,7 @@ Respond ONLY with a JSON object (no markdown fences, no extra text) in exactly t
 {"valid": true, "issue": null, "reason": "short reason"}
 
 - Nudity/explicit found -> {"valid": false, "issue": "nudity", "reason": "..."}
-- Image shows a child/minor -> {"valid": false, "issue": "minor", "reason": "..."}${genderRule}
+- Image shows a child/minor (unless it is a valid ID card of a current adult) -> {"valid": false, "issue": "minor", "reason": "..."}${genderRule}
 - Wrong document type -> {"valid": false, "issue": "mismatch", "reason": "..."}
 - Unreadable -> {"valid": false, "issue": "unreadable", "reason": "..."}
 - None of the above -> {"valid": true, "issue": null, "reason": "Looks valid"}

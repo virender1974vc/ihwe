@@ -497,33 +497,39 @@ class ExhibitorAuthController {
             const extension = originalName.includes('.') ? originalName.split('.').pop() : '';
             const fileType = (extension || mimeSubtype).toUpperCase();
 
+            const docType = req.body.documentType === 'idproof' ? 'ID Proof' : 'Person Photo';
+
             const aiResult = await aiDocumentVerificationService.verifyDocument({
                 fileUrl: photoUrl,
-                documentName: 'Person Photo',
+                documentName: docType,
                 fileType
             });
 
             const unsafePhotoIssues = new Set([
-                'nudity',
-                'explicit',
-                'sexual_content',
-                'adult_content',
-                'minor',
-                'inappropriate',
-                'inappropriate_content',
-                'graphic_violence',
-                'hate'
+                'nudity', 'explicit', 'sexual_content', 'adult_content',
+                'minor', 'inappropriate', 'inappropriate_content', 'graphic_violence', 'hate'
             ]);
             const aiIssue = String(aiResult.issue || '').toLowerCase();
-            const isUnsafePhoto = !aiResult.skipped
-                && aiResult.valid === false
-                && unsafePhotoIssues.has(aiIssue);
 
-            if (isUnsafePhoto) {
+            let isRejected = false;
+            let rejectReason = aiResult.reason;
+
+            if (!aiResult.skipped && aiResult.valid === false) {
+                if (docType === 'Person Photo') {
+                    if (unsafePhotoIssues.has(aiIssue)) {
+                        isRejected = true;
+                        rejectReason = aiResult.reason || 'This photo was rejected because it contains inappropriate content.';
+                    }
+                } else {
+                    isRejected = true;
+                }
+            }
+
+            if (isRejected) {
                 await deleteFileFromCloudinary(photoUrl);
                 return res.status(400).json({
                     success: false,
-                    message: aiResult.reason || 'This photo was rejected because it contains inappropriate content.',
+                    message: rejectReason,
                     aiIssue: aiResult.issue
                 });
             }

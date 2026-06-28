@@ -374,6 +374,7 @@ app.use("/api/data-source", dataSourceRoutes);
 app.use("/api/crm-states", crmStateRoutes);
 app.use("/api/users", crmUserRoutes);
 app.use("/api/companies", companyRoutes);
+app.use("/api/client-contacts", require('./routes/clientContactRoutes'));
 app.use("/api/status-option", statusOptionRoutes);
 app.use("/api/next-action", nextActionRoutes);
 app.use("/api/crm-messages", whatsappMessageRoutes);
