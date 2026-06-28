@@ -50,6 +50,29 @@ class AiDocumentVerificationService {
     }
 
     buildPrompt(documentName, expectedGender) {
+        if (String(documentName).trim().toLowerCase() === 'company logo') {
+            return `You are a content-moderation system for company logo uploads on an exhibition portal.
+
+The uploaded image is supposed to be a company logo or brand image. Accept normal brand logos, text marks, symbols, product packaging with clear branding, storefront/signboard images, or clean brand creatives.
+
+Reject when the image clearly contains:
+- nudity, explicit sexual content, or strongly sexually suggestive content -> issue "nudity"
+- bikini, lingerie, underwear, swimwear model photos, revealing glamour/model poses, or adult body-focused fashion/catalog photos -> issue "nudity"
+- a child/minor in an unsafe or inappropriate context -> issue "minor"
+- graphic violence, hateful imagery, or other clearly inappropriate content -> issue "inappropriate_content"
+- a person/model/selfie/photo shoot/product catalog image instead of an actual logo or brand image -> issue "mismatch"
+
+Important:
+- Do not accept a human model photo as a company logo just because it may be from a fashion brand.
+- If the image is mainly a person/model/body, reject it as "mismatch"; if it is revealing or sexually suggestive, reject it as "nudity".
+- Be strict for the Company Logo field.
+
+Respond ONLY with valid JSON:
+{"valid": true, "issue": null, "reason": "Looks safe"}
+or
+{"valid": false, "issue": "nudity|minor|inappropriate_content|mismatch", "reason": "short reason"}`;
+        }
+
         if (String(documentName).trim().toLowerCase() === 'person photo') {
             return `You are a content-moderation system for profile photos on an exhibition portal.
 
@@ -174,7 +197,15 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
         const blockReason = response.promptFeedback?.blockReason;
         const finishReason = response.candidates?.[0]?.finishReason;
         if (blockReason || finishReason === 'SAFETY') {
-            return { skipped: false, valid: false, issue: 'nudity', reason: 'Flagged as inappropriate content by the AI provider\'s safety system.' };
+            const isCompanyLogo = String(documentName || '').trim().toLowerCase() === 'company logo';
+            return {
+                skipped: false,
+                valid: false,
+                issue: isCompanyLogo ? 'verification_blocked' : 'nudity',
+                reason: isCompanyLogo
+                    ? 'AI could not verify this image confidently. Please upload a clear company logo or brand image.'
+                    : 'Flagged as inappropriate content by the AI provider\'s safety system.'
+            };
         }
 
         return this.parseAiResponse(response.text());
