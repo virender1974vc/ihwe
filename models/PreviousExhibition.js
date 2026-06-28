@@ -8,12 +8,6 @@ const auditUserSchema = new mongoose.Schema({
 
 const previousExhibitionSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true, maxlength: 150 },
-    year: {
-        type: Number,
-        required: true,
-        min: 1900,
-        max: 2200
-    },
     status: {
         type: String,
         enum: ['Active', 'Inactive'],

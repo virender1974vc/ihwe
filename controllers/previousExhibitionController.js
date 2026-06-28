@@ -42,16 +42,12 @@ const enrichAuditNames = async (items) => {
 
 const cleanPayload = (body) => ({
     name: String(body.name || '').trim(),
-    year: Number(body.year),
     status: body.status === 'Inactive' ? 'Inactive' : 'Active'
 });
 
 const validate = (data) => {
-    if (!data.name || !Number.isInteger(data.year)) {
-        return 'Exhibition name and year are required.';
-    }
-    if (data.year < 1900 || data.year > 2200) {
-        return 'Please enter a valid exhibition year.';
+    if (!data.name) {
+        return 'Exhibition name is required.';
     }
     return null;
 };
@@ -61,15 +57,14 @@ const findDuplicate = (payload, excludedId) => PreviousExhibition.findOne({
     name: {
         $regex: `^${payload.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
         $options: 'i'
-    },
-    year: payload.year
+    }
 }).lean();
 
 const handleError = (res, error) => {
     if (error?.code === 11000) {
         return res.status(409).json({
             success: false,
-            message: 'This exhibition name and year already exists.'
+            message: 'This exhibition name already exists.'
         });
     }
     console.error('Previous exhibition error:', error);
@@ -79,9 +74,9 @@ const handleError = (res, error) => {
 exports.getPublic = async (_req, res) => {
     try {
         const data = await PreviousExhibition.find({ status: 'Active' })
-            .select('name year')
+            .select('name')
             .collation({ locale: 'en', strength: 2 })
-            .sort({ name: 1, year: -1 })
+            .sort({ name: 1 })
             .lean();
         res.json({ success: true, data });
     } catch (error) {
@@ -93,7 +88,7 @@ exports.getAll = async (_req, res) => {
     try {
         const records = await PreviousExhibition.find()
             .collation({ locale: 'en', strength: 2 })
-            .sort({ name: 1, year: -1 })
+            .sort({ name: 1 })
             .lean();
         const data = await enrichAuditNames(records);
         res.json({ success: true, data });
@@ -112,7 +107,7 @@ exports.create = async (req, res) => {
         if (await findDuplicate(payload)) {
             return res.status(409).json({
                 success: false,
-                message: 'This exhibition name and year already exists.'
+                message: 'This exhibition name already exists.'
             });
         }
 
@@ -123,7 +118,7 @@ exports.create = async (req, res) => {
             updatedBy: actor
         });
         await logActivity(req, 'Created', 'Previous Exhibition List',
-            `Created ${data.name} (${data.year})`);
+            `Created ${data.name}`);
         res.status(201).json({ success: true, message: 'Previous exhibition created.', data });
     } catch (error) {
         handleError(res, error);
@@ -140,7 +135,7 @@ exports.update = async (req, res) => {
         if (await findDuplicate(payload, req.params.id)) {
             return res.status(409).json({
                 success: false,
-                message: 'This exhibition name and year already exists.'
+                message: 'This exhibition name already exists.'
             });
         }
 
@@ -153,7 +148,7 @@ exports.update = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Previous exhibition not found.' });
         }
         await logActivity(req, 'Updated', 'Previous Exhibition List',
-            `Updated ${data.name} (${data.year})`);
+            `Updated ${data.name}`);
         res.json({ success: true, message: 'Previous exhibition updated.', data });
     } catch (error) {
         handleError(res, error);
@@ -167,7 +162,7 @@ exports.remove = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Previous exhibition not found.' });
         }
         await logActivity(req, 'Deleted', 'Previous Exhibition List',
-            `Deleted ${data.name} (${data.year})`);
+            `Deleted ${data.name}`);
         res.json({ success: true, message: 'Previous exhibition deleted.' });
     } catch (error) {
         handleError(res, error);

@@ -619,7 +619,22 @@ class EmailService {
         }
     }
 
+    getExhibitorRecipient(registration) {
+        return String(
+            registration?.officialEmail
+            || registration?.companyEmail
+            || registration?.contact1?.email
+            || ''
+        ).trim();
+    }
+
     async sendEmail({ to, subject, html, attachments = [], profile = 'DEFAULT', logData = {} }) {
+        const recipient = String(to || '').trim();
+        if (!recipient) {
+            console.warn(`[Email] Skipped "${subject || 'Untitled'}": no recipient email available.`);
+            return false;
+        }
+
         try {
             let transporter = this.transporter;
             let fromEmail = process.env.FROM_EMAIL;
@@ -647,7 +662,7 @@ class EmailService {
 
             const info = await transporter.sendMail({
                 from: '"' + fromName + '" <' + fromEmail + '>',
-                to,
+                to: recipient,
                 subject,
                 html,
                 attachments
@@ -655,7 +670,7 @@ class EmailService {
 
             // Log the email in the database - ALIGNED WITH EmailLog Model
             await EmailLog.create({
-                recipient: to,
+                recipient,
                 subject,
                 status: 'success',
                 name: logData.name || null,
@@ -671,7 +686,7 @@ class EmailService {
         } catch (error) {
             console.error('Email send failed:', error);
             await EmailLog.create({
-                recipient: to,
+                recipient,
                 subject,
                 status: 'failed',
                 error: error.message,
@@ -1258,7 +1273,7 @@ class EmailService {
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
             const sentToUser = await this.sendEmail({
-                to: registration.contact1.email,
+                to: this.getExhibitorRecipient(registration),
                 subject,
                 html,
                 attachments,
@@ -1531,7 +1546,7 @@ class EmailService {
         }
 
         return await this.sendDynamicConfirmation({
-            to: registration.contact1.email,
+            to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-payment-receipt',
             data,
             profile: 'EXHIBITOR',
@@ -1543,7 +1558,7 @@ class EmailService {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
         const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
         return await this.sendDynamicConfirmation({
-            to: registration.contact1.email,
+            to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-registration-approved',
             data: {
                 exhibitor_name: registration.exhibitorName,
@@ -1582,7 +1597,7 @@ class EmailService {
         };
 
         return await this.sendDynamicConfirmation({
-            to: registration.contact1.email,
+            to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-booking-confirmed',
             data,
             profile: 'EXHIBITOR'
@@ -1602,7 +1617,7 @@ class EmailService {
         };
 
         return await this.sendDynamicConfirmation({
-            to: registration.contact1.email,
+            to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-registration-rejection',
             data,
             profile: 'EXHIBITOR'
@@ -1623,7 +1638,7 @@ class EmailService {
             phone: registration.contact1.mobile
         };
         return await this.sendDynamicConfirmation({
-            to: registration.contact1.email,
+            to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-payment-failed',
             data,
             profile: 'EXHIBITOR'

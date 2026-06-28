@@ -43,10 +43,20 @@ class ExhibitorRegistrationController {
     async addRegistration(req, res) {
         try {
             const previousExhibitionId = req.body.previousExhibition?.id;
-            if (req.body.exhibitorStatus === 'Existing Client' && !previousExhibitionId) {
+            const previousExhibitionYear = Number(req.body.previousExhibition?.year);
+            const currentYear = new Date().getFullYear();
+            if (
+                req.body.exhibitorStatus === 'Existing Client'
+                && (
+                    !previousExhibitionId
+                    || !Number.isInteger(previousExhibitionYear)
+                    || previousExhibitionYear < 2016
+                    || previousExhibitionYear > currentYear
+                )
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Please select a valid previous exhibition.'
+                    message: `Please select a valid previous exhibition and year between 2016 and ${currentYear}.`
                 });
             }
             if (previousExhibitionId) {
@@ -63,7 +73,7 @@ class ExhibitorRegistrationController {
                 req.body.previousExhibition = {
                     id: previousExhibition._id,
                     name: previousExhibition.name,
-                    year: previousExhibition.year
+                    year: previousExhibitionYear
                 };
             } else {
                 delete req.body.previousExhibition;
