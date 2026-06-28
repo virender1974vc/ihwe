@@ -17,7 +17,7 @@ const storage = new CloudinaryStorage({
     params: async (req, file) => ({
         folder: 'exhibitor-docs',
         resource_type: 'auto',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
     }),
 });
 
@@ -41,7 +41,18 @@ router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController
 router.get('/updates', protectExhibitor, (req, res) => exhibitorAuthController.getUpdates(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
 router.post('/pass-request', protectExhibitor, (req, res) => exhibitorAuthController.requestPass(req, res));
-router.post('/team-member-photo', protectExhibitor, upload.single('photo'), (req, res) => exhibitorAuthController.uploadTeamMemberPhoto(req, res));
+router.post('/team-member-photo', protectExhibitor, (req, res, next) => {
+    upload.single('photo')(req, res, (err) => {
+        if (err) {
+            console.error('Team member photo upload error:', err);
+            return res.status(400).json({
+                success: false,
+                message: 'Photo upload failed: ' + err.message
+            });
+        }
+        next();
+    });
+}, (req, res) => exhibitorAuthController.uploadTeamMemberPhoto(req, res));
 router.put('/update-profile', protectExhibitor, (req, res, next) => {
     uploadFields(req, res, (err) => {
         if (err) {

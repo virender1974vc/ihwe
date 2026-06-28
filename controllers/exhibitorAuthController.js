@@ -2,9 +2,38 @@ const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary').v2;
 const emailService = require('../utils/emailService');
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
+const aiDocumentVerificationService = require('../services/aiDocumentVerificationService');
 const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+
+const FILE_FIELD_LABELS = {
+    companyLogo: 'Company Logo',
+    panCardFront: 'PAN Card',
+    panCardBack: 'PAN Card',
+    aadhaarCardFront: 'Aadhaar Card',
+    aadhaarCardBack: 'Aadhaar Card',
+    gstCertificate: 'GST Certificate',
+    cancelledCheque: 'Cancelled Cheque',
+    representativePhoto: 'Representative Photo',
+};
+
+async function deleteFileFromCloudinary(fileUrl) {
+    if (!fileUrl || !fileUrl.includes('cloudinary.com')) return;
+    try {
+        const urlParts = fileUrl.split('/upload/');
+        if (urlParts.length > 1) {
+            let publicId = urlParts[1];
+            if (publicId.match(/^v\d+\//)) publicId = publicId.replace(/^v\d+\//, '');
+            publicId = publicId.substring(0, publicId.lastIndexOf('.')) || publicId;
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => { });
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => { });
+        }
+    } catch (err) {
+        console.error('Cloudinary deletion error:', err);
+    }
+}
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -334,7 +363,7 @@ class ExhibitorAuthController {
                 return res.status(403).json({ success: false, message: 'Access denied.' });
             }
 
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'aadhaarNo', 'registrantType', 'contact1', 'contact2', 'natureOfBusiness', 'companyDescription', 'productCategories', 'teamMembers', 'certificates', 'brandName', 'companyLogoUrl'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'companyEmail', 'fasciaName', 'gstNo', 'panNo', 'aadhaarNo', 'registrantType', 'contact1', 'contact2', 'natureOfBusiness', 'companyDescription', 'productCategories', 'teamMembers', 'certificates', 'brandName', 'companyLogoUrl', 'typeOfBusiness', 'industrySector', 'socialMedia'];
             const update = {};
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
@@ -400,10 +429,30 @@ class ExhibitorAuthController {
                     representativePhoto: 'representativePhotoUrl'
                 };
 
-                Object.keys(fileFields).forEach(field => {
-                    if (req.files[field] && req.files[field][0]) {
-                        update[fileFields[field]] = req.files[field][0].path;
+                const uploadedFields = Object.keys(fileFields).filter(field => req.files[field] && req.files[field][0]);
+                for (const field of uploadedFields) {
+                    const uploadedFile = req.files[field][0];
+                    const originalName = uploadedFile.originalname || uploadedFile.name || '';
+                    const fileType = (originalName.split('.').pop() || '').toUpperCase();
+
+                    const aiResult = await aiDocumentVerificationService.verifyDocument({
+                        fileUrl: uploadedFile.path,
+                        documentName: FILE_FIELD_LABELS[field] || field,
+                        fileType
+                    });
+
+                    if (!aiResult.skipped && aiResult.valid === false) {
+                        await Promise.all(uploadedFields.map(f => deleteFileFromCloudinary(req.files[f][0].path)));
+                        return res.status(400).json({
+                            success: false,
+                            message: aiResult.reason || `This file was rejected by AI verification: ${aiResult.issue}`,
+                            aiIssue: aiResult.issue
+                        });
                     }
+                }
+
+                uploadedFields.forEach(field => {
+                    update[fileFields[field]] = req.files[field][0].path;
                 });
             }
 
@@ -439,13 +488,49 @@ class ExhibitorAuthController {
             }
 
             if (!req.file) {
-                return res.status(400).json({ success: false, message: 'Please upload a team member photo' });
+                return res.status(400).json({ success: false, message: 'Please upload a photo' });
             }
 
             const photoUrl = req.file.path || req.file.secure_url || req.file.url;
+            const originalName = req.file.originalname || req.file.name || '';
+            const mimeSubtype = String(req.file.mimetype || '').split('/').pop() || '';
+            const extension = originalName.includes('.') ? originalName.split('.').pop() : '';
+            const fileType = (extension || mimeSubtype).toUpperCase();
+
+            const aiResult = await aiDocumentVerificationService.verifyDocument({
+                fileUrl: photoUrl,
+                documentName: 'Person Photo',
+                fileType
+            });
+
+            const unsafePhotoIssues = new Set([
+                'nudity',
+                'explicit',
+                'sexual_content',
+                'adult_content',
+                'minor',
+                'inappropriate',
+                'inappropriate_content',
+                'graphic_violence',
+                'hate'
+            ]);
+            const aiIssue = String(aiResult.issue || '').toLowerCase();
+            const isUnsafePhoto = !aiResult.skipped
+                && aiResult.valid === false
+                && unsafePhotoIssues.has(aiIssue);
+
+            if (isUnsafePhoto) {
+                await deleteFileFromCloudinary(photoUrl);
+                return res.status(400).json({
+                    success: false,
+                    message: aiResult.reason || 'This photo was rejected because it contains inappropriate content.',
+                    aiIssue: aiResult.issue
+                });
+            }
+
             res.status(200).json({
                 success: true,
-                message: 'Team member photo uploaded',
+                message: 'Photo uploaded',
                 photoUrl,
             });
         } catch (error) {

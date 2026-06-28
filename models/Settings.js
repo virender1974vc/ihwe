@@ -161,6 +161,17 @@ const settingsSchema = new mongoose.Schema({
     downloadBrochurePdf: {
         type: String,
         default: ""
+    },
+    // --- AI Document Verification Settings ---
+    aiVerification: {
+        provider: { type: String, enum: ['gemini', 'openai'], default: 'gemini' },
+        isEnabled: { type: Boolean, default: false },
+        geminiApiKey: { type: String, default: "" },
+        geminiModel: { type: String, default: "gemini-2.5-flash" },
+        openaiApiKey: { type: String, default: "" },
+        openaiModel: { type: String, default: "gpt-4o-mini" },
+        lastTestedAt: { type: Date, default: null },
+        lastTestResult: { type: String, default: "" }
     }
 }, { timestamps: true });
 

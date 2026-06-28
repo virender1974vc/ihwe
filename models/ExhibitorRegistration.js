@@ -39,6 +39,17 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     },
     registrationId: { type: String, unique: true, sparse: true },
     exhibitorName: { type: String, required: true },
+    exhibitorStatus: {
+        type: String,
+        enum: ['New Client', 'Existing Client'],
+        default: 'New Client'
+    },
+    previousExhibition: {
+        id: { type: mongoose.Schema.Types.ObjectId, ref: 'PreviousExhibition' },
+        name: String,
+        year: Number,
+        edition: String
+    },
     typeOfBusiness: String,
     industrySector: String,
     website: String,
@@ -48,6 +59,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     city: String,
     pincode: String,
     landlineNo: String,
+    companyEmail: { type: String, trim: true, lowercase: true },
     gstNo: String,
     panNo: String,
     aadhaarNo: String,

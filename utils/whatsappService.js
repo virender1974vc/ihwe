@@ -1,4 +1,5 @@
 const axios = require('axios');
+const aisensy = require('./aisensyService');
 
 /**
  * WhatsApp Service - Send WhatsApp messages via OPUS API
@@ -42,7 +43,18 @@ const formatPhoneNumber = (phone) => {
  */
 const sendMessage = async (to, message) => {
     try {
-        // If WhatsApp is disabled, just log and return success
+        // Try AiSensy first via the generic freeform wrapper template - checked BEFORE
+        // the legacy Opus enabled/disabled check below, so AiSensy keeps working even
+        // after OPUS_API_KEY is eventually removed from .env at the end of migration.
+        const aisensyResult = await aisensy.sendTemplate({
+            campaignEnvKey: 'AISENSY_CAMPAIGN_ADMIN_FREEFORM',
+            phone: to,
+            templateParams: [message]
+        });
+        if (aisensyResult.success) return aisensyResult;
+        if (!aisensyResult.skipped) console.warn(`[WhatsApp] AiSensy attempt failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+
+        // If legacy Opus is disabled/unconfigured, just log and return success
         if (!WHATSAPP_ENABLED || !OPUS_API_KEY) {
             console.log('📱 WhatsApp (Disabled/Preview):', { to, message: message.substring(0, 100) + '...' });
             return {
@@ -106,6 +118,27 @@ const sendMessage = async (to, message) => {
  * @returns {Promise<object>}
  */
 const sendPaymentDelayWarning = async (phone, data, customMessage = null) => {
+    if (!customMessage) {
+        const aisensyResult = await aisensy.sendTemplate({
+            campaignEnvKey: 'AISENSY_CAMPAIGN_PAYMENT_REMINDER',
+            phone,
+            userName: data.contactPerson || 'Customer',
+            templateParams: [
+                data.contactPerson || 'Customer',
+                data.eventName || 'Exhibition',
+                data.daysOverdue || 0,
+                data.registrationId || 'N/A',
+                data.stallNo || 'N/A',
+                (data.balanceAmount || 0).toLocaleString('en-IN'),
+                (data.penaltyAmount || 0).toLocaleString('en-IN'),
+                (data.totalPayable || 0).toLocaleString('en-IN')
+            ],
+            media: process.env.AISENSY_BANNER_PAYMENT_REMINDER ? { url: process.env.AISENSY_BANNER_PAYMENT_REMINDER, filename: 'payment-reminder.jpg' } : null
+        });
+        if (aisensyResult.success) return aisensyResult;
+        if (!aisensyResult.skipped) console.warn(`[WhatsApp] AiSensy attempt failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+    }
+
     const message = customMessage || `⚠️ *Payment Reminder*
 
 Dear ${data.contactPerson || 'Customer'},
@@ -135,6 +168,22 @@ _This is an automated message from ${data.companyName || 'Exhibition'}_`;
  * @returns {Promise<object>}
  */
 const sendPaymentConfirmation = async (phone, data) => {
+    const aisensyResult = await aisensy.sendTemplate({
+        campaignEnvKey: 'AISENSY_CAMPAIGN_PAYMENT_CONFIRMED',
+        phone,
+        userName: data.contactPerson || 'Customer',
+        templateParams: [
+            data.contactPerson || 'Customer',
+            data.registrationId || 'N/A',
+            (data.amountPaid || 0).toLocaleString('en-IN'),
+            data.transactionId || 'N/A',
+            new Date().toLocaleDateString('en-IN')
+        ],
+        media: process.env.AISENSY_BANNER_PAYMENT_CONFIRMED ? { url: process.env.AISENSY_BANNER_PAYMENT_CONFIRMED, filename: 'payment-confirmed.jpg' } : null
+    });
+    if (aisensyResult.success) return aisensyResult;
+        if (!aisensyResult.skipped) console.warn(`[WhatsApp] AiSensy attempt failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+
     const message = `✅ *Payment Received*
 
 Dear ${data.contactPerson || 'Customer'},
@@ -161,6 +210,22 @@ _${data.companyName || 'Exhibition'}_`;
  * @returns {Promise<object>}
  */
 const sendBookingConfirmation = async (phone, data) => {
+    const aisensyResult = await aisensy.sendTemplate({
+        campaignEnvKey: 'AISENSY_CAMPAIGN_BOOKING_CONFIRMED',
+        phone,
+        userName: data.contactPerson || 'Customer',
+        templateParams: [
+            data.contactPerson || 'Customer',
+            data.eventName || 'Exhibition',
+            data.registrationId || 'N/A',
+            data.stallNo || 'N/A',
+            data.stallType || 'N/A'
+        ],
+        media: process.env.AISENSY_BANNER_BOOKING_CONFIRMED ? { url: process.env.AISENSY_BANNER_BOOKING_CONFIRMED, filename: 'booking-confirmed.jpg' } : null
+    });
+    if (aisensyResult.success) return aisensyResult;
+        if (!aisensyResult.skipped) console.warn(`[WhatsApp] AiSensy attempt failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+
     const message = `🎉 *Booking Confirmed*
 
 Dear ${data.contactPerson || 'Customer'},
@@ -187,6 +252,22 @@ _${data.companyName || 'Exhibition'}_`;
  * @returns {Promise<object>}
  */
 const sendInstallmentReminder = async (phone, data) => {
+    const aisensyResult = await aisensy.sendTemplate({
+        campaignEnvKey: 'AISENSY_CAMPAIGN_INSTALLMENT_DUE',
+        phone,
+        userName: data.contactPerson || 'Customer',
+        templateParams: [
+            data.contactPerson || 'Customer',
+            data.installmentLabel || 'installment',
+            data.registrationId || 'N/A',
+            (data.dueAmount || 0).toLocaleString('en-IN'),
+            data.dueDate || 'N/A'
+        ],
+        media: process.env.AISENSY_BANNER_INSTALLMENT_DUE ? { url: process.env.AISENSY_BANNER_INSTALLMENT_DUE, filename: 'installment-due.jpg' } : null
+    });
+    if (aisensyResult.success) return aisensyResult;
+        if (!aisensyResult.skipped) console.warn(`[WhatsApp] AiSensy attempt failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+
     const message = `📅 *Installment Due Reminder*
 
 Dear ${data.contactPerson || 'Customer'},

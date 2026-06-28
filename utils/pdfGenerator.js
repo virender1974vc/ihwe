@@ -617,8 +617,9 @@ class PDFGenerator {
     }
 
     async generateAccessoryReceipt(order, registration) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             try {
+                const { headerPath, footerPath } = await resolveHeaderFooterPaths();
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
                 const filePath = path.join(TEMP_DIR, `acc_receipt_${order._id}_${Date.now()}.pdf`);
                 const stream = fs.createWriteStream(filePath);
@@ -627,7 +628,7 @@ class PDFGenerator {
                 const pageW = doc.page.width;
                 const fmt = (n) => `INR ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
-                this._headerImg(doc);
+                this._headerImg(doc, headerPath);
                 let y = doc.y + 10;
 
                 // Title
