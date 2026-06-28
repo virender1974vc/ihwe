@@ -398,6 +398,7 @@ app.use("/api/floating-videos", floatingVideoRoutes);
 app.use("/api/sponsorship-enquiry", sponsorshipEnquiryRoutes);
 app.use("/api/expo-support-enquiry", expoSupportEnquiryRoutes);
 app.use("/api/referrals", referralRoutes);
+app.use("/api/ownership-transfer", require("./routes/ownershipTransferRoutes"));
 
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));

@@ -360,12 +360,16 @@ class EmailService {
                         color: { dark: '#000000', light: '#ffffff' }
                     });
                     const qrBlock = `
-                        <div class="qr-section">
-                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
-                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
-                        </div>
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 25px 0;">
+                            <tr>
+                                <td align="center" style="padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff;">
+                                    <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                                    <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                                    <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
+                                    <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                                </td>
+                            </tr>
+                        </table>
                     `;
                     if (bodyContent.includes(QR_TOKEN)) {
                         bodyContent = bodyContent.replace(QR_TOKEN, qrBlock);
@@ -602,12 +606,16 @@ class EmailService {
                     const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
                     const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 150, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
                     const qrBlock = `
-                        <div class="qr-section">
-                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
-                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
-                        </div>`;
+                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 25px 0;">
+                            <tr>
+                                <td align="center" style="padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px; background-color: #ffffff;">
+                                    <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                                    <img src="cid:qrcode_entry" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
+                                    <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
+                                    <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                                </td>
+                            </tr>
+                        </table>`;
                     bodyContent = bodyContent.includes(QR_TOKEN) ? bodyContent.replace(QR_TOKEN, qrBlock) : bodyContent + qrBlock;
                     emailAttachments.push({ filename: 'entry-qr.png', content: qrBuffer, cid: 'qrcode_entry' });
                 } catch (qrErr) {
@@ -1635,6 +1643,11 @@ class EmailService {
             contextDescription = 'requesting Expo Support Services';
             dashboardText = 'IHWE Partner Network';
             contextGreeting = 'Exhibitor';
+        } else if (context === 'ADMIN' || context.includes('admin')) {
+            contextTitle = 'Admin Login';
+            contextDescription = 'logging into the Admin Panel';
+            dashboardText = 'IHWE Admin Dashboard';
+            contextGreeting = 'Admin';
         }
 
         const subject = `IHWE ${contextTitle} – Email Verification OTP`;
