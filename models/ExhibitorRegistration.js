@@ -7,6 +7,7 @@ const ContactPersonSchema = new mongoose.Schema({
     email: String,
     designation: String,
     mobile: String,
+    whatsapp: String,
     alternateNo: String,
     photoUrl: String
 });
