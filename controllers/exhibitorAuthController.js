@@ -488,13 +488,31 @@ class ExhibitorAuthController {
             }
 
             if (!req.file) {
-                return res.status(400).json({ success: false, message: 'Please upload a team member photo' });
+                return res.status(400).json({ success: false, message: 'Please upload a photo' });
             }
 
             const photoUrl = req.file.path || req.file.secure_url || req.file.url;
+            const originalName = req.file.originalname || req.file.name || '';
+            const fileType = (originalName.split('.').pop() || '').toUpperCase();
+
+            const aiResult = await aiDocumentVerificationService.verifyDocument({
+                fileUrl: photoUrl,
+                documentName: 'Person Photo',
+                fileType
+            });
+
+            if (!aiResult.skipped && aiResult.valid === false) {
+                await deleteFileFromCloudinary(photoUrl);
+                return res.status(400).json({
+                    success: false,
+                    message: aiResult.reason || `This photo was rejected by AI verification: ${aiResult.issue}`,
+                    aiIssue: aiResult.issue
+                });
+            }
+
             res.status(200).json({
                 success: true,
-                message: 'Team member photo uploaded',
+                message: 'Photo uploaded',
                 photoUrl,
             });
         } catch (error) {
