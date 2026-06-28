@@ -142,7 +142,7 @@ const sendWarning = async (req, res) => {
             daysOverdue,
             paymentLink: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/exhibitor/payment/${registration._id}`,
             supportEmail: process.env.SUPPORT_EMAIL || 'support@exhibition.com',
-            supportPhone: process.env.SUPPORT_PHONE || '+91 9876543210',
+            supportPhone: process.env.SUPPORT_PHONE || '',
             companyName: process.env.COMPANY_NAME || 'Exhibition'
         };
 

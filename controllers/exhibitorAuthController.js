@@ -5,6 +5,124 @@ const jwt = require('jsonwebtoken');
 const emailService = require('../utils/emailService');
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+const { sendWhatsAppOTP } = require('../utils/whatsapp');
+
+const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const DUMMY_MOBILE_NUMBERS = new Set([
+    '98765432' + '11',
+    '98765432' + '10',
+    '99999' + '99999'
+]);
+
+const isDummyMobile = (value) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (DUMMY_MOBILE_NUMBERS.has(digits)) return true;
+    if (digits.length > 10 && DUMMY_MOBILE_NUMBERS.has(digits.slice(-10))) return true;
+    return false;
+};
+
+const normalizeIndianMobile = (value) => {
+    if (isDummyMobile(value)) return '';
+    const digits = String(value || '').replace(/\D/g, '');
+    if (/^[6-9]\d{9}$/.test(digits)) return digits;
+    if (/^91[6-9]\d{9}$/.test(digits)) return digits.slice(-10);
+    if (/^0[6-9]\d{9}$/.test(digits)) return digits.slice(1);
+    return '';
+};
+
+const getMobileSearchVariants = (value) => {
+    const raw = String(value || '').trim();
+    const digits = raw.replace(/\D/g, '');
+    let stripped = normalizeIndianMobile(raw);
+
+    if (isDummyMobile(raw)) return [];
+
+    if (!stripped && digits.length >= 10) {
+        const lastTen = digits.slice(-10);
+        if (/^[6-9]\d{9}$/.test(lastTen) && !isDummyMobile(lastTen)) stripped = lastTen;
+    }
+
+    return [...new Set([
+        raw,
+        digits,
+        stripped,
+        stripped ? `91${stripped}` : '',
+        stripped ? `0${stripped}` : ''
+    ].filter(Boolean))];
+};
+
+const getOtpResponseMessage = ({ email, mobile }) => {
+    if (email && mobile) return 'OTP sent to email and WhatsApp';
+    if (email) return 'OTP sent to email only';
+    if (mobile) return 'OTP sent to WhatsApp only';
+    return 'OTP generated but no delivery channel was available';
+};
+
+const safeJson = (value) => {
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch (error) {
+        return String(value);
+    }
+};
+
+async function sendOtpToAvailableChannels(exhibitor, otp) {
+    const email = exhibitor.contact1?.email?.trim();
+    const rawMobile = exhibitor.contact1?.mobile;
+    const rawWhatsapp = exhibitor.contact1?.whatsapp;
+    const mobile = normalizeIndianMobile(rawWhatsapp) || normalizeIndianMobile(rawMobile);
+    const tasks = [];
+
+    console.log('[OTP] Exhibitor:', {
+        id: exhibitor._id?.toString(),
+        contact1Email: email || null,
+        contact1Mobile: rawMobile || null,
+        contact1Whatsapp: rawWhatsapp || null,
+        finalWhatsappNumber: mobile || null
+    });
+
+    if (email) {
+        tasks.push(
+            emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName, 'EXHIBITOR')
+                .then(result => ({ channel: 'email', success: true, result }))
+                .catch(error => ({ channel: 'email', success: false, error: error.message }))
+        );
+    } else {
+        console.log('[OTP] Email skipped: missing email');
+    }
+
+    if (mobile) {
+        tasks.push(
+            sendWhatsAppOTP(mobile, otp, 'EXHIBITOR', exhibitor.exhibitorName)
+                .then(result => ({ channel: 'whatsapp', success: !!result?.success, result }))
+                .catch(error => ({ channel: 'whatsapp', success: false, error: error.message }))
+        );
+    } else {
+        const reason = rawMobile || rawWhatsapp
+            ? 'missing valid mobile'
+            : 'missing mobile';
+        console.log(`[OTP] WhatsApp skipped: ${reason}`);
+    }
+
+    const settledResults = await Promise.allSettled(tasks);
+    const results = settledResults.map(result => result.status === 'fulfilled'
+        ? result.value
+        : { channel: 'unknown', success: false, error: result.reason?.message || String(result.reason) }
+    );
+
+    const emailResult = results.find(result => result.channel === 'email') || null;
+    const whatsappResult = results.find(result => result.channel === 'whatsapp') || null;
+
+    console.log('[OTP] Email result:', safeJson(emailResult));
+    console.log('[OTP] WhatsApp result:', safeJson(whatsappResult));
+    console.log('[OTP] Results:', safeJson(settledResults));
+
+    return {
+        email,
+        mobile,
+        results
+    };
+}
 
 class ExhibitorAuthController {
     async login(req, res) {
@@ -14,7 +132,7 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Email and password are required' });
 
             const exhibitor = await ExhibitorRegistration.findOne({
-                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') }
+                'contact1.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') }
             }).sort({ createdAt: -1 })
                 .select('+password');
 
@@ -31,11 +149,11 @@ class ExhibitorAuthController {
             await exhibitor.save();
 
 
-            await emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName, 'EXHIBITOR');
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
 
             res.status(200).json({
                 success: true,
-                message: 'OTP sent to registered email',
+                message: getOtpResponseMessage(notification),
                 requiresOtp: true,
                 exhibitorId: exhibitor._id
             });
@@ -88,7 +206,7 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Email address is required' });
 
             const exhibitor = await ExhibitorRegistration.findOne({
-                'contact1.email': { $regex: new RegExp(`^${email.trim()}$`, 'i') }
+                'contact1.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') }
             }).sort({ createdAt: -1 });
 
             if (!exhibitor)
@@ -99,12 +217,11 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            // Send OTP via email
-            await emailService.sendOtpEmail(email.trim().toLowerCase(), otp, exhibitor.exhibitorName, 'EXHIBITOR');
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
 
             res.status(200).json({
                 success: true,
-                message: 'OTP sent to registered email',
+                message: getOtpResponseMessage(notification),
                 exhibitorId: exhibitor._id
             });
         } catch (error) {
@@ -119,7 +236,16 @@ class ExhibitorAuthController {
             if (!mobile)
                 return res.status(400).json({ success: false, message: 'Mobile number is required' });
 
-            const exhibitor = await ExhibitorRegistration.findOne({ 'contact1.mobile': mobile })
+            const mobileVariants = getMobileSearchVariants(mobile);
+            if (mobileVariants.length === 0) {
+                return res.status(400).json({ success: false, message: 'Valid mobile number is required' });
+            }
+            const exhibitor = await ExhibitorRegistration.findOne({
+                $or: [
+                    { 'contact1.mobile': { $in: mobileVariants } },
+                    { 'contact1.whatsapp': { $in: mobileVariants } }
+                ]
+            })
                 .sort({ createdAt: -1 });
 
             if (!exhibitor)
@@ -130,18 +256,11 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            // Try sending via WhatsApp if available
-            const { sendWhatsAppOTP } = require('../utils/whatsapp');
-            await sendWhatsAppOTP(mobile, otp, 'EXHIBITOR', exhibitor.exhibitorName);
-
-            // Also send via email if exists
-            if (exhibitor.contact1.email) {
-                await emailService.sendOtpEmail(exhibitor.contact1.email, otp, exhibitor.exhibitorName, 'EXHIBITOR');
-            }
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
 
             res.status(200).json({
                 success: true,
-                message: 'OTP sent to mobile & email',
+                message: getOtpResponseMessage(notification),
                 exhibitorId: exhibitor._id
             });
         } catch (error) {
@@ -198,6 +317,7 @@ class ExhibitorAuthController {
                         email: existing.email || contact.email || '',
                         designation: existing.designation || contact.designation || '',
                         mobile: existing.mobile || contact.mobile || '',
+                        whatsapp: existing.whatsapp || contact.whatsapp || contact.mobile || '',
                         alternateNo: existing.alternateNo || contact.alternate || '',
                         photoUrl: existing.photoUrl || contact.photo || contact.photoUrl || '',
                     } : existing;
@@ -382,6 +502,7 @@ class ExhibitorAuthController {
                         email: String(current.email || '').trim().toLowerCase(),
                         designation: String(current.designation || '').trim(),
                         mobile: String(current.mobile || '').trim(),
+                        whatsapp: String(current.whatsapp || current.mobile || '').trim(),
                         alternateNo: String(current.alternateNo || '').trim(),
                         photoUrl: String(current.photoUrl || '').trim(),
                     };

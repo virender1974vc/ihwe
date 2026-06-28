@@ -474,7 +474,7 @@ class EmailService {
                     } else {
                         bodyContent += qrBlock;
                     }
-                    // Store QR buffer as attachment for CID embedding
+
                     data.__qrBuffer = qrBuffer;
                 } catch (qrErr) {
                     console.error('[QR] Failed to generate QR code:', qrErr.message);
@@ -499,7 +499,7 @@ class EmailService {
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
 
-            // 1. Send Email to USER
+
             const emailAttachments = [];
             if (data.__qrBuffer) {
                 emailAttachments.push({
@@ -521,9 +521,8 @@ class EmailService {
                 emailAttachments.push({ filename: `smallLogo.${sExt}`, content: smallLogoBuf, cid: 'email_small_logo_img@ihwe.in' });
             }
 
-            // Accessory approvals should dispatch mail and WhatsApp in the same flow,
-            // instead of firing WhatsApp after the response has already moved on.
-            const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
+            s
+            const mobile = data.whatsapp || data.mobile || data.phone || data.mobileNumber;
             const sendDynamicWhatsapp = async () => {
                 if (!mobile || !whatsappContent) {
                     return { success: false, skipped: true, reason: 'Mobile number or WhatsApp content missing' };
@@ -539,21 +538,59 @@ class EmailService {
                 ? sendDynamicWhatsapp().catch(err => ({ success: false, error: err.message }))
                 : null;
 
-            const sentToUser = await this.sendEmail({
+            const emailPayload = {
                 to,
                 subject,
                 html,
                 attachments: [...emailAttachments, ...attachments],
                 profile,
-                logData: { name: data.firstName || data.name, phone: data.mobile || data.phone, message: `Dynamic Confirmation (${formType})` }
-            });
+                logData: {
+                    name: data.contact_person || data.firstName || data.name,
+                    phone: data.mobile || data.phone,
+                    message: `Dynamic Confirmation (${formType})`
+                }
+            };
 
-            // 2. Send WhatsApp to USER (if available)
+            let sentToUser = false;
+            let accessoryWhatsappResult = null;
+
             if (formType === 'exhibitor-accessory-order') {
-                const whatsappResult = await accessoryWhatsappPromise;
+                console.log('[AccessoryNotification] Dynamic send attempt:', {
+                    orderNo: data.order_no,
+                    email: to || null,
+                    mobile: mobile || null,
+                    attachmentCount: emailPayload.attachments.length
+                });
+
+                const [emailResult, whatsappResult] = await Promise.all([
+                    to
+                        ? this.sendEmail(emailPayload)
+                        : Promise.resolve(false),
+                    accessoryWhatsappPromise
+                ]);
+                sentToUser = !!emailResult;
+                accessoryWhatsappResult = whatsappResult;
+                if (!to) {
+                    console.warn('[Email] Accessory order email skipped: recipient email missing');
+                }
+                console.log('[AccessoryNotification] Dynamic result:', {
+                    orderNo: data.order_no,
+                    emailSent: !!emailResult,
+                    whatsappSent: !!whatsappResult?.success,
+                    whatsappSkipped: !!whatsappResult?.skipped,
+                    whatsappError: whatsappResult?.error || whatsappResult?.reason || null
+                });
+            } else {
+                sentToUser = await this.sendEmail(emailPayload);
+            }
+
+
+            if (formType === 'exhibitor-accessory-order') {
+                const whatsappResult = accessoryWhatsappResult;
                 if (!whatsappResult?.success) {
                     console.error(`[WhatsApp] Accessory order msg failed for ${mobile || 'missing mobile'}:`, whatsappResult?.error || whatsappResult?.reason || 'Unknown error');
                 }
+                sentToUser = sentToUser || !!whatsappResult?.success;
             } else if (mobile && whatsappContent) {
                 sendDynamicWhatsapp().catch(err => {
                     console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
@@ -573,12 +610,11 @@ class EmailService {
     }
 
     async notifyAdmin(formType, data, originalSubject, profile) {
-        // Find the designated admin for this PARTICULAR form
+
         const deptAdmin = (this.getAdminEmailForProfile(profile) || '').trim();
         const globalAdmin = (process.env.ADMIN_EMAIL || '').trim();
 
-        // If a department-specific admin exists, they get the lead. 
-        // Otherwise, it falls back to the global admin.
+
         const targetAdmin = deptAdmin || globalAdmin;
 
         if (!targetAdmin) {
@@ -590,7 +626,7 @@ class EmailService {
 
         const adminHtml = this.adminLeadShell(formType, data);
 
-        // Send WhatsApp to Admin if configured
+
         const adminWhatsApp = (process.env.ADMIN_WHATSAPP_NUMBER || '').trim();
         if (adminWhatsApp) {
             const adminMsg = `🚨 *NEW ${formType.toUpperCase()} LEAD* 🚨\n\n*Name:* ${data.name || data.fullName}\n*Company:* ${data.company || data.companyName}\n*Email:* ${data.email}\n*Phone:* ${data.phone}\n*Subject:* ${originalSubject}\n\n_Please check your admin panel for full details._`;
@@ -599,14 +635,7 @@ class EmailService {
             });
         }
 
-        // For Admin Notifications, we ALWAYS use the DEFAULT transporter to ensure delivery
-        // return await this.sendEmail({
-        //     to: targetAdmin,
-        //     subject: `NEW LEAD ALERT: ${originalSubject}`,
-        //     html: adminHtml,
-        //     profile: 'DEFAULT',
-        //     logData: { name: "System Admin Notification", message: `Lead alert for ${formType}` }
-        // });
+
     }
 
     getAdminEmailForProfile(profile) {
@@ -653,7 +682,17 @@ class EmailService {
                 attachments
             });
 
-            // Log the email in the database - ALIGNED WITH EmailLog Model
+            console.log('[Email] Sent:', {
+                to,
+                subject,
+                profile,
+                messageId: info.messageId,
+                accepted: info.accepted,
+                rejected: info.rejected,
+                response: info.response
+            });
+
+
             await EmailLog.create({
                 recipient: to,
                 subject,
@@ -728,7 +767,7 @@ class EmailService {
             const footerBuf = getImageBuffer(template.footerImage);
             const smallLogoBuf = getImageBuffer(template.smallLogo);
 
-            // Add small logo at the very bottom of the email (after Warm Regards)
+
             if (template.smallLogo && smallLogoBuf) {
                 const smallLogoHtml = `<div style="text-align: left; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eeeeee;"><img src="cid:email_small_logo_img@ihwe.in" alt="Logo" width="150" style="display:block; max-width:150px; height:auto; border:0;" /></div>`;
                 bodyContent += smallLogoHtml;
@@ -781,7 +820,6 @@ class EmailService {
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
 
-            // 1. Send Email to USER only (no admin notification)
             const sentToUser = await this.sendEmail({
                 to: data.emailAddress || data.email,
                 subject,
@@ -791,7 +829,7 @@ class EmailService {
                 logData: { name: data.fullName || data.firstName || data.name, phone: data.mobileNumber || data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
             });
 
-            // 2. Send WhatsApp to USER (if available)
+
             const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
             if (mobile && whatsappContent) {
                 this.trySendAisensyForFormType(formType, mobile, template, data).then(result => {
@@ -940,7 +978,7 @@ class EmailService {
             </html>
             `;
 
-            // Send to B2B coordinator
+
             const b2bCoordinatorEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
 
             await this.sendEmail({
@@ -1036,13 +1074,13 @@ class EmailService {
             let logMessage;
 
             if (recipientType === 'b2b') {
-                // B2B Coordinator gets Buyer Interest template (RED theme, high priority)
+
                 subject = `Buyer Registration Interest Received | IHWE 2026 | Reg ID: ${data.registrationId}`;
                 html = getBuyerInterestAlertTemplate(data);
                 recipientEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
                 logMessage = 'B2B Coordinator Notification';
             } else {
-                // Admin gets responsive visitor alert template (GREEN theme, same design as B2B but green)
+
                 subject = `New Visitor Registration Alert | IHWE 2026 | Reg ID: ${data.registrationId}`;
                 html = getResponsiveVisitorAlertTemplate(data);
                 recipientEmail = process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
@@ -1124,7 +1162,7 @@ class EmailService {
     async sendInternationalBuyerRegistrationEmails(data) {
         return await this.sendDynamicConfirmation({
             to: data.primaryContact?.emailId,
-            formType: 'buyer-registration', // Reusing buyer template for now as requested "jase buyer ma jara ha"
+            formType: 'buyer-registration',
             data: {
                 name: data.primaryContact?.fullName,
                 company: data.brandName,
@@ -1284,7 +1322,7 @@ class EmailService {
         }
     }
 
-    // Static content methods still use emailShell but without double escaping
+
     async sendPaymentReceipt(registration, pdfPath) {
         const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
         const fmt = (n) => `${cur === '$' ? 'USD' : 'INR'} ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1349,7 +1387,7 @@ class EmailService {
             return `${d}/${m}/${y}`;
         })();
 
-        // Calculate specific fields for the itemized receipt
+
         const rateVal = registration.participation?.rate || 0;
         const sizeVal = registration.participation?.stallSize || 0;
         const calculatedAmount = rateVal * sizeVal;
@@ -1370,8 +1408,7 @@ class EmailService {
 
         let rowsHtml = '';
 
-        // 1. Description, dimensions, rate, amount (gross amount)
-        // NOTE: col widths match template: desc=230, dim=100, scheme=100, rate=110, amount=160
+
         rowsHtml += `
             <tr style="background-color: #ffffff;">
                 <td width="230" style="padding: 1px 10px; font-size: 11px; line-height: 1.2; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-family: Arial, sans-serif;">
@@ -1385,7 +1422,7 @@ class EmailService {
             </tr>
         `;
 
-        // 2. Stall Discount (if any)
+
         if (stallDiscountAmount > 0) {
             rowsHtml += `
                 <tr>
@@ -1396,7 +1433,6 @@ class EmailService {
             `;
         }
 
-        // 3. Full Payment Discount (if any)
         if (discountAmount > 0) {
             rowsHtml += `
                 <tr>
@@ -1479,8 +1515,8 @@ class EmailService {
         const data = {
             site_url: (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, ''),
             logo_url: logoUrl,
-            exhibitor_name: toTitleCase(registration.exhibitorName),          // Company name (for TO card & subject)
-            contact_person: contactPersonName,                   // Person name (for Exhibitor Details row)
+            exhibitor_name: toTitleCase(registration.exhibitorName),
+            contact_person: contactPersonName,
             designation: registration.contact1.designation || 'N/A',
             registrationId: registration.registrationId,
             stall_no: registration.participation?.stallFor || 'N/A',
@@ -1660,7 +1696,7 @@ class EmailService {
                 </div>
             `);
 
-            // Send Email
+
             await this.sendEmail({
                 to: data.email,
                 subject,
@@ -1668,14 +1704,14 @@ class EmailService {
                 profile: 'CONTACT'
             });
 
-            // Send WhatsApp
+
             const whatsappMsg = `*Namo Gange Namaskar!* 🙏\n\nDear *${name}*,\n\nThank you for your interest in *Sponsoring IHWE 2026*. We have received your enquiry for the *${data.category || 'Sponsorship'}* category.\n\nOur partnership team is reviewing your details and will contact you shortly to discuss how we can elevate your brand at the expo.\n\n*Team IHWE*\nNamo Gange Wellness Pvt. Ltd.`;
 
             if (data.phone) {
                 await whatsapp.sendWhatsAppMessage(data.phone, whatsappMsg, 'Sponsorship Confirmation');
             }
 
-            // Also notify admin
+
             await this.notifyAdmin('sponsorship-enquiry', data, subject, 'CONTACT');
 
             return true;
@@ -1714,7 +1750,7 @@ class EmailService {
                 </div>
             `);
 
-            // Send Email to User
+
             await this.sendEmail({
                 to: data.email,
                 subject,
@@ -1722,14 +1758,14 @@ class EmailService {
                 profile: 'CONTACT'
             });
 
-            // Send WhatsApp to User
+
             const whatsappMsg = `*Namo Gange Namaskar!* 🙏\n\nDear *${name}*,\n\nThank you for requesting *Expo Support* for IHWE 2026. We have received your requirements for: *${servicesText}*.\n\nOur team is reviewing your request and will connect you with the right partners shortly to assist you.\n\n*Team IHWE*\nNamo Gange Wellness Pvt. Ltd.`;
 
             if (data.phone) {
                 await whatsapp.sendWhatsAppMessage(data.phone, whatsappMsg, 'Expo Support Confirmation');
             }
 
-            // Notify Admin
+
             await this.notifyAdmin('expo-support-enquiry', data, subject, 'CONTACT');
 
             return true;
@@ -1828,10 +1864,20 @@ class EmailService {
 
     async sendAccessoryOrderEmail(registration, order, pdfPath) {
         try {
-            const email = registration.contact1?.email;
-            if (!email) return false;
+            const resolvedRegistration = await this.resolveAccessoryNotificationRegistration(registration);
+            const contact = resolvedRegistration.contact1 || {};
+            const email = contact.email || '';
+            const mobile = String(contact.whatsapp || contact.mobile || '').trim();
 
             const fmt = (n) => `INR ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+            console.log('[AccessoryNotification] Resolved recipient:', {
+                orderNo: order.orderNo,
+                registrationId: resolvedRegistration.registrationId || null,
+                exhibitorId: resolvedRegistration._id || null,
+                email: email || null,
+                mobile: mobile || null
+            });
 
             const itemRows = order.items.map((item, i) => `
                 <tr style="border-bottom:1px solid #f3f4f6;">
@@ -1857,15 +1903,15 @@ class EmailService {
             `;
 
             const data = {
-                exhibitor_name: registration.exhibitorName,
-                contact_person: `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim(),
-                designation: registration.contact1.designation || 'N/A',
-                mobile: registration.contact1.mobile || registration.contact1.whatsapp || registration.contact1.alternateNo || '',
-                phone: registration.contact1.mobile || registration.contact1.whatsapp || registration.contact1.alternateNo || '',
-                whatsapp: registration.contact1.whatsapp || registration.contact1.mobile || registration.contact1.alternateNo || '',
-                registrationId: registration.registrationId,
+                exhibitor_name: resolvedRegistration.exhibitorName,
+                contact_person: `${contact.title || ''} ${contact.firstName || ''} ${contact.lastName || ''}`.trim(),
+                designation: contact.designation || 'N/A',
+                mobile,
+                phone: mobile,
+                whatsapp: mobile,
+                registrationId: resolvedRegistration.registrationId,
                 order_no: order.orderNo,
-                stall_no: registration.participation?.stallFor || 'N/A',
+                stall_no: resolvedRegistration.participation?.stallFor || 'N/A',
                 grand_total: order.paymentStatus === 'complimentary' ? 'Complimentary' : fmt(order.grandTotal),
                 item_table: itemTable,
             };
@@ -1875,17 +1921,159 @@ class EmailService {
                 attachments.push({ filename: `Accessory_Receipt_${order.orderNo}.pdf`, path: pdfPath });
             }
 
-            return await this.sendDynamicConfirmation({
+            // Try the dynamic template-based path first
+            const templateResult = await this.sendDynamicConfirmation({
                 to: email,
                 formType: 'exhibitor-accessory-order',
                 data,
                 profile: 'EXHIBITOR',
                 attachments
             });
+
+            if (templateResult) return templateResult;
+
+            // --- FALLBACK: No template in DB — send direct email + WhatsApp ---
+            console.warn('[sendAccessoryOrderEmail] No template found. Using direct fallback.');
+            const tasks = [];
+
+            if (email) {
+                const contactPerson = data.contact_person || resolvedRegistration.exhibitorName;
+                const fallbackHtml = this.emailShell(`
+                    <tr>
+                        <td style="padding:30px 30px;background:#ffffff;font-family:Arial,sans-serif;">
+                            <p style="font-size:16px;font-weight:700;color:#23471d;margin:0 0 12px;">Dear ${contactPerson},</p>
+                            <p style="font-size:14px;color:#374151;margin:0 0 16px;">Thank you for your stall accessories order. Your payment has been received successfully.</p>
+                            <table style="width:100%;border-collapse:collapse;margin:0 0 16px;border:1px solid #e5e7eb;">
+                                <tr><td style="padding:8px 14px;font-size:13px;font-weight:700;color:#6b7280;background:#f9fafb;width:160px;">Order No</td><td style="padding:8px 14px;font-size:13px;color:#111827;">${order.orderNo}</td></tr>
+                                <tr><td style="padding:8px 14px;font-size:13px;font-weight:700;color:#6b7280;background:#f9fafb;">Exhibitor</td><td style="padding:8px 14px;font-size:13px;color:#111827;">${resolvedRegistration.exhibitorName}</td></tr>
+                                <tr><td style="padding:8px 14px;font-size:13px;font-weight:700;color:#6b7280;background:#f9fafb;">Amount Paid</td><td style="padding:8px 14px;font-size:13px;color:#16a34a;font-weight:700;">${data.grand_total}</td></tr>
+                            </table>
+                            <p style="font-size:13px;font-weight:700;color:#23471d;margin:0 0 8px;">Items Ordered:</p>
+                            ${itemTable}
+                            <p style="font-size:13px;color:#6b7280;margin:16px 0 0;">For any queries, please contact our team. Thank you for exhibiting with IHWE 2026!</p>
+                        </td>
+                    </tr>
+                `);
+
+                tasks.push(
+                    this.sendEmail({
+                        to: email,
+                        subject: `Stall Accessories Order Confirmed — Order No: ${order.orderNo}`,
+                        html: fallbackHtml,
+                        attachments,
+                        profile: 'EXHIBITOR',
+                        logData: { name: contactPerson, phone: mobile, message: `Accessory order fallback email (${order.orderNo})` }
+                    }).catch(err => {
+                        console.error('[sendAccessoryOrderEmail] Fallback email failed:', err.message);
+                        return false;
+                    })
+                );
+            } else {
+                console.warn('[sendAccessoryOrderEmail] Fallback skipped: no email address found');
+            }
+
+            if (mobile) {
+                const whatsappService = require('./whatsappService');
+                const normalizeIndianMobile = (val) => {
+                    const digits = String(val || '').replace(/\D/g, '');
+                    if (/^[6-9]\d{9}$/.test(digits)) return digits;
+                    if (/^91[6-9]\d{9}$/.test(digits)) return digits.slice(-10);
+                    if (/^0[6-9]\d{9}$/.test(digits)) return digits.slice(1);
+                    return '';
+                };
+                const normalizedMobile = normalizeIndianMobile(mobile);
+                if (normalizedMobile) {
+                    tasks.push(
+                        whatsappService.sendPaymentConfirmation(normalizedMobile, {
+                            contactPerson: data.contact_person,
+                            registrationId: resolvedRegistration.registrationId,
+                            amountPaid: order.grandTotal,
+                            transactionId: order.transactionId,
+                            companyName: process.env.COMPANY_NAME || 'IHWE'
+                        }).catch(err => {
+                            console.error('[sendAccessoryOrderEmail] Fallback WhatsApp failed:', err.message);
+                        })
+                    );
+                }
+            } else {
+                console.warn('[sendAccessoryOrderEmail] Fallback WhatsApp skipped: no mobile found');
+            }
+
+            if (tasks.length > 0) await Promise.allSettled(tasks);
+            return true;
         } catch (err) {
             console.error('sendAccessoryOrderEmail error:', err.message);
             return false;
         }
+    }
+
+    async resolveAccessoryNotificationRegistration(registration) {
+        const toPlain = (doc) => doc?.toObject ? doc.toObject() : { ...(doc || {}) };
+        const base = toPlain(registration);
+        const merged = {
+            ...base,
+            contact1: { ...(base.contact1 || {}) },
+            participation: { ...(base.participation || {}) }
+        };
+        const hasValue = (value) => {
+            const normalized = String(value || '').trim();
+            return normalized && normalized.toUpperCase() !== 'N/A';
+        };
+        const applyContact = (source = {}) => {
+            if (!source) return;
+            const map = {
+                title: ['title'],
+                firstName: ['firstName'],
+                lastName: ['lastName', 'surname'],
+                email: ['email'],
+                designation: ['designation'],
+                mobile: ['mobile'],
+                whatsapp: ['whatsapp', 'mobile'],
+                alternateNo: ['alternateNo', 'alternate'],
+                photoUrl: ['photoUrl', 'photo']
+            };
+
+            Object.entries(map).forEach(([targetKey, sourceKeys]) => {
+                if (hasValue(merged.contact1[targetKey])) return;
+                const sourceKey = sourceKeys.find((key) => hasValue(source[key]));
+                if (sourceKey) merged.contact1[targetKey] = String(source[sourceKey]).trim();
+            });
+        };
+
+        try {
+            const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+            const query = [];
+            if (base._id) query.push({ _id: base._id });
+            if (base.clientId) query.push({ clientId: base.clientId });
+            if (base.exhibitorName && base.eventId) query.push({ exhibitorName: base.exhibitorName, eventId: base.eventId });
+            if (hasValue(base.registrationId)) query.push({ registrationId: base.registrationId });
+
+            if (query.length) {
+                const registrations = await ExhibitorRegistration.find({ $or: query })
+                    .sort({ createdAt: -1 })
+                    .limit(10)
+                    .lean();
+                registrations.forEach((doc) => {
+                    applyContact(doc.contact1);
+                    applyContact(doc.contact2);
+                    if (!hasValue(merged.participation?.stallFor) && doc.participation?.stallFor) {
+                        merged.participation.stallFor = doc.participation.stallFor;
+                    }
+                });
+            }
+
+            if (base.clientId) {
+                const Company = require('../models/Company');
+                const crmCompany = await Company.findById(base.clientId).lean();
+                if (crmCompany?.contacts?.length) {
+                    crmCompany.contacts.forEach(applyContact);
+                }
+            }
+        } catch (err) {
+            console.error('[AccessoryNotification] Contact resolution failed:', err.message);
+        }
+
+        return merged;
     }
 
     /**
