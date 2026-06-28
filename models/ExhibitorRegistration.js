@@ -59,6 +59,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     city: String,
     pincode: String,
     landlineNo: String,
+    companyEmail: { type: String, trim: true, lowercase: true },
     gstNo: String,
     panNo: String,
     aadhaarNo: String,

@@ -141,7 +141,7 @@ class ExhibitorRegistrationController {
             }
 
             // Also merge any text body fields
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'companyEmail', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
                     try {
