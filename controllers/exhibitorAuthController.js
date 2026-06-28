@@ -493,7 +493,9 @@ class ExhibitorAuthController {
 
             const photoUrl = req.file.path || req.file.secure_url || req.file.url;
             const originalName = req.file.originalname || req.file.name || '';
-            const fileType = (originalName.split('.').pop() || '').toUpperCase();
+            const mimeSubtype = String(req.file.mimetype || '').split('/').pop() || '';
+            const extension = originalName.includes('.') ? originalName.split('.').pop() : '';
+            const fileType = (extension || mimeSubtype).toUpperCase();
 
             const aiResult = await aiDocumentVerificationService.verifyDocument({
                 fileUrl: photoUrl,
@@ -501,11 +503,27 @@ class ExhibitorAuthController {
                 fileType
             });
 
-            if (!aiResult.skipped && aiResult.valid === false) {
+            const unsafePhotoIssues = new Set([
+                'nudity',
+                'explicit',
+                'sexual_content',
+                'adult_content',
+                'minor',
+                'inappropriate',
+                'inappropriate_content',
+                'graphic_violence',
+                'hate'
+            ]);
+            const aiIssue = String(aiResult.issue || '').toLowerCase();
+            const isUnsafePhoto = !aiResult.skipped
+                && aiResult.valid === false
+                && unsafePhotoIssues.has(aiIssue);
+
+            if (isUnsafePhoto) {
                 await deleteFileFromCloudinary(photoUrl);
                 return res.status(400).json({
                     success: false,
-                    message: aiResult.reason || `This photo was rejected by AI verification: ${aiResult.issue}`,
+                    message: aiResult.reason || 'This photo was rejected because it contains inappropriate content.',
                     aiIssue: aiResult.issue
                 });
             }

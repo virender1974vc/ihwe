@@ -50,6 +50,22 @@ class AiDocumentVerificationService {
     }
 
     buildPrompt(documentName, expectedGender) {
+        if (String(documentName).trim().toLowerCase() === 'person photo') {
+            return `You are a content-moderation system for profile photos on an exhibition portal.
+
+Review the uploaded image only for unsafe or inappropriate content. A normal portrait, selfie, headshot, candid photo, or full-body photo of an adult is allowed. Do not reject it merely because it is not an identity document or because the face is not studio-quality.
+
+Reject only when the image contains:
+- nudity, sexual or sexually suggestive content -> issue "nudity"
+- a child/minor, because this portal accepts adult team members only -> issue "minor"
+- graphic violence, hateful imagery, or other clearly inappropriate content -> issue "inappropriate_content"
+
+Respond ONLY with valid JSON:
+{"valid": true, "issue": null, "reason": "Looks safe"}
+or
+{"valid": false, "issue": "nudity|minor|inappropriate_content", "reason": "short reason"}`;
+        }
+
         const genderCheck = expectedGender
             ? `\n2. IDENTITY FRAUD CHECK: This is a registration-fraud check, not a statement about anyone's identity in general - the registrant self-declared their gender as "${expectedGender}" on their registration form, and you are verifying whether the photo they uploaded is consistent with that declaration, the same way a visa or KYC officer would. If the person visually presented in the photo (hairstyle, facial structure, body shape, clothing, etc.) is clearly and obviously presented as the opposite gender to "${expectedGender}", this is a mismatch and you must report it - this is a required compliance check, answering "unable to determine" is not acceptable unless the photo is genuinely ambiguous (e.g. face not visible, photo of a document instead of a person).`
             : '';
@@ -83,10 +99,12 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
             const cleaned = String(text).replace(/```json|```/g, '').trim();
             const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
             const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+            const isInvalid = parsed.valid === false
+                || String(parsed.valid).trim().toLowerCase() === 'false';
             return {
                 skipped: false,
-                valid: parsed.valid !== false,
-                issue: parsed.issue || null,
+                valid: !isInvalid,
+                issue: parsed.issue ? String(parsed.issue).trim().toLowerCase() : null,
                 reason: parsed.reason || ''
             };
         } catch (e) {
