@@ -17,7 +17,7 @@ const storage = new CloudinaryStorage({
     params: async (req, file) => ({
         folder: 'exhibitor-docs',
         resource_type: 'auto',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
     }),
 });
 

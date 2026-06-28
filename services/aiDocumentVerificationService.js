@@ -4,7 +4,9 @@ const { decrypt } = require('../utils/cryptoHelper');
 
 class AiDocumentVerificationService {
     async getSettingsDoc() {
-        let settings = await Settings.findOne();
+        // Sorted so behavior stays deterministic even if a stray duplicate Settings doc
+        // exists (the oldest doc is always the canonical one in this codebase).
+        let settings = await Settings.findOne().sort({ createdAt: 1 });
         if (!settings) settings = await new Settings({}).save();
         return settings;
     }
