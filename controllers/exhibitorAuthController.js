@@ -443,6 +443,127 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async getMyDocuments(req, res) {
+        try {
+            if (req.user.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied. Exhibitors only.' });
+
+            const email = req.user.email;
+            const mobile = req.user.mobile;
+            let strippedMobile = mobile;
+            if (mobile && mobile.startsWith('0')) {
+                strippedMobile = mobile.substring(1);
+            }
+
+            const registrations = await ExhibitorRegistration.find({
+                $or: [
+                    { 'contact1.email': email },
+                    { 'contact1.mobile': mobile },
+                    { 'contact1.mobile': strippedMobile },
+                    { 'contact1.mobile': '0' + strippedMobile }
+                ]
+            }).lean();
+
+            if (!registrations || registrations.length === 0) {
+                return res.status(404).json({ success: false, message: 'No registrations found' });
+            }
+
+            const lookupIds = Array.from(new Set(
+                registrations.flatMap((r) => [r._id.toString(), r.clientId ? String(r.clientId) : null]).filter(Boolean)
+            ));
+
+            const Invoice = require('../models/Invoice');
+            const Estimate = require('../models/Estimate');
+            const CreditNote = require('../models/CreditNote');
+            const DebitNote = require('../models/DebitNote');
+            const Payment = require('../models/Payment');
+
+            const [invoices, proformaInvoices, creditNotes, debitNotes] = await Promise.all([
+                Invoice.find({ companyId: { $in: lookupIds } }).lean(),
+                Estimate.find({ companyId: { $in: lookupIds } }).lean(),
+                CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
+                DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
+            ]);
+
+            const docIds = [
+                ...invoices.map((i) => i._id.toString()),
+                ...proformaInvoices.map((e) => e._id.toString()),
+            ];
+
+            const payments = docIds.length
+                ? await Payment.find({ invoice_id: { $in: docIds } }).lean()
+                : [];
+
+            const getDocPaid = (docId) => payments
+                .filter((p) => p.invoice_id === docId.toString())
+                .reduce((sum, p) => sum + (parseFloat(p.amount_text) || 0), 0);
+
+            let documents = [];
+
+            invoices.forEach((inv) => {
+                const paid = getDocPaid(inv._id);
+                const amount = parseFloat(inv.finalAmount) || 0;
+                documents.push({
+                    documentType: 'Invoice',
+                    documentNo: inv.invoice_no,
+                    date: inv.invoice_date || inv.added,
+                    amount,
+                    status: paid >= amount && amount > 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Unpaid'),
+                    id: inv._id,
+                    timestamp: inv.added || new Date(),
+                });
+            });
+
+            proformaInvoices.forEach((pi) => {
+                const paid = getDocPaid(pi._id);
+                const amount = parseFloat(pi.finalAmount) || 0;
+                documents.push({
+                    documentType: 'Proforma Invoice',
+                    documentNo: pi.est_no,
+                    date: pi.supply_date || pi.added,
+                    amount,
+                    status: paid >= amount && amount > 0 ? 'Paid' : (paid > 0 ? 'Partial' : 'Sent'),
+                    id: pi._id,
+                    timestamp: pi.added || new Date(),
+                });
+            });
+
+            creditNotes.forEach((cn) => {
+                const amount = (cn.items || []).reduce(
+                    (sum, it) => sum + ((parseFloat(it.cn_amount) || 0) * (it.quantity || 1)), 0
+                );
+                documents.push({
+                    documentType: 'Credit Note',
+                    documentNo: cn.create_note_no,
+                    date: cn.created_at || cn.updated_date,
+                    amount,
+                    status: 'Generated',
+                    id: cn._id,
+                    timestamp: cn.created_at || new Date(),
+                });
+            });
+
+            debitNotes.forEach((dn) => {
+                documents.push({
+                    documentType: 'Debit Note',
+                    documentNo: dn.debit_note_no,
+                    date: dn.debit_note_date || dn.added,
+                    amount: parseFloat(dn.totalAmount) || 0,
+                    status: 'Generated',
+                    id: dn._id,
+                    attachmentUrl: dn.attachmentUrl || '',
+                    timestamp: dn.added || new Date(),
+                });
+            });
+
+            documents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            res.status(200).json({ success: true, data: documents });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     async changePassword(req, res) {
         try {
             if (req.user.role !== 'exhibitor')
