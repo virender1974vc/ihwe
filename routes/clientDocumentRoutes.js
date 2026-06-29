@@ -42,6 +42,7 @@ const upload = multer({ storage: storage });
 // Routes
 router.post('/upload', upload.single('file'), clientDocumentController.uploadClientDocument);
 router.get('/proxy/download', clientDocumentController.downloadProxy);
+router.get('/admin/pending', clientDocumentController.getPendingDocuments);
 router.get('/:client_id', clientDocumentController.getClientDocuments);
 router.patch('/:id/status', clientDocumentController.updateDocumentStatus);
 router.post('/:id/comment', clientDocumentController.addDocumentComment);

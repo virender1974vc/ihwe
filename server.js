@@ -461,6 +461,7 @@ const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
+app.set('io', io);
 
 const ChatMessage = require('./models/ChatMessage');
 

@@ -1,4 +1,7 @@
 const ClientDocument = require("../models/ClientDocument");
+const Company = require("../models/Company");
+const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const mongoose = require("mongoose");
 const cloudinary = require('cloudinary').v2;
 const aiDocumentVerificationService = require("../services/aiDocumentVerificationService");
 async function deleteFileFromCloudinary(file_url) {
@@ -82,6 +85,37 @@ exports.uploadClientDocument = async (req, res) => {
             { returnDocument: 'after', upsert: true }
         );
 
+        // Emit real-time socket event for the admin
+        const io = req.app.get('io');
+        if (io) {
+            let companyName = "Unknown Client";
+            try {
+                const comp = await Company.findOne({ 
+                    $or: [
+                        { _id: mongoose.Types.ObjectId.isValid(document.client_id) ? document.client_id : null },
+                        { clientId: document.client_id }
+                    ]
+                }).select('companyName');
+                
+                if (comp) {
+                    companyName = comp.companyName;
+                } else if (mongoose.Types.ObjectId.isValid(document.client_id)) {
+                    const exh = await ExhibitorRegistration.findById(document.client_id).select('exhibitorName');
+                    if (exh) companyName = exh.exhibitorName;
+                }
+            } catch (e) {
+                console.error("Error finding company:", e);
+            }
+
+            io.to('admin_room').emit('document_uploaded', {
+                client_id: document.client_id,
+                document_name: document.document_name,
+                companyName: companyName,
+                status: document.status,
+                timestamp: Date.now()
+            });
+        }
+
         res.status(201).json(document);
     } catch (error) {
         res.status(500).json({ message: "Error uploading document", error: error.message });
@@ -95,6 +129,45 @@ exports.getClientDocuments = async (req, res) => {
         res.status(200).json(documents);
     } catch (error) {
         res.status(500).json({ message: "Failed to fetch client documents", error: error.message });
+    }
+};
+
+// Get all pending documents for Admin Dashboard Task & Alerts
+exports.getPendingDocuments = async (req, res) => {
+    try {
+        const pendingDocuments = await ClientDocument.find({ status: "Pending" }).sort({ added: -1 });
+        
+        // Extract unique client IDs
+        const clientIds = [...new Set(pendingDocuments.map(doc => doc.client_id))];
+        
+        // Find companies matching these IDs
+        const validObjectIds = clientIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        const [companies, exhibitors] = await Promise.all([
+            Company.find({ 
+                $or: [
+                    { _id: { $in: validObjectIds } },
+                    { clientId: { $in: clientIds } }
+                ]
+            }).select('companyName clientId _id'),
+            ExhibitorRegistration.find({
+                _id: { $in: validObjectIds }
+            }).select('exhibitorName _id')
+        ]);
+
+        // Attach companyName to each document
+        const docsWithCompany = pendingDocuments.map(doc => {
+            const docObj = doc.toObject();
+            const comp = companies.find(c => String(c._id) === docObj.client_id || String(c.clientId) === docObj.client_id);
+            const exh = exhibitors.find(e => String(e._id) === docObj.client_id);
+            return {
+                ...docObj,
+                companyName: exh ? exh.exhibitorName : (comp ? comp.companyName : "Unknown Client")
+            };
+        });
+
+        res.status(200).json(docsWithCompany);
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch pending documents", error: error.message });
     }
 };
 
