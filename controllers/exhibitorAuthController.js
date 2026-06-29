@@ -72,7 +72,7 @@ const safeJson = (value) => {
     }
 };
 
-async function sendOtpToAvailableChannels(exhibitor, otp) {
+async function sendOtpToAvailableChannels(exhibitor, otp, requestedChannel = 'both') {
     const email = exhibitor.contact1?.email?.trim();
     const rawMobile = exhibitor.contact1?.mobile;
     const rawWhatsapp = exhibitor.contact1?.whatsapp;
@@ -84,26 +84,27 @@ async function sendOtpToAvailableChannels(exhibitor, otp) {
         contact1Email: email || null,
         contact1Mobile: rawMobile || null,
         contact1Whatsapp: rawWhatsapp || null,
-        finalWhatsappNumber: mobile || null
+        finalWhatsappNumber: mobile || null,
+        requestedChannel
     });
 
-    if (email) {
+    if (email && (requestedChannel === 'both' || requestedChannel === 'email')) {
         tasks.push(
             emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName, 'EXHIBITOR')
                 .then(result => ({ channel: 'email', success: true, result }))
                 .catch(error => ({ channel: 'email', success: false, error: error.message }))
         );
-    } else {
+    } else if (!email && (requestedChannel === 'both' || requestedChannel === 'email')) {
         console.log('[OTP] Email skipped: missing email');
     }
 
-    if (mobile) {
+    if (mobile && (requestedChannel === 'both' || requestedChannel === 'mobile')) {
         tasks.push(
             sendWhatsAppOTP(mobile, otp, 'EXHIBITOR', exhibitor.exhibitorName)
                 .then(result => ({ channel: 'whatsapp', success: !!result?.success, result }))
                 .catch(error => ({ channel: 'whatsapp', success: false, error: error.message }))
         );
-    } else {
+    } else if (!mobile && (requestedChannel === 'both' || requestedChannel === 'mobile')) {
         const reason = rawMobile || rawWhatsapp
             ? 'missing valid mobile'
             : 'missing mobile';
@@ -250,7 +251,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'email');
 
             res.status(200).json({
                 success: true,
@@ -289,7 +290,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'mobile');
 
             res.status(200).json({
                 success: true,
