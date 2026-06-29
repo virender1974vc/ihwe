@@ -23,7 +23,10 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
     },
     vehicles: [{
         vehicleType: { type: String, enum: ['2-wheeler', '4-wheeler'] },
-        vehicleNumber: { type: String, trim: true }
+        vehicleNumber: { type: String, trim: true },
+        name: { type: String, trim: true },
+        email: { type: String, trim: true },
+        phone: { type: String, trim: true }
     }],
     personnel: [{
         name: { type: String, trim: true },

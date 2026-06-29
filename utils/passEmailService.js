@@ -58,79 +58,47 @@ const sendPassNotifications = async (passRequest, exhibitorData) => {
         const exhibitorPhone = exhibitorData.contact1?.mobile || exhibitorData.contact1?.whatsapp;
         const exhibitorName = exhibitorData.exhibitorName || 'Exhibitor';
 
-        if (type === 'vehicle') {
-            const qrCodesHtmlArray = [];
-            const attachments = [];
-            const items = passRequest.vehicles;
+        const items = type === 'vehicle' ? passRequest.vehicles : passRequest.personnel;
+        
+        if (items && items.length > 0) {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                
+                const qrData = JSON.stringify({ reqId: passRequest._id.toString(), type: type, index: i });
+                const qrBuffer = await QRCode.toBuffer(qrData, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+                const cid = `qrcode_${type}_${i}@ihwe.in`;
 
-            if (items && items.length > 0) {
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    
-                    const qrData = JSON.stringify({ reqId: passRequest._id.toString(), type: type, index: i });
-                    const qrBuffer = await QRCode.toBuffer(qrData, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
-                    const cid = `qrcode_${type}_${i}@ihwe.in`;
-                    
-                    attachments.push({ filename: `${type}-pass-${i + 1}.png`, content: qrBuffer, cid: cid });
-
-                    const itemDetails = `<strong>Vehicle No:</strong> ${item.vehicleNumber || 'N/A'} <br/> <strong>Type:</strong> ${item.vehicleType || 'N/A'}`;
-                    qrCodesHtmlArray.push(`
-                        <div style="background-color: white; border: 1px dashed #d1d5db; padding: 15px; margin-bottom: 20px; text-align: center; border-radius: 6px;">
-                            <p style="margin: 0 0 10px 0; font-size: 16px; color: #374151;">${itemDetails}</p>
-                            <img src="cid:${cid}" alt="QR Code" style="max-width: 150px; height: auto;" />
-                        </div>
-                    `);
+                const attachments = [{ filename: `${type}-pass.png`, content: qrBuffer, cid: cid }];
+                
+                let itemDetails = '';
+                if (type === 'vehicle') {
+                    itemDetails = `<strong>Vehicle No:</strong> ${item.vehicleNumber || 'N/A'} <br/> <strong>Type:</strong> ${item.vehicleType || 'N/A'}`;
+                    if (item.name) itemDetails += `<br/> <strong>Driver/Contact:</strong> ${item.name}`;
+                } else {
+                    itemDetails = `<strong>Name:</strong> ${item.name || 'N/A'} <br/> <strong>Designation:</strong> ${item.designation || 'N/A'}`;
                 }
-            }
 
-            const emailHtml = generatePassHTML(passRequest, qrCodesHtmlArray.join(''));
-            const subject = `Your IHWE Vehicle Passes are Approved`;
+                const qrCodesHtmlArray = [`
+                    <div style="background-color: white; border: 1px dashed #d1d5db; padding: 15px; margin-bottom: 20px; text-align: center; border-radius: 6px;">
+                        <p style="margin: 0 0 10px 0; font-size: 16px; color: #374151;">${itemDetails}</p>
+                        <img src="cid:${cid}" alt="QR Code" style="max-width: 150px; height: auto;" />
+                    </div>
+                `];
 
-            if (exhibitorEmail) {
-                await emailServiceInstance.sendEmail({
-                    to: exhibitorEmail, subject: subject, html: emailHtml, attachments: attachments, profile: 'EXHIBITOR',
-                    logData: { name: exhibitorName, phone: exhibitorPhone, message: `Sent vehicle pass QR codes` }
-                });
-            }
-            if (exhibitorPhone) {
-                await whatsapp.sendPassApprovalWhatsApp(exhibitorPhone, passRequest.quantity, type, exhibitorEmail || 'N/A', exhibitorName);
-            }
-        } else {
-            // Send individual emails/whatsapp to each personnel
-            const items = passRequest.personnel;
-            if (items && items.length > 0) {
-                for (let i = 0; i < items.length; i++) {
-                    const item = items[i];
-                    
-                    const qrData = JSON.stringify({ reqId: passRequest._id.toString(), type: type, index: i });
-                    const qrBuffer = await QRCode.toBuffer(qrData, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
-                    const cid = `qrcode_${type}_${i}@ihwe.in`;
+                const emailHtml = generatePassHTML({ quantity: 1, passType: type }, qrCodesHtmlArray.join(''));
+                const subject = `Your IHWE ${type.charAt(0).toUpperCase() + type.slice(1)} Pass is Approved`;
 
-                    const attachments = [{ filename: `${type}-pass.png`, content: qrBuffer, cid: cid }];
-                    
-                    const itemDetails = `<strong>Name:</strong> ${item.name || 'N/A'} <br/> <strong>Designation:</strong> ${item.designation || 'N/A'}`;
-                    const qrCodesHtmlArray = [`
-                        <div style="background-color: white; border: 1px dashed #d1d5db; padding: 15px; margin-bottom: 20px; text-align: center; border-radius: 6px;">
-                            <p style="margin: 0 0 10px 0; font-size: 16px; color: #374151;">${itemDetails}</p>
-                            <img src="cid:${cid}" alt="QR Code" style="max-width: 150px; height: auto;" />
-                        </div>
-                    `];
-
-                    const emailHtml = generatePassHTML({ quantity: 1, passType: type }, qrCodesHtmlArray.join(''));
-                    const subject = `Your IHWE ${type.charAt(0).toUpperCase() + type.slice(1)} Pass is Approved`;
-
-                    const targetEmail = item.email || exhibitorEmail;
-                    if (targetEmail) {
-                        await emailServiceInstance.sendEmail({
-                            to: targetEmail, subject: subject, html: emailHtml, attachments: attachments, profile: 'EXHIBITOR',
-                            logData: { name: item.name || exhibitorName, phone: item.phone, message: `Sent ${type} pass QR code` }
-                        });
-                    }
-                    
-                    const targetPhone = item.phone || exhibitorPhone;
-                    if (targetPhone) {
-                        await whatsapp.sendPassApprovalWhatsApp(targetPhone, 1, type, targetEmail || 'N/A', item.name || exhibitorName);
-                    }
+                const targetEmail = item.email || exhibitorEmail;
+                if (targetEmail) {
+                    await emailServiceInstance.sendEmail({
+                        to: targetEmail, subject: subject, html: emailHtml, attachments: attachments, profile: 'EXHIBITOR',
+                        logData: { name: item.name || exhibitorName, phone: item.phone, message: `Sent ${type} pass QR code` }
+                    });
+                }
+                
+                const targetPhone = item.phone || exhibitorPhone;
+                if (targetPhone) {
+                    await whatsapp.sendPassApprovalWhatsApp(targetPhone, 1, type, targetEmail || 'N/A', item.name || exhibitorName);
                 }
             }
         }
