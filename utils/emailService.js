@@ -521,7 +521,6 @@ class EmailService {
                 emailAttachments.push({ filename: `smallLogo.${sExt}`, content: smallLogoBuf, cid: 'email_small_logo_img@ihwe.in' });
             }
 
-            s
             const mobile = data.whatsapp || data.mobile || data.phone || data.mobileNumber;
             const sendDynamicWhatsapp = async () => {
                 if (!mobile || !whatsappContent) {
