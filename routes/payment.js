@@ -8,14 +8,99 @@ const emailService = require('../utils/emailService');
 const whatsappService = require('../utils/whatsappService');
 const Stall = require('../models/Stall');
 const { logActivity } = require('../utils/logger');
+
+const normalizeIndianMobile = (value) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (/^[6-9]\d{9}$/.test(digits)) return digits;
+    if (/^91[6-9]\d{9}$/.test(digits)) return digits.slice(-10);
+    return '';
+};
+
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
+const applyReceiptContact = (registration, receiptContact = {}) => {
+    registration.contact1 = registration.contact1 || {};
+
+    const currentName = `${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
+    const name = String(receiptContact.name || currentName || '').trim();
+    const email = String(receiptContact.email || registration.contact1.email || '').trim().toLowerCase();
+    const mobile = normalizeIndianMobile(receiptContact.mobile || receiptContact.whatsappNumber || registration.contact1.mobile || registration.contact1.whatsapp);
+
+    if (!name) {
+        return { valid: false, message: 'Name is required for payment receipt' };
+    }
+    if (!isValidEmail(email)) {
+        return { valid: false, message: 'Valid email is required for payment receipt' };
+    }
+    if (!mobile) {
+        return { valid: false, message: 'Valid 10-digit Indian mobile number is required for payment receipt' };
+    }
+
+    const [firstName, ...rest] = name.split(/\s+/);
+    registration.contact1.firstName = firstName;
+    registration.contact1.lastName = rest.join(' ');
+    registration.contact1.email = email;
+    registration.contact1.mobile = mobile;
+    registration.contact1.whatsapp = mobile;
+
+    return { valid: true, contact: { name, email, mobile } };
+};
+
+const sendPaymentSuccessNotifications = async (registration, pdfFilePath, receiptData = {}) => {
+    // Unconditionally extract both the canonical email and mobile from the registration.
+    const email = String(registration.contact1?.email || '').trim();
+    const mobile = normalizeIndianMobile(registration.contact1?.whatsapp || registration.contact1?.mobile);
+
+    const tasks = [];
+
+    if (email) {
+        tasks.push(
+            emailService.sendPaymentReceipt(registration, pdfFilePath)
+                .catch(err => {
+                    console.error('[PaymentReceiptEmail] Failed:', err.message);
+                })
+        );
+    } else {
+        console.warn('[PaymentReceiptEmail] Skipped: No email found in registration');
+    }
+
+    if (mobile) {
+        tasks.push(
+            whatsappService.sendPaymentConfirmation(mobile, {
+                contactPerson: `${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim(),
+                registrationId: registration.registrationId,
+                amountPaid: receiptData.amountPaid,
+                transactionId: receiptData.transactionId,
+                companyName: process.env.COMPANY_NAME || 'Exhibition'
+            })
+                .catch(err => {
+                    console.error('[PaymentReceiptWhatsApp] Failed:', err.message);
+                })
+        );
+    } else {
+        console.warn('[PaymentReceiptWhatsApp] Skipped: No mobile found in registration');
+    }
+
+    // Await both notifications concurrently to ensure one doesn't delay or block the other
+    if (tasks.length > 0) {
+        await Promise.allSettled(tasks);
+    }
+};
+
 router.post('/create-order/:registrationId', async (req, res) => {
     try {
         const { registrationId } = req.params;
-        const { amount, installmentNumber } = req.body;
+        const { amount, installmentNumber, receiptContact } = req.body;
         const registration = await ExhibitorRegistration.findById(registrationId);
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
         }
+
+        const contactResult = applyReceiptContact(registration, receiptContact);
+        if (!contactResult.valid) {
+            return res.status(400).json({ success: false, message: contactResult.message });
+        }
+
         const balanceAmount = registration.balanceAmount || 0;
         const penaltyAmount = registration.penaltyAmount || 0;
         const totalPayable = registration.totalPayable || (balanceAmount + penaltyAmount);
@@ -64,7 +149,8 @@ router.post('/create-order/:registrationId', async (req, res) => {
                 _id: registration._id,
                 exhibitorName: registration.exhibitorName,
                 registrationId: registration.registrationId,
-                contact1: registration.contact1
+                contact1: registration.contact1,
+                receiptContact: contactResult.contact
             }
         });
     } catch (error) {
@@ -87,7 +173,8 @@ router.post('/verify-payment', async (req, res) => {
             registrationId,
             amountPaid,
             paymentType,
-            installmentNumber
+            installmentNumber,
+            receiptContact
         } = req.body;
 
         // Verify signature
@@ -105,6 +192,11 @@ router.post('/verify-payment', async (req, res) => {
         const registration = await ExhibitorRegistration.findById(registrationId);
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
+        }
+
+        const contactResult = applyReceiptContact(registration, receiptContact);
+        if (!contactResult.valid) {
+            return res.status(400).json({ success: false, message: contactResult.message });
         }
 
         const wasPaymentFailed = registration.status === 'payment-failed';
@@ -222,17 +314,10 @@ router.post('/verify-payment', async (req, res) => {
                 registration.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
             }
             await registration.save();
-            await emailService.sendPaymentReceipt(registration, pdfFilePath);
-
-            // Send WhatsApp confirmation
-            if (registration.contact1?.mobile) {
-                await whatsappService.sendPaymentConfirmation(registration.contact1.mobile, {
-                    contactPerson: `${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim(),
-                    registrationId: registration.registrationId,
-                    amountPaid: paidAmount,
-                    transactionId: razorpay_payment_id
-                });
-            }
+            await sendPaymentSuccessNotifications(registration, pdfFilePath, {
+                amountPaid: paidAmount,
+                transactionId: razorpay_payment_id
+            });
         } catch (err) {
             console.error('Payment Receipt Error:', err);
         }
@@ -265,7 +350,7 @@ router.get('/summary/:registrationId', async (req, res) => {
 
         const registration = await ExhibitorRegistration.findById(registrationId)
             .populate('eventId', 'name startDate endDate paymentPlans')
-            .select('exhibitorName registrationId participation financeBreakdown amountPaid balanceAmount penaltyAmount totalPayable paymentHistory installments status paymentDueDate paymentPlanType paymentPlanLabel chosenTdsPercent');
+            .select('exhibitorName registrationId contact1 participation financeBreakdown amountPaid balanceAmount penaltyAmount totalPayable paymentHistory installments status paymentDueDate paymentPlanType paymentPlanLabel chosenTdsPercent');
 
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -274,6 +359,7 @@ router.get('/summary/:registrationId', async (req, res) => {
         const summary = {
             exhibitorName: registration.exhibitorName,
             registrationId: registration.registrationId,
+            contact1: registration.contact1,
             event: registration.eventId,
             stall: registration.participation,
             finance: {
@@ -396,23 +482,12 @@ router.post('/installment/:registrationId/:installmentNumber', async (req, res) 
                 registration.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
                 await registration.save();
             }
-            await emailService.sendPaymentReceipt(registration, pdfFilePath);
+            await sendPaymentSuccessNotifications(registration, pdfFilePath, {
+                amountPaid: paidAmount,
+                transactionId: razorpay_payment_id
+            });
         } catch (err) {
             console.error('Payment Receipt Error:', err);
-        }
-
-        // Send confirmation
-        try {
-            if (registration.contact1?.mobile) {
-                await whatsappService.sendPaymentConfirmation(registration.contact1.mobile, {
-                    contactPerson: `${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim(),
-                    registrationId: registration.registrationId,
-                    amountPaid: paidAmount,
-                    transactionId: razorpay_payment_id
-                });
-            }
-        } catch (err) {
-            console.error('WhatsApp Error:', err);
         }
 
         res.json({
@@ -502,9 +577,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                         reg.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
                     }
                     await reg.save();
-                    await emailService.sendPaymentReceipt(reg, pdfFilePath);
+                    await sendPaymentSuccessNotifications(reg, pdfFilePath, {
+                        amountPaid: paidAmount,
+                        transactionId: payment.id
+                    });
                 } catch (err) {
-                    console.error('Webhook Email Error:', err);
+                    console.error('Webhook Receipt Notification Error:', err);
                 }
             }
         }
@@ -659,16 +737,10 @@ router.post('/manual/:registrationId', async (req, res) => {
                 registration.paymentHistory[latestPaymentIdx].receiptPdfUrl = pdfUrl || '';
             }
             await registration.save();
-            await emailService.sendPaymentReceipt(registration, pdfFilePath);
-            if (registration.contact1?.mobile) {
-                await whatsappService.sendPaymentConfirmation(registration.contact1.mobile, {
-                    contactPerson: `${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim(),
-                    registrationId: registration.registrationId,
-                    amountPaid: paidAmount,
-                    transactionId: transactionId || 'Manual Payment',
-                    companyName: process.env.COMPANY_NAME || 'Exhibition'
-                });
-            }
+            await sendPaymentSuccessNotifications(registration, pdfFilePath, {
+                amountPaid: paidAmount,
+                transactionId: transactionId || 'Manual Payment'
+            });
         } catch (err) {
             console.error('Manual Payment Receipt Error:', err);
         }

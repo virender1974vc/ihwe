@@ -33,6 +33,11 @@ const paymentSchema = new mongoose.Schema(
     neft_date: { type: String, default: "" },
     status: { type: Number, default: 1 },
     added_by: { type: String, default: "Admin" },
+    proofUrl: { type: String, default: "" },
+    tds_rate: { type: String, default: "" },
+    tds_section: { type: String, default: "" },
+    tds_certificate_no: { type: String, default: "" },
+    notes: { type: String, default: "" },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );

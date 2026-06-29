@@ -7,6 +7,7 @@ const ContactPersonSchema = new mongoose.Schema({
     email: String,
     designation: String,
     mobile: String,
+    whatsapp: String,
     alternateNo: String,
     photoUrl: String
 });
@@ -245,7 +246,10 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
             exhibitor: Boolean,
             delegate: Boolean,
             lunch: Boolean,
-            parking: Boolean
+            parking: Boolean,
+            vehicle: Boolean,
+            service: Boolean,
+            visitor: Boolean
         },
         verificationStatus: { type: String, enum: ['Pending', 'Verified', 'Rejected'], default: 'Pending' }
     }]

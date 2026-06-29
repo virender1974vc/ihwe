@@ -23,7 +23,10 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
     },
     vehicles: [{
         vehicleType: { type: String, enum: ['2-wheeler', '4-wheeler'] },
-        vehicleNumber: { type: String, trim: true }
+        vehicleNumber: { type: String, trim: true },
+        name: { type: String, trim: true },
+        email: { type: String, trim: true },
+        phone: { type: String, trim: true }
     }],
     personnel: [{
         name: { type: String, trim: true },
@@ -32,6 +35,18 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
         phone: { type: String, trim: true },
         gender: { type: String, enum: ['male', 'female', 'other'] }
     }],
+    paymentStatus: {
+        type: String,
+        enum: ['pending', 'paid', 'free'],
+        default: 'free'
+    },
+    paidQuantity: { type: Number, default: 0 },
+    baseAmount: { type: Number, default: 0 },
+    gstAmount: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorPassRequest', exhibitorPassRequestSchema);
