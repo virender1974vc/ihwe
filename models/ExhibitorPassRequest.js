@@ -32,6 +32,18 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
         phone: { type: String, trim: true },
         gender: { type: String, enum: ['male', 'female', 'other'] }
     }],
+    paymentStatus: {
+        type: String,
+        enum: ['pending', 'paid', 'free'],
+        default: 'free'
+    },
+    paidQuantity: { type: Number, default: 0 },
+    baseAmount: { type: Number, default: 0 },
+    gstAmount: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorPassRequest', exhibitorPassRequestSchema);

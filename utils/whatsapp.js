@@ -164,6 +164,93 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
     }
 };
 
+const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
+    let status = 'failed';
+    let errorMsg = null;
+
+    try {
+        let formattedMobile = mobile.replace(/\D/g, ''); 
+        if (formattedMobile.length === 10) {
+            formattedMobile = '91' + formattedMobile;
+        }
+
+        const apiKey = (process.env.OPUS_API_KEY || '').trim();
+        if (!apiKey) {
+            throw new Error('OPUS_API_KEY is not configured');
+        }
+        const url = `https://api.opustechnology.in/wapp/v2/api/send?apikey=${apiKey}&mobile=${formattedMobile}&msg=${encodeURIComponent(msg)}`;
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); 
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            throw new Error(`WhatsApp API returned invalid JSON. Status: ${response.status}. Response: ${responseText.substring(0, 120)}`);
+        }
+        if (!response.ok) {
+            throw new Error(`WhatsApp API responded with ${response.status}: ${responseText.substring(0, 120)}`);
+        }
+        const apiStatus = String(data.status || data.Status || data.success || '').toLowerCase();
+        const apiMessage = data.message || data.Message || data.error || data.Error || '';
+        if (apiStatus && ['false', 'failed', 'fail', 'error', '0'].includes(apiStatus)) {
+            throw new Error(`WhatsApp API failed: ${apiMessage || responseText.substring(0, 120)}`);
+        }
+        console.log(`Opus WhatsApp Message sent to ${mobile}:`, data);
+        status = 'success';
+        return { success: true, data };
+    } catch (error) {
+        console.error(`Error sending Opus WhatsApp to ${mobile}:`, error);
+        errorMsg = error.message || 'Failed to connect to WhatsApp API';
+        return { success: false, error: errorMsg };
+    } finally {
+        WhatsAppLog.create({
+            recipient: mobile,
+            message: msg,
+            name: name || 'System Notification (Opus)',
+            status,
+            error: errorMsg,
+            senderId: options.senderId || null,
+            senderName: options.senderName || null,
+            companyId: options.companyId || null,
+            companyName: options.companyName || null
+        }).catch(err => console.error('Error saving WhatsApp log:', err));
+    }
+};
+
+const sendPassApprovalWhatsApp = async (mobile, quantity, type, email, name = null) => {
+    let status = 'failed';
+    try {
+        const aisensyResult = await aisensy.sendTemplate({
+            campaignEnvKey: 'AISENSY_CAMPAIGN_PASS_APPROVAL',
+            phone: mobile,
+            userName: name || 'Customer',
+            templateParams: [String(quantity), type, email]
+        });
+        
+        if (aisensyResult.success) {
+            status = 'success';
+            return { success: true, data: aisensyResult.response, provider: 'aisensy' };
+        }
+        
+        if (!aisensyResult.skipped) {
+            console.warn(`[WhatsApp] AiSensy pass approval send failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+        }
+
+        const waMsg = `Dear Exhibitor,\n\nYour request for ${quantity} ${type} pass(es) has been APPROVED.\n\nWe have sent the entry QR codes to your registered email address (${email}). Please check your inbox (and spam folder) and present the QR codes at the entry gates.\n\nRegards,\nTeam IHWE`;
+        
+        return await sendOpusWhatsAppMessage(mobile, waMsg, 'Pass Approval Notification');
+    } catch (error) {
+        console.error(`Error sending Pass Approval WhatsApp to ${mobile}:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
 const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, options = {}) => {
     let status = 'failed';
     let errorMsg = null;
@@ -296,5 +383,7 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
 module.exports = {
     sendWhatsAppOTP,
     sendWhatsAppMessage,
+    sendOpusWhatsAppMessage,
+    sendPassApprovalWhatsApp,
     sendWhatsAppRichMessage
 };
