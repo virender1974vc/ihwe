@@ -7,7 +7,11 @@ const emailService = require('../utils/emailService');
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 const aiDocumentVerificationService = require('../services/aiDocumentVerificationService');
 const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
 const { sendWhatsAppOTP } = require('../utils/whatsapp');
+const razorpay = require('../utils/razorpay');
+const crypto = require('crypto');
+const passEmailService = require('../utils/passEmailService');
 
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const DUMMY_MOBILE_NUMBERS = new Set([
@@ -68,7 +72,7 @@ const safeJson = (value) => {
     }
 };
 
-async function sendOtpToAvailableChannels(exhibitor, otp) {
+async function sendOtpToAvailableChannels(exhibitor, otp, requestedChannel = 'both') {
     const email = exhibitor.contact1?.email?.trim();
     const rawMobile = exhibitor.contact1?.mobile;
     const rawWhatsapp = exhibitor.contact1?.whatsapp;
@@ -80,26 +84,27 @@ async function sendOtpToAvailableChannels(exhibitor, otp) {
         contact1Email: email || null,
         contact1Mobile: rawMobile || null,
         contact1Whatsapp: rawWhatsapp || null,
-        finalWhatsappNumber: mobile || null
+        finalWhatsappNumber: mobile || null,
+        requestedChannel
     });
 
-    if (email) {
+    if (email && (requestedChannel === 'both' || requestedChannel === 'email')) {
         tasks.push(
             emailService.sendOtpEmail(email, otp, exhibitor.exhibitorName, 'EXHIBITOR')
                 .then(result => ({ channel: 'email', success: true, result }))
                 .catch(error => ({ channel: 'email', success: false, error: error.message }))
         );
-    } else {
+    } else if (!email && (requestedChannel === 'both' || requestedChannel === 'email')) {
         console.log('[OTP] Email skipped: missing email');
     }
 
-    if (mobile) {
+    if (mobile && (requestedChannel === 'both' || requestedChannel === 'mobile')) {
         tasks.push(
             sendWhatsAppOTP(mobile, otp, 'EXHIBITOR', exhibitor.exhibitorName)
                 .then(result => ({ channel: 'whatsapp', success: !!result?.success, result }))
                 .catch(error => ({ channel: 'whatsapp', success: false, error: error.message }))
         );
-    } else {
+    } else if (!mobile && (requestedChannel === 'both' || requestedChannel === 'mobile')) {
         const reason = rawMobile || rawWhatsapp
             ? 'missing valid mobile'
             : 'missing mobile';
@@ -246,7 +251,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'email');
 
             res.status(200).json({
                 success: true,
@@ -285,7 +290,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'mobile');
 
             res.status(200).json({
                 success: true,
@@ -801,13 +806,115 @@ class ExhibitorAuthController {
         }
     }
 
-    async requestPass(req, res) {
+    async createPassOrder(req, res) {
         try {
-            const exhibitorId = req.user.id; // from protectExhibitor middleware
-            const { passType, quantity, vehicles, personnel } = req.body;
+            const exhibitorId = req.user.id;
+            const { passType, quantity } = req.body;
 
             if (!passType || !quantity) {
                 return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
+            }
+
+            const config = await ExhibitorPassConfig.findOne({ passType, isActive: true });
+            if (!config) {
+                return res.status(404).json({ success: false, message: 'Pass configuration not found or inactive' });
+            }
+
+            // Calculate existing passes
+            const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType });
+            const usedQuantity = existingRequests.reduce((sum, req) => {
+                if (req.status !== 'rejected') return sum + req.quantity;
+                return sum;
+            }, 0);
+
+            const complimentary = config.complimentaryQuota || 0;
+            const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
+            
+            let paidQuantity = quantity;
+            if (remainingComplimentary > 0) {
+                paidQuantity = Math.max(0, quantity - remainingComplimentary);
+            }
+
+            if (paidQuantity <= 0) {
+                return res.status(200).json({ success: true, isFree: true });
+            }
+
+            const baseAmount = paidQuantity * (config.price || 0);
+            const gstPercentage = config.gstPercentage || 18;
+            const gstAmount = (baseAmount * gstPercentage) / 100;
+            const totalAmount = baseAmount + gstAmount;
+
+            const options = {
+                amount: Math.round(totalAmount * 100),
+                currency: 'INR',
+                receipt: ('rp_' + exhibitorId.toString().slice(-6) + '_' + Date.now().toString(36)).slice(0, 40)
+            };
+
+            const order = await razorpay.orders.create(options);
+            
+            res.status(200).json({
+                success: true,
+                isFree: false,
+                order: order,
+                baseAmount,
+                gstAmount,
+                totalAmount,
+                paidQuantity
+            });
+        } catch (error) {
+            console.error('Error creating pass order:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async requestPass(req, res) {
+        try {
+            const exhibitorId = req.user.id; // from protectExhibitor middleware
+            const { passType, quantity, vehicles, personnel, paymentDetails } = req.body;
+
+            if (!passType || !quantity) {
+                return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
+            }
+
+            const config = await ExhibitorPassConfig.findOne({ passType, isActive: true });
+            if (!config) {
+                return res.status(404).json({ success: false, message: 'Pass configuration not found' });
+            }
+
+            // Calculate if any passes are paid
+            const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType });
+            const usedQuantity = existingRequests.reduce((sum, req) => {
+                if (req.status !== 'rejected') return sum + req.quantity;
+                return sum;
+            }, 0);
+
+            const complimentary = config.complimentaryQuota || 0;
+            const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
+            let paidQuantity = Math.max(0, quantity - remainingComplimentary);
+
+            let paymentStatus = paidQuantity > 0 ? 'pending' : 'free';
+            let baseAmount = 0, gstAmount = 0, totalAmount = 0;
+
+            if (paidQuantity > 0) {
+                baseAmount = paidQuantity * (config.price || 0);
+                const gstPercentage = config.gstPercentage || 18;
+                gstAmount = (baseAmount * gstPercentage) / 100;
+                totalAmount = baseAmount + gstAmount;
+
+                if (!paymentDetails || !paymentDetails.razorpay_payment_id) {
+                    return res.status(400).json({ success: false, message: 'Payment details are required for extra passes' });
+                }
+
+                const expectedSignature = crypto
+                    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+                    .update(paymentDetails.razorpay_order_id + '|' + paymentDetails.razorpay_payment_id)
+                    .digest('hex');
+
+                if (expectedSignature !== paymentDetails.razorpay_signature) {
+                    return res.status(400).json({ success: false, message: 'Invalid payment signature' });
+                }
+
+                paymentStatus = 'paid';
             }
 
             // Create new pass request
@@ -816,10 +923,30 @@ class ExhibitorAuthController {
                 passType,
                 quantity,
                 vehicles: passType === 'vehicle' ? vehicles : undefined,
-                personnel: passType !== 'vehicle' ? personnel : undefined
+                personnel: passType !== 'vehicle' ? personnel : undefined,
+                paymentStatus,
+                status: (paymentStatus === 'paid' || paymentStatus === 'free') ? 'approved' : 'pending',
+                paidQuantity,
+                baseAmount,
+                gstAmount,
+                totalAmount,
+                razorpayOrderId: paymentDetails?.razorpay_order_id,
+                razorpayPaymentId: paymentDetails?.razorpay_payment_id,
+                razorpaySignature: paymentDetails?.razorpay_signature
             });
 
             await newRequest.save();
+
+            // Trigger Email (QR Code) and WhatsApp via Opus if automatically approved
+            if (newRequest.status === 'approved') {
+                ExhibitorRegistration.findById(exhibitorId).then(exhibitor => {
+                    if (exhibitor) {
+                        passEmailService.sendPassNotifications(newRequest, exhibitor).catch(err => {
+                            console.error('Failed to send pass notifications background task:', err);
+                        });
+                    }
+                }).catch(err => console.error('Error fetching exhibitor for pass notification:', err));
+            }
 
             res.status(201).json({
                 success: true,
@@ -827,6 +954,7 @@ class ExhibitorAuthController {
                 data: newRequest
             });
         } catch (error) {
+            console.error('Error submitting pass request:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     }

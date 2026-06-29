@@ -46,6 +46,8 @@ const AccessoryOrderSchema = new mongoose.Schema({
     receiptUrl: { type: String, default: '' },
     // Email sent
     emailSent: { type: Boolean, default: false },
+    // Notification tracking
+    isViewed: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Auto-generate order number

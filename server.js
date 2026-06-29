@@ -94,6 +94,7 @@ const estimateRoutes = require("./routes/estimateRoutes");
 const perInvoiceRoutes = require("./routes/perInvoiceRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
+const debitNoteRoutes = require("./routes/debitNoteRoutes");
 const activityLogRoutes = require("./routes/activity/activityLogRoutes");
 const corporateVisitorRoutes = require("./routes/visitor/corporateVisitorRoutes");
 const generalVisitorRoutes = require("./routes/visitor/generalVisitorRoutes");
@@ -408,6 +409,8 @@ app.use("/api/estimates", estimateRoutes);
 app.use("/api/perinvoice", perInvoiceRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/creditnotes", creditNoteRoutes);
+app.use("/api/debitnotes", debitNoteRoutes);
+app.use("/api/account-overview", require("./routes/accountOverviewRoutes"));
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
 app.use("/api/group-visitors", groupVisitorRoutes);
@@ -485,6 +488,7 @@ const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
+app.set('io', io);
 
 const ChatMessage = require('./models/ChatMessage');
 

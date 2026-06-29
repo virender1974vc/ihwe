@@ -1,14 +1,17 @@
 const StallProduct = require('../models/StallProduct');
 const StallProductEnquiry = require('../models/StallProductEnquiry');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const fs = require('fs');
 const path = require('path');
 const deleteFile = (filePath) => {
     const abs = path.join(__dirname, '..', filePath);
     if (fs.existsSync(abs)) fs.unlinkSync(abs);
 };
+const getTargetExhibitorId = (req) => req.body?.regId || req.query?.regId || req.user.id;
+
 exports.getMyProducts = async (req, res) => {
     try {
-        const exhibitorId = req.query.regId || req.user.id;
+        const exhibitorId = getTargetExhibitorId(req);
         const products = await StallProduct.find({ exhibitorId }).sort({ createdAt: -1 });
         res.json({ success: true, data: products });
     } catch (err) {
@@ -17,7 +20,7 @@ exports.getMyProducts = async (req, res) => {
 };
 exports.addProduct = async (req, res) => {
     try {
-        const exhibitorId = req.body.regId || req.query.regId || req.user.id;
+        const exhibitorId = getTargetExhibitorId(req);
         const { name, description, category, tags, price, priceUnit, moq } = req.body;
         const images = (req.files || []).map(f => `/uploads/stall-products/${f.filename}`);
 
@@ -38,7 +41,8 @@ exports.addProduct = async (req, res) => {
 };
 exports.updateProduct = async (req, res) => {
     try {
-        const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId: req.user.id });
+        const exhibitorId = getTargetExhibitorId(req);
+        const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId });
         if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
         const { name, description, category, tags, price, priceUnit, moq, isActive, removeImages } = req.body;
@@ -67,7 +71,8 @@ exports.updateProduct = async (req, res) => {
 };
 exports.deleteProduct = async (req, res) => {
     try {
-        const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId: req.user.id });
+        const exhibitorId = getTargetExhibitorId(req);
+        const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId });
         if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
         product.images.forEach(img => deleteFile(img));
         await product.deleteOne();
@@ -107,7 +112,7 @@ exports.submitEnquiry = async (req, res) => {
 };
 exports.getProductEnquiries = async (req, res) => {
     try {
-        const exhibitorId = req.query.regId || req.user.id;
+        const exhibitorId = getTargetExhibitorId(req);
         const product = await StallProduct.findOne({ _id: req.params.id, exhibitorId });
         if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
 
@@ -119,7 +124,7 @@ exports.getProductEnquiries = async (req, res) => {
 };
 exports.getAnalytics = async (req, res) => {
     try {
-        const exhibitorId = req.query.regId || req.user.id;
+        const exhibitorId = getTargetExhibitorId(req);
         const products = await StallProduct.find({ exhibitorId })
             .select('name views enquiryCount images isActive createdAt')
             .sort({ views: -1 });
@@ -149,6 +154,46 @@ exports.getAnalytics = async (req, res) => {
     }
 };
 // Admin specific controllers
+const getExhibitorsWithProductsAdmin = async (req, res) => {
+    try {
+        const productStats = await StallProduct.aggregate([
+            {
+                $group: {
+                    _id: '$exhibitorId',
+                    productCount: { $sum: 1 },
+                    totalViews: { $sum: '$views' },
+                    totalEnquiries: { $sum: '$enquiryCount' },
+                    latestProductAt: { $max: '$createdAt' }
+                }
+            },
+            { $sort: { latestProductAt: -1 } }
+        ]);
+
+        const exhibitorIds = productStats.map(item => item._id).filter(Boolean);
+        const exhibitors = await ExhibitorRegistration.find({ _id: { $in: exhibitorIds } })
+            .select('exhibitorName city country contact1 companyLogoUrl registrationId sellerSubscription isSeller sellerStatus');
+
+        const exhibitorById = new Map(exhibitors.map(exhibitor => [String(exhibitor._id), exhibitor]));
+        const data = productStats
+            .map(stat => {
+                const exhibitor = exhibitorById.get(String(stat._id));
+                if (!exhibitor) return null;
+                return {
+                    ...exhibitor.toObject(),
+                    productCount: stat.productCount,
+                    totalViews: stat.totalViews,
+                    totalEnquiries: stat.totalEnquiries,
+                    latestProductAt: stat.latestProductAt
+                };
+            })
+            .filter(Boolean);
+
+        res.json({ success: true, data });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 const getExhibitorProductsAdmin = async (req, res) => {
     try {
         const { exhibitorId } = req.params;
@@ -220,6 +265,7 @@ module.exports = {
     submitEnquiry: exports.submitEnquiry,
     getProductEnquiries: exports.getProductEnquiries,
     getAnalytics: exports.getAnalytics,
+    getExhibitorsWithProductsAdmin,
     getExhibitorProductsAdmin,
     getExhibitorAnalyticsAdmin,
     deleteProductAdmin,

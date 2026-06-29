@@ -3,7 +3,11 @@ const Payment = require("../models/Payment");
 // ➤ Add a new payment
 const addPayment = async (req, res) => {
   try {
-    const payment = new Payment(req.body);
+    const payload = { ...req.body };
+    if (req.file) {
+      payload.proofUrl = `/uploads/payment_proofs/${req.file.filename}`;
+    }
+    const payment = new Payment(payload);
     await payment.save();
 
     res.status(201).json({
