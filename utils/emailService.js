@@ -104,7 +104,7 @@ class EmailService {
         this.emailShell = (body, options = {}) => {
             const { headerCid, footerCid, headerImage, footerImage, padding, hideFallbackFooter } = options;
 
-            // Use CID if available, else try base64 embed, else fallback to default
+
             const toBase64 = (imgPath) => {
                 try {
                     if (!imgPath) return null;

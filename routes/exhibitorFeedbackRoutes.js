@@ -8,7 +8,8 @@ const router = express.Router();
 
 router.get('/my', protectExhibitor, async (req, res) => {
     try {
-        const feedback = await ExhibitorFeedback.findOne({ exhibitorId: req.user.id }).sort({ createdAt: -1 });
+        const exhibitorId = req.query.regId || req.user.id;
+        const feedback = await ExhibitorFeedback.findOne({ exhibitorId }).sort({ createdAt: -1 });
         res.json({ success: true, data: feedback });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -17,10 +18,11 @@ router.get('/my', protectExhibitor, async (req, res) => {
 
 router.post('/submit', protectExhibitor, async (req, res) => {
     try {
-        const exhibitor = await ExhibitorRegistration.findById(req.user.id);
+        const exhibitorId = req.body.regId || req.user.id;
+        const exhibitor = await ExhibitorRegistration.findById(exhibitorId);
         if (!exhibitor) return res.status(404).json({ success: false, message: 'Exhibitor not found' });
 
-        const existing = await ExhibitorFeedback.findOne({ exhibitorId: req.user.id });
+        const existing = await ExhibitorFeedback.findOne({ exhibitorId });
         if (existing) {
             return res.status(400).json({ success: false, message: 'Feedback already submitted' });
         }

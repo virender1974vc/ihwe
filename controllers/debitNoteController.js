@@ -1,11 +1,60 @@
 const DebitNote = require("../models/DebitNote");
 
+const parseItems = (items) => {
+  if (Array.isArray(items)) return items;
+  if (!items) return [];
+  try {
+    const parsed = JSON.parse(items);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("[DebitNote] Failed to parse items:", error.message);
+    return [];
+  }
+};
+
+const toNumber = (value, fallback = 0) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+};
+
 // CREATE DEBIT NOTE
 const createDebitNote = async (req, res) => {
   try {
     const debit_note_no = await DebitNote.generateNextDebitNoteNo();
 
-    const payload = { ...req.body, debit_note_no };
+    const parsedItems = parseItems(req.body.items)
+      .filter((item) => item && item.description)
+      .map((item) => ({
+        description: item.description,
+        hsn: item.hsn || "",
+        qty: toNumber(item.qty, 1),
+        unit: item.unit || "Nos",
+        rate: toNumber(item.rate),
+        amount: toNumber(item.amount),
+        gstPct: item.gstPct || "18%",
+        gstAmount: toNumber(item.gstAmount),
+        total: toNumber(item.total),
+      }));
+
+    if (parsedItems.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one debit note item is required",
+      });
+    }
+
+    const payload = {
+      ...req.body,
+      debit_note_no,
+      items: parsedItems,
+      originalAmount: toNumber(req.body.originalAmount),
+      taxableAmount: toNumber(req.body.taxableAmount),
+      cgstAmount: toNumber(req.body.cgstAmount),
+      sgstAmount: toNumber(req.body.sgstAmount),
+      igstAmount: toNumber(req.body.igstAmount),
+      totalAmount: toNumber(req.body.totalAmount),
+    };
+
     if (req.file) {
       payload.attachmentUrl = `/uploads/debit_notes/${req.file.filename}`;
     }
