@@ -1,5 +1,24 @@
 const ClientDocument = require("../models/ClientDocument");
 const cloudinary = require('cloudinary').v2;
+const aiDocumentVerificationService = require("../services/aiDocumentVerificationService");
+async function deleteFileFromCloudinary(file_url) {
+    if (!file_url || !file_url.includes('cloudinary.com')) return;
+    try {
+        const urlParts = file_url.split('/upload/');
+        if (urlParts.length > 1) {
+            let publicId = urlParts[1];
+            if (publicId.match(/^v\d+\//)) {
+                publicId = publicId.replace(/^v\d+\//, '');
+            }
+            publicId = publicId.substring(0, publicId.lastIndexOf('.')) || publicId;
+
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => { });
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => { });
+        }
+    } catch (cloudErr) {
+        console.error("Cloudinary deletion error:", cloudErr);
+    }
+}
 
 // Upload or update a document
 exports.uploadClientDocument = async (req, res) => {
@@ -18,6 +37,24 @@ exports.uploadClientDocument = async (req, res) => {
         // Extract file type (extension)
         const originalName = req.file.originalname || req.file.name || "unknown.pdf";
         const file_type = originalName.split('.').pop().toUpperCase();
+        const aiResult = await aiDocumentVerificationService.verifyDocument({
+            fileUrl: file_url,
+            documentName: document_name,
+            fileType: file_type
+        });
+
+        if (!aiResult.skipped && aiResult.valid === false) {
+            await deleteFileFromCloudinary(file_url);
+            const issueMessages = {
+                nudity: `This file appears to contain inappropriate content and cannot be accepted as "${document_name}".`,
+                mismatch: `This file doesn't look like a valid "${document_name}". Please upload the correct document.`,
+                unreadable: `This file is unclear/unreadable. Please upload a clearer copy of "${document_name}".`
+            };
+            return res.status(400).json({
+                message: aiResult.reason || issueMessages[aiResult.issue] || `This document was rejected by AI verification: ${aiResult.issue}`,
+                aiIssue: aiResult.issue
+            });
+        }
 
         const updateData = {
             category,
@@ -42,7 +79,7 @@ exports.uploadClientDocument = async (req, res) => {
                     }
                 }
             },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         );
 
         res.status(201).json(document);
@@ -119,24 +156,7 @@ exports.deleteClientDocument = async (req, res) => {
             return res.status(404).json({ message: "Document not found" });
         }
 
-        // Delete from Cloudinary
-        if (document.file_url && document.file_url.includes('cloudinary.com')) {
-            try {
-                const urlParts = document.file_url.split('/upload/');
-                if (urlParts.length > 1) {
-                    let publicId = urlParts[1];
-                    if (publicId.match(/^v\d+\//)) {
-                        publicId = publicId.replace(/^v\d+\//, '');
-                    }
-                    publicId = publicId.substring(0, publicId.lastIndexOf('.')) || publicId;
-
-                    await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => { });
-                    await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => { });
-                }
-            } catch (cloudErr) {
-                console.error("Cloudinary deletion error:", cloudErr);
-            }
-        }
+        await deleteFileFromCloudinary(document.file_url);
 
         await ClientDocument.findByIdAndDelete(req.params.id);
         res.status(200).json({ message: "Document deleted successfully", id: req.params.id });
@@ -166,7 +186,7 @@ exports.downloadProxy = async (req, res) => {
                 const isRaw = url.includes('/raw/upload/');
 
                 const cloudinary = require('cloudinary').v2;
-                
+
                 // For raw files, the public_id must include the extension and format should be empty.
                 // For image/auto files, the public_id should not include the extension.
                 const format = (!isRaw && publicIdWithExt.includes('.')) ? publicIdWithExt.split('.').pop() : '';

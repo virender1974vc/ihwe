@@ -358,6 +358,7 @@ class ExhibitorRegistrationService {
                 if (data.city) companyUpdate.city = data.city;
                 if (data.pincode) companyUpdate.pincode = data.pincode;
                 if (data.landlineNo) companyUpdate.landline = data.landlineNo;
+                if (data.companyEmail) companyUpdate.email = data.companyEmail;
                 if (data.gstNo) companyUpdate.gstNumber = data.gstNo;
                 if (data.aboutCompany) companyUpdate.companyDescription = data.aboutCompany;
                 if (data.typeOfBusiness) companyUpdate.category = data.typeOfBusiness;
@@ -419,7 +420,7 @@ class ExhibitorRegistrationService {
 
                 const newCompanyData = {
                     companyName: data.exhibitorName || 'Unknown Company',
-                    email: data.contact1?.email || 'N/A', // Required field
+                    email: data.companyEmail || data.contact1?.email || 'N/A', // Required field
                     website: data.website || '',
                     address: data.address || '',
                     country: data.country || '',

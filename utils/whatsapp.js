@@ -116,6 +116,9 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
         }
 
         const apiKey = (process.env.OPUS_API_KEY || '').trim();
+        if (!apiKey) {
+            throw new Error('OPUS_API_KEY is not configured');
+        }
         const url = `https://api.opustechnology.in/wapp/v2/api/send?apikey=${apiKey}&mobile=${formattedMobile}&msg=${encodeURIComponent(msg)}`;
 
         const controller = new AbortController();
@@ -124,7 +127,21 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
 
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (e) {
+            throw new Error(`WhatsApp API returned invalid JSON. Status: ${response.status}. Response: ${responseText.substring(0, 120)}`);
+        }
+        if (!response.ok) {
+            throw new Error(`WhatsApp API responded with ${response.status}: ${responseText.substring(0, 120)}`);
+        }
+        const apiStatus = String(data.status || data.Status || data.success || '').toLowerCase();
+        const apiMessage = data.message || data.Message || data.error || data.Error || '';
+        if (apiStatus && ['false', 'failed', 'fail', 'error', '0'].includes(apiStatus)) {
+            throw new Error(`WhatsApp API failed: ${apiMessage || responseText.substring(0, 120)}`);
+        }
         console.log(`WhatsApp Message sent to ${mobile}:`, data);
         status = 'success';
         return { success: true, data };

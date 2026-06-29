@@ -7,6 +7,7 @@ const ContactPersonSchema = new mongoose.Schema({
     email: String,
     designation: String,
     mobile: String,
+    whatsapp: String,
     alternateNo: String,
     photoUrl: String
 });
@@ -39,6 +40,17 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     },
     registrationId: { type: String, unique: true, sparse: true },
     exhibitorName: { type: String, required: true },
+    exhibitorStatus: {
+        type: String,
+        enum: ['New Client', 'Existing Client'],
+        default: 'New Client'
+    },
+    previousExhibition: {
+        id: { type: mongoose.Schema.Types.ObjectId, ref: 'PreviousExhibition' },
+        name: String,
+        year: Number,
+        edition: String
+    },
     typeOfBusiness: String,
     industrySector: String,
     website: String,
@@ -48,6 +60,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     city: String,
     pincode: String,
     landlineNo: String,
+    companyEmail: { type: String, trim: true, lowercase: true },
     gstNo: String,
     panNo: String,
     aadhaarNo: String,
@@ -200,43 +213,6 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         branch: String,
         accountType: { type: String, enum: ['Savings', 'Current'], default: 'Current' }
     },
-    companyLogoUrl: String,
-    panCardFrontUrl: String,
-    panCardBackUrl: String,
-    aadhaarCardFrontUrl: String,
-    aadhaarCardBackUrl: String,
-    gstCertificateUrl: String,
-    cancelledChequeUrl: String,
-    representativePhotoUrl: String,
-    brandName: String,
-    companyDescription: String,
-    productCategories: [String],
-    businessRegistrationNo: String,
-    teamMembers: [{
-        name: String,
-        designation: String,
-        email: String,
-        mobile: String,
-        photoUrl: String,
-        isPrimary: { type: Boolean, default: false }
-    }],
-    certificates: [{
-        name: String,
-        fileUrl: String,
-        issuedDate: Date,
-        expiryDate: Date
-    }],
-    logo: String,
-    brochure: String,
-    productCatalogue: String,
-    socialMedia: {
-        facebook: String,
-        instagram: String,
-        linkedin: String,
-        twitter: String,
-        youtube: String
-    },
-    billingContact: ContactPersonSchema,
     accountsContact: ContactPersonSchema,
     kycDocuments: {
         gstCertificate: String,
@@ -249,12 +225,31 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     documentStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
     paymentVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
     bankVerificationStatus: { type: String, enum: ['pending', 'under_review', 'approved', 'rejected'], default: 'pending' },
-  specialDocuments: [{
+    specialDocuments: [{
         label: String,
         url: String,
         uploadedAt: { type: Date, default: Date.now }
     }],
-    expoPushTokens: [{ type: String }]
+    expoPushTokens: [{ type: String }],
+    teamMembers: [{
+        name: String,
+        designation: String,
+        department: String,
+        email: String,
+        mobile: String,
+        photoUrl: String,
+        isPrimary: Boolean,
+        roleAtExhibition: String,
+        idProof: String,
+        idProofUrl: String,
+        passes: {
+            exhibitor: Boolean,
+            delegate: Boolean,
+            lunch: Boolean,
+            parking: Boolean
+        },
+        verificationStatus: { type: String, enum: ['Pending', 'Verified', 'Rejected'], default: 'Pending' }
+    }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

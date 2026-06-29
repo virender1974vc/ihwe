@@ -136,13 +136,15 @@ const documentRequirementRoutes = require("./routes/add_by_admin/documentRequire
 const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
 const clientDocumentRoutes = require("./routes/clientDocumentRoutes");
 const referralRoutes = require("./routes/referralRoutes");
+const previousExhibitionRoutes = require("./routes/previousExhibitionRoutes");
 
-mongoose
+const databaseReady = mongoose
   .connect(process.env.MONGO_URI_MAIN, {
-    // optional options (remove if not needed)
+    serverSelectionTimeoutMS: 15000,
   })
-  .then(() => console.log("✅ Connected to MAIN MongoDB (default connection)"))
-  .catch((err) => console.error("❌ MAIN DB connection error:", err));
+  .then(() => {
+    console.log("✅ Connected to MAIN MongoDB (default connection)");
+  });
 global.secondaryDB = mongoose;
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -296,6 +298,7 @@ app.use("/api/hotel-stay-partner", hotelStayPartnerRoutes);
 app.use("/api/fabrication-partner", fabricationPartnerRoutes);
 app.use("/api/travel-partner", travelPartnerRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/ai-verification-settings", require("./routes/aiVerificationSettingsRoutes"));
 app.use("/api/download-pdf", downloadPdfRoutes);
 app.use("/api/marquee", marqueeRoutes);
 app.use("/api/who-we-are", whoWeAreRoutes);
@@ -395,6 +398,7 @@ app.use("/api/data-source", dataSourceRoutes);
 app.use("/api/crm-states", crmStateRoutes);
 app.use("/api/users", crmUserRoutes);
 app.use("/api/companies", companyRoutes);
+app.use("/api/client-contacts", require('./routes/clientContactRoutes'));
 app.use("/api/status-option", statusOptionRoutes);
 app.use("/api/next-action", nextActionRoutes);
 app.use("/api/crm-messages", whatsappMessageRoutes);
@@ -422,6 +426,8 @@ app.use("/api/floating-videos", floatingVideoRoutes);
 app.use("/api/sponsorship-enquiry", sponsorshipEnquiryRoutes);
 app.use("/api/expo-support-enquiry", expoSupportEnquiryRoutes);
 app.use("/api/referrals", referralRoutes);
+app.use("/api/ownership-transfer", require("./routes/ownershipTransferRoutes"));
+app.use("/api/previous-exhibitions", previousExhibitionRoutes);
 
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
@@ -593,10 +599,17 @@ io.on('connection', (socket) => {
   });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} with Socket.io`);
+databaseReady
+  .then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT} with Socket.io`);
 
-  // Start IMAP email reply poller
-  const { startImapPoller } = require("./services/imapPollerService");
-  startImapPoller();
-});
+      // Start background services only after MongoDB is ready.
+      const { startImapPoller } = require("./services/imapPollerService");
+      startImapPoller();
+    });
+  })
+  .catch((error) => {
+    console.error("❌ MongoDB connection failed. Server was not started:", error.message);
+    process.exitCode = 1;
+  });

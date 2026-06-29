@@ -1,6 +1,7 @@
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 const { logActivity } = require('../utils/logger');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const PreviousExhibition = require('../models/PreviousExhibition');
 
 const toPublicUploadPath = (filePath = '') => {
     const normalized = String(filePath).replace(/\\/g, '/');
@@ -8,14 +9,7 @@ const toPublicUploadPath = (filePath = '') => {
     if (normalized.startsWith('uploads/')) return `/${normalized}`;
     return normalized;
 };
-
-/**
- * Controller for handling Exhibitor Registration requests.
- */
 class ExhibitorRegistrationController {
-    /**
-     * Get all registrations.
-     */
     async getAllRegistrations(req, res) {
         try {
             const enriched = await exhibitorRegistrationService.getAllRegistrations();
@@ -48,6 +42,42 @@ class ExhibitorRegistrationController {
      */
     async addRegistration(req, res) {
         try {
+            const previousExhibitionId = req.body.previousExhibition?.id;
+            const previousExhibitionYear = Number(req.body.previousExhibition?.year);
+            const currentYear = new Date().getFullYear();
+            if (
+                req.body.exhibitorStatus === 'Existing Client'
+                && (
+                    !previousExhibitionId
+                    || !Number.isInteger(previousExhibitionYear)
+                    || previousExhibitionYear < 2016
+                    || previousExhibitionYear > currentYear
+                )
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Please select a valid previous exhibition and year between 2016 and ${currentYear}.`
+                });
+            }
+            if (previousExhibitionId) {
+                const previousExhibition = await PreviousExhibition.findOne({
+                    _id: previousExhibitionId,
+                    status: 'Active'
+                }).lean();
+                if (!previousExhibition) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please select a valid previous exhibition.'
+                    });
+                }
+                req.body.previousExhibition = {
+                    id: previousExhibition._id,
+                    name: previousExhibition.name,
+                    year: previousExhibitionYear
+                };
+            } else {
+                delete req.body.previousExhibition;
+            }
             const savedRegistration = await exhibitorRegistrationService.addRegistration(req.body);
 
             await logActivity(req, 'Created', 'Exhibitor Bookings', `New booking: ${savedRegistration.companyName} (${savedRegistration.registrationId})`);
@@ -121,7 +151,7 @@ class ExhibitorRegistrationController {
             }
 
             // Also merge any text body fields
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'companyEmail', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
                     try {
@@ -229,7 +259,7 @@ class ExhibitorRegistrationController {
             const ExhibitorRegistration = require('../models/ExhibitorRegistration');
             const { id } = req.params;
             const { label } = req.body;
-            
+
             if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
             if (!label) return res.status(400).json({ success: false, message: 'Label is required' });
 

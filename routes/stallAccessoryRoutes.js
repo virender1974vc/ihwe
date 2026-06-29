@@ -139,7 +139,7 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             notes: notes || '',
         });
         await order.save();
-        
+
         // Update stock availability
         try {
             for (const item of items) {
@@ -154,23 +154,18 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             console.error('Stock update error:', stockErr.message);
         }
 
-        // Generate receipt PDF + send email
+        // Generate receipt PDF + send email/WhatsApp
         try {
             const pdfResult = await pdfGenerator.generateAccessoryReceipt(order, reg);
             if (pdfResult?.cloudUrl) {
                 order.receiptUrl = pdfResult.cloudUrl;
                 await order.save();
             }
-            const email = reg.contact1?.email;
-            if (email) {
-                const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-                order.emailSent = !!sent;
-                await order.save();
-                if (!sent) {
-                    console.error('Accessory receipt email failed for order:', order.orderNo, 'to:', email);
-                }
-            } else {
-                console.warn('Accessory receipt email skipped, exhibitor email missing for order:', order.orderNo);
+            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+            order.emailSent = !!sent;
+            await order.save();
+            if (!sent) {
+                console.error('Accessory receipt notification failed for order:', order.orderNo);
             }
         } catch (e) {
             console.error('Accessory receipt/email error:', e.message);
@@ -184,9 +179,22 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
 });
 
 // ── Exhibitor self-purchase: submit NEFT details for admin approval ──────────
-router.post('/neft-order', requireExhibitor, async (req, res) => {
+router.post('/neft-order', requireExhibitor, upload.single('paymentScreenshot'), async (req, res) => {
     try {
-        const { exhibitorRegistrationId, items, bankTransferDetails, notes } = req.body;
+        const {
+            exhibitorRegistrationId,
+            notes
+        } = req.body;
+        let items;
+        let bankTransferDetails;
+        try {
+            items = typeof req.body.items === 'string' ? JSON.parse(req.body.items) : req.body.items;
+            bankTransferDetails = typeof req.body.bankTransferDetails === 'string'
+                ? JSON.parse(req.body.bankTransferDetails)
+                : req.body.bankTransferDetails;
+        } catch (parseErr) {
+            return res.status(400).json({ success: false, message: 'Invalid NEFT payment details' });
+        }
 
         if (!exhibitorRegistrationId) {
             return res.status(400).json({ success: false, message: 'Registration is required' });
@@ -197,12 +205,10 @@ router.post('/neft-order', requireExhibitor, async (req, res) => {
 
         const details = bankTransferDetails || {};
         const required = [
-            'beneficiaryName',
-            'beneficiaryAccountNumber',
-            'ifscCode',
-            'bankName',
-            'amount',
-            'accountType',
+            'transactionReferenceNumber',
+            'transactionDate',
+            'transferredAmount',
+            'senderBankName',
         ];
         for (const key of required) {
             if (!details[key]) {
@@ -210,12 +216,15 @@ router.post('/neft-order', requireExhibitor, async (req, res) => {
             }
         }
 
-        const amount = Number(details.amount);
+        const amount = Number(details.transferredAmount);
         if (!amount || amount <= 0) {
             return res.status(400).json({ success: false, message: 'Valid NEFT amount is required' });
         }
-        if (!['Savings', 'Current'].includes(details.accountType)) {
-            return res.status(400).json({ success: false, message: 'Invalid account type' });
+        if (!String(details.senderAccountHolderName || '').trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Sender account holder name is required'
+            });
         }
 
         const reg = await ExhibitorRegistration.findById(exhibitorRegistrationId);
@@ -255,14 +264,15 @@ router.post('/neft-order', requireExhibitor, async (req, res) => {
             grandTotal,
             paymentStatus: 'pending',
             paymentMode: 'neft',
-            transactionId: '',
+            transactionId: String(details.transactionReferenceNumber).trim(),
             bankTransferDetails: {
-                beneficiaryName: String(details.beneficiaryName).trim(),
-                beneficiaryAccountNumber: String(details.beneficiaryAccountNumber).trim(),
-                ifscCode: String(details.ifscCode).trim().toUpperCase(),
-                bankName: String(details.bankName).trim(),
-                amount,
-                accountType: details.accountType,
+                transactionReferenceNumber: String(details.transactionReferenceNumber).trim(),
+                transactionDate: new Date(details.transactionDate),
+                transactionTime: String(details.transactionTime || '').trim(),
+                transferredAmount: amount,
+                senderBankName: String(details.senderBankName).trim(),
+                senderAccountHolderName: String(details.senderAccountHolderName || '').trim(),
+                paymentScreenshotUrl: req.file ? `/uploads/accessories/${req.file.filename}` : '',
             },
             paidAt: null,
             processedBy: reg.exhibitorName,
@@ -323,16 +333,11 @@ router.put('/orders/:id/approve-neft', flexAuth, async (req, res) => {
                 order.receiptUrl = pdfResult.cloudUrl;
                 await order.save();
             }
-            const email = reg.contact1?.email;
-            if (email) {
-                const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-                order.emailSent = !!sent;
-                await order.save();
-                if (!sent) {
-                    console.error('Accessory NEFT approval email failed for order:', order.orderNo, 'to:', email);
-                }
-            } else {
-                console.warn('Accessory NEFT approval email skipped, exhibitor email missing for order:', order.orderNo);
+            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+            order.emailSent = !!sent;
+            await order.save();
+            if (!sent) {
+                console.error('Accessory NEFT approval notification failed for order:', order.orderNo);
             }
         } catch (e) {
             console.error('Accessory NEFT approval receipt/email error:', e.message);
