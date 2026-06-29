@@ -63,6 +63,14 @@ router.get('/orders/:id', flexAuth, ctrl.getOrderById);
 router.post('/orders', ctrl.createOrder);           // admin creates order
 router.put('/orders/:id', ctrl.updateOrder);
 router.delete('/orders/:id', ctrl.deleteOrder);
+router.put('/orders/:id/view', flexAuth, async (req, res) => {
+    try {
+        await AccessoryOrder.findByIdAndUpdate(req.params.id, { isViewed: true });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // ── Exhibitor self-purchase: create Razorpay order ───────────────────────────
 router.post('/create-payment-order', requireExhibitor, async (req, res) => {
@@ -169,6 +177,18 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             }
         } catch (e) {
             console.error('Accessory receipt/email error:', e.message);
+        }
+
+        // Emit socket event to admin
+        const io = req.app.get('io');
+        if (io) {
+            io.to('admin_room').emit('accessory_order_placed', {
+                orderNo: order.orderNo,
+                exhibitorName: order.exhibitorName,
+                grandTotal: order.grandTotal,
+                paymentMode: order.paymentMode,
+                timestamp: Date.now()
+            });
         }
 
         res.json({ success: true, data: order });
@@ -292,6 +312,18 @@ router.post('/neft-order', requireExhibitor, upload.single('paymentScreenshot'),
             }
         } catch (stockErr) {
             console.error('Stock update error:', stockErr.message);
+        }
+
+        // Emit socket event to admin
+        const io = req.app.get('io');
+        if (io) {
+            io.to('admin_room').emit('accessory_order_placed', {
+                orderNo: order.orderNo,
+                exhibitorName: order.exhibitorName,
+                grandTotal: order.grandTotal,
+                paymentMode: order.paymentMode,
+                timestamp: Date.now()
+            });
         }
 
         res.status(201).json({ success: true, data: order });

@@ -176,6 +176,17 @@ const createOrder = async (req, res) => {
             console.error('Accessory receipt/email error:', emailErr.message);
         }
 
+        const io = req.app.get('io');
+        if (io) {
+            io.to('admin_room').emit('accessory_order_placed', {
+                orderNo: order.orderNo,
+                exhibitorName: order.exhibitorName,
+                grandTotal: order.grandTotal,
+                paymentMode: order.paymentMode,
+                timestamp: Date.now()
+            });
+        }
+
         res.status(201).json({ success: true, data: order });
     } catch (err) {
         res.status(400).json({ success: false, message: err.message });
