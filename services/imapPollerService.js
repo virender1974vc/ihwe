@@ -80,9 +80,9 @@ const pollInbox = async () => {
     const existingReplies = await CrmReview.find({ type: "email_reply" }).select("message_id").lean();
     const processedIds = new Set(existingReplies.map((r) => r.message_id).filter(Boolean));
 
-    // Search for emails in the last 30 days to avoid scanning the entire inbox
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const searchResult = await client.search({ since: thirtyDaysAgo });
+    // Search for emails in the last 2 days to avoid scanning the entire inbox
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const searchResult = await client.search({ since: twoDaysAgo });
 
     if (!searchResult || (Array.isArray(searchResult) && searchResult.length === 0)) {
       await client.logout();
@@ -92,24 +92,28 @@ const pollInbox = async () => {
 
     const matchingItems = [];
 
-    // Fetch ONLY envelopes first (very fast)
-    for await (const msg of client.fetch(searchResult, { envelope: true })) {
-      const inReplyTo = msg.envelope?.inReplyTo;
-      const msgId = msg.envelope?.messageId;
+    // Fetch ONLY envelopes first (very fast), in chunks to prevent 'Command failed' on huge arrays
+    const chunkSize = 1000;
+    for (let i = 0; i < searchResult.length; i += chunkSize) {
+      const chunk = searchResult.slice(i, i + chunkSize);
+      for await (const msg of client.fetch(chunk, { envelope: true })) {
+        const inReplyTo = msg.envelope?.inReplyTo;
+        const msgId = msg.envelope?.messageId;
 
-      if (!inReplyTo || !msgId) continue;
-      if (processedIds.has(msgId)) continue;
+        if (!inReplyTo || !msgId) continue;
+        if (processedIds.has(msgId)) continue;
 
-      // Find matching sent email
-      const cleanInReplyTo = inReplyTo.replace(/[<>]/g, "").trim();
-      const matched = sentEmails.find((s) => {
-        if (!s.message_id) return false;
-        const cleanSentId = s.message_id.replace(/[<>]/g, "").trim();
-        return cleanInReplyTo.includes(cleanSentId) || cleanSentId.includes(cleanInReplyTo);
-      });
+        // Find matching sent email
+        const cleanInReplyTo = inReplyTo.replace(/[<>]/g, "").trim();
+        const matched = sentEmails.find((s) => {
+          if (!s.message_id) return false;
+          const cleanSentId = s.message_id.replace(/[<>]/g, "").trim();
+          return cleanInReplyTo.includes(cleanSentId) || cleanSentId.includes(cleanInReplyTo);
+        });
 
-      if (matched) {
-        matchingItems.push({ seq: msg.seq, matched, msgId, envelope: msg.envelope });
+        if (matched) {
+          matchingItems.push({ seq: msg.seq, matched, msgId, envelope: msg.envelope });
+        }
       }
     }
 
