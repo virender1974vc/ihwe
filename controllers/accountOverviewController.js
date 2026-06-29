@@ -175,27 +175,14 @@ const getAccountOverview = async (req, res) => {
           : "Pending",
       }));
     } else if (totalDue > 0) {
-      const fallbackDueDate = formatScheduleDate(exhibitor?.paymentDueDate);
+      // No installment plan was chosen (exhibitor.installments is intentionally [] for
+      // full-payment registrations) — show the real single lump-sum due, not an invented split.
       paymentSchedule = [
         {
           id: 1,
-          scheduleType: "Booking / Advance (50%)",
-          dueDate: fallbackDueDate,
-          dueAmount: totalDue * 0.5,
-          status: paidAmount >= totalDue * 0.5 ? "Paid" : "Pending",
-        },
-        {
-          id: 2,
-          scheduleType: "Second Installment (30%)",
-          dueDate: fallbackDueDate,
-          dueAmount: totalDue * 0.3,
-          status: paidAmount >= totalDue * 0.8 ? "Paid" : "Pending",
-        },
-        {
-          id: 3,
-          scheduleType: "Final Installment (20%)",
-          dueDate: fallbackDueDate,
-          dueAmount: totalDue * 0.2,
+          scheduleType: exhibitor?.paymentPlanLabel || "Full Payment",
+          dueDate: formatScheduleDate(exhibitor?.paymentDueDate),
+          dueAmount: totalDue,
           status: paidAmount >= totalDue ? "Paid" : "Pending",
         },
       ];
