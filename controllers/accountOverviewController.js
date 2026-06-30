@@ -5,10 +5,14 @@ const DebitNote = require("../models/DebitNote");
 const Payment = require("../models/Payment");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const ActivityLog = require("../models/activity/activityLogModel");
 const Stall = require("../models/Stall");
 const mongoose = require("mongoose");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const uniqueStrings = (values) => [...new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))];
+
 const resolveCompanyAndExhibitor = async (companyId) => {
   let company = null;
   let exhibitor = null;
@@ -29,6 +33,24 @@ const resolveCompanyAndExhibitor = async (companyId) => {
   }
 
   return { company, exhibitor };
+};
+
+const buildAccountActivityQuery = (terms) => {
+  const uniqueTerms = uniqueStrings(terms);
+  if (uniqueTerms.length === 0) return null;
+
+  return {
+    $or: uniqueTerms.flatMap((term) => {
+      const pattern = new RegExp(escapeRegex(term), "i");
+      return [
+        { user: pattern },
+        { action: pattern },
+        { module: pattern },
+        { details: pattern },
+        { link: pattern },
+      ];
+    }),
+  };
 };
 
 const EXHIBITOR_STATUS_LABELS = {
@@ -61,6 +83,8 @@ const getAccountOverview = async (req, res) => {
       CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
       DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
     ]);
+
+    const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
 
     const docIds = [
       ...invoices.map((i) => i._id.toString()),
@@ -156,6 +180,31 @@ const getAccountOverview = async (req, res) => {
     });
     recentDocs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     recentDocs = recentDocs.slice(0, 5);
+
+    const activityQuery = buildAccountActivityQuery([
+      companyId,
+      company?._id?.toString(),
+      exhibitor?._id?.toString(),
+      company?.companyName,
+      exhibitor?.exhibitorName,
+      exhibitor?.registrationId,
+      company?.exhibitorRegistrationId,
+      company?.email,
+      exhibitor?.companyEmail,
+      exhibitor?.contact1?.email,
+      exhibitor?.contact1?.mobile,
+      primaryContact?.email,
+      primaryContact?.mobile,
+      ...recentDocs.map((doc) => doc.documentNo),
+    ]);
+
+    const activityLogs = activityQuery
+      ? await ActivityLog.find(activityQuery)
+          .sort({ createdAt: -1 })
+          .limit(12)
+          .lean()
+      : [];
+
     const formatScheduleDate = (date) => {
       if (!date) return "TBD";
       const d = new Date(date);
@@ -224,7 +273,6 @@ const getAccountOverview = async (req, res) => {
     }
 
     // Resolve contact person + email/mobile from whichever source has it
-    const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
     const contactPerson =
       (exhibitor?.contact1 && (exhibitor.contact1.firstName || exhibitor.contact1.lastName)
         ? `${exhibitor.contact1.firstName || ""} ${exhibitor.contact1.lastName || ""}`.trim()
@@ -233,6 +281,7 @@ const getAccountOverview = async (req, res) => {
         ? primaryContact.name || `${primaryContact.firstName || ""} ${primaryContact.surname || ""}`.trim()
         : null) ||
       "N/A";
+    const designation = primaryContact?.designation || exhibitor?.contact1?.designation || "N/A";
     let statusLabel = "Lead";
     let statusColor = "gray";
     if (exhibitor?.status && EXHIBITOR_STATUS_LABELS[exhibitor.status]) {
@@ -262,6 +311,7 @@ const getAccountOverview = async (req, res) => {
             primaryContact?.mobile ||
             "N/A",
           contactPerson,
+          designation,
           stallNo: stallNoToDisplay,
           stallSize: stallSizeToDisplay,
           category:
@@ -289,6 +339,16 @@ const getAccountOverview = async (req, res) => {
         recentDocuments: recentDocs,
         paymentSchedule,
         lastPayment,
+        activityLogs: activityLogs.map((log) => ({
+          id: log._id,
+          action: log.action,
+          module: log.module,
+          details: log.details,
+          user: log.user,
+          link: log.link,
+          ip_address: log.ip_address,
+          timestamp: log.createdAt,
+        })),
       },
     });
   } catch (error) {
