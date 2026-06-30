@@ -290,6 +290,8 @@ app.use("/api/national-expo", nationalExpoRoutes);
 app.use("/api/integrated-format", integratedFormatRoutes);
 app.use("/api/why-participate", whyParticipateRoutes);
 app.use("/api/new-testimonials", newTestimonialsRoutes);
+app.use("/api/delegate-config", require("./routes/delegateConfigRoutes"));
+app.use("/api/delegate", require("./routes/delegateRegistrationRoutes"));
 app.use("/api/client", clientRoutes);
 app.use("/api/parallax", parallaxRoutes);
 app.use("/api/testimonials", testimonialsRoutes);
