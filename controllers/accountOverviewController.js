@@ -233,6 +233,7 @@ const getAccountOverview = async (req, res) => {
         ? primaryContact.name || `${primaryContact.firstName || ""} ${primaryContact.surname || ""}`.trim()
         : null) ||
       "N/A";
+    const designation = primaryContact?.designation || exhibitor?.contact1?.designation || "N/A";
     let statusLabel = "Lead";
     let statusColor = "gray";
     if (exhibitor?.status && EXHIBITOR_STATUS_LABELS[exhibitor.status]) {
@@ -262,6 +263,7 @@ const getAccountOverview = async (req, res) => {
             primaryContact?.mobile ||
             "N/A",
           contactPerson,
+          designation,
           stallNo: stallNoToDisplay,
           stallSize: stallSizeToDisplay,
           category:
