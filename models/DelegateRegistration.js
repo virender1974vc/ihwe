@@ -51,6 +51,12 @@ const delegateRegistrationSchema = new mongoose.Schema({
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },
+    registrationSource: { type: String, enum: ['website', 'exhibitor', 'admin'], default: 'website' },
+    sourceChannel: { type: String, default: 'website' },
+    isComplimentary: { type: Boolean, default: false },
+    complimentaryType: { type: String, default: '' },
+    exhibitorId: { type: mongoose.Schema.Types.ObjectId, ref: 'ExhibitorRegistration' },
+    exhibitorCompanyName: { type: String, default: '' },
 
 }, { timestamps: true });
 

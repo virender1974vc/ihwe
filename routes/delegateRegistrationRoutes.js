@@ -25,6 +25,7 @@ const { authMiddleware } = require('../middleware/authMiddleware');
 router.post('/register', upload.single('profileImage'), delegateRegistrationController.createRegistration);
 router.post('/verify', delegateRegistrationController.verifyPayment);
 router.post('/exhibitor-complimentary', authMiddleware, upload.single('profileImage'), delegateRegistrationController.createExhibitorComplimentaryRegistration);
+router.post('/registration/exhibitor-complimentary', authMiddleware, upload.single('profileImage'), delegateRegistrationController.createExhibitorComplimentaryRegistration);
 router.get('/admin/registrations', delegateRegistrationController.getAdminRegistrations);
 router.post('/admin/create-offline', upload.fields([
     { name: 'profileImage', maxCount: 1 },

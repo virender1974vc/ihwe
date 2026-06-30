@@ -6,6 +6,18 @@ const { sendWhatsAppMessage, sendOpusWhatsAppMessage } = require('../utils/whats
 const emailService = require('../utils/emailService'); // Ensure you have this
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET;
 
+const generateDelegateRegNo = async () => {
+    const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
+    let newRegNo = 'DEL-IHWE-1001';
+    if (lastReg && lastReg.regNo && lastReg.regNo.startsWith('DEL-IHWE-')) {
+        const lastNumber = parseInt(lastReg.regNo.replace('DEL-IHWE-', ''), 10);
+        if (!isNaN(lastNumber)) {
+            newRegNo = `DEL-IHWE-${lastNumber + 1}`;
+        }
+    }
+    return newRegNo;
+};
+
 exports.createRegistration = async (req, res) => {
     try {
         let sessions = [];
@@ -32,14 +44,7 @@ exports.createRegistration = async (req, res) => {
 
         // Generate regNo: DEL-IHWE-1000 + logic
         // Get the latest regNo to increment
-        const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
-        let newRegNo = 'DEL-IHWE-1001';
-        if (lastReg && lastReg.regNo && lastReg.regNo.startsWith('DEL-IHWE-')) {
-            const lastNumber = parseInt(lastReg.regNo.replace('DEL-IHWE-', ''), 10);
-            if (!isNaN(lastNumber)) {
-                newRegNo = `DEL-IHWE-${lastNumber + 1}`;
-            }
-        }
+        const newRegNo = await generateDelegateRegNo();
 
         const registration = await DelegateRegistration.create({
             ...personalDetails,
@@ -50,7 +55,9 @@ exports.createRegistration = async (req, res) => {
             gstAmount,
             gatewayChargeAmount,
             totalAmount: finalTotalAmount,
-            paymentStatus: 'pending'
+            paymentStatus: 'pending',
+            registrationSource: 'website',
+            sourceChannel: 'website'
         });
         const options = {
             amount: Math.round(finalTotalAmount * 100),
@@ -285,15 +292,16 @@ exports.getAdminRegistrations = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    totalPaid: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, 1, 0] } },
+                    totalPaid: { $sum: { $cond: [{ $and: [{ $eq: ["$paymentStatus", "paid"] }, { $ne: ["$isComplimentary", true] }] }, 1, 0] } },
                     totalPending: { $sum: { $cond: [{ $eq: ["$paymentStatus", "pending"] }, 1, 0] } },
+                    totalComplimentary: { $sum: { $cond: ["$isComplimentary", 1, 0] } },
                     totalRevenue: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$totalAmount", 0] } },
                     totalRegistrations: { $sum: 1 }
                 }
             }
         ]);
 
-        const statsData = stats.length > 0 ? stats[0] : { totalPaid: 0, totalPending: 0, totalRevenue: 0 };
+        const statsData = stats.length > 0 ? stats[0] : { totalPaid: 0, totalPending: 0, totalComplimentary: 0, totalRevenue: 0 };
 
         res.json({
             success: true,
@@ -304,6 +312,7 @@ exports.getAdminRegistrations = async (req, res) => {
             registrations,
             totalPaid: statsData.totalPaid,
             totalPending: statsData.totalPending,
+            totalComplimentary: statsData.totalComplimentary || 0,
             totalRevenue: statsData.totalRevenue,
             globalTotal: statsData.totalRegistrations || 0
         });
@@ -340,14 +349,7 @@ exports.createOfflineRegistration = async (req, res) => {
         const gatewayChargeAmount = 0;
         const finalTotalAmount = totalAfterGst + gatewayChargeAmount;
 
-        const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
-        let newRegNo = 'DEL-IHWE-1001';
-        if (lastReg && lastReg.regNo && lastReg.regNo.startsWith('DEL-IHWE-')) {
-            const lastNumber = parseInt(lastReg.regNo.replace('DEL-IHWE-', ''), 10);
-            if (!isNaN(lastNumber)) {
-                newRegNo = `DEL-IHWE-${lastNumber + 1}`;
-            }
-        }
+        const newRegNo = await generateDelegateRegNo();
 
         const registration = await DelegateRegistration.create({
             ...personalDetails,
@@ -361,7 +363,9 @@ exports.createOfflineRegistration = async (req, res) => {
             paymentStatus: 'paid',
             paymentMode: paymentMode || 'offline',
             paymentReceipt,
-            paymentRemarks
+            paymentRemarks,
+            registrationSource: 'admin',
+            sourceChannel: 'admin_offline'
         });
         try {
             const allSessions = [];
@@ -505,31 +509,83 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
         const quota = exhibitorQuota > 0 ? exhibitorQuota : configuredQuota;
         const used = exhibitor.entitlements?.delegatePassUsed || 0;
 
-        if (used >= quota) {
-            return res.status(400).json({ success: false, message: 'Complimentary delegate quota exceeded' });
-        }
-
-        const { ...personalDetails } = req.body;
+        let sessions = [];
+        let specialPasses = [];
+        if (req.body.sessions) sessions = JSON.parse(req.body.sessions);
+        if (req.body.specialPasses) specialPasses = JSON.parse(req.body.specialPasses);
+        const { sessions: _sessions, specialPasses: _specialPasses, gatewayAmount, ...personalDetails } = req.body;
 
         if (req.file) {
             personalDetails.profileImage = `/uploads/delegates/${req.file.filename}`;
         }
-        const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
-        let newRegNo = 'DEL-IHWE-1001';
-        if (lastReg && lastReg.regNo && lastReg.regNo.startsWith('DEL-IHWE-')) {
-            const lastNumber = parseInt(lastReg.regNo.replace('DEL-IHWE-', ''), 10);
-            if (!isNaN(lastNumber)) {
-                newRegNo = `DEL-IHWE-${lastNumber + 1}`;
-            }
+        const newRegNo = await generateDelegateRegNo();
+
+        if (used >= quota) {
+            const selectedAmount = [...sessions, ...specialPasses].reduce((sum, item) => sum + Number(item.price || 0), 0);
+            const baseAmount = selectedAmount > 0 ? selectedAmount : Number(delegateConfig?.price || 5000);
+            const gstAmount = Math.round(baseAmount * 0.18);
+            const totalAfterGst = baseAmount + gstAmount;
+            const gatewayChargeAmount = Math.round(totalAfterGst * 0.025);
+            const finalTotalAmount = totalAfterGst + gatewayChargeAmount;
+
+            const registration = await DelegateRegistration.create({
+                ...personalDetails,
+                regNo: newRegNo,
+                sessions,
+                specialPasses,
+                subTotal: baseAmount,
+                gstAmount,
+                gatewayChargeAmount,
+                totalAmount: finalTotalAmount,
+                paymentStatus: 'pending',
+                paymentMode: 'online',
+                paymentRemarks: `Exhibitor Delegate Paid: ${exhibitor.companyName}`,
+                registrationSource: 'exhibitor',
+                sourceChannel: 'exhibitor_paid',
+                isComplimentary: false,
+                exhibitorId: exhibitor._id,
+                exhibitorCompanyName: exhibitor.companyName || ''
+            });
+
+            const order = await razorpay.orders.create({
+                amount: Math.round(finalTotalAmount * 100),
+                currency: "INR",
+                receipt: `exh_del_${registration._id}`
+            });
+
+            registration.razorpayOrderId = order.id;
+            await registration.save();
+
+            return res.status(201).json({
+                success: true,
+                requiresPayment: true,
+                message: 'Complimentary quota exhausted. Please complete payment.',
+                orderId: order.id,
+                order,
+                registrationId: registration._id,
+                amount: order.amount,
+                totalAmount: finalTotalAmount
+            });
         }
 
         const registration = await DelegateRegistration.create({
             ...personalDetails,
             regNo: newRegNo,
+            sessions,
+            specialPasses,
+            subTotal: 0,
+            gstAmount: 0,
+            gatewayChargeAmount: 0,
             paymentStatus: 'paid',
             paymentMode: 'exhibitor_complimentary',
             paymentRemarks: `Exhibitor Complimentary: ${exhibitor.companyName}`,
-            totalAmount: 0
+            totalAmount: 0,
+            registrationSource: 'exhibitor',
+            sourceChannel: 'exhibitor_complimentary',
+            isComplimentary: true,
+            complimentaryType: 'exhibitor_delegate',
+            exhibitorId: exhibitor._id,
+            exhibitorCompanyName: exhibitor.companyName || ''
         });
 
         // Increment used quota
