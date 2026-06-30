@@ -1,10 +1,34 @@
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const ActivityLog = require("../models/activity/activityLogModel");
+const { logActivity } = require("../utils/logger");
+
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const uniqueStrings = (values) => [...new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))];
+
+const buildActivityQuery = (terms) => {
+    const uniqueTerms = uniqueStrings(terms);
+    if (uniqueTerms.length === 0) return null;
+
+    return {
+        $or: uniqueTerms.flatMap((term) => {
+            const pattern = new RegExp(escapeRegex(term), "i");
+            return [
+                { user: pattern },
+                { action: pattern },
+                { module: pattern },
+                { details: pattern },
+                { link: pattern }
+            ];
+        })
+    };
+};
 
 exports.getClientContacts = async (req, res) => {
     try {
         const { clientId } = req.params;
         let company = await Company.findById(clientId);
+        let exhibitor = null;
 
         let contacts = [];
         let source = "";
@@ -39,7 +63,7 @@ exports.getClientContacts = async (req, res) => {
             source = "Company";
 
             if (company.exhibitorRegistrationId) {
-                const exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId);
+                exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId);
                 if (exhibitor) {
                     contacts = exhibitor.teamMembers || [];
                     contacts = injectPrimaryContact(contacts, exhibitor);
@@ -48,7 +72,7 @@ exports.getClientContacts = async (req, res) => {
             }
         } else {
             // Check if it is an ExhibitorRegistration ID directly
-            const exhibitor = await ExhibitorRegistration.findById(clientId);
+            exhibitor = await ExhibitorRegistration.findById(clientId);
             if (exhibitor) {
                 contacts = exhibitor.teamMembers || [];
                 contacts = injectPrimaryContact(contacts, exhibitor);
@@ -58,7 +82,42 @@ exports.getClientContacts = async (req, res) => {
             }
         }
 
-        res.status(200).json({ success: true, data: contacts, source });
+        const activityQuery = buildActivityQuery([
+            clientId,
+            company?._id?.toString(),
+            exhibitor?._id?.toString(),
+            company?.companyName,
+            exhibitor?.exhibitorName,
+            exhibitor?.registrationId,
+            company?.exhibitorRegistrationId,
+            company?.email,
+            exhibitor?.companyEmail,
+            exhibitor?.contact1?.email,
+            exhibitor?.contact1?.mobile,
+            ...(contacts || []).map((contact) => contact?.email),
+            ...(contacts || []).map((contact) => contact?.mobile),
+            ...(contacts || []).map((contact) => contact?.name)
+        ]);
+
+        const activityLogs = activityQuery
+            ? await ActivityLog.find(activityQuery).sort({ createdAt: -1 }).limit(12).lean()
+            : [];
+
+        res.status(200).json({
+            success: true,
+            data: contacts,
+            source,
+            activityLogs: activityLogs.map((log) => ({
+                id: log._id,
+                action: log.action,
+                module: log.module,
+                details: log.details,
+                user: log.user,
+                link: log.link,
+                ip_address: log.ip_address,
+                timestamp: log.createdAt
+            }))
+        });
     } catch (error) {
         console.error("Error fetching client contacts:", error);
         res.status(500).json({ success: false, message: "Internal server error" });
@@ -71,25 +130,67 @@ exports.updateClientContacts = async (req, res) => {
         const { contacts } = req.body;
 
         let company = await Company.findById(clientId);
+        let exhibitor = null;
+        let existingContacts = [];
+        const makeKey = (contact = {}) => [
+            contact.email || "",
+            contact.mobile || "",
+            contact.name || contact.firstName || "",
+            contact.roleAtExhibition || ""
+        ].map((part) => String(part).trim().toLowerCase()).join("|");
+        const displayName = (contact = {}) => contact.name || [contact.title, contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || contact.mobile || "Unknown";
 
         if (company) {
             if (company.exhibitorRegistrationId) {
-                const exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId);
+                exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId);
                 if (exhibitor) {
+                    existingContacts = exhibitor.teamMembers || [];
                     exhibitor.teamMembers = contacts;
                     await exhibitor.save();
+                    const prevKeys = new Set(existingContacts.map(makeKey));
+                    const nextKeys = new Set(contacts.map(makeKey));
+                    const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
+                    const removed = existingContacts.filter((c) => !nextKeys.has(makeKey(c)));
+                    const summary = [
+                        `Updated team members for ${exhibitor.exhibitorName || company.companyName || clientId}`,
+                        added.length ? `+${added.length} added (${added.slice(0, 3).map(displayName).join(", ")})` : null,
+                        removed.length ? `-${removed.length} removed (${removed.slice(0, 3).map(displayName).join(", ")})` : null,
+                    ].filter(Boolean).join(" | ");
+                    await logActivity(req, "Updated", "Team Members", summary);
                     return res.status(200).json({ success: true, message: "Contacts updated successfully", data: exhibitor.teamMembers });
                 }
             }
+            existingContacts = company.contacts || [];
             company.contacts = contacts;
             await company.save();
+            const prevKeys = new Set(existingContacts.map(makeKey));
+            const nextKeys = new Set(contacts.map(makeKey));
+            const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
+            const removed = existingContacts.filter((c) => !nextKeys.has(makeKey(c)));
+            const summary = [
+                `Updated contacts for ${company.companyName || clientId}`,
+                added.length ? `+${added.length} added (${added.slice(0, 3).map(displayName).join(", ")})` : null,
+                removed.length ? `-${removed.length} removed (${removed.slice(0, 3).map(displayName).join(", ")})` : null,
+            ].filter(Boolean).join(" | ");
+            await logActivity(req, "Updated", "Client Contacts", summary);
             return res.status(200).json({ success: true, message: "Contacts updated successfully", data: company.contacts });
         } else {
             // Check if it's an exhibitor ID directly
-            const exhibitor = await ExhibitorRegistration.findById(clientId);
+            exhibitor = await ExhibitorRegistration.findById(clientId);
             if (exhibitor) {
+                existingContacts = exhibitor.teamMembers || [];
                 exhibitor.teamMembers = contacts;
                 await exhibitor.save();
+                const prevKeys = new Set(existingContacts.map(makeKey));
+                const nextKeys = new Set(contacts.map(makeKey));
+                const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
+                const removed = existingContacts.filter((c) => !nextKeys.has(makeKey(c)));
+                const summary = [
+                    `Updated team members for ${exhibitor.exhibitorName || clientId}`,
+                    added.length ? `+${added.length} added (${added.slice(0, 3).map(displayName).join(", ")})` : null,
+                    removed.length ? `-${removed.length} removed (${removed.slice(0, 3).map(displayName).join(", ")})` : null,
+                ].filter(Boolean).join(" | ");
+                await logActivity(req, "Updated", "Team Members", summary);
                 return res.status(200).json({ success: true, message: "Contacts updated successfully", data: exhibitor.teamMembers });
             } else {
                 return res.status(404).json({ success: false, message: "Client not found" });

@@ -242,6 +242,10 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         roleAtExhibition: String,
         idProof: String,
         idProofUrl: String,
+        emailVerified: { type: Boolean, default: false },
+        mobileVerified: { type: Boolean, default: false },
+        emailOtpVerifiedAt: Date,
+        mobileOtpVerifiedAt: Date,
         passes: {
             exhibitor: Boolean,
             delegate: Boolean,
