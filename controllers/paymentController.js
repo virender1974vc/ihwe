@@ -1,4 +1,29 @@
 const Payment = require("../models/Payment");
+const Invoice = require("../models/Invoice");
+const Estimate = require("../models/Estimate");
+const PerformaInvoice = require("../models/PerformaInvoice");
+const { logActivity } = require("../utils/logger");
+const { getAccountNameById, getDocumentAccountName } = require("../utils/accountActivityDetails");
+
+const resolvePaymentAccount = async (payment) => {
+  if (payment.companyId) {
+    return {
+      companyId: payment.companyId,
+      accountName: await getAccountNameById(payment.companyId, "account"),
+    };
+  }
+  if (!payment.invoice_id) return { companyId: "", accountName: "account" };
+
+  const doc =
+    await Invoice.findById(payment.invoice_id).lean() ||
+    await Estimate.findById(payment.invoice_id).lean() ||
+    await PerformaInvoice.findById(payment.invoice_id).lean();
+
+  return {
+    companyId: doc?.companyId || "",
+    accountName: await getDocumentAccountName(doc, "account"),
+  };
+};
 
 // ➤ Add a new payment
 const addPayment = async (req, res) => {
@@ -9,6 +34,13 @@ const addPayment = async (req, res) => {
     }
     const payment = new Payment(payload);
     await payment.save();
+    const { accountName } = await resolvePaymentAccount(payment);
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Added Payment for ${accountName}. Amount: ₹${payment.amount_text || 0}`,
+    );
 
     res.status(201).json({
       message: "Payment added successfully",
@@ -63,6 +95,13 @@ const updatePayment = async (req, res) => {
 
     if (!updatedPayment)
       return res.status(404).json({ message: "Payment not found" });
+    const { accountName } = await resolvePaymentAccount(updatedPayment);
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Payment for ${accountName}. Amount: ₹${updatedPayment.amount_text || 0}`,
+    );
 
     res.status(200).json({
       message: "✏️ Payment updated successfully",
@@ -83,6 +122,13 @@ const deletePayment = async (req, res) => {
 
     if (!deletedPayment)
       return res.status(404).json({ message: "Payment not found" });
+    const { accountName } = await resolvePaymentAccount(deletedPayment);
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Payment for ${accountName}. Amount: ₹${deletedPayment.amount_text || 0}`,
+    );
 
     res.status(200).json({
       message: "🗑️ Payment deleted successfully",

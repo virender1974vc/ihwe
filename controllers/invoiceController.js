@@ -3,6 +3,8 @@ const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const { sendWhatsAppMessage } = require('../utils/whatsapp');
 const emailService = require('../utils/emailService');
+const { logActivity } = require("../utils/logger");
+const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 
 // 📍 GET all invoices
 const getAllInvoices = async (req, res) => {
@@ -72,6 +74,13 @@ const createInvoice = async (req, res) => {
     });
 
     const savedInvoice = await newInvoice.save();
+    const accountName = await getDocumentAccountName(savedInvoice, "account");
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Created Invoice for ${accountName}. Amount: ₹${savedInvoice.finalAmount || 0}`,
+    );
 
     res.status(201).json({
       message: "✅ Invoice Created",
@@ -98,6 +107,13 @@ const updateInvoice = async (req, res) => {
 
     if (!updatedInvoice)
       return res.status(404).json({ message: "Invoice not found" });
+    const accountName = await getDocumentAccountName(updatedInvoice, "account");
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Invoice for ${accountName}. Amount: ₹${updatedInvoice.finalAmount || 0}`,
+    );
 
     res.status(200).json({
       message: "✅ Invoice Updated",
@@ -118,6 +134,13 @@ const deleteInvoice = async (req, res) => {
 
     if (!deletedInvoice)
       return res.status(404).json({ message: "Invoice not found" });
+    const accountName = await getDocumentAccountName(deletedInvoice, "account");
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Invoice for ${accountName}. Amount: ₹${deletedInvoice.finalAmount || 0}`,
+    );
 
     res.status(200).json({
       message: "🗑️ Invoice deleted successfully",

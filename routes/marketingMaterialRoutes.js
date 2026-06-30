@@ -31,6 +31,7 @@ router.post("/", upload.single("file"), marketingMaterialController.createMateri
 router.put("/:id", upload.single("file"), marketingMaterialController.updateMaterial);
 router.delete("/:id", marketingMaterialController.deleteMaterial);
 router.post("/share", marketingMaterialController.shareMaterials);
+router.get("/history/all", marketingMaterialController.getAllShareHistory);
 router.get("/history/:cmpny_id", marketingMaterialController.getShareHistory);
 
 module.exports = router;

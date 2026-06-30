@@ -314,6 +314,8 @@ app.use("/api/national-expo", nationalExpoRoutes);
 app.use("/api/integrated-format", integratedFormatRoutes);
 app.use("/api/why-participate", whyParticipateRoutes);
 app.use("/api/new-testimonials", newTestimonialsRoutes);
+app.use("/api/delegate-config", require("./routes/delegateConfigRoutes"));
+app.use("/api/delegate", require("./routes/delegateRegistrationRoutes"));
 app.use("/api/client", clientRoutes);
 app.use("/api/parallax", parallaxRoutes);
 app.use("/api/testimonials", testimonialsRoutes);
@@ -548,12 +550,18 @@ io.on('connection', (socket) => {
         const ExhibitorRegistration = require('./models/ExhibitorRegistration');
         const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
         const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
-        io.to(targetRoom).emit('room_updated', {
+        
+        const payload = {
           roomId, exhibitorName, lastMessage: message,
           lastMessageAt: msg.createdAt, lastSenderType: senderType,
           unreadIncrement: !otherOnline ? 1 : 0,
           spokenWith: exhibitor?.spokenWith || ''
-        });
+        };
+        
+        io.to(targetRoom).emit('room_updated', payload);
+        if (targetRoom !== 'admin_room') {
+           io.to('admin_room').emit('room_updated', payload);
+        }
       } else if (senderType === 'buyer') {
         // Buyer notification to admin
         io.to('admin_room').emit('room_updated', {

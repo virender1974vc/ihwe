@@ -1,4 +1,6 @@
 const DebitNote = require("../models/DebitNote");
+const { logActivity } = require("../utils/logger");
+const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 
 const parseItems = (items) => {
   if (Array.isArray(items)) return items;
@@ -61,6 +63,13 @@ const createDebitNote = async (req, res) => {
 
     const debitNote = new DebitNote(payload);
     await debitNote.save();
+    const accountName = await getDocumentAccountName(debitNote, "account");
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Created Debit Note for ${accountName}. Amount: ₹${debitNote.totalAmount || 0}`,
+    );
 
     res.status(201).json({
       success: true,
@@ -117,6 +126,13 @@ const updateDebitNote = async (req, res) => {
     if (!updated) {
       return res.status(404).json({ success: false, message: "Debit note not found" });
     }
+    const accountName = await getDocumentAccountName(updated, "account");
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Debit Note for ${accountName}. Amount: ₹${updated.totalAmount || 0}`,
+    );
     res.json({ success: true, message: "Debit Note Updated", data: updated });
   } catch (error) {
     res.status(500).json({
@@ -134,6 +150,13 @@ const deleteDebitNote = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ success: false, message: "Debit note not found" });
     }
+    const accountName = await getDocumentAccountName(deleted, "account");
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Debit Note for ${accountName}. Amount: ₹${deleted.totalAmount || 0}`,
+    );
     res.json({ success: true, message: "Debit Note Deleted" });
   } catch (error) {
     res.status(500).json({

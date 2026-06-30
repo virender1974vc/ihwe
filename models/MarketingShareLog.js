@@ -5,9 +5,12 @@ const marketingShareLogSchema = new mongoose.Schema(
   {
     cmpny_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "CrmExhibatorNew",
+      ref: "Company",
       required: true,
     },
+    clientName: { type: String },
+    clientMobile: { type: String },
+    clientEmail: { type: String },
     materials: [
       {
         material_id: {

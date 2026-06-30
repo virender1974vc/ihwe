@@ -1052,6 +1052,22 @@ exports.updateSellerProfile = async (req, res) => {
             'low'
         );
         
+        // Emit live socket event to admin
+        const io = req.app.get('io');
+        if (io) {
+            // Determine what was updated conceptually (for display)
+            let actionText = 'Profile Details';
+            if (socialMedia) actionText = 'Social Media Links';
+            if (companyName || brandName || companyDescription || website || productCategories) actionText = 'Company Info';
+            
+            io.to('admin_room').emit('profile_updated', {
+                clientId: String(updated._id) || updated.registrationId,
+                companyName: updated.exhibitorName || updated.companyName || 'An Exhibitor',
+                action: actionText,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
         res.json({ success: true, message: 'Profile updated successfully', data: updated });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Failed to update profile' });
