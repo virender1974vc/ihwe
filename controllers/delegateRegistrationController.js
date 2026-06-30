@@ -282,13 +282,13 @@ exports.getAdminRegistrations = async (req, res) => {
             .limit(limitNum);
 
         const stats = await DelegateRegistration.aggregate([
-            { $match: query },
             {
                 $group: {
                     _id: null,
                     totalPaid: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, 1, 0] } },
                     totalPending: { $sum: { $cond: [{ $eq: ["$paymentStatus", "pending"] }, 1, 0] } },
-                    totalRevenue: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$totalAmount", 0] } }
+                    totalRevenue: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$totalAmount", 0] } },
+                    totalRegistrations: { $sum: 1 }
                 }
             }
         ]);
@@ -304,7 +304,8 @@ exports.getAdminRegistrations = async (req, res) => {
             registrations,
             totalPaid: statsData.totalPaid,
             totalPending: statsData.totalPending,
-            totalRevenue: statsData.totalRevenue
+            totalRevenue: statsData.totalRevenue,
+            globalTotal: statsData.totalRegistrations || 0
         });
     } catch (error) {
         console.error('Error fetching admin registrations:', error);
