@@ -312,3 +312,179 @@ exports.getAdminRegistrations = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+exports.createOfflineRegistration = async (req, res) => {
+    try {
+        let sessions = [];
+        let specialPasses = [];
+        if (req.body.sessions) sessions = JSON.parse(req.body.sessions);
+        if (req.body.specialPasses) specialPasses = JSON.parse(req.body.specialPasses);
+
+        const { gatewayAmount, paymentMode, paymentRemarks, ...personalDetails } = req.body;
+
+        if (req.files && req.files.profileImage) {
+            personalDetails.profileImage = `/uploads/delegates/${req.files.profileImage[0].filename}`;
+        }
+
+        let paymentReceipt = null;
+        if (req.files && req.files.paymentReceipt) {
+            paymentReceipt = `/uploads/delegates/${req.files.paymentReceipt[0].filename}`;
+        }
+
+        let calculatedSubTotal = 0;
+        sessions.forEach(s => calculatedSubTotal += s.price);
+        specialPasses.forEach(p => calculatedSubTotal += p.price);
+
+        const gstAmount = Math.round(calculatedSubTotal * 0.18);
+        const totalAfterGst = calculatedSubTotal + gstAmount;
+        const gatewayChargeAmount = 0;
+        const finalTotalAmount = totalAfterGst + gatewayChargeAmount;
+
+        const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
+        let newRegNo = 'DEL-IHWE-1001';
+        if (lastReg && lastReg.regNo && lastReg.regNo.startsWith('DEL-IHWE-')) {
+            const lastNumber = parseInt(lastReg.regNo.replace('DEL-IHWE-', ''), 10);
+            if (!isNaN(lastNumber)) {
+                newRegNo = `DEL-IHWE-${lastNumber + 1}`;
+            }
+        }
+
+        const registration = await DelegateRegistration.create({
+            ...personalDetails,
+            regNo: newRegNo,
+            sessions,
+            specialPasses,
+            subTotal: calculatedSubTotal,
+            gstAmount,
+            gatewayChargeAmount,
+            totalAmount: finalTotalAmount,
+            paymentStatus: 'paid',
+            paymentMode: paymentMode || 'offline',
+            paymentReceipt,
+            paymentRemarks
+        });
+        try {
+            const allSessions = [];
+            if (registration.sessions) {
+                registration.sessions.forEach(s => {
+                    allSessions.push(s.title);
+                });
+            }
+            if (registration.specialPasses) {
+                registration.specialPasses.forEach(p => {
+                    if (p.title === 'ALL 3 SESSIONS') {
+                        allSessions.push("Saturday - Scientific Session (Theme - 1) & (Theme - 2)");
+                        allSessions.push("Sunday - Scientific Session (Theme - 1)");
+                    } else if (p.title === 'Scientific Session - (Theme - 1) & (Theme - 2)') {
+                        allSessions.push("Saturday - Scientific Session (Theme - 1) & (Theme - 2)");
+                    } else if (p.title === 'Scientific Session - (Theme - 1)') {
+                        allSessions.push("Sunday - Scientific Session (Theme - 1)");
+                    }
+                });
+            }
+
+            const uniqueSessions = [...new Set(allSessions)];
+
+            const emailHtml = `
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <h2 style="color: #1a5c2a; text-align: center; margin-bottom: 20px;">Delegate Registration Confirmed</h2>
+                <p>Dear <strong>${registration.title} ${registration.fullName}</strong>,</p>
+                <p><strong>Namo Gange Namaskar!</strong></p>
+                <p>Thank you for registering for the <strong>9th International Health & Wellness Expo (IHWE) 2026</strong>. Your offline delegate registration has been successfully processed.</p>
+                
+                <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                    <h3 style="color: #1a5c2a; margin-top: 0;">Registration Details</h3>
+                    <ul style="list-style: none; padding-left: 0; margin-bottom: 0;">
+                        <li style="margin-bottom: 8px;"><strong>Registration Number:</strong> ${registration.regNo}</li>
+                        <li style="margin-bottom: 8px;"><strong>Status:</strong> ✅ Confirmed (Paid via ${registration.paymentMode})</li>
+                        <li><strong>Total Amount:</strong> ₹${registration.totalAmount}</li>
+                    </ul>
+                </div>
+
+                ${registration.specialPasses && registration.specialPasses.length > 0 ? `
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: #1a5c2a;">Your Event Pass</h3>
+                    <ul style="list-style: none; padding-left: 0;">
+                        ${registration.specialPasses.map(p => `<li style="margin-bottom: 5px;">• ${p.title}</li>`).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+
+                <div style="margin-bottom: 20px;">
+                    <h3 style="color: #1a5c2a;">Sessions Included</h3>
+                    ${uniqueSessions.length > 0 ? `
+                    <ul style="list-style: none; padding-left: 0;">
+                        ${uniqueSessions.map(s => `<li style="margin-bottom: 5px;">• ${s}</li>`).join('')}
+                    </ul>
+                    ` : '<p>No sessions have been selected yet. If session selection is available for your pass, you may choose your preferred sessions before the event.</p>'}
+                </div>
+
+                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 6px; border-left: 4px solid #1a5c2a;">
+                    <h3 style="color: #1a5c2a; margin-top: 0;">Event Details</h3>
+                    <ul style="list-style: none; padding-left: 0; margin-bottom: 0;">
+                        <li style="margin-bottom: 5px;"><strong>Venue:</strong> Bharat Mandapam (Pragati Maidan), New Delhi</li>
+                        <li><strong>Dates:</strong> 21–23 August 2026</li>
+                    </ul>
+                </div>
+
+                <p style="margin-top: 25px; color: #4b5563; font-size: 14px;">Please carry this confirmation email or your digital/printed delegate pass while visiting the venue.</p>
+                <p style="margin-top: 20px; color: #1a5c2a; font-weight: bold;">Warm Regards,<br>Team IHWE 2026<br><span style="font-size: 12px; font-weight: normal; color: #6b7280;">Namo Gange Wellness Pvt. Ltd.</span></p>
+            </div>
+            `;
+
+            if (registration.email) {
+                emailService.sendEmail({
+                    to: registration.email,
+                    subject: 'Delegate Registration Confirmed - 9th IHWE 2026',
+                    html: emailHtml
+                });
+            }
+        } catch (err) {
+            console.error("Failed to send offline delegate email:", err);
+        }
+
+        // WhatsApp
+        try {
+            const allSessions = [];
+            if (registration.sessions) registration.sessions.forEach(s => allSessions.push(s.title));
+            if (registration.specialPasses) {
+                registration.specialPasses.forEach(p => {
+                    if (p.title === 'ALL 3 SESSIONS') {
+                        allSessions.push("Saturday - Scientific Session (Theme - 1) & (Theme - 2)");
+                        allSessions.push("Sunday - Scientific Session (Theme - 1)");
+                    } else if (p.title === 'Scientific Session - (Theme - 1) & (Theme - 2)') {
+                        allSessions.push("Saturday - Scientific Session (Theme - 1) & (Theme - 2)");
+                    } else if (p.title === 'Scientific Session - (Theme - 1)') {
+                        allSessions.push("Sunday - Scientific Session (Theme - 1)");
+                    }
+                });
+            }
+            const uniqueSessions = [...new Set(allSessions)];
+
+            let waMessage = `Namo Gange Namaskar!\n\nDear ${registration.title} ${registration.fullName},\n\nThank you for registering for the *9th International Health & Wellness Expo (IHWE) 2026*. We are delighted to confirm that your delegate registration has been successfully completed.\n\n*Registration Details*\n- Registration No: ${registration.regNo}\n- Delegate Name: ${registration.title} ${registration.fullName}\n- Registration Status: ✅ Confirmed\n- Payment Status: Paid via ${registration.paymentMode}\n- Total Amount Paid: ₹${registration.totalAmount}\n`;
+
+            if (registration.specialPasses && registration.specialPasses.length > 0) {
+                waMessage += `\n*Your Event Pass*\n${registration.specialPasses.map(p => `- ${p.title}`).join('\n')}\n`;
+            }
+
+            if (uniqueSessions.length > 0) {
+                waMessage += `\n*Sessions Included*\n${uniqueSessions.map(s => `- ${s}`).join('\n')}\n`;
+            } else {
+                waMessage += `\n*Sessions Included*\nNo sessions have been selected yet. If session selection is available for your pass, you may choose your preferred sessions before the event.\n`;
+            }
+
+            waMessage += `\n*Event Details*\n- Venue: Bharat Mandapam (Pragati Maidan), New Delhi\n- Dates: 21–23 August 2026\n\nPlease carry this confirmation email or your digital/printed delegate pass while visiting the venue.\n\nWarm Regards,\n*Team IHWE 2026*\nNamo Gange Wellness Pvt. Ltd.`;
+
+            if (registration.mobile) {
+                await sendWhatsAppMessage(registration.mobile, waMessage, registration.fullName);
+            }
+        } catch (err) {
+            console.error("Failed to send offline delegate whatsapp:", err);
+        }
+
+        res.json({ success: true, message: 'Offline registration created successfully', registration });
+    } catch (error) {
+        console.error('Error creating offline registration:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

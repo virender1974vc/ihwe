@@ -46,6 +46,8 @@ const delegateRegistrationSchema = new mongoose.Schema({
 
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
     paymentMode: { type: String, default: 'online' },
+    paymentReceipt: { type: String },
+    paymentRemarks: { type: String },
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },

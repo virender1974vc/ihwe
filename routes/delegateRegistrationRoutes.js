@@ -23,5 +23,9 @@ const upload = multer({ storage });
 router.post('/register', upload.single('profileImage'), delegateRegistrationController.createRegistration);
 router.post('/verify', delegateRegistrationController.verifyPayment);
 router.get('/admin/registrations', delegateRegistrationController.getAdminRegistrations);
+router.post('/admin/create-offline', upload.fields([
+    { name: 'profileImage', maxCount: 1 },
+    { name: 'paymentReceipt', maxCount: 1 }
+]), delegateRegistrationController.createOfflineRegistration);
 
 module.exports = router;
