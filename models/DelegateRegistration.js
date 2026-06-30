@@ -9,22 +9,30 @@ const delegateRegistrationSchema = new mongoose.Schema({
     organization: { type: String, required: true },
     mobile: { type: String, required: true },
     alternateMobile: { type: String },
-    
+
     // Address Details
     address: { type: String, required: true },
+    pincode: { type: String, required: true },
     country: { type: String, required: true },
+    state: { type: String, required: true },
     city: { type: String, required: true },
-    
-    // Interests
-    industryType: { type: String, required: true },
-    areasOfInterest: { type: String, required: true },
+    profileImage: { type: String },
 
-    // Sessions Selected
+    // Interests
+    regNo: { type: String, unique: true },
+    industrySector: { type: String, required: true },
+    typeOfBusiness: { type: String, required: true },
     sessions: [{
         session: { type: mongoose.Schema.Types.ObjectId, ref: 'DelegateSession' },
         title: String,
         date: String,
         time: String,
+        price: Number
+    }],
+    specialPasses: [{
+        pass: { type: mongoose.Schema.Types.ObjectId, ref: 'DelegatePass' },
+        passKey: String,
+        title: String,
         price: Number
     }],
 
@@ -35,7 +43,7 @@ const delegateRegistrationSchema = new mongoose.Schema({
     gatewayChargePercentage: { type: Number, default: 2.5 },
     gatewayChargeAmount: { type: Number, required: true, default: 0 },
     totalAmount: { type: Number, required: true, default: 0 },
-    
+
     paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
     paymentMode: { type: String, default: 'online' },
     razorpayOrderId: { type: String },

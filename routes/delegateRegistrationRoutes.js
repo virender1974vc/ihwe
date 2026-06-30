@@ -1,8 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const delegateRegistrationController = require('../controllers/delegateRegistrationController');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 
-router.post('/register', delegateRegistrationController.createRegistration);
+// Configure multer
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, '../uploads/delegates');
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  }
+});
+const upload = multer({ storage });
+
+router.post('/register', upload.single('profileImage'), delegateRegistrationController.createRegistration);
 router.post('/verify', delegateRegistrationController.verifyPayment);
+router.get('/admin/registrations', delegateRegistrationController.getAdminRegistrations);
 
 module.exports = router;
