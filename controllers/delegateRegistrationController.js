@@ -14,7 +14,7 @@ exports.createRegistration = async (req, res) => {
         if (req.body.specialPasses) specialPasses = JSON.parse(req.body.specialPasses);
 
         const { gatewayAmount, ...personalDetails } = req.body;
-        
+
         // Handle profile image upload
         if (req.file) {
             personalDetails.profileImage = `/uploads/delegates/${req.file.filename}`;
@@ -90,7 +90,7 @@ exports.verifyPayment = async (req, res) => {
             registration.razorpayPaymentId = razorpay_payment_id;
             registration.razorpaySignature = razorpay_signature;
             await registration.save();
-            
+
             // Map to store unique sessions
             let allSessionsMap = new Map();
             if (registration.sessions && registration.sessions.length > 0) {
@@ -102,11 +102,11 @@ exports.verifyPayment = async (req, res) => {
             // Extract sessions included in passes
             if (registration.specialPasses && registration.specialPasses.length > 0) {
                 const allDbSessions = await DelegateSession.find({ isActive: true }).populate('dayId');
-                
+
                 registration.specialPasses.forEach(p => {
                     const pTitle = p.title.toLowerCase();
                     const isFullPass = pTitle.includes('all 3 days') || pTitle.includes('full access') || pTitle.includes('all days');
-                    
+
                     let dayMatch = null;
                     if (pTitle.includes('day 1')) dayMatch = 'Day 1';
                     else if (pTitle.includes('day 2')) dayMatch = 'Day 2';
@@ -115,7 +115,7 @@ exports.verifyPayment = async (req, res) => {
                     allDbSessions.forEach(dbSess => {
                         const sessDayStr = dbSess.dayId ? dbSess.dayId.day : '';
                         const sessDateStr = dbSess.dayId ? dbSess.dayId.date : '';
-                        
+
                         if (isFullPass || (dayMatch && sessDayStr.toLowerCase() === dayMatch.toLowerCase())) {
                             allSessionsMap.set(dbSess.title, `- ${dbSess.title} (${sessDateStr}, ${dbSess.time})`);
                         }
@@ -201,7 +201,7 @@ exports.verifyPayment = async (req, res) => {
                 </div>
             </div>
             `;
-            
+
             try {
                 if (emailService && emailService.sendEmail) {
                     await emailService.sendEmail({
@@ -215,17 +215,17 @@ exports.verifyPayment = async (req, res) => {
             }
 
             let waMessage = `Namo Gange Namaskar!\n\nDear ${registration.title} ${registration.fullName},\n\nThank you for registering for the *9th International Health & Wellness Expo (IHWE) 2026*. We are delighted to confirm that your delegate registration has been successfully completed.\n\n*Registration Details*\n- Registration No: ${registration.regNo}\n- Delegate Name: ${registration.title} ${registration.fullName}\n- Registration Status: ✅ Confirmed\n- Payment Status: Successfully Paid\n- Total Amount Paid: ₹${registration.totalAmount}\n`;
-            
+
             if (registration.specialPasses && registration.specialPasses.length > 0) {
                 waMessage += `\n*Your Event Pass*\n${registration.specialPasses.map(p => `- ${p.title}`).join('\n')}\n`;
             }
-            
+
             if (allSessionsMap.size > 0) {
                 waMessage += `\n*Sessions Included*\n${Array.from(allSessionsMap.values()).map(s => s).join('\n')}\n`;
             } else {
                 waMessage += `\n*Sessions Included*\nNo sessions have been selected yet. If session selection is available for your pass, you may choose your preferred sessions before the event.\n`;
             }
-            
+
             waMessage += `\n*Event Details*\n- Venue: Bharat Mandapam (Pragati Maidan), New Delhi\n- Dates: 21–23 August 2026\n\nPlease carry this confirmation email or your digital/printed delegate pass while visiting the venue.\n\nWarm Regards,\n*Team IHWE 2026*\nNamo Gange Wellness Pvt. Ltd.`;
 
             try {
@@ -271,8 +271,6 @@ exports.getAdminRegistrations = async (req, res) => {
             };
         }
 
-        // We can add filtering by eventType or passType if needed based on frontend mappings.
-
         const pageNum = parseInt(page);
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
@@ -283,13 +281,30 @@ exports.getAdminRegistrations = async (req, res) => {
             .skip(skip)
             .limit(limitNum);
 
+        const stats = await DelegateRegistration.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: null,
+                    totalPaid: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, 1, 0] } },
+                    totalPending: { $sum: { $cond: [{ $eq: ["$paymentStatus", "pending"] }, 1, 0] } },
+                    totalRevenue: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$totalAmount", 0] } }
+                }
+            }
+        ]);
+
+        const statsData = stats.length > 0 ? stats[0] : { totalPaid: 0, totalPending: 0, totalRevenue: 0 };
+
         res.json({
             success: true,
             total,
             page: pageNum,
             limit: limitNum,
             totalPages: Math.ceil(total / limitNum),
-            registrations
+            registrations,
+            totalPaid: statsData.totalPaid,
+            totalPending: statsData.totalPending,
+            totalRevenue: statsData.totalRevenue
         });
     } catch (error) {
         console.error('Error fetching admin registrations:', error);
