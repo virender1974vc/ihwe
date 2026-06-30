@@ -983,6 +983,26 @@ class ExhibitorAuthController {
 
             await newRequest.save();
 
+            const allocatedEntries = passType === 'vehicle' ? (vehicles || []) : (personnel || []);
+            const allocatedTeamMemberIds = allocatedEntries
+                .map(entry => entry.teamMemberId)
+                .filter(Boolean);
+
+            if (allocatedTeamMemberIds.length > 0) {
+                const exhibitor = await ExhibitorRegistration.findById(exhibitorId);
+                if (exhibitor) {
+                    const allocatedIdSet = new Set(allocatedTeamMemberIds.map(id => String(id)));
+                    exhibitor.teamMembers.forEach(member => {
+                        if (allocatedIdSet.has(String(member._id))) {
+                            member.passes = member.passes || {};
+                            member.passes[passType] = true;
+                        }
+                    });
+                    exhibitor.markModified('teamMembers');
+                    await exhibitor.save();
+                }
+            }
+
             // Trigger Email (QR Code) and WhatsApp via Opus if automatically approved
             if (newRequest.status === 'approved') {
                 ExhibitorRegistration.findById(exhibitorId).then(exhibitor => {

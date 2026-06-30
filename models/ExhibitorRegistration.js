@@ -253,7 +253,9 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
             parking: Boolean,
             vehicle: Boolean,
             service: Boolean,
-            visitor: Boolean
+            visitor: Boolean,
+            water: Boolean,
+            dinner: Boolean
         },
         verificationStatus: { type: String, enum: ['Pending', 'Verified', 'Rejected'], default: 'Pending' }
     }],
