@@ -2,21 +2,79 @@ const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const ActivityLog = require("../models/activity/activityLogModel");
 const { logActivity } = require("../utils/logger");
+const { cleanText, formatDetails } = require("../utils/activityLogFormatter");
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const uniqueStrings = (values) => [...new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))];
+const getContactDisplayName = (contact = {}) =>
+    cleanText(contact.name || contact.firstName || contact.email || contact.mobile, "Team Member");
+
+const buildContactActivity = ({ operation, accountName, contactName, contactCount, added, removed }) => {
+    const normalizedOperation = String(operation || "").toLowerCase();
+    const cleanAccountName = cleanText(accountName, "this client");
+    const cleanContactName = cleanText(contactName, "");
+
+    if (normalizedOperation === "delete") {
+        return {
+            action: "Deleted",
+            details: `Deleted Team Member ${cleanContactName || "Team Member"} for ${cleanAccountName}`,
+        };
+    }
+
+    if (normalizedOperation === "create") {
+        return {
+            action: "Created",
+            details: `Created Team Member ${cleanContactName || "Team Member"} for ${cleanAccountName}`,
+        };
+    }
+
+    if (normalizedOperation === "bulk-create") {
+        const count = Number(contactCount) || added.length || 0;
+        const sampleNames = added.slice(0, 3).map(getContactDisplayName).join(", ");
+        return {
+            action: "Created",
+            details: `Created ${count} Team Member${count === 1 ? "" : "s"} for ${cleanAccountName}${sampleNames ? ` (${sampleNames})` : ""}`,
+        };
+    }
+
+    if (normalizedOperation === "update") {
+        return {
+            action: "Updated",
+            details: `Updated Team Member ${cleanContactName || "Team Member"} for ${cleanAccountName}`,
+        };
+    }
+
+    if (added.length && !removed.length) {
+        const names = added.slice(0, 3).map(getContactDisplayName).join(", ");
+        return {
+            action: "Created",
+            details: `Created ${added.length} Team Member${added.length === 1 ? "" : "s"} for ${cleanAccountName}${names ? ` (${names})` : ""}`,
+        };
+    }
+
+    if (removed.length && !added.length) {
+        const names = removed.slice(0, 3).map(getContactDisplayName).join(", ");
+        return {
+            action: "Deleted",
+            details: `Deleted ${removed.length} Team Member${removed.length === 1 ? "" : "s"} for ${cleanAccountName}${names ? ` (${names})` : ""}`,
+        };
+    }
+
+    return {
+        action: "Updated",
+        details: `Updated Team Members for ${cleanAccountName}`,
+    };
+};
 
 const buildActivityQuery = (terms) => {
     const uniqueTerms = uniqueStrings(terms);
     if (uniqueTerms.length === 0) return null;
 
     return {
+        module: { $in: [/^Client Contacts$/i, /^Team Members$/i] },
         $or: uniqueTerms.flatMap((term) => {
             const pattern = new RegExp(escapeRegex(term), "i");
             return [
-                { user: pattern },
-                { action: pattern },
-                { module: pattern },
                 { details: pattern },
                 { link: pattern }
             ];
@@ -109,10 +167,10 @@ exports.getClientContacts = async (req, res) => {
             source,
             activityLogs: activityLogs.map((log) => ({
                 id: log._id,
-                action: log.action,
-                module: log.module,
-                details: log.details,
-                user: log.user,
+                action: cleanText(log.action, "Activity"),
+                module: cleanText(log.module, "Client Contacts"),
+                details: formatDetails(log.details),
+                user: cleanText(log.user, "System"),
                 link: log.link,
                 ip_address: log.ip_address,
                 timestamp: log.createdAt
@@ -127,7 +185,7 @@ exports.getClientContacts = async (req, res) => {
 exports.updateClientContacts = async (req, res) => {
     try {
         const { clientId } = req.params;
-        const { contacts } = req.body;
+        const { contacts, contactOperation, contactName, contactCount } = req.body;
 
         let company = await Company.findById(clientId);
         let exhibitor = null;
@@ -138,7 +196,6 @@ exports.updateClientContacts = async (req, res) => {
             contact.name || contact.firstName || "",
             contact.roleAtExhibition || ""
         ].map((part) => String(part).trim().toLowerCase()).join("|");
-        const displayName = (contact = {}) => contact.name || [contact.title, contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.email || contact.mobile || "Unknown";
 
         if (company) {
             if (company.exhibitorRegistrationId) {
@@ -151,12 +208,15 @@ exports.updateClientContacts = async (req, res) => {
                     const nextKeys = new Set(contacts.map(makeKey));
                     const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
                     const removed = existingContacts.filter((c) => !nextKeys.has(makeKey(c)));
-                    const summary = [
-                        `Updated team members for ${exhibitor.exhibitorName || company.companyName || clientId}`,
-                        added.length ? `+${added.length} added (${added.slice(0, 3).map(displayName).join(", ")})` : null,
-                        removed.length ? `-${removed.length} removed (${removed.slice(0, 3).map(displayName).join(", ")})` : null,
-                    ].filter(Boolean).join(" | ");
-                    await logActivity(req, "Updated", "Team Members", summary);
+                    const activity = buildContactActivity({
+                        operation: contactOperation,
+                        accountName: exhibitor.exhibitorName || company.companyName,
+                        contactName,
+                        contactCount,
+                        added,
+                        removed,
+                    });
+                    await logActivity(req, activity.action, "Client Contacts", activity.details);
                     return res.status(200).json({ success: true, message: "Contacts updated successfully", data: exhibitor.teamMembers });
                 }
             }
@@ -167,12 +227,15 @@ exports.updateClientContacts = async (req, res) => {
             const nextKeys = new Set(contacts.map(makeKey));
             const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
             const removed = existingContacts.filter((c) => !nextKeys.has(makeKey(c)));
-            const summary = [
-                `Updated contacts for ${company.companyName || clientId}`,
-                added.length ? `+${added.length} added (${added.slice(0, 3).map(displayName).join(", ")})` : null,
-                removed.length ? `-${removed.length} removed (${removed.slice(0, 3).map(displayName).join(", ")})` : null,
-            ].filter(Boolean).join(" | ");
-            await logActivity(req, "Updated", "Client Contacts", summary);
+            const activity = buildContactActivity({
+                operation: contactOperation,
+                accountName: company.companyName,
+                contactName,
+                contactCount,
+                added,
+                removed,
+            });
+            await logActivity(req, activity.action, "Client Contacts", activity.details);
             return res.status(200).json({ success: true, message: "Contacts updated successfully", data: company.contacts });
         } else {
             // Check if it's an exhibitor ID directly
@@ -185,12 +248,15 @@ exports.updateClientContacts = async (req, res) => {
                 const nextKeys = new Set(contacts.map(makeKey));
                 const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
                 const removed = existingContacts.filter((c) => !nextKeys.has(makeKey(c)));
-                const summary = [
-                    `Updated team members for ${exhibitor.exhibitorName || clientId}`,
-                    added.length ? `+${added.length} added (${added.slice(0, 3).map(displayName).join(", ")})` : null,
-                    removed.length ? `-${removed.length} removed (${removed.slice(0, 3).map(displayName).join(", ")})` : null,
-                ].filter(Boolean).join(" | ");
-                await logActivity(req, "Updated", "Team Members", summary);
+                const activity = buildContactActivity({
+                    operation: contactOperation,
+                    accountName: exhibitor.exhibitorName,
+                    contactName,
+                    contactCount,
+                    added,
+                    removed,
+                });
+                await logActivity(req, activity.action, "Client Contacts", activity.details);
                 return res.status(200).json({ success: true, message: "Contacts updated successfully", data: exhibitor.teamMembers });
             } else {
                 return res.status(404).json({ success: false, message: "Client not found" });
