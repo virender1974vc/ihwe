@@ -6,6 +6,10 @@ const delegateConfigController = require('../controllers/delegateConfigControlle
 router.get('/public', delegateConfigController.getDaysWithSessions);
 
 // Admin routes
+router.get('/admin/days/paginated', delegateConfigController.getDaysPaginated);
+router.get('/admin/sessions/paginated', delegateConfigController.getSessionsPaginated);
+router.get('/admin/passes/paginated', delegateConfigController.getPassesPaginated);
+
 router.get('/admin', delegateConfigController.getAllDaysAdmin);
 router.post('/days', delegateConfigController.createDay);
 router.put('/days/:id', delegateConfigController.updateDay);

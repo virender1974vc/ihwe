@@ -118,3 +118,90 @@ exports.deletePass = async (req, res) => {
         res.status(400).json({ success: false, message: error.message });
     }
 };
+
+exports.getDaysPaginated = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+
+        const query = search ? {
+            $or: [
+                { date: { $regex: search, $options: 'i' } },
+                { day: { $regex: search, $options: 'i' } },
+                { title: { $regex: search, $options: 'i' } },
+                { addedBy: { $regex: search, $options: 'i' } },
+                { updatedBy: { $regex: search, $options: 'i' } }
+            ]
+        } : {};
+
+        const total = await DelegateDay.countDocuments(query);
+        const days = await DelegateDay.find(query)
+            .populate('sessions')
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit);
+
+        res.json({ success: true, data: days, total, page, totalPages: Math.ceil(total / limit) });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getSessionsPaginated = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+
+        const query = search ? {
+            $or: [
+                { number: { $regex: search, $options: 'i' } },
+                { title: { $regex: search, $options: 'i' } },
+                { time: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { addedBy: { $regex: search, $options: 'i' } },
+                { updatedBy: { $regex: search, $options: 'i' } }
+            ]
+        } : {};
+
+        const total = await DelegateSession.countDocuments(query);
+        const sessions = await DelegateSession.find(query)
+            .populate('dayId', 'date day title')
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit);
+
+        res.json({ success: true, data: sessions, total, page, totalPages: Math.ceil(total / limit) });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+exports.getPassesPaginated = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const search = req.query.search || '';
+
+        const query = search ? {
+            $or: [
+                { passKey: { $regex: search, $options: 'i' } },
+                { title: { $regex: search, $options: 'i' } },
+                { subtitle: { $regex: search, $options: 'i' } },
+                { addedBy: { $regex: search, $options: 'i' } },
+                { updatedBy: { $regex: search, $options: 'i' } }
+            ]
+        } : {};
+
+        const total = await DelegatePass.countDocuments(query);
+        const passes = await DelegatePass.find(query)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit);
+
+        res.json({ success: true, data: passes, total, page, totalPages: Math.ceil(total / limit) });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
