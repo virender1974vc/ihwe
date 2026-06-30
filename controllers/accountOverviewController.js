@@ -8,10 +8,19 @@ const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const ActivityLog = require("../models/activity/activityLogModel");
 const Stall = require("../models/Stall");
 const mongoose = require("mongoose");
+const { cleanText, formatDetails } = require("../utils/activityLogFormatter");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const uniqueStrings = (values) => [...new Set(values.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))];
+const isGenericUserName = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  return !normalized || ["admin", "system", "unknown_user", "unknown", "n/a"].includes(normalized);
+};
+const cleanActorName = (value) => {
+  const cleaned = cleanText(value, "");
+  return isGenericUserName(cleaned) ? "" : cleaned;
+};
 
 const resolveCompanyAndExhibitor = async (companyId) => {
   let company = null;
@@ -40,12 +49,10 @@ const buildAccountActivityQuery = (terms) => {
   if (uniqueTerms.length === 0) return null;
 
   return {
+    module: /^Accounts$/i,
     $or: uniqueTerms.flatMap((term) => {
       const pattern = new RegExp(escapeRegex(term), "i");
       return [
-        { user: pattern },
-        { action: pattern },
-        { module: pattern },
         { details: pattern },
         { link: pattern },
       ];
@@ -205,6 +212,29 @@ const getAccountOverview = async (req, res) => {
           .lean()
       : [];
 
+    const actorByDocumentNo = new Map();
+    const addDocumentActor = (documentNo, actor) => {
+      const cleanActor = cleanActorName(actor);
+      if (documentNo && cleanActor && !actorByDocumentNo.has(documentNo)) {
+        actorByDocumentNo.set(String(documentNo), cleanActor);
+      }
+    };
+    invoices.forEach((invoice) => addDocumentActor(invoice.invoice_no, invoice.added_by || invoice.updated_by));
+    proformaInvoices.forEach((estimate) => addDocumentActor(estimate.est_no, estimate.added_by || estimate.updated_by));
+    debitNotes.forEach((debitNote) => addDocumentActor(debitNote.debit_note_no, debitNote.added_by || debitNote.updated_by));
+    creditNotes.forEach((creditNote) => addDocumentActor(creditNote.create_note_no, creditNote.added_by || creditNote.updated_by));
+
+    const paymentActorByDocumentNo = new Map();
+    payments
+      .slice()
+      .sort((a, b) => new Date(b.added || b.updated || 0) - new Date(a.added || a.updated || 0))
+      .forEach((payment) => {
+        const cleanActor = cleanActorName(payment.added_by || payment.updated_by);
+        if (payment.ex_no && cleanActor && !paymentActorByDocumentNo.has(payment.ex_no)) {
+          paymentActorByDocumentNo.set(String(payment.ex_no), cleanActor);
+        }
+      });
+
     const formatScheduleDate = (date) => {
       if (!date) return "TBD";
       const d = new Date(date);
@@ -292,6 +322,35 @@ const getAccountOverview = async (req, res) => {
       statusColor = company.companyStatus.toLowerCase().includes("won") ? "green" : "gray";
     }
 
+    const accountDisplayName = company?.companyName || exhibitor?.exhibitorName || "this account";
+    const cleanAccountActivityDetails = (details) => {
+      let text = formatDetails(details);
+      lookupIds.forEach((lookupId) => {
+        text = text.replace(new RegExp(`\\b${escapeRegex(lookupId)}\\b`, "g"), accountDisplayName);
+      });
+      text = text
+        .replace(/\bNGW\/[A-Z]+\/\d{2}-\d{2}\/\d+\b/gi, "")
+        .replace(/\bNGW\/\d{2}-\d{2}\/PI\/\d+\b/gi, "")
+        .replace(/\b(Added|Updated|Deleted)\s+Payment\s+[a-f0-9]{24}\b/gi, "$1 Payment")
+        .replace(/\bagainst\s+\.?/gi, "")
+        .replace(/\bfor company\s+/gi, "for ")
+        .replace(new RegExp(`for\\s+${escapeRegex(accountDisplayName)}\\s+${escapeRegex(accountDisplayName)}`, "gi"), `for ${accountDisplayName}`)
+        .replace(/\.{2,}/g, ".")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      return cleanText(text);
+    };
+    const resolveActivityUser = (log) => {
+      const details = cleanAccountActivityDetails(log.details);
+      const isPaymentLog = /\bpayment\b/i.test(details);
+      const actorMap = isPaymentLog ? paymentActorByDocumentNo : actorByDocumentNo;
+      for (const [documentNo, actor] of actorMap.entries()) {
+        if (details.includes(documentNo)) return actor;
+      }
+      const existingUser = cleanText(log.user, "");
+      return isGenericUserName(existingUser) ? "Admin" : existingUser;
+    };
+
     res.status(200).json({
       success: true,
       data: {
@@ -341,10 +400,10 @@ const getAccountOverview = async (req, res) => {
         lastPayment,
         activityLogs: activityLogs.map((log) => ({
           id: log._id,
-          action: log.action,
-          module: log.module,
-          details: log.details,
-          user: log.user,
+          action: cleanText(log.action, "Activity"),
+          module: cleanText(log.module, "System"),
+          details: cleanAccountActivityDetails(log.details),
+          user: resolveActivityUser(log),
           link: log.link,
           ip_address: log.ip_address,
           timestamp: log.createdAt,

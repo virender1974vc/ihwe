@@ -1,4 +1,9 @@
 const CreditNote = require("../models/CreditNote");
+const { logActivity } = require("../utils/logger");
+const { getAccountNameById } = require("../utils/accountActivityDetails");
+
+const calculateCreditNoteAmount = (items = []) =>
+  items.reduce((sum, item) => sum + ((parseFloat(item.cn_amount) || 0) * (parseFloat(item.quantity) || 1)), 0);
 
 // Fiscal Year Function
 const getFiscalYear = () => {
@@ -49,6 +54,13 @@ const createCreditNote = async (req, res) => {
     });
 
     await creditNote.save();
+    const accountName = await getAccountNameById(creditNote.companyId, "account");
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Created Credit Note for ${accountName}. Amount: ₹${calculateCreditNoteAmount(creditNote.items)}`,
+    );
 
     res.status(201).json({
       success: true,
@@ -106,6 +118,16 @@ const updateCreditNote = async (req, res) => {
       },
       { returnDocument: 'after' },
     );
+    if (!updated) {
+      return res.status(404).json({ message: "Credit note not found" });
+    }
+    const accountName = await getAccountNameById(updated.companyId, "account");
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Credit Note for ${accountName}. Amount: ₹${calculateCreditNoteAmount(updated.items)}`,
+    );
 
     res.json(updated);
   } catch (error) {
@@ -119,7 +141,17 @@ const updateCreditNote = async (req, res) => {
 // DELETE CREDIT NOTE
 const deleteCreditNote = async (req, res) => {
   try {
-    await CreditNote.findByIdAndDelete(req.params.id);
+    const deleted = await CreditNote.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Credit note not found" });
+    }
+    const accountName = await getAccountNameById(deleted.companyId, "account");
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Credit Note for ${accountName}. Amount: ₹${calculateCreditNoteAmount(deleted.items)}`,
+    );
     res.json({ message: "Credit Note Deleted" });
   } catch (error) {
     res.status(500).json({

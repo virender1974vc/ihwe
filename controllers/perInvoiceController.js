@@ -1,6 +1,8 @@
 const PerformaInvoice = require("../models/PerformaInvoice");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Company = require("../models/Company");
+const { logActivity } = require("../utils/logger");
+const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 
 // ✅ Create new PROFORMA Invoice
 const createPerformaInvoice = async (req, res) => {
@@ -23,6 +25,13 @@ const createPerformaInvoice = async (req, res) => {
     });
 
     await invoice.save();
+    const accountName = await getDocumentAccountName(invoice, "account");
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Created Proforma Invoice for ${accountName}. Amount: ₹${invoice.finalAmount || 0}`,
+    );
 
     res.status(201).json({
       message: "✅ PROFORMA Invoice Created",
@@ -86,6 +95,13 @@ const updatePerformaInvoice = async (req, res) => {
 
     if (!updatedInvoice)
       return res.status(404).json({ message: "Invoice not found" });
+    const accountName = await getDocumentAccountName(updatedInvoice, "account");
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Proforma Invoice for ${accountName}. Amount: ₹${updatedInvoice.finalAmount || 0}`,
+    );
 
     res.json({
       message: "✅ PROFORMA Invoice Updated",
@@ -108,6 +124,13 @@ const deletePerformaInvoice = async (req, res) => {
 
     if (!deletedInvoice)
       return res.status(404).json({ message: "Invoice not found" });
+    const accountName = await getDocumentAccountName(deletedInvoice, "account");
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Proforma Invoice for ${accountName}. Amount: ₹${deletedInvoice.finalAmount || 0}`,
+    );
 
     res.json({
       message: "🗑️ PROFORMA Invoice Deleted",

@@ -3,6 +3,7 @@ const { secondaryDB } = require("../config/secondaryDb");
 const paymentSchema = new mongoose.Schema(
   {
     ex_no: { type: String, default: "" },
+    companyId: { type: String, default: "" },
     invoice_id: { type: String, required: true },
     f_amount: { type: String, required: true },
     amount_text: { type: String, required: true },

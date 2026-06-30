@@ -5,6 +5,8 @@ const ChatMessage = require('../models/ChatMessage');
 const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
 const { sendWhatsAppMessage } = require('../utils/whatsapp');
 const emailService = require('../utils/emailService');
+const { logActivity } = require("../utils/logger");
+const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 
 // Add estimate
 const addEstimate = async (req, res) => {
@@ -18,6 +20,13 @@ const addEstimate = async (req, res) => {
 
     const estimate = new Estimate(estimateBody);
     await estimate.save();
+    const accountName = await getDocumentAccountName(estimate, "account");
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Created Proforma Invoice for ${accountName}. Amount: ₹${estimate.finalAmount || 0}`,
+    );
 
     // Log the creation in the chat/communication
     try {
@@ -300,6 +309,13 @@ const updateEstimate = async (req, res) => {
 
     if (!updated)
       return res.status(404).json({ message: "Estimate not found" });
+    const accountName = await getDocumentAccountName(updated, "account");
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Proforma Invoice for ${accountName}. Amount: ₹${updated.finalAmount || 0}`,
+    );
 
     res.status(200).json({
       message: "✏️ Estimate updated",
@@ -320,6 +336,13 @@ const deleteEstimate = async (req, res) => {
 
     if (!deleted)
       return res.status(404).json({ message: "Estimate not found" });
+    const accountName = await getDocumentAccountName(deleted, "account");
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Proforma Invoice for ${accountName}. Amount: ₹${deleted.finalAmount || 0}`,
+    );
 
     res.status(200).json({
       message: "🗑️ Estimate deleted",
