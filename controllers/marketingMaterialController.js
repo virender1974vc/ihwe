@@ -291,6 +291,9 @@ exports.shareMaterials = async (req, res) => {
       sentVia,
       sentBy: sentBy || "Admin",
       status: "Sent",
+      clientName: clientNameVar,
+      clientEmail: clientEmailVar,
+      clientMobile: clientMobileVar
     });
 
     res.json({ success: true, message: `Materials shared via ${sentVia}`, data: log });
@@ -304,6 +307,18 @@ exports.getShareHistory = async (req, res) => {
   try {
     const { cmpny_id } = req.params;
     const history = await MarketingShareLog.find({ cmpny_id }).sort({ createdAt: -1 });
+    res.json({ success: true, data: history });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.getAllShareHistory = async (req, res) => {
+  try {
+    const history = await MarketingShareLog.find()
+      .populate("cmpny_id", "companyName exhibitorName email mobile companyEmail companyMobile contacts category dataSource")
+      .populate("materials.material_id", "fileType")
+      .sort({ createdAt: -1 });
     res.json({ success: true, data: history });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

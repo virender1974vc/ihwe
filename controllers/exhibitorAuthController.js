@@ -599,6 +599,52 @@ class ExhibitorAuthController {
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
             }
 
+            // Emit live socket event to admin panel
+            try {
+                const io = req.app.get('io');
+                if (io) {
+                    // Map field keys to display-friendly names
+                    const FIELD_LABELS = {
+                        fasciaName: 'Fascia Name',
+                        typeOfBusiness: 'Type of Business',
+                        industrySector: 'Industry Sector',
+                        website: 'Website',
+                        gstNo: 'GST No.',
+                        panNo: 'PAN No.',
+                        landlineNo: 'Landline',
+                        companyEmail: 'Company Email',
+                        address: 'Address',
+                        city: 'City',
+                        state: 'State',
+                        country: 'Country',
+                        pincode: 'Pincode',
+                        companyDescription: 'Company Description',
+                        brandName: 'Brand Name',
+                        teamMembers: 'Team Members',
+                        socialMedia: 'Social Media Links',
+                        contact1: 'Primary Contact',
+                        contact2: 'Secondary Contact',
+                    };
+
+                    const changedFields = Object.keys(update)
+                        .filter(k => FIELD_LABELS[k])
+                        .map(k => FIELD_LABELS[k]);
+
+                    let actionText = changedFields.length > 0
+                        ? changedFields.slice(0, 3).join(', ') + (changedFields.length > 3 ? ` +${changedFields.length - 3} more` : '')
+                        : 'Profile Details';
+
+                    io.to('admin_room').emit('profile_updated', {
+                        clientId: String(updated._id),
+                        companyName: updated.exhibitorName || updated.fasciaName || 'An Exhibitor',
+                        action: actionText,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (socketErr) {
+                console.error('Socket emit error (non-critical):', socketErr.message);
+            }
+
             console.log('Profile updated successfully for:', targetId);
             res.status(200).json({ success: true, message: 'Profile updated and synced successfully', data: updated });
         } catch (error) {
