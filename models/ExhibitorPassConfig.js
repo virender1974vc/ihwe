@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const exhibitorPassConfigSchema = new mongoose.Schema({
     passType: {
         type: String,
-        enum: ['exhibitor', 'vehicle', 'service', 'visitor'],
+        enum: ['exhibitor', 'vehicle', 'service', 'visitor', 'lunch', 'water', 'delegate'],
         required: true,
         unique: true
     },

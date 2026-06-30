@@ -488,3 +488,103 @@ exports.createOfflineRegistration = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+exports.createExhibitorComplimentaryRegistration = async (req, res) => {
+    try {
+        const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+        const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
+        const exhibitorId = req.user.id;
+        const exhibitor = await ExhibitorRegistration.findById(exhibitorId);
+        if (!exhibitor) {
+            return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+        }
+
+        const delegateConfig = await ExhibitorPassConfig.findOne({ passType: 'delegate', isActive: true });
+        const configuredQuota = Number(delegateConfig?.complimentaryQuota || 0);
+        const exhibitorQuota = Number(exhibitor.entitlements?.delegatePassQuota || 0);
+        const quota = exhibitorQuota > 0 ? exhibitorQuota : configuredQuota;
+        const used = exhibitor.entitlements?.delegatePassUsed || 0;
+
+        if (used >= quota) {
+            return res.status(400).json({ success: false, message: 'Complimentary delegate quota exceeded' });
+        }
+
+        const { ...personalDetails } = req.body;
+
+        if (req.file) {
+            personalDetails.profileImage = `/uploads/delegates/${req.file.filename}`;
+        }
+        const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
+        let newRegNo = 'DEL-IHWE-1001';
+        if (lastReg && lastReg.regNo && lastReg.regNo.startsWith('DEL-IHWE-')) {
+            const lastNumber = parseInt(lastReg.regNo.replace('DEL-IHWE-', ''), 10);
+            if (!isNaN(lastNumber)) {
+                newRegNo = `DEL-IHWE-${lastNumber + 1}`;
+            }
+        }
+
+        const registration = await DelegateRegistration.create({
+            ...personalDetails,
+            regNo: newRegNo,
+            paymentStatus: 'paid',
+            paymentMode: 'exhibitor_complimentary',
+            paymentRemarks: `Exhibitor Complimentary: ${exhibitor.companyName}`,
+            totalAmount: 0
+        });
+
+        // Increment used quota
+        exhibitor.entitlements.delegatePassUsed = used + 1;
+        await exhibitor.save();
+
+        // Send emails/whatsapp
+        try {
+            const emailHtml = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
+                <h2 style="color: #1a5c2a; text-align: center; border-bottom: 2px solid #22c55e; padding-bottom: 10px;">Delegate Registration Confirmed</h2>
+                <p style="font-size: 16px; color: #374151;">Dear <strong>${registration.title} ${registration.fullName}</strong>,</p>
+                <p style="color: #4b5563; line-height: 1.6;">Thank you for registering for the <strong>9th International Health & Wellness Expo (IHWE) 2026</strong>. We are delighted to confirm that your delegate registration has been successfully completed as a complimentary pass from <strong>${exhibitor.companyName}</strong>.</p>
+                <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                    <h3 style="color: #1a5c2a; margin-top: 0;">Registration Details</h3>
+                    <ul style="list-style: none; padding-left: 0;">
+                        <li style="margin-bottom: 5px;"><strong>Registration No:</strong> ${registration.regNo}</li>
+                        <li style="margin-bottom: 5px;"><strong>Status:</strong> ✅ Confirmed</li>
+                        <li style="margin-bottom: 5px;"><strong>Pass Type:</strong> Complimentary (Exhibitor)</li>
+                    </ul>
+                </div>
+                <div style="background-color: #f0fdf4; padding: 15px; border-radius: 6px; border-left: 4px solid #1a5c2a;">
+                    <h3 style="color: #1a5c2a; margin-top: 0;">Event Details</h3>
+                    <ul style="list-style: none; padding-left: 0; margin-bottom: 0;">
+                        <li style="margin-bottom: 5px;"><strong>Venue:</strong> Bharat Mandapam (Pragati Maidan), New Delhi</li>
+                        <li><strong>Dates:</strong> 21–23 August 2026</li>
+                    </ul>
+                </div>
+                <p style="margin-top: 25px; color: #4b5563; font-size: 14px;">Please carry this confirmation email or your digital/printed delegate pass while visiting the venue.</p>
+                <p style="margin-top: 20px; color: #1a5c2a; font-weight: bold;">Warm Regards,<br>Team IHWE 2026<br><span style="font-size: 12px; font-weight: normal; color: #6b7280;">Namo Gange Wellness Pvt. Ltd.</span></p>
+            </div>
+            `;
+            if (registration.email) {
+                emailService.sendEmail({
+                    to: registration.email,
+                    subject: 'Delegate Registration Confirmed - 9th IHWE 2026',
+                    html: emailHtml
+                });
+            }
+        } catch (err) {
+            console.error("Failed to send complimentary delegate email:", err);
+        }
+
+        try {
+            let waMessage = `Namo Gange Namaskar!\n\nDear ${registration.title} ${registration.fullName},\n\nThank you for registering for the *9th International Health & Wellness Expo (IHWE) 2026*. We are delighted to confirm that your delegate registration has been successfully completed.\n\n*Registration Details*\n- Registration No: ${registration.regNo}\n- Delegate Name: ${registration.title} ${registration.fullName}\n- Registration Status: ✅ Confirmed\n- Pass Type: Complimentary (${exhibitor.companyName})\n\n*Event Details*\n- Venue: Bharat Mandapam (Pragati Maidan), New Delhi\n- Dates: 21–23 August 2026\n\nPlease carry this confirmation email or your digital/printed delegate pass while visiting the venue.\n\nWarm Regards,\n*Team IHWE 2026*\nNamo Gange Wellness Pvt. Ltd.`;
+            if (registration.mobile) {
+                await sendWhatsAppMessage(registration.mobile, waMessage, registration.fullName);
+            }
+        } catch (err) {
+            console.error("Failed to send complimentary delegate whatsapp:", err);
+        }
+
+        res.json({ success: true, message: 'Complimentary delegate registration created successfully', registration });
+    } catch (error) {
+        console.error('Error creating complimentary delegate registration:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

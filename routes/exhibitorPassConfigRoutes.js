@@ -9,6 +9,7 @@ const defaultConfigs = [
     { passType: 'vehicle', title: 'Vehicle Pass', subtitle: 'For Exhibitor Vehicles', complimentaryQuota: 2, totalQuota: 10, price: 500, displayOrder: 2 },
     { passType: 'service', title: 'Service Pass', subtitle: 'For Staff, Workers', complimentaryQuota: 4, totalQuota: 10, price: 150, displayOrder: 3 },
     { passType: 'visitor', title: 'Visitor Pass', subtitle: 'For Invited Visitors', complimentaryQuota: 10, totalQuota: 20, price: 200, displayOrder: 4 },
+    { passType: 'delegate', title: 'Delegate Pass', subtitle: 'For Conference Access', complimentaryQuota: 0, totalQuota: 0, price: 0, displayOrder: 5 },
 ];
 
 const ensureDefaults = async () => {

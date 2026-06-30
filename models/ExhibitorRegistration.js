@@ -252,7 +252,14 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
             visitor: Boolean
         },
         verificationStatus: { type: String, enum: ['Pending', 'Verified', 'Rejected'], default: 'Pending' }
-    }]
+    }],
+    entitlements: {
+        lunchCount: { type: Number, default: 0 },
+        waterBottleCount: { type: Number, default: 0 },
+        dinnerCount: { type: Number, default: 0 },
+        delegatePassQuota: { type: Number, default: 0 },
+        delegatePassUsed: { type: Number, default: 0 }
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

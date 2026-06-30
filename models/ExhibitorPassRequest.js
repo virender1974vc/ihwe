@@ -8,7 +8,7 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
     },
     passType: {
         type: String,
-        enum: ['exhibitor', 'vehicle', 'service', 'visitor'],
+        enum: ['exhibitor', 'vehicle', 'service', 'visitor', 'lunch', 'water', 'dinner'],
         required: true
     },
     status: {
