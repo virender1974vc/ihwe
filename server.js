@@ -96,6 +96,7 @@ const invoiceRoutes = require("./routes/invoiceRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
 const debitNoteRoutes = require("./routes/debitNoteRoutes");
 const activityLogRoutes = require("./routes/activity/activityLogRoutes");
+const exhibitorActivityLogRoutes = require("./routes/exhibitorActivityLogRoutes");
 const corporateVisitorRoutes = require("./routes/visitor/corporateVisitorRoutes");
 const generalVisitorRoutes = require("./routes/visitor/generalVisitorRoutes");
 const freeHealthCampRoutes = require("./routes/visitor/freeHealthCampRoutes");
@@ -362,6 +363,7 @@ app.use("/api/upcoming-events", require("./routes/upcomingEventRoutes"));
 app.use("/api/upcoming-brands", require("./routes/upcomingBrands"));
 
 app.use("/api/activity-logs", activityLogRoutes);
+app.use("/api/exhibitor-activity-logs", exhibitorActivityLogRoutes);
 app.use("/api/banks", bankListRoutes);
 app.use("/api/bank-options", bankOptionRoutes);
 app.use("/api/whatsapp", commonWhatsappRoutes);
