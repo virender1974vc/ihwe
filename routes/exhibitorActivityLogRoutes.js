@@ -31,7 +31,7 @@ router.post('/', async (req, res) => {
         res.status(201).json({ success: true, data: newLog });
     } catch (error) {
         console.error('Error creating activity log:', error);
-        res.status(500).json({ success: false, message: 'Server Error' });
+        res.status(500).json({ success: false, message: 'Server Error', error: error.message });
     }
 });
 
@@ -42,12 +42,12 @@ router.get('/', async (req, res) => {
         const limit = parseInt(req.query.limit, 10) || 50;
         const skip = (page - 1) * limit;
 
-        const logs = await ExhibitorActivityLog.find()
+        const logs = await ExhibitorActivityLog.find({ companyName: { $exists: true } })
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit);
 
-        const total = await ExhibitorActivityLog.countDocuments();
+        const total = await ExhibitorActivityLog.countDocuments({ companyName: { $exists: true } });
 
         res.status(200).json({
             success: true,

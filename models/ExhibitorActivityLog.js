@@ -30,4 +30,4 @@ const exhibitorActivityLogSchema = new mongoose.Schema({
   timestamps: true
 });
 
-module.exports = mongoose.model('ExhibitorActivityLog', exhibitorActivityLogSchema);
+module.exports = mongoose.model('ExhibitorActivityLog', exhibitorActivityLogSchema, 'activitylogs');
