@@ -882,6 +882,23 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
             }
 
+            if (passType === 'service') {
+                if (!Array.isArray(personnel) || personnel.length !== Number(quantity)) {
+                    return res.status(400).json({ success: false, message: 'Service personnel details are required for every pass' });
+                }
+
+                const hasInvalidAadhaar = personnel.some(person =>
+                    String(person?.aadhaarNumber || '').replace(/\D/g, '').length !== 12
+                );
+                if (hasInvalidAadhaar) {
+                    return res.status(400).json({ success: false, message: 'A valid 12-digit Aadhaar number is required for every service pass holder' });
+                }
+
+                personnel.forEach(person => {
+                    person.aadhaarNumber = String(person.aadhaarNumber).replace(/\D/g, '');
+                });
+            }
+
             const config = await ExhibitorPassConfig.findOne({ passType, isActive: true });
             if (!config) {
                 return res.status(404).json({ success: false, message: 'Pass configuration not found or inactive' });
