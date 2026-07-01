@@ -94,7 +94,9 @@ const getAccountOverview = async (req, res) => {
 
     const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
 
-    const docIds = [
+    const activeInvoices = invoices.filter((invoice) => !isCancelledDoc(invoice));
+    const activeProformaInvoices = proformaInvoices.filter((estimate) => !isCancelledDoc(estimate));
+    const allDocIds = [
       ...invoices.map((i) => i._id.toString()),
       ...proformaInvoices.map((e) => e._id.toString()),
     ];
