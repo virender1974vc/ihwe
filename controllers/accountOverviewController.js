@@ -124,23 +124,42 @@ const getAccountOverview = async (req, res) => {
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
     let paidBreakdown = [];
     if (payments.length > 0) {
-        paidBreakdown = payments.map(p => {
-             let forDoc = invoices.find(i => i._id.toString() === p.invoice_id) || proformaInvoices.find(pi => pi._id.toString() === p.invoice_id);
-             let forNo = forDoc ? (forDoc.invoice_no || forDoc.est_no) : p.invoice_id;
-             let forType = forDoc ? (forDoc.invoice_no ? 'Invoice' : 'Proforma Invoice') : 'Unknown';
-             return {
-                 id: p._id,
-                 no: p.ex_no || p.payment_no || 'Payment',
-                 amount: parseFloat(p.amount_text) || 0,
-                 date: p.payment_date || p.added,
-                 type: 'Payment',
-                 forNo,
-                 forType
-             };
+      paidBreakdown = payments.map(p => {
+        let forDoc = invoices.find(i => i._id.toString() === p.invoice_id) || proformaInvoices.find(pi => pi._id.toString() === p.invoice_id);
+        let forNo = forDoc ? (forDoc.invoice_no || forDoc.est_no) : p.invoice_id;
+        let forType = forDoc ? (forDoc.invoice_no ? 'Invoice' : 'Proforma Invoice') : 'Unknown';
+        return {
+          id: p._id,
+          no: p.ex_no || p.payment_no || 'Payment',
+          amount: parseFloat(p.amount_text) || 0,
+          date: p.payment_date || p.added,
+          type: 'Payment',
+          forNo,
+          forType
+        };
+      });
+    }
+    let onlinePaidAmount = 0;
+    if (exhibitor?.paymentHistory && exhibitor.paymentHistory.length > 0) {
+      exhibitor.paymentHistory.forEach(ph => {
+        const amt = parseFloat(ph.amount) || 0;
+        onlinePaidAmount += amt;
+        paidBreakdown.push({
+          id: ph._id || ph.transactionId || Math.random().toString(),
+          no: ph.transactionId || 'Online Payment',
+          amount: amt,
+          date: ph.paidAt,
+          type: 'Online Payment',
+          forNo: 'Registration',
+          forType: 'Registration'
         });
+      });
+      paidAmount += onlinePaidAmount;
     } else if (paidAmount === 0 && exhibitor?.amountPaid) {
-      paidAmount = parseFloat(exhibitor.amountPaid) || 0;
-      paidBreakdown = [{ no: 'Registration Paid', amount: paidAmount, type: 'Registration', date: exhibitor?.createdAt }];
+      const amt = parseFloat(exhibitor.amountPaid) || 0;
+      onlinePaidAmount += amt;
+      paidAmount += amt;
+      paidBreakdown.push({ no: 'Registration Paid', amount: amt, type: 'Registration', date: exhibitor?.createdAt });
     }
 
     // 3. Compute Remaining Balance
@@ -148,27 +167,36 @@ const getAccountOverview = async (req, res) => {
     let remainingBreakdown = [];
 
     if (dueBreakdown.length === 1 && dueBreakdown[0].type === 'Registration') {
-        const rem = Math.max(0, dueBreakdown[0].amount - paidAmount);
-        if (rem > 0) {
-            remainingBreakdown.push({
-                ...dueBreakdown[0],
-                paidAmount: paidAmount,
-                remainingAmount: rem
-            });
-        }
-    } else {
-        dueBreakdown.forEach(doc => {
-           const docPayments = payments.filter((p) => p.invoice_id === doc.id?.toString());
-           const docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
-           const rem = Math.max(0, doc.amount - docPaid);
-           if (rem > 0) {
-               remainingBreakdown.push({
-                   ...doc,
-                   paidAmount: docPaid,
-                   remainingAmount: rem
-               });
-           }
+      const rem = Math.max(0, dueBreakdown[0].amount - paidAmount);
+      if (rem > 0) {
+        remainingBreakdown.push({
+          ...dueBreakdown[0],
+          paidAmount: paidAmount,
+          remainingAmount: rem
         });
+      }
+    } else {
+      let unallocatedOnlinePaid = onlinePaidAmount;
+      dueBreakdown.forEach(doc => {
+        const docPayments = payments.filter((p) => p.invoice_id === doc.id?.toString());
+        let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+
+        let docRemaining = Math.max(0, doc.amount - docPaid);
+        if (docRemaining > 0 && unallocatedOnlinePaid > 0) {
+          const allocation = Math.min(docRemaining, unallocatedOnlinePaid);
+          docPaid += allocation;
+          unallocatedOnlinePaid -= allocation;
+          docRemaining -= allocation;
+        }
+
+        if (docRemaining > 0) {
+          remainingBreakdown.push({
+            ...doc,
+            paidAmount: docPaid,
+            remainingAmount: docRemaining
+          });
+        }
+      });
     }
 
     if (totalDue === 0 && exhibitor?.balanceAmount) {
@@ -223,10 +251,19 @@ const getAccountOverview = async (req, res) => {
       id: dn._id,
       timestamp: dn.added || new Date(),
     }));
+    let recentDocsUnallocated = onlinePaidAmount;
     recentDocs = recentDocs.map((doc) => {
       if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
         const docPayments = payments.filter((p) => p.invoice_id === doc.id.toString());
-        const docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+        let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+
+        let docRemaining = Math.max(0, parseFloat(doc.amount) - docPaid);
+        if (docRemaining > 0 && recentDocsUnallocated > 0) {
+          const allocation = Math.min(docRemaining, recentDocsUnallocated);
+          docPaid += allocation;
+          recentDocsUnallocated -= allocation;
+        }
+
         if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
         else if (docPaid > 0) doc.status = "Partial";
         else doc.status = doc.documentType === "Invoice" ? "Unpaid" : "Sent";
@@ -255,9 +292,9 @@ const getAccountOverview = async (req, res) => {
 
     const activityLogs = activityQuery
       ? await ActivityLog.find(activityQuery)
-          .sort({ createdAt: -1 })
-          .limit(12)
-          .lean()
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .lean()
       : [];
 
     const actorByDocumentNo = new Map();
