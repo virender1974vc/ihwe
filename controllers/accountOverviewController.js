@@ -21,6 +21,7 @@ const cleanActorName = (value) => {
   const cleaned = cleanText(value, "");
   return isGenericUserName(cleaned) ? "" : cleaned;
 };
+const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 
 const resolveCompanyAndExhibitor = async (companyId) => {
   let company = null;
@@ -93,28 +94,35 @@ const getAccountOverview = async (req, res) => {
 
     const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
 
-    const docIds = [
+    const activeInvoices = invoices.filter((invoice) => !isCancelledDoc(invoice));
+    const activeProformaInvoices = proformaInvoices.filter((estimate) => !isCancelledDoc(estimate));
+    const allDocIds = [
       ...invoices.map((i) => i._id.toString()),
       ...proformaInvoices.map((e) => e._id.toString()),
     ];
+    const payableDocIds = new Set([
+      ...activeInvoices.map((i) => i._id.toString()),
+      ...activeProformaInvoices.map((e) => e._id.toString()),
+    ]);
 
-    const payments = docIds.length
-      ? await Payment.find({ invoice_id: { $in: docIds } }).lean()
+    const allPayments = allDocIds.length
+      ? await Payment.find({ invoice_id: { $in: allDocIds } }).lean()
       : [];
+    const payments = allPayments.filter((payment) => payableDocIds.has(String(payment.invoice_id)));
     let totalDue = 0;
     let dueBreakdown = [];
-    if (invoices.length > 0) {
-      totalDue = invoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-      dueBreakdown = invoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
+    if (activeInvoices.length > 0) {
+      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
     } else if (exhibitor?.financeBreakdown?.netPayable) {
       totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (exhibitor?.totalPayable) {
       totalDue = parseFloat(exhibitor.totalPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Total Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
-    } else if (proformaInvoices.length > 0) {
-      totalDue = proformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-      dueBreakdown = proformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
+    } else if (activeProformaInvoices.length > 0) {
+      totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
     }
 
     // 2. Compute Paid Amount
@@ -178,7 +186,7 @@ const getAccountOverview = async (req, res) => {
     } else {
       let unallocatedOnlinePaid = onlinePaidAmount;
       dueBreakdown.forEach(doc => {
-        const docPayments = payments.filter((p) => p.invoice_id === doc.id?.toString());
+        const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
         let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
 
         let docRemaining = Math.max(0, doc.amount - docPaid);
@@ -211,9 +219,10 @@ const getAccountOverview = async (req, res) => {
       documentNo: inv.invoice_no,
       date: inv.invoice_date || inv.added,
       amount: inv.finalAmount,
-      status: "Unpaid",
+      status: isCancelledDoc(inv) ? "Cancelled" : "Unpaid",
       id: inv._id,
       timestamp: inv.added || new Date(),
+      cancelled: isCancelledDoc(inv),
     }));
 
     proformaInvoices.forEach((pi) => recentDocs.push({
@@ -221,9 +230,10 @@ const getAccountOverview = async (req, res) => {
       documentNo: pi.est_no,
       date: pi.supply_date || pi.added,
       amount: pi.finalAmount,
-      status: "Sent",
+      status: isCancelledDoc(pi) ? "Cancelled" : "Sent",
       id: pi._id,
       timestamp: pi.added || new Date(),
+      cancelled: isCancelledDoc(pi),
     }));
 
     creditNotes.forEach((cn) => {
@@ -254,7 +264,8 @@ const getAccountOverview = async (req, res) => {
     let recentDocsUnallocated = onlinePaidAmount;
     recentDocs = recentDocs.map((doc) => {
       if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
-        const docPayments = payments.filter((p) => p.invoice_id === doc.id.toString());
+        if (doc.cancelled) return doc;
+        const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
         let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
 
         let docRemaining = Math.max(0, parseFloat(doc.amount) - docPaid);
