@@ -102,14 +102,19 @@ const getAccountOverview = async (req, res) => {
       ? await Payment.find({ invoice_id: { $in: docIds } }).lean()
       : [];
     let totalDue = 0;
+    let dueBreakdown = [];
     if (invoices.length > 0) {
       totalDue = invoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = invoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
     } else if (exhibitor?.financeBreakdown?.netPayable) {
       totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
+      dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (exhibitor?.totalPayable) {
       totalDue = parseFloat(exhibitor.totalPayable) || 0;
+      dueBreakdown = [{ no: 'Registration (Total Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (proformaInvoices.length > 0) {
       totalDue = proformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = proformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
     }
 
     // 2. Compute Paid Amount
@@ -117,12 +122,55 @@ const getAccountOverview = async (req, res) => {
     // amount_text is the amount actually RECEIVED in that payment (see PaymentTable.jsx
     // where Balance = f_amount - amount_text). Paid amount must sum amount_text.
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
-    if (paidAmount === 0 && exhibitor?.amountPaid) {
+    let paidBreakdown = [];
+    if (payments.length > 0) {
+        paidBreakdown = payments.map(p => {
+             let forDoc = invoices.find(i => i._id.toString() === p.invoice_id) || proformaInvoices.find(pi => pi._id.toString() === p.invoice_id);
+             let forNo = forDoc ? (forDoc.invoice_no || forDoc.est_no) : p.invoice_id;
+             let forType = forDoc ? (forDoc.invoice_no ? 'Invoice' : 'Proforma Invoice') : 'Unknown';
+             return {
+                 id: p._id,
+                 no: p.ex_no || p.payment_no || 'Payment',
+                 amount: parseFloat(p.amount_text) || 0,
+                 date: p.payment_date || p.added,
+                 type: 'Payment',
+                 forNo,
+                 forType
+             };
+        });
+    } else if (paidAmount === 0 && exhibitor?.amountPaid) {
       paidAmount = parseFloat(exhibitor.amountPaid) || 0;
+      paidBreakdown = [{ no: 'Registration Paid', amount: paidAmount, type: 'Registration', date: exhibitor?.createdAt }];
     }
 
     // 3. Compute Remaining Balance
     let remainingBalance = Math.max(0, totalDue - paidAmount);
+    let remainingBreakdown = [];
+
+    if (dueBreakdown.length === 1 && dueBreakdown[0].type === 'Registration') {
+        const rem = Math.max(0, dueBreakdown[0].amount - paidAmount);
+        if (rem > 0) {
+            remainingBreakdown.push({
+                ...dueBreakdown[0],
+                paidAmount: paidAmount,
+                remainingAmount: rem
+            });
+        }
+    } else {
+        dueBreakdown.forEach(doc => {
+           const docPayments = payments.filter((p) => p.invoice_id === doc.id?.toString());
+           const docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+           const rem = Math.max(0, doc.amount - docPaid);
+           if (rem > 0) {
+               remainingBreakdown.push({
+                   ...doc,
+                   paidAmount: docPaid,
+                   remainingAmount: rem
+               });
+           }
+        });
+    }
+
     if (totalDue === 0 && exhibitor?.balanceAmount) {
       remainingBalance = parseFloat(exhibitor.balanceAmount) || 0;
     }
@@ -394,6 +442,9 @@ const getAccountOverview = async (req, res) => {
           totalDue,
           paidAmount,
           remainingBalance,
+          dueBreakdown,
+          paidBreakdown,
+          remainingBreakdown,
         },
         recentDocuments: recentDocs,
         paymentSchedule,
