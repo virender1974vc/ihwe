@@ -62,7 +62,7 @@ const getFiscalYear = () => {
 
 debitNoteSchema.statics.generateNextDebitNoteNo = async function () {
   const fiscalYear = getFiscalYear();
-  const prefix = `NGW/DN/${fiscalYear}/`;
+  const prefix = `NGW/CN/${fiscalYear}/`;
 
   const lastNote = await this.findOne({
     debit_note_no: { $regex: `^${prefix}` },

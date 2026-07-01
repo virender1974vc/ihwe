@@ -65,6 +65,19 @@ const createInvoice = async (req, res) => {
       }
     }
 
+    if (req.body.estimate_no) {
+      const existingInvoice = await Invoice.findOne({
+        estimate_no: req.body.estimate_no,
+        $or: [{ status: { $ne: "cancelled" } }, { status: { $exists: false } }],
+      });
+      if (existingInvoice) {
+        return res.status(409).json({
+          message: "Invoice already exists against this Proforma Invoice / Estimate",
+          data: existingInvoice,
+        });
+      }
+    }
+
     // Generate invoice number
     const invoice_no = await Invoice.generateNextInvoiceNumber();
 
@@ -99,6 +112,19 @@ const createInvoice = async (req, res) => {
 // 📍 UPDATE invoice
 const updateInvoice = async (req, res) => {
   try {
+    if (req.body.estimate_no) {
+      const duplicateInvoice = await Invoice.findOne({
+        estimate_no: req.body.estimate_no,
+        $or: [{ status: { $ne: "cancelled" } }, { status: { $exists: false } }],
+      });
+      if (duplicateInvoice && String(duplicateInvoice._id) !== String(req.params.id)) {
+        return res.status(409).json({
+          message: "Invoice already exists against this Proforma Invoice / Estimate",
+          data: duplicateInvoice,
+        });
+      }
+    }
+
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
       req.body,

@@ -35,7 +35,8 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
         designation: { type: String, trim: true },
         email: { type: String, trim: true, lowercase: true },
         phone: { type: String, trim: true },
-        gender: { type: String, enum: ['male', 'female', 'other'] }
+        gender: { type: String, enum: ['male', 'female', 'other'] },
+        aadhaarNumber: { type: String, trim: true }
     }],
     paymentStatus: {
         type: String,

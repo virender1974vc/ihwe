@@ -1,4 +1,5 @@
 const Estimate = require("../models/Estimate");
+const Invoice = require("../models/Invoice");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const ChatMessage = require('../models/ChatMessage');
@@ -8,10 +9,51 @@ const emailService = require('../utils/emailService');
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 
+const getFiscalYear = () => {
+  const date = new Date();
+  const currentYear = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const startYear = month >= 4 ? currentYear : currentYear - 1;
+  const endYear = month >= 4 ? currentYear + 1 : currentYear;
+  return `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
+};
+
+const getDocumentSeq = (docNo = "") => {
+  const seq = parseInt(String(docNo).split("/").pop(), 10);
+  return Number.isNaN(seq) ? null : seq;
+};
+
+const generateNextProformaNo = async () => {
+  const fiscalYear = getFiscalYear();
+  const prefix = `NGW/${fiscalYear}/PI/`;
+  const invoicePrefix = `NGW/${fiscalYear}/INV/`;
+
+  const [estimates, invoices] = await Promise.all([
+    Estimate.find({ est_no: { $regex: `^${prefix}` } }).select("est_no").lean(),
+    Invoice.find({ estimate_no: { $regex: `^${prefix}` } }).select("estimate_no invoice_no").lean(),
+  ]);
+
+  const maxEstimateSeq = estimates.reduce((max, estimate) => {
+    const seq = getDocumentSeq(estimate.est_no);
+    return seq === null ? max : Math.max(max, seq);
+  }, 0);
+
+  const maxInvoiceSeq = invoices.reduce((max, invoice) => {
+    const estimateSeq = getDocumentSeq(invoice.estimate_no);
+    const invoiceSeq = String(invoice.invoice_no || "").startsWith(invoicePrefix)
+      ? getDocumentSeq(invoice.invoice_no)
+      : null;
+    return Math.max(max, estimateSeq || 0, invoiceSeq || 0);
+  }, 0);
+
+  const nextSeq = Math.max(maxEstimateSeq, maxInvoiceSeq) + 1;
+  return `${prefix}${String(nextSeq).padStart(3, "0")}`;
+};
+
 // Add estimate
 const addEstimate = async (req, res) => {
   try {
-    const newEstimateNo = await Estimate.generateNextEstimateNo();
+    const newEstimateNo = await generateNextProformaNo();
 
     const estimateBody = {
       ...req.body,
@@ -90,7 +132,7 @@ const getGroupedEstimateData = async (req, res) => {
                 },
               },
             },
-            { $project: { _id: 1, pi_no: 1, added: 1 } },
+            { $project: { _id: 1, pi_no: 1, added: 1, status: 1 } },
           ],
           as: "performaInvoice",
         },
@@ -111,7 +153,7 @@ const getGroupedEstimateData = async (req, res) => {
                 },
               },
             },
-            { $project: { _id: 1, invoice_no: 1, added: 1 } },
+            { $project: { _id: 1, invoice_no: 1, added: 1, status: 1, invoice_date: 1, supply_date: 1, updated: 1, finalAmount: 1 } },
           ],
           as: "invoice",
         },
@@ -137,6 +179,7 @@ const getGroupedEstimateData = async (req, res) => {
           city: 1,
           pincode: 1,
           added_by: 1,
+          status: 1,
           updated: 1,
           items: 1,
           supply_date: 1,
@@ -195,7 +238,7 @@ const getAllEstimates = async (req, res) => {
                 },
               },
             },
-            { $project: { _id: 1, pi_no: 1, updated: 1, finalAmount: 1 } },
+            { $project: { _id: 1, pi_no: 1, updated: 1, finalAmount: 1, status: 1 } },
           ],
           as: "performaInvoice",
         },
@@ -215,7 +258,7 @@ const getAllEstimates = async (req, res) => {
                 },
               },
             },
-            { $project: { _id: 1, invoice_no: 1, added: 1 } },
+            { $project: { _id: 1, invoice_no: 1, added: 1, status: 1, invoice_date: 1, supply_date: 1, updated: 1, finalAmount: 1 } },
           ],
           as: "invoice",
         },
@@ -240,6 +283,7 @@ const getAllEstimates = async (req, res) => {
           city: 1,
           pincode: 1,
           added_by: 1,
+          status: 1,
           updated: 1,
           items: 1,
           supply_date: 1,
@@ -358,7 +402,7 @@ const deleteEstimate = async (req, res) => {
 // Get next estimate number
 const getNextEstimateNumber = async (req, res) => {
   try {
-    const nextNo = await Estimate.generateNextEstimateNo();
+    const nextNo = await generateNextProformaNo();
     res.status(200).json({ est_no: nextNo });
   } catch (error) {
     res.status(500).json({
