@@ -222,6 +222,27 @@ class ExhibitorAuthController {
                 { expiresIn: '7d' }
             );
 
+            // Log login activity
+            try {
+                const ExhibitorActivityLog = require('../models/ExhibitorActivityLog');
+                const newLog = new ExhibitorActivityLog({
+                    companyName: exhibitor.exhibitorName || 'Unknown Company',
+                    exhibitorId: exhibitor._id,
+                    action: 'Logged into Exhibitor Dashboard',
+                    details: 'Successful OTP verification',
+                    module: 'Authentication',
+                    status: 'Success'
+                });
+                await newLog.save();
+                
+                const io = req.app.get('io');
+                if (io) {
+                    io.emit('new_exhibitor_activity_log', newLog);
+                }
+            } catch (logErr) {
+                console.error('Failed to log login activity:', logErr);
+            }
+
             res.status(200).json({
                 success: true,
                 message: 'Login successful',
