@@ -222,6 +222,27 @@ class ExhibitorAuthController {
                 { expiresIn: '7d' }
             );
 
+            // Log login activity
+            try {
+                const ExhibitorActivityLog = require('../models/ExhibitorActivityLog');
+                const newLog = new ExhibitorActivityLog({
+                    companyName: exhibitor.exhibitorName || 'Unknown Company',
+                    exhibitorId: exhibitor._id,
+                    action: 'Logged into Exhibitor Dashboard',
+                    details: 'Successful OTP verification',
+                    module: 'Authentication',
+                    status: 'Success'
+                });
+                await newLog.save();
+                
+                const io = req.app.get('io');
+                if (io) {
+                    io.emit('new_exhibitor_activity_log', newLog);
+                }
+            } catch (logErr) {
+                console.error('Failed to log login activity:', logErr);
+            }
+
             res.status(200).json({
                 success: true,
                 message: 'Login successful',
@@ -861,6 +882,23 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
             }
 
+            if (passType === 'service') {
+                if (!Array.isArray(personnel) || personnel.length !== Number(quantity)) {
+                    return res.status(400).json({ success: false, message: 'Service personnel details are required for every pass' });
+                }
+
+                const hasInvalidAadhaar = personnel.some(person =>
+                    String(person?.aadhaarNumber || '').replace(/\D/g, '').length !== 12
+                );
+                if (hasInvalidAadhaar) {
+                    return res.status(400).json({ success: false, message: 'A valid 12-digit Aadhaar number is required for every service pass holder' });
+                }
+
+                personnel.forEach(person => {
+                    person.aadhaarNumber = String(person.aadhaarNumber).replace(/\D/g, '');
+                });
+            }
+
             const config = await ExhibitorPassConfig.findOne({ passType, isActive: true });
             if (!config) {
                 return res.status(404).json({ success: false, message: 'Pass configuration not found or inactive' });
@@ -982,6 +1020,26 @@ class ExhibitorAuthController {
             });
 
             await newRequest.save();
+
+            const allocatedEntries = passType === 'vehicle' ? (vehicles || []) : (personnel || []);
+            const allocatedTeamMemberIds = allocatedEntries
+                .map(entry => entry.teamMemberId)
+                .filter(Boolean);
+
+            if (allocatedTeamMemberIds.length > 0) {
+                const exhibitor = await ExhibitorRegistration.findById(exhibitorId);
+                if (exhibitor) {
+                    const allocatedIdSet = new Set(allocatedTeamMemberIds.map(id => String(id)));
+                    exhibitor.teamMembers.forEach(member => {
+                        if (allocatedIdSet.has(String(member._id))) {
+                            member.passes = member.passes || {};
+                            member.passes[passType] = true;
+                        }
+                    });
+                    exhibitor.markModified('teamMembers');
+                    await exhibitor.save();
+                }
+            }
 
             // Trigger Email (QR Code) and WhatsApp via Opus if automatically approved
             if (newRequest.status === 'approved') {

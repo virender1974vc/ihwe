@@ -5,6 +5,7 @@ const fs = require("fs");
 
 const {
   createDebitNote,
+  getNextDebitNoteNo,
   getDebitNotes,
   getDebitNoteById,
   updateDebitNote,
@@ -26,6 +27,7 @@ const attachmentStorage = multer.diskStorage({
 const attachmentUpload = multer({ storage: attachmentStorage });
 
 router.post("/", attachmentUpload.single("attachment"), createDebitNote);
+router.get("/next-number", getNextDebitNoteNo);
 router.get("/", getDebitNotes);
 router.get("/:id", getDebitNoteById);
 router.put("/:id", updateDebitNote);

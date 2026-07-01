@@ -30,6 +30,7 @@ const invoiceItemSchema = new mongoose.Schema({
 const InvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
+    source_estimate_id: { type: String, default: "" },
     estimate_no: { type: String, default: "" }, // Optional now
     invoice_no: { type: String, required: true, unique: true }, 
     type_of_invoice: { type: String, required: true },
@@ -40,6 +41,13 @@ const InvoiceSchema = new mongoose.Schema(
     
     gst_no: { type: String },
     supply_date: { type: String }, // Can be used as invoice date if not separate
+
+    company_name: { type: String },
+    company_addr: { type: String },
+    company_gst_no: { type: String },
+    event_name: { type: String },
+    event_place_of_supply: { type: String },
+    event_gst_no: { type: String },
     
     consignee_name: { type: String, required: true },
     consignee_addr: { type: String }, // Shipping

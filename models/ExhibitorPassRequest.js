@@ -22,6 +22,7 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
         min: 1
     },
     vehicles: [{
+        teamMemberId: { type: mongoose.Schema.Types.ObjectId },
         vehicleType: { type: String, enum: ['2-wheeler', '4-wheeler'] },
         vehicleNumber: { type: String, trim: true },
         name: { type: String, trim: true },
@@ -29,11 +30,13 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
         phone: { type: String, trim: true }
     }],
     personnel: [{
+        teamMemberId: { type: mongoose.Schema.Types.ObjectId },
         name: { type: String, trim: true },
         designation: { type: String, trim: true },
         email: { type: String, trim: true, lowercase: true },
         phone: { type: String, trim: true },
-        gender: { type: String, enum: ['male', 'female', 'other'] }
+        gender: { type: String, enum: ['male', 'female', 'other'] },
+        aadhaarNumber: { type: String, trim: true }
     }],
     paymentStatus: {
         type: String,

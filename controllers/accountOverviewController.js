@@ -21,6 +21,7 @@ const cleanActorName = (value) => {
   const cleaned = cleanText(value, "");
   return isGenericUserName(cleaned) ? "" : cleaned;
 };
+const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 
 const resolveCompanyAndExhibitor = async (companyId) => {
   let company = null;
@@ -97,19 +98,29 @@ const getAccountOverview = async (req, res) => {
       ...invoices.map((i) => i._id.toString()),
       ...proformaInvoices.map((e) => e._id.toString()),
     ];
+    const payableDocIds = new Set([
+      ...activeInvoices.map((i) => i._id.toString()),
+      ...activeProformaInvoices.map((e) => e._id.toString()),
+    ]);
 
-    const payments = docIds.length
-      ? await Payment.find({ invoice_id: { $in: docIds } }).lean()
+    const allPayments = allDocIds.length
+      ? await Payment.find({ invoice_id: { $in: allDocIds } }).lean()
       : [];
+    const payments = allPayments.filter((payment) => payableDocIds.has(String(payment.invoice_id)));
     let totalDue = 0;
-    if (invoices.length > 0) {
-      totalDue = invoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+    let dueBreakdown = [];
+    if (activeInvoices.length > 0) {
+      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
     } else if (exhibitor?.financeBreakdown?.netPayable) {
       totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
+      dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (exhibitor?.totalPayable) {
       totalDue = parseFloat(exhibitor.totalPayable) || 0;
-    } else if (proformaInvoices.length > 0) {
-      totalDue = proformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = [{ no: 'Registration (Total Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
+    } else if (activeProformaInvoices.length > 0) {
+      totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
     }
 
     // 2. Compute Paid Amount
@@ -117,12 +128,83 @@ const getAccountOverview = async (req, res) => {
     // amount_text is the amount actually RECEIVED in that payment (see PaymentTable.jsx
     // where Balance = f_amount - amount_text). Paid amount must sum amount_text.
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
-    if (paidAmount === 0 && exhibitor?.amountPaid) {
-      paidAmount = parseFloat(exhibitor.amountPaid) || 0;
+    let paidBreakdown = [];
+    if (payments.length > 0) {
+      paidBreakdown = payments.map(p => {
+        let forDoc = invoices.find(i => i._id.toString() === p.invoice_id) || proformaInvoices.find(pi => pi._id.toString() === p.invoice_id);
+        let forNo = forDoc ? (forDoc.invoice_no || forDoc.est_no) : p.invoice_id;
+        let forType = forDoc ? (forDoc.invoice_no ? 'Invoice' : 'Proforma Invoice') : 'Unknown';
+        return {
+          id: p._id,
+          no: p.ex_no || p.payment_no || 'Payment',
+          amount: parseFloat(p.amount_text) || 0,
+          date: p.payment_date || p.added,
+          type: 'Payment',
+          forNo,
+          forType
+        };
+      });
+    }
+    let onlinePaidAmount = 0;
+    if (exhibitor?.paymentHistory && exhibitor.paymentHistory.length > 0) {
+      exhibitor.paymentHistory.forEach(ph => {
+        const amt = parseFloat(ph.amount) || 0;
+        onlinePaidAmount += amt;
+        paidBreakdown.push({
+          id: ph._id || ph.transactionId || Math.random().toString(),
+          no: ph.transactionId || 'Online Payment',
+          amount: amt,
+          date: ph.paidAt,
+          type: 'Online Payment',
+          forNo: 'Registration',
+          forType: 'Registration'
+        });
+      });
+      paidAmount += onlinePaidAmount;
+    } else if (paidAmount === 0 && exhibitor?.amountPaid) {
+      const amt = parseFloat(exhibitor.amountPaid) || 0;
+      onlinePaidAmount += amt;
+      paidAmount += amt;
+      paidBreakdown.push({ no: 'Registration Paid', amount: amt, type: 'Registration', date: exhibitor?.createdAt });
     }
 
     // 3. Compute Remaining Balance
     let remainingBalance = Math.max(0, totalDue - paidAmount);
+    let remainingBreakdown = [];
+
+    if (dueBreakdown.length === 1 && dueBreakdown[0].type === 'Registration') {
+      const rem = Math.max(0, dueBreakdown[0].amount - paidAmount);
+      if (rem > 0) {
+        remainingBreakdown.push({
+          ...dueBreakdown[0],
+          paidAmount: paidAmount,
+          remainingAmount: rem
+        });
+      }
+    } else {
+      let unallocatedOnlinePaid = onlinePaidAmount;
+      dueBreakdown.forEach(doc => {
+        const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
+        let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+
+        let docRemaining = Math.max(0, doc.amount - docPaid);
+        if (docRemaining > 0 && unallocatedOnlinePaid > 0) {
+          const allocation = Math.min(docRemaining, unallocatedOnlinePaid);
+          docPaid += allocation;
+          unallocatedOnlinePaid -= allocation;
+          docRemaining -= allocation;
+        }
+
+        if (docRemaining > 0) {
+          remainingBreakdown.push({
+            ...doc,
+            paidAmount: docPaid,
+            remainingAmount: docRemaining
+          });
+        }
+      });
+    }
+
     if (totalDue === 0 && exhibitor?.balanceAmount) {
       remainingBalance = parseFloat(exhibitor.balanceAmount) || 0;
     }
@@ -135,9 +217,10 @@ const getAccountOverview = async (req, res) => {
       documentNo: inv.invoice_no,
       date: inv.invoice_date || inv.added,
       amount: inv.finalAmount,
-      status: "Unpaid",
+      status: isCancelledDoc(inv) ? "Cancelled" : "Unpaid",
       id: inv._id,
       timestamp: inv.added || new Date(),
+      cancelled: isCancelledDoc(inv),
     }));
 
     proformaInvoices.forEach((pi) => recentDocs.push({
@@ -145,9 +228,10 @@ const getAccountOverview = async (req, res) => {
       documentNo: pi.est_no,
       date: pi.supply_date || pi.added,
       amount: pi.finalAmount,
-      status: "Sent",
+      status: isCancelledDoc(pi) ? "Cancelled" : "Sent",
       id: pi._id,
       timestamp: pi.added || new Date(),
+      cancelled: isCancelledDoc(pi),
     }));
 
     creditNotes.forEach((cn) => {
@@ -175,10 +259,20 @@ const getAccountOverview = async (req, res) => {
       id: dn._id,
       timestamp: dn.added || new Date(),
     }));
+    let recentDocsUnallocated = onlinePaidAmount;
     recentDocs = recentDocs.map((doc) => {
       if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
-        const docPayments = payments.filter((p) => p.invoice_id === doc.id.toString());
-        const docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+        if (doc.cancelled) return doc;
+        const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
+        let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+
+        let docRemaining = Math.max(0, parseFloat(doc.amount) - docPaid);
+        if (docRemaining > 0 && recentDocsUnallocated > 0) {
+          const allocation = Math.min(docRemaining, recentDocsUnallocated);
+          docPaid += allocation;
+          recentDocsUnallocated -= allocation;
+        }
+
         if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
         else if (docPaid > 0) doc.status = "Partial";
         else doc.status = doc.documentType === "Invoice" ? "Unpaid" : "Sent";
@@ -207,9 +301,9 @@ const getAccountOverview = async (req, res) => {
 
     const activityLogs = activityQuery
       ? await ActivityLog.find(activityQuery)
-          .sort({ createdAt: -1 })
-          .limit(12)
-          .lean()
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .lean()
       : [];
 
     const actorByDocumentNo = new Map();
@@ -394,6 +488,9 @@ const getAccountOverview = async (req, res) => {
           totalDue,
           paidAmount,
           remainingBalance,
+          dueBreakdown,
+          paidBreakdown,
+          remainingBreakdown,
         },
         recentDocuments: recentDocs,
         paymentSchedule,
