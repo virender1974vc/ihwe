@@ -2,6 +2,7 @@ const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
 const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
+const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
@@ -94,11 +95,17 @@ const getAccountOverview = async (req, res) => {
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
       )
     );
-    const [invoices, proformaInvoices, creditNotes, debitNotes] = await Promise.all([
+    const [invoices, proformaInvoices, creditNotes, debitNotes, deliveryChallans] = await Promise.all([
       Invoice.find({ companyId: { $in: lookupIds } }).lean(),
       Estimate.find({ companyId: { $in: lookupIds } }).lean(),
       CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
       DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
+      DeliveryChallan.find({
+        $or: [
+          { companyId: { $in: lookupIds } },
+          { account_ref_id: { $in: lookupIds } },
+        ],
+      }).lean(),
     ]);
 
     const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
@@ -270,6 +277,16 @@ const getAccountOverview = async (req, res) => {
       id: dn._id,
       timestamp: dn.added || new Date(),
     }));
+
+    deliveryChallans.forEach((challan) => recentDocs.push({
+      documentType: "Delivery Challan",
+      documentNo: challan.challan_no,
+      date: challan.challan_date || challan.added,
+      amount: 0,
+      status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
+      id: challan._id,
+      timestamp: challan.added || new Date(),
+    }));
     let recentDocsUnallocated = onlinePaidAmount;
     recentDocs = recentDocs.map((doc) => {
       if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
@@ -330,6 +347,7 @@ const getAccountOverview = async (req, res) => {
     proformaInvoices.forEach((estimate) => addDocumentActor(estimate.est_no, estimate.added_by || estimate.updated_by));
     debitNotes.forEach((debitNote) => addDocumentActor(debitNote.debit_note_no, debitNote.added_by || debitNote.updated_by));
     creditNotes.forEach((creditNote) => addDocumentActor(creditNote.create_note_no, creditNote.added_by || creditNote.updated_by));
+    deliveryChallans.forEach((challan) => addDocumentActor(challan.challan_no, challan.added_by || challan.updated_by));
 
     const paymentActorByDocumentNo = new Map();
     payments
@@ -508,6 +526,7 @@ const getAccountOverview = async (req, res) => {
           activeInvoiceCount: activeInvoices.length,
           proformaInvoiceCount: proformaInvoices.length,
           activeProformaInvoiceCount: activeProformaInvoices.length,
+          deliveryChallanCount: deliveryChallans.length,
         },
         recentDocuments: recentDocs,
         paymentSchedule,

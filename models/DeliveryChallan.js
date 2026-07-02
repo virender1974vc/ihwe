@@ -1,0 +1,71 @@
+const mongoose = require("mongoose");
+const { secondaryDB } = require("../config/secondaryDb");
+
+const challanItemSchema = new mongoose.Schema(
+  {
+    sourceItemKey: { type: String, required: true },
+    description: { type: String, required: true },
+    hsn: { type: String, default: "" },
+    qty: { type: Number, required: true, min: 0.000001 },
+    unit: { type: String, default: "" },
+    size: { type: String, default: "" },
+    area: { type: String, default: "" },
+    remarks: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+const deliveryChallanSchema = new mongoose.Schema(
+  {
+    challan_no: { type: String, required: true, unique: true },
+    challan_date: { type: String, required: true },
+    companyId: { type: String, required: true, index: true },
+    account_ref_id: { type: String, default: "", index: true },
+    source_estimate_id: { type: String, required: true, index: true },
+    estimate_no: { type: String, required: true },
+    company_name: { type: String, default: "" },
+    company_address: { type: String, default: "" },
+    company_gst_no: { type: String, default: "" },
+    contact_person: { type: String, default: "" },
+    contact_phone: { type: String, default: "" },
+    event_name: { type: String, default: "" },
+    delivery_address: { type: String, default: "" },
+    purpose: {
+      type: String,
+      enum: ["Event/Stall Material", "Job Work", "Returnable Material", "Non-returnable Material", "Other"],
+      default: "Event/Stall Material",
+    },
+    vehicle_no: { type: String, default: "" },
+    transporter_name: { type: String, default: "" },
+    po_no: { type: String, default: "" },
+    remarks: { type: String, default: "" },
+    terms: { type: String, default: "" },
+    items: { type: [challanItemSchema], required: true },
+    status: {
+      type: String,
+      enum: ["draft", "issued", "delivered", "acknowledged", "cancelled"],
+      default: "issued",
+    },
+    emailSent: { type: Boolean, default: false },
+    emailSentAt: { type: Date },
+    whatsappSent: { type: Boolean, default: false },
+    whatsappSentAt: { type: Date },
+    added_by: { type: String, default: "" },
+  },
+  { timestamps: { createdAt: "added", updatedAt: "updated" } },
+);
+
+deliveryChallanSchema.statics.generateNextNumber = async function () {
+  const now = new Date();
+  const year = now.getFullYear();
+  const startYear = now.getMonth() + 1 >= 4 ? year : year - 1;
+  const fiscalYear = `${String(startYear).slice(-2)}-${String(startYear + 1).slice(-2)}`;
+  const prefix = `NGW/DC/${fiscalYear}/`;
+  const last = await this.findOne({ challan_no: { $regex: `^${prefix}` } })
+    .sort({ challan_no: -1 })
+    .lean();
+  const lastSequence = Number(String(last?.challan_no || "").split("/").pop()) || 0;
+  return `${prefix}${String(lastSequence + 1).padStart(3, "0")}`;
+};
+
+module.exports = secondaryDB.model("DeliveryChallan", deliveryChallanSchema);
