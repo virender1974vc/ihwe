@@ -19,6 +19,19 @@ const toNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const getNextDebitNoteNo = async (req, res) => {
+  try {
+    const debit_note_no = await DebitNote.generateNextDebitNoteNo();
+    res.json({ success: true, debit_note_no });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error generating credit note number",
+      error: error.message,
+    });
+  }
+};
+
 // CREATE DEBIT NOTE
 const createDebitNote = async (req, res) => {
   try {
@@ -41,7 +54,7 @@ const createDebitNote = async (req, res) => {
     if (parsedItems.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "At least one debit note item is required",
+        message: "At least one credit note item is required",
       });
     }
 
@@ -68,18 +81,18 @@ const createDebitNote = async (req, res) => {
       req,
       "Created",
       "Accounts",
-      `Created Debit Note for ${accountName}. Amount: ₹${debitNote.totalAmount || 0}`,
+      `Created Credit Note for ${accountName}. Amount: ₹${debitNote.totalAmount || 0}`,
     );
 
     res.status(201).json({
       success: true,
-      message: "Debit Note Created",
+      message: "Credit Note Created",
       data: debitNote,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error creating debit note",
+      message: "Error creating credit note",
       error: error.message,
     });
   }
@@ -94,7 +107,7 @@ const getDebitNotes = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error fetching debit notes",
+      message: "Error fetching credit notes",
       error: error.message,
     });
   }
@@ -105,13 +118,13 @@ const getDebitNoteById = async (req, res) => {
   try {
     const note = await DebitNote.findById(req.params.id);
     if (!note) {
-      return res.status(404).json({ success: false, message: "Debit note not found" });
+      return res.status(404).json({ success: false, message: "Credit note not found" });
     }
     res.json({ success: true, data: note });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error fetching debit note",
+      message: "Error fetching credit note",
       error: error.message,
     });
   }
@@ -124,20 +137,20 @@ const updateDebitNote = async (req, res) => {
       new: true,
     });
     if (!updated) {
-      return res.status(404).json({ success: false, message: "Debit note not found" });
+      return res.status(404).json({ success: false, message: "Credit note not found" });
     }
     const accountName = await getDocumentAccountName(updated, "account");
     await logActivity(
       req,
       "Updated",
       "Accounts",
-      `Updated Debit Note for ${accountName}. Amount: ₹${updated.totalAmount || 0}`,
+      `Updated Credit Note for ${accountName}. Amount: ₹${updated.totalAmount || 0}`,
     );
-    res.json({ success: true, message: "Debit Note Updated", data: updated });
+    res.json({ success: true, message: "Credit Note Updated", data: updated });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error updating debit note",
+      message: "Error updating credit note",
       error: error.message,
     });
   }
@@ -148,20 +161,20 @@ const deleteDebitNote = async (req, res) => {
   try {
     const deleted = await DebitNote.findByIdAndDelete(req.params.id);
     if (!deleted) {
-      return res.status(404).json({ success: false, message: "Debit note not found" });
+      return res.status(404).json({ success: false, message: "Credit note not found" });
     }
     const accountName = await getDocumentAccountName(deleted, "account");
     await logActivity(
       req,
       "Deleted",
       "Accounts",
-      `Deleted Debit Note for ${accountName}. Amount: ₹${deleted.totalAmount || 0}`,
+      `Deleted Credit Note for ${accountName}. Amount: ₹${deleted.totalAmount || 0}`,
     );
-    res.json({ success: true, message: "Debit Note Deleted" });
+    res.json({ success: true, message: "Credit Note Deleted" });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error deleting debit note",
+      message: "Error deleting credit note",
       error: error.message,
     });
   }
@@ -169,6 +182,7 @@ const deleteDebitNote = async (req, res) => {
 
 module.exports = {
   createDebitNote,
+  getNextDebitNoteNo,
   getDebitNotes,
   getDebitNoteById,
   updateDebitNote,
