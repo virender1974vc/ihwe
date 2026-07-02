@@ -23,6 +23,17 @@ const featuredSpeakerSchema = new mongoose.Schema({
   category: String // e.g., KEYNOTE SPEAKER, PANELIST
 });
 
+const cardSchema = new mongoose.Schema({
+  title: String,
+  text: String,
+  link: String,
+});
+
+const highlightFeatureSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+});
+
 const conferenceDaySchema = new mongoose.Schema(
   {
     dayNumber: {
@@ -43,6 +54,12 @@ const conferenceDaySchema = new mongoose.Schema(
           value: String,
         },
       ],
+      features: [
+        {
+          title: String,
+          subTitle: String,
+        },
+      ],
     },
     about: {
       title: String,
@@ -56,6 +73,14 @@ const conferenceDaySchema = new mongoose.Schema(
       sessions: [sessionSchema],
     },
     featuredSpeakers: [featuredSpeakerSchema],
+    ourSpeakers: [featuredSpeakerSchema],
+    cards: [cardSchema], // Participation options e.g., Paper Presentation, Poster Presentation, Abstract Submission
+    associates: [String], // Partner/associate logo image URLs
+    healthcareHighlights: {
+      title: String,
+      subtitle: String,
+      features: [highlightFeatureSchema], // e.g., Network, Discover
+    },
     cta: {
       bePartTitle: String,
       bePartDescription: String,
