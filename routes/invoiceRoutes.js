@@ -6,7 +6,9 @@ const {
   updateInvoice,
   deleteInvoice,
   sendWhatsAppInvoice,
+  previewWhatsAppInvoice,
   sendEmailInvoice,
+  previewEmailInvoice,
 } = require("../controllers/invoiceController.js");
 
 const router = express.Router();
@@ -17,6 +19,8 @@ router.post("/", createInvoice); // CREATE invoice
 router.put("/:id", updateInvoice); // UPDATE invoice
 router.delete("/:id", deleteInvoice); // DELETE invoice
 router.post("/:id/send-whatsapp", sendWhatsAppInvoice);
+router.get("/:id/preview-whatsapp", previewWhatsAppInvoice);
 router.post("/:id/send-email", sendEmailInvoice);
+router.get("/:id/preview-email", previewEmailInvoice);
 
 module.exports = router;
