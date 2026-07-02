@@ -111,10 +111,7 @@ const getAccountOverview = async (req, res) => {
     const payments = allPayments.filter((payment) => payableDocIds.has(String(payment.invoice_id)));
     let totalDue = 0;
     let dueBreakdown = [];
-    if (activeInvoices.length > 0) {
-      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
-    } else if (exhibitor?.financeBreakdown?.netPayable) {
+    if (exhibitor?.financeBreakdown?.netPayable) {
       totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (exhibitor?.totalPayable) {
@@ -123,6 +120,9 @@ const getAccountOverview = async (req, res) => {
     } else if (activeProformaInvoices.length > 0) {
       totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
       dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
+    } else if (activeInvoices.length > 0) {
+      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
     }
 
     // 2. Compute Paid Amount
@@ -493,6 +493,10 @@ const getAccountOverview = async (req, res) => {
           dueBreakdown,
           paidBreakdown,
           remainingBreakdown,
+          invoiceCount: invoices.length,
+          activeInvoiceCount: activeInvoices.length,
+          proformaInvoiceCount: proformaInvoices.length,
+          activeProformaInvoiceCount: activeProformaInvoices.length,
         },
         recentDocuments: recentDocs,
         paymentSchedule,
