@@ -310,7 +310,7 @@ const getAccountOverview = async (req, res) => {
       return doc;
     });
     recentDocs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    recentDocs = recentDocs.slice(0, 5);
+    // recentDocs = recentDocs.slice(0, 5); // User requested all documents to be shown
 
     const activityQuery = buildAccountActivityQuery([
       companyId,
