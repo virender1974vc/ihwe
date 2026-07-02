@@ -26,10 +26,6 @@ const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) =>
     }
 
     try {
-        // Try AiSensy first (Authentication template). Falls through to legacy Opus
-        // below if AiSensy isn't configured yet OR if the AiSensy attempt itself fails
-        // (e.g. template rejected/pending) - Opus is a permanent safety net, not just a
-        // during-migration fallback.
         const aisensyResult = await aisensy.sendTemplate({
             campaignEnvKey: 'AISENSY_CAMPAIGN_OTP',
             phone: mobile,
@@ -169,7 +165,7 @@ const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) =
     let errorMsg = null;
 
     try {
-        let formattedMobile = mobile.replace(/\D/g, ''); 
+        let formattedMobile = mobile.replace(/\D/g, '');
         if (formattedMobile.length === 10) {
             formattedMobile = '91' + formattedMobile;
         }
@@ -181,7 +177,7 @@ const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) =
         const url = `https://api.opustechnology.in/wapp/v2/api/send?apikey=${apiKey}&mobile=${formattedMobile}&msg=${encodeURIComponent(msg)}`;
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); 
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
 
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -232,18 +228,18 @@ const sendPassApprovalWhatsApp = async (mobile, quantity, type, email, name = nu
             userName: name || 'Customer',
             templateParams: [String(quantity), type, email]
         });
-        
+
         if (aisensyResult.success) {
             status = 'success';
             return { success: true, data: aisensyResult.response, provider: 'aisensy' };
         }
-        
+
         if (!aisensyResult.skipped) {
             console.warn(`[WhatsApp] AiSensy pass approval send failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
         }
 
         const waMsg = `Dear Exhibitor,\n\nYour request for ${quantity} ${type} pass(es) has been APPROVED.\n\nWe have sent the entry QR codes to your registered email address (${email}). Please check your inbox (and spam folder) and present the QR codes at the entry gates.\n\nRegards,\nTeam IHWE`;
-        
+
         return await sendOpusWhatsAppMessage(mobile, waMsg, 'Pass Approval Notification');
     } catch (error) {
         console.error(`Error sending Pass Approval WhatsApp to ${mobile}:`, error);
@@ -380,10 +376,54 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
     }
 };
 
+const sendProformaInvoiceWhatsApp = async (mobile, msg, name = null, params = [], options = {}) => {
+    try {
+        const aisensyResult = await aisensy.sendTemplate({
+            campaignEnvKey: 'AISENSY_CAMPAIGN_PROFORMA_INVOICE',
+            phone: mobile,
+            userName: name || 'Customer',
+            templateParams: params
+        });
+        if (aisensyResult.success) {
+            return { success: true, data: aisensyResult.response, provider: 'aisensy' };
+        }
+        if (!aisensyResult.skipped) {
+            console.warn(`[WhatsApp] AiSensy Proforma Invoice send failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+        }
+        return await sendOpusWhatsAppMessage(mobile, msg, 'Proforma Invoice', options);
+    } catch (error) {
+        console.error(`Error sending Proforma WhatsApp to ${mobile}:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
+const sendTaxInvoiceWhatsApp = async (mobile, msg, name = null, params = [], options = {}) => {
+    try {
+        const aisensyResult = await aisensy.sendTemplate({
+            campaignEnvKey: 'AISENSY_CAMPAIGN_TAX_INVOICE',
+            phone: mobile,
+            userName: name || 'Customer',
+            templateParams: params
+        });
+        if (aisensyResult.success) {
+            return { success: true, data: aisensyResult.response, provider: 'aisensy' };
+        }
+        if (!aisensyResult.skipped) {
+            console.warn(`[WhatsApp] AiSensy Tax Invoice send failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
+        }
+        return await sendOpusWhatsAppMessage(mobile, msg, 'Tax Invoice', options);
+    } catch (error) {
+        console.error(`Error sending Tax Invoice WhatsApp to ${mobile}:`, error);
+        return { success: false, error: error.message };
+    }
+};
+
 module.exports = {
     sendWhatsAppOTP,
     sendWhatsAppMessage,
     sendOpusWhatsAppMessage,
     sendPassApprovalWhatsApp,
-    sendWhatsAppRichMessage
+    sendWhatsAppRichMessage,
+    sendProformaInvoiceWhatsApp,
+    sendTaxInvoiceWhatsApp
 };

@@ -8,7 +8,9 @@ const {
   deleteEstimate,
   getNextEstimateNumber,
   sendWhatsAppEstimate,
+  previewWhatsAppEstimate,
   sendEmailEstimate,
+  previewEmailEstimate,
 } = require("../controllers/estimateController.js");
 
 const router = express.Router();
@@ -23,6 +25,8 @@ router.get("/:id", getEstimateById);
 router.put("/:id", updateEstimate);
 router.delete("/:id", deleteEstimate);
 router.post("/:id/send-whatsapp", sendWhatsAppEstimate);
+router.get("/:id/preview-whatsapp", previewWhatsAppEstimate);
 router.post("/:id/send-email", sendEmailEstimate);
+router.get("/:id/preview-email", previewEmailEstimate);
 
 module.exports = router;

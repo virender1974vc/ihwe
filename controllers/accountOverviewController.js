@@ -2,6 +2,7 @@ const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
 const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
+const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
@@ -22,6 +23,15 @@ const cleanActorName = (value) => {
   return isGenericUserName(cleaned) ? "" : cleaned;
 };
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+const getProformaCommunicationStatus = (estimate) => {
+  if (isCancelledDoc(estimate)) return "Cancelled";
+  const emailSent = Boolean(estimate?.emailSent || estimate?.emailSentAt);
+  const whatsappSent = Boolean(estimate?.whatsappSent || estimate?.whatsappSentAt);
+  if (emailSent && whatsappSent) return "E/W-Sent";
+  if (emailSent) return "E-Sent";
+  if (whatsappSent) return "W-Sent";
+  return "Sent";
+};
 
 const resolveCompanyAndExhibitor = async (companyId) => {
   let company = null;
@@ -85,11 +95,17 @@ const getAccountOverview = async (req, res) => {
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
       )
     );
-    const [invoices, proformaInvoices, creditNotes, debitNotes] = await Promise.all([
+    const [invoices, proformaInvoices, creditNotes, debitNotes, deliveryChallans] = await Promise.all([
       Invoice.find({ companyId: { $in: lookupIds } }).lean(),
       Estimate.find({ companyId: { $in: lookupIds } }).lean(),
       CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
       DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
+      DeliveryChallan.find({
+        $or: [
+          { companyId: { $in: lookupIds } },
+          { account_ref_id: { $in: lookupIds } },
+        ],
+      }).lean(),
     ]);
 
     const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
@@ -111,10 +127,7 @@ const getAccountOverview = async (req, res) => {
     const payments = allPayments.filter((payment) => payableDocIds.has(String(payment.invoice_id)));
     let totalDue = 0;
     let dueBreakdown = [];
-    if (activeInvoices.length > 0) {
-      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
-    } else if (exhibitor?.financeBreakdown?.netPayable) {
+    if (exhibitor?.financeBreakdown?.netPayable) {
       totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (exhibitor?.totalPayable) {
@@ -123,6 +136,9 @@ const getAccountOverview = async (req, res) => {
     } else if (activeProformaInvoices.length > 0) {
       totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
       dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
+    } else if (activeInvoices.length > 0) {
+      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
     }
 
     // 2. Compute Paid Amount
@@ -230,7 +246,7 @@ const getAccountOverview = async (req, res) => {
       documentNo: pi.est_no,
       date: pi.supply_date || pi.added,
       amount: pi.finalAmount,
-      status: isCancelledDoc(pi) ? "Cancelled" : "Sent",
+      status: getProformaCommunicationStatus(pi),
       id: pi._id,
       timestamp: pi.added || new Date(),
       cancelled: isCancelledDoc(pi),
@@ -261,6 +277,16 @@ const getAccountOverview = async (req, res) => {
       id: dn._id,
       timestamp: dn.added || new Date(),
     }));
+
+    deliveryChallans.forEach((challan) => recentDocs.push({
+      documentType: "Delivery Challan",
+      documentNo: challan.challan_no,
+      date: challan.challan_date || challan.added,
+      amount: 0,
+      status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
+      id: challan._id,
+      timestamp: challan.added || new Date(),
+    }));
     let recentDocsUnallocated = onlinePaidAmount;
     recentDocs = recentDocs.map((doc) => {
       if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
@@ -275,9 +301,11 @@ const getAccountOverview = async (req, res) => {
           recentDocsUnallocated -= allocation;
         }
 
-        if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
-        else if (docPaid > 0) doc.status = "Partial";
-        else doc.status = doc.documentType === "Invoice" ? "Unpaid" : "Sent";
+        if (doc.documentType === "Invoice") {
+          if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
+          else if (docPaid > 0) doc.status = "Partial";
+          else doc.status = "Unpaid";
+        }
       }
       return doc;
     });
@@ -319,6 +347,7 @@ const getAccountOverview = async (req, res) => {
     proformaInvoices.forEach((estimate) => addDocumentActor(estimate.est_no, estimate.added_by || estimate.updated_by));
     debitNotes.forEach((debitNote) => addDocumentActor(debitNote.debit_note_no, debitNote.added_by || debitNote.updated_by));
     creditNotes.forEach((creditNote) => addDocumentActor(creditNote.create_note_no, creditNote.added_by || creditNote.updated_by));
+    deliveryChallans.forEach((challan) => addDocumentActor(challan.challan_no, challan.added_by || challan.updated_by));
 
     const paymentActorByDocumentNo = new Map();
     payments
@@ -493,6 +522,11 @@ const getAccountOverview = async (req, res) => {
           dueBreakdown,
           paidBreakdown,
           remainingBreakdown,
+          invoiceCount: invoices.length,
+          activeInvoiceCount: activeInvoices.length,
+          proformaInvoiceCount: proformaInvoices.length,
+          activeProformaInvoiceCount: activeProformaInvoices.length,
+          deliveryChallanCount: deliveryChallans.length,
         },
         recentDocuments: recentDocs,
         paymentSchedule,
