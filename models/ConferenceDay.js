@@ -77,8 +77,6 @@ const conferenceDaySchema = new mongoose.Schema(
     cards: [cardSchema], // Participation options e.g., Paper Presentation, Poster Presentation, Abstract Submission
     associates: [String], // Partner/associate logo image URLs
     healthcareHighlights: {
-      title: String,
-      subtitle: String,
       features: [highlightFeatureSchema], // e.g., Network, Discover
     },
     cta: {
