@@ -180,6 +180,10 @@ const getGroupedEstimateData = async (req, res) => {
           pincode: 1,
           added_by: 1,
           status: 1,
+          emailSent: 1,
+          emailSentAt: 1,
+          whatsappSent: 1,
+          whatsappSentAt: 1,
           updated: 1,
           items: 1,
           supply_date: 1,
@@ -284,6 +288,10 @@ const getAllEstimates = async (req, res) => {
           pincode: 1,
           added_by: 1,
           status: 1,
+          emailSent: 1,
+          emailSentAt: 1,
+          whatsappSent: 1,
+          whatsappSentAt: 1,
           updated: 1,
           items: 1,
           supply_date: 1,
@@ -611,6 +619,9 @@ const sendWhatsAppEstimate = async (req, res) => {
     }
 
     if (result.success) {
+      estimate.whatsappSent = true;
+      estimate.whatsappSentAt = new Date();
+      await estimate.save();
       res.status(200).json({ message: "WhatsApp message sent successfully" });
     } else {
       res.status(500).json({ message: "Failed to send WhatsApp message", error: result.error });
@@ -1016,6 +1027,10 @@ const sendEmailEstimate = async (req, res) => {
       html: htmlContent,
       profile: 'DEFAULT'
     });
+
+    estimate.emailSent = true;
+    estimate.emailSentAt = new Date();
+    await estimate.save();
 
     res.status(200).json({ message: "Email sent successfully" });
   } catch (error) {

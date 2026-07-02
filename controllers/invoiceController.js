@@ -1,10 +1,77 @@
 const Invoice = require("../models/Invoice");
+const Estimate = require("../models/Estimate");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const { sendWhatsAppMessage, sendTaxInvoiceWhatsApp } = require('../utils/whatsapp');
 const emailService = require('../utils/emailService');
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
+
+const normalizeItemValue = (value) => String(value ?? "").trim().toLowerCase();
+const getItemKey = (item = {}) => [
+  normalizeItemValue(item.description),
+  normalizeItemValue(item.hsn),
+  normalizeItemValue(item.unit),
+  normalizeItemValue(item.size),
+  normalizeItemValue(item.area),
+  Number(item.rate || 0).toFixed(2),
+].join("|");
+const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+
+const validateInvoiceItemsAgainstEstimate = async (payload, excludeInvoiceId = null) => {
+  if (!payload?.estimate_no && !payload?.source_estimate_id) return null;
+
+  const estimateQuery = payload.source_estimate_id
+    ? { _id: payload.source_estimate_id }
+    : { est_no: payload.estimate_no, companyId: payload.companyId };
+  const estimate = await Estimate.findOne(estimateQuery).lean();
+  if (!estimate) return null;
+
+  const allowedQtyByKey = new Map();
+  (estimate.items || []).forEach((item) => {
+    const key = getItemKey(item);
+    allowedQtyByKey.set(key, (allowedQtyByKey.get(key) || 0) + (Number(item.qty) || 0));
+  });
+
+  const invoiceQuery = {
+    companyId: payload.companyId,
+    $or: [
+      { source_estimate_id: String(estimate._id) },
+      { estimate_no: estimate.est_no },
+    ],
+  };
+  if (excludeInvoiceId) invoiceQuery._id = { $ne: excludeInvoiceId };
+
+  const existingInvoices = await Invoice.find(invoiceQuery).lean();
+  const usedQtyByKey = new Map();
+  existingInvoices
+    .filter((invoice) => !isCancelledDoc(invoice))
+    .forEach((invoice) => {
+      (invoice.items || []).forEach((item) => {
+        const key = getItemKey(item);
+        usedQtyByKey.set(key, (usedQtyByKey.get(key) || 0) + (Number(item.qty) || 0));
+      });
+    });
+
+  const requestedQtyByKey = new Map();
+  (payload.items || []).forEach((item) => {
+    const key = getItemKey(item);
+    requestedQtyByKey.set(key, (requestedQtyByKey.get(key) || 0) + (Number(item.qty) || 0));
+  });
+
+  for (const [key, requestedQty] of requestedQtyByKey.entries()) {
+    if (!allowedQtyByKey.has(key)) {
+      return "Selected invoice item does not exist in the selected proforma invoice.";
+    }
+    const remainingQty = (allowedQtyByKey.get(key) || 0) - (usedQtyByKey.get(key) || 0);
+    if (requestedQty > remainingQty + 0.000001) {
+      const description = (payload.items || []).find((item) => getItemKey(item) === key)?.description || "item";
+      return `Only ${Math.max(0, remainingQty)} quantity remaining for ${description}.`;
+    }
+  }
+
+  return null;
+};
 
 // 📍 GET all invoices
 const getAllInvoices = async (req, res) => {
@@ -65,6 +132,11 @@ const createInvoice = async (req, res) => {
       }
     }
 
+    const validationError = await validateInvoiceItemsAgainstEstimate(req.body);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
+
     // Generate invoice number
     const invoice_no = await Invoice.generateNextInvoiceNumber();
 
@@ -99,6 +171,11 @@ const createInvoice = async (req, res) => {
 // 📍 UPDATE invoice
 const updateInvoice = async (req, res) => {
   try {
+    const validationError = await validateInvoiceItemsAgainstEstimate(req.body, req.params.id);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
+    }
+
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
       req.body,

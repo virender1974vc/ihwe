@@ -45,6 +45,10 @@ const estimateSchema = new mongoose.Schema(
     finalAmount: { type: Number },
     added_by: { type: String },
     status: { type: String, default: "active" },
+    emailSent: { type: Boolean, default: false },
+    emailSentAt: { type: Date },
+    whatsappSent: { type: Boolean, default: false },
+    whatsappSentAt: { type: Date },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );

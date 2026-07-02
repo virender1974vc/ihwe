@@ -22,6 +22,15 @@ const cleanActorName = (value) => {
   return isGenericUserName(cleaned) ? "" : cleaned;
 };
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+const getProformaCommunicationStatus = (estimate) => {
+  if (isCancelledDoc(estimate)) return "Cancelled";
+  const emailSent = Boolean(estimate?.emailSent || estimate?.emailSentAt);
+  const whatsappSent = Boolean(estimate?.whatsappSent || estimate?.whatsappSentAt);
+  if (emailSent && whatsappSent) return "E/W-Sent";
+  if (emailSent) return "E-Sent";
+  if (whatsappSent) return "W-Sent";
+  return "Sent";
+};
 
 const resolveCompanyAndExhibitor = async (companyId) => {
   let company = null;
@@ -230,7 +239,7 @@ const getAccountOverview = async (req, res) => {
       documentNo: pi.est_no,
       date: pi.supply_date || pi.added,
       amount: pi.finalAmount,
-      status: isCancelledDoc(pi) ? "Cancelled" : "Sent",
+      status: getProformaCommunicationStatus(pi),
       id: pi._id,
       timestamp: pi.added || new Date(),
       cancelled: isCancelledDoc(pi),
@@ -275,9 +284,11 @@ const getAccountOverview = async (req, res) => {
           recentDocsUnallocated -= allocation;
         }
 
-        if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
-        else if (docPaid > 0) doc.status = "Partial";
-        else doc.status = doc.documentType === "Invoice" ? "Unpaid" : "Sent";
+        if (doc.documentType === "Invoice") {
+          if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
+          else if (docPaid > 0) doc.status = "Partial";
+          else doc.status = "Unpaid";
+        }
       }
       return doc;
     });
