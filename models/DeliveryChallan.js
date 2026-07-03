@@ -37,6 +37,7 @@ const deliveryChallanSchema = new mongoose.Schema(
     },
     vehicle_no: { type: String, default: "" },
     transporter_name: { type: String, default: "" },
+    eway_bill: { type: String, default: "" },
     po_no: { type: String, default: "" },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
