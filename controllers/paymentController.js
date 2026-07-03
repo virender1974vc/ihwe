@@ -57,9 +57,25 @@ const addPayment = async (req, res) => {
 // ➤ Get all payments
 const getAllPayments = async (req, res) => {
   try {
-    const payments = await Payment.find().sort({ added: -1 });
+    const payments = await Payment.find().sort({ added: -1 }).lean();
 
-    res.status(200).json(payments);
+    const mongoose = require("mongoose");
+    const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, "invoice_no").lean();
+    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, "est_no").lean();
+    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, "est_no").lean();
+
+    const invoiceMap = {};
+    invoices.forEach(i => invoiceMap[i._id.toString()] = i.invoice_no);
+    estimates.forEach(e => invoiceMap[e._id.toString()] = e.est_no);
+    proformas.forEach(p => invoiceMap[p._id.toString()] = p.est_no);
+
+    const populatedPayments = payments.map(p => ({
+      ...p,
+      invoice_no: invoiceMap[p.invoice_id] || p.invoice_id
+    }));
+
+    res.status(200).json(populatedPayments);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching payments",
