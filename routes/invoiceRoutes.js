@@ -3,6 +3,8 @@ const {
   getAllInvoices,
   getInvoiceById,
   createInvoice, // यह फंक्शन अब invoice_no को जेनरेट करेगा
+  previewInvoiceRevision,
+  reviseInvoiceFromEstimate,
   updateInvoice,
   deleteInvoice,
   sendWhatsAppInvoice,
@@ -14,6 +16,8 @@ const {
 const router = express.Router();
 
 router.get("/", getAllInvoices); // GET all invoices
+router.get("/:id/revision-preview", previewInvoiceRevision);
+router.post("/:id/revise-from-estimate", reviseInvoiceFromEstimate);
 router.get("/:id", getInvoiceById); // GET single invoice
 router.post("/", createInvoice); // CREATE invoice
 router.put("/:id", updateInvoice); // UPDATE invoice

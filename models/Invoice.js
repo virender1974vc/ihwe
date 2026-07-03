@@ -53,6 +53,17 @@ const invoiceDeliveryChallanSchema = new mongoose.Schema(
   { _id: false },
 );
 
+const invoiceRevisionSchema = new mongoose.Schema(
+  {
+    revision: { type: Number, required: true },
+    revised_at: { type: Date, default: Date.now },
+    revised_by: { type: String, default: "" },
+    reason: { type: String, default: "" },
+    snapshot: { type: mongoose.Schema.Types.Mixed, required: true },
+  },
+  { _id: false },
+);
+
 const InvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
@@ -94,6 +105,9 @@ const InvoiceSchema = new mongoose.Schema(
     delivery_challans: { type: [invoiceDeliveryChallanSchema], default: [] },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
+    revision_no: { type: Number, default: 0 },
+    revised_at: { type: Date, default: null },
+    revisions: { type: [invoiceRevisionSchema], default: [] },
     
     added_by: { type: String },
     status: { type: String, default: "active" },
