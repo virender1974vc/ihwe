@@ -38,6 +38,8 @@ const PerformaInvoiceSchema = new mongoose.Schema(
     pincode: { type: Number, required: true },
     items: { type: [piItemSchema], required: true },
     finalAmount: { type: Number, required: true },
+    remarks: { type: String, default: "" },
+    terms: { type: String, default: "" },
     added_by: { type: String },
     status: { type: String, default: "active" },
     added: { type: Date, default: Date.now },
