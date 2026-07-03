@@ -1,5 +1,6 @@
 const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
+const DeliveryChallan = require("../models/DeliveryChallan");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const { sendWhatsAppMessage, sendTaxInvoiceWhatsApp } = require('../utils/whatsapp');
@@ -17,6 +18,69 @@ const getItemKey = (item = {}) => [
   Number(item.rate || 0).toFixed(2),
 ].join("|");
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+
+const buildDeliveryChallanSnapshots = async (payload) => {
+  const rawIds = Array.isArray(payload.delivery_challan_ids)
+    ? payload.delivery_challan_ids.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  const ids = [...new Set(rawIds)];
+
+  if (ids.length !== rawIds.length) {
+    return { error: "A delivery challan cannot be selected more than once." };
+  }
+  if (ids.length === 0) return { ids: [], snapshots: [] };
+
+  const estimate = payload.source_estimate_id
+    ? await Estimate.findById(payload.source_estimate_id).lean().catch(() => null)
+    : await Estimate.findOne({
+      est_no: payload.estimate_no,
+      companyId: payload.companyId,
+    }).lean();
+  if (!estimate) {
+    return { error: "The invoice proforma could not be found for delivery challan validation." };
+  }
+
+  const challans = await DeliveryChallan.find({ _id: { $in: ids } }).lean().catch(() => []);
+  if (challans.length !== ids.length) {
+    return { error: "One or more selected delivery challans were not found." };
+  }
+
+  const byId = new Map(challans.map((challan) => [String(challan._id), challan]));
+  const snapshots = [];
+  for (const id of ids) {
+    const challan = byId.get(id);
+    if (isCancelledDoc(challan)) {
+      return { error: `Cancelled delivery challan ${challan.challan_no || id} cannot be linked.` };
+    }
+    if (String(challan.source_estimate_id) !== String(estimate._id)) {
+      return { error: `Delivery challan ${challan.challan_no || id} does not belong to this proforma.` };
+    }
+    const belongsToCompany = String(challan.companyId) === String(payload.companyId)
+      || String(challan.account_ref_id || "") === String(payload.companyId)
+      || String(challan.companyId) === String(estimate.companyId);
+    if (!belongsToCompany) {
+      return { error: `Delivery challan ${challan.challan_no || id} does not belong to this client.` };
+    }
+    snapshots.push({
+      delivery_challan_id: id,
+      challan_no: challan.challan_no,
+      challan_date: challan.challan_date || "",
+      status: challan.status || "",
+      delivery_address: challan.delivery_address || "",
+      transporter_name: challan.transporter_name || "",
+      vehicle_no: challan.vehicle_no || "",
+      eway_bill: challan.eway_bill || "",
+      bilty_no: challan.bilty_no || "",
+      items: (challan.items || []).map((item) => ({
+        description: item.description || "",
+        hsn: item.hsn || "",
+        qty: Number(item.qty || 0),
+        unit: item.unit || "",
+      })),
+    });
+  }
+  return { ids, snapshots };
+};
 
 const validateInvoiceItemsAgainstEstimate = async (payload, excludeInvoiceId = null) => {
   if (!payload?.estimate_no && !payload?.source_estimate_id) return null;
@@ -137,11 +201,18 @@ const createInvoice = async (req, res) => {
       return res.status(400).json({ message: validationError });
     }
 
+    const challanResult = await buildDeliveryChallanSnapshots(req.body);
+    if (challanResult.error) {
+      return res.status(400).json({ message: challanResult.error });
+    }
+
     // Generate invoice number
     const invoice_no = await Invoice.generateNextInvoiceNumber();
 
     const newInvoice = new Invoice({
       ...req.body,
+      delivery_challan_ids: challanResult.ids,
+      delivery_challans: challanResult.snapshots,
       invoice_no,
     });
 
@@ -176,9 +247,21 @@ const updateInvoice = async (req, res) => {
       return res.status(400).json({ message: validationError });
     }
 
+    const existingInvoice = await Invoice.findById(req.params.id).lean();
+    if (!existingInvoice) return res.status(404).json({ message: "Invoice not found" });
+    const mergedPayload = { ...existingInvoice, ...req.body };
+    const challanResult = await buildDeliveryChallanSnapshots(mergedPayload);
+    if (challanResult.error) {
+      return res.status(400).json({ message: challanResult.error });
+    }
+
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      {
+        ...req.body,
+        delivery_challan_ids: challanResult.ids,
+        delivery_challans: challanResult.snapshots,
+      },
       { returnDocument: 'after' },
     );
 
