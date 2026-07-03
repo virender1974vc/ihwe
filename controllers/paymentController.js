@@ -2,8 +2,12 @@ const Payment = require("../models/Payment");
 const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
 const PerformaInvoice = require("../models/PerformaInvoice");
+const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const Company = require("../models/Company");
 const { logActivity } = require("../utils/logger");
 const { getAccountNameById, getDocumentAccountName } = require("../utils/accountActivityDetails");
+const emailService = require("../utils/emailService");
+const whatsappService = require("../utils/whatsappService");
 
 const resolvePaymentAccount = async (payment) => {
   if (payment.companyId) {
@@ -157,6 +161,86 @@ const deletePayment = async (req, res) => {
   }
 };
 
+// ✅ SEND RECEIPT
+const sendPaymentReceipt = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query; // 'email' or 'whatsapp'
+    const payment = await Payment.findById(id).lean();
+    
+    if (!payment) {
+      return res.status(404).json({ success: false, message: "Payment not found" });
+    }
+    
+    const companyId = payment.companyId;
+    if (!companyId) {
+      return res.status(400).json({ success: false, message: "No company associated with this payment." });
+    }
+
+    const exhibitor = await ExhibitorRegistration.findById(companyId).lean();
+    const company = await Company.findById(companyId).lean();
+
+    if (!exhibitor && !company) {
+      return res.status(404).json({ success: false, message: "Company details not found." });
+    }
+
+    let email = "";
+    let mobile = "";
+    let name = "Contact";
+    let companyName = "";
+
+    if (exhibitor) {
+      const contact1 = exhibitor.contact1 || {};
+      email = contact1.email || "";
+      mobile = contact1.whatsapp || contact1.mobile || "";
+      name = contact1.name || exhibitor.companyName || "Contact";
+      companyName = exhibitor.companyName || exhibitor.companyFirmName;
+    } else if (company) {
+      const contact = company.contacts && company.contacts.length > 0 ? company.contacts[0] : {};
+      email = contact.email || company.email || "";
+      mobile = contact.mobile || company.landline || "";
+      name = contact.name || contact.firstName || company.companyName || "Contact";
+      companyName = company.companyName;
+    }
+
+    if (!email && !mobile) {
+      return res.status(400).json({ success: false, message: "No email or mobile found for Contact Person 1." });
+    }
+
+    const receiptData = {
+      name,
+      amount: payment.amount_text,
+      mode: payment.payment_mode,
+      date: payment.payment_date,
+      reference: payment.ex_no || payment.invoice_id || 'N/A',
+      companyName: companyName
+    };
+
+    let emailSent = false;
+    let whatsappSent = false;
+
+    if (email && (!type || type === 'email')) {
+      emailSent = await emailService.sendManualPaymentReceipt(email, receiptData);
+    }
+    
+    if (mobile && (!type || type === 'whatsapp')) {
+      const normalizedMobile = whatsappService.formatPhoneNumber(mobile) || mobile;
+      whatsappSent = await whatsappService.sendManualPaymentReceipt(normalizedMobile, receiptData);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Receipt sent successfully${type ? ' via ' + type : ''}.`,
+      emailSent,
+      whatsappSent
+    });
+
+  } catch (error) {
+    console.error("sendPaymentReceipt error:", error);
+    res.status(500).json({ success: false, message: "Error sending receipt.", error: error.message });
+  }
+};
+
 // ✅ EXPORT
 module.exports = {
   addPayment,
@@ -164,4 +248,5 @@ module.exports = {
   getPaymentById,
   updatePayment,
   deletePayment,
+  sendPaymentReceipt,
 };

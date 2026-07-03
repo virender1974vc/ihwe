@@ -297,6 +297,16 @@ const sendCustomMessage = async (phone, message) => {
     return await sendMessage(phone, message);
 };
 
+const sendManualPaymentReceipt = async (phone, data) => {
+    try {
+        const message = `Payment Received ✅\n\nDear ${data.name},\n\nThank you for your payment! We have successfully received your payment for the 9th IHWE.\n\n*Payment Details:*\n💰 Amount: ₹${data.amount}\n📝 Payment Mode: ${data.mode}\n📅 Date: ${data.date}\n📄 Reference / Invoice No: ${data.reference}\n\nYour payment has been successfully recorded against your company: *${data.companyName}*.\n\nIf you have any questions or concerns, please feel free to reach out to us.\n\nWarm Regards,\nTeam 9th IHWE\nIndia Health & Wellness Expo\n\nThank you for being part of IHWE!`;
+        return await sendMessage(phone, message);
+    } catch (error) {
+        console.error('sendManualPaymentReceipt WhatsApp error:', error);
+        return false;
+    }
+};
+
 module.exports = {
     sendMessage,
     sendPaymentDelayWarning,
@@ -304,5 +314,6 @@ module.exports = {
     sendBookingConfirmation,
     sendInstallmentReminder,
     sendCustomMessage,
+    sendManualPaymentReceipt,
     formatPhoneNumber
 };
