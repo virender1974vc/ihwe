@@ -27,6 +27,32 @@ const invoiceItemSchema = new mongoose.Schema({
   total: { type: Number, required: true },
 });
 
+const invoiceDeliveryChallanItemSchema = new mongoose.Schema(
+  {
+    description: { type: String, default: "" },
+    hsn: { type: String, default: "" },
+    qty: { type: Number, default: 0 },
+    unit: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
+const invoiceDeliveryChallanSchema = new mongoose.Schema(
+  {
+    delivery_challan_id: { type: String, required: true },
+    challan_no: { type: String, required: true },
+    challan_date: { type: String, default: "" },
+    status: { type: String, default: "" },
+    delivery_address: { type: String, default: "" },
+    transporter_name: { type: String, default: "" },
+    vehicle_no: { type: String, default: "" },
+    eway_bill: { type: String, default: "" },
+    bilty_no: { type: String, default: "" },
+    items: { type: [invoiceDeliveryChallanItemSchema], default: [] },
+  },
+  { _id: false },
+);
+
 const InvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
@@ -64,6 +90,8 @@ const InvoiceSchema = new mongoose.Schema(
     
     items: { type: [invoiceItemSchema], required: true },
     finalAmount: { type: Number, required: true },
+    delivery_challan_ids: { type: [String], default: [] },
+    delivery_challans: { type: [invoiceDeliveryChallanSchema], default: [] },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
     
