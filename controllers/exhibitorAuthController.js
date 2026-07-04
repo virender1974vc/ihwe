@@ -469,6 +469,49 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async getMyAccountOverview(req, res) {
+        try {
+            if (req.user.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied. Exhibitors only.' });
+
+            const email = req.user.email;
+            const mobile = req.user.mobile;
+            let strippedMobile = mobile;
+            if (mobile && mobile.startsWith('0')) {
+                strippedMobile = mobile.substring(1);
+            }
+
+            const registrations = await ExhibitorRegistration.find({
+                $or: [
+                    { 'contact1.email': email },
+                    { 'contact1.mobile': mobile },
+                    { 'contact1.mobile': strippedMobile },
+                    { 'contact1.mobile': '0' + strippedMobile }
+                ]
+            }).sort({ createdAt: -1 });
+
+            if (!registrations || registrations.length === 0)
+                return res.status(404).json({ success: false, message: 'No registrations found' });
+
+            const selectedId = req.query.id;
+            let selectedRegistration = selectedId
+                ? registrations.find(r => r._id.toString() === selectedId)
+                : null;
+            if (!selectedRegistration) {
+                selectedRegistration = registrations[0];
+            }
+
+            const { resolveCompanyAndExhibitor, buildAccountOverview } = require('./accountOverviewController');
+            const regId = selectedRegistration._id.toString();
+            const { company, exhibitor } = await resolveCompanyAndExhibitor(regId);
+            const data = await buildAccountOverview(regId, company, exhibitor || selectedRegistration.toObject());
+
+            res.status(200).json({ success: true, data });
+        } catch (error) {
+            console.error('Error in getMyAccountOverview:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
     async changePassword(req, res) {
         try {
             if (req.user.role !== 'exhibitor')

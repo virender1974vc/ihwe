@@ -81,15 +81,7 @@ const EXHIBITOR_STATUS_LABELS = {
   "payment-failed": { label: "Payment Failed", color: "red" },
 };
 
-const getAccountOverview = async (req, res) => {
-  try {
-    const { companyId } = req.params;
-
-    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
-
-    if (!company && !exhibitor) {
-      return res.status(404).json({ message: "Company not found" });
-    }
+const buildAccountOverview = async (companyId, company, exhibitor) => {
     const lookupIds = Array.from(
       new Set(
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
@@ -274,14 +266,30 @@ const getAccountOverview = async (req, res) => {
       timestamp: dn.added || new Date(),
     }));
 
-    deliveryChallans.forEach((challan) => recentDocs.push({
-      documentType: "Delivery Challan",
-      documentNo: challan.challan_no,
-      date: challan.challan_date || challan.added,
-      amount: 0,
-      status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
-      id: challan._id,
-      timestamp: challan.added || new Date(),
+    deliveryChallans.forEach((challan) => {
+      const challanAmount = (challan.items || []).reduce(
+        (sum, it) => sum + ((parseFloat(it.finalAmount) || 0) || ((parseFloat(it.taxable) || 0) + (parseFloat(it.gstAmount) || 0))),
+        0
+      );
+      recentDocs.push({
+        documentType: "Delivery Challan",
+        documentNo: challan.challan_no,
+        date: challan.challan_date || challan.added,
+        amount: challanAmount,
+        status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
+        id: challan._id,
+        timestamp: challan.added || new Date(),
+      });
+    });
+
+    allPayments.forEach((pmt) => recentDocs.push({
+      documentType: "Payment",
+      documentNo: pmt.ex_no || pmt.payment_no || 'Payment',
+      date: pmt.payment_date || pmt.added,
+      amount: parseFloat(pmt.amount_text) || 0,
+      status: "Received",
+      id: pmt._id,
+      timestamp: pmt.added || new Date(),
     }));
 
     allPayments.forEach((pmt) => recentDocs.push({
@@ -482,9 +490,7 @@ const getAccountOverview = async (req, res) => {
       return isGenericUserName(existingUser) ? "Admin" : existingUser;
     };
 
-    res.status(200).json({
-      success: true,
-      data: {
+    return {
         companyInfo: {
           id: company?._id || exhibitor?._id,
           name: company?.companyName || exhibitor?.exhibitorName || "Unknown Company",
@@ -547,8 +553,21 @@ const getAccountOverview = async (req, res) => {
           ip_address: log.ip_address,
           timestamp: log.createdAt,
         })),
-      },
-    });
+    };
+};
+
+const getAccountOverview = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
+
+    if (!company && !exhibitor) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    const data = await buildAccountOverview(companyId, company, exhibitor);
+    res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Error in getAccountOverview:", error);
     res.status(500).json({ success: false, message: "Error fetching account overview", error: error.message });
@@ -557,4 +576,6 @@ const getAccountOverview = async (req, res) => {
 
 module.exports = {
   getAccountOverview,
+  buildAccountOverview,
+  resolveCompanyAndExhibitor,
 };

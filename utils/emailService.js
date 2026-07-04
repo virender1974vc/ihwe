@@ -1344,6 +1344,12 @@ class EmailService {
         const attachments = [];
         const fs = require('fs');
         const path = require('path');
+        if (pdfPath && fs.existsSync(pdfPath)) {
+            attachments.push({
+                filename: `Payment_Receipt_${String(registration.registrationId || registration._id || 'IHWE').replace(/[^\w-]+/g, '_')}.pdf`,
+                path: pdfPath
+            });
+        }
         let logoUrl = '';
         try {
             const Settings = require('../models/Settings');
@@ -2239,9 +2245,18 @@ class EmailService {
                 html
             };
 
+            const attachments = [];
+            if (data.receiptPath && require('fs').existsSync(data.receiptPath)) {
+                attachments.push({
+                    filename: `Payment_Receipt_${String(data.reference || 'IHWE').replace(/[^\w-]+/g, '_')}.pdf`,
+                    path: data.receiptPath,
+                });
+            }
+
             return await this.sendEmail({
                 ...data,
-                profile: 'EXHIBITOR'
+                profile: 'EXHIBITOR',
+                attachments
             });
         } catch (err) {
             console.error('sendPaymentDelayWarning error:', err.message);
@@ -2335,6 +2350,14 @@ class EmailService {
     async sendManualPaymentReceipt(email, data) {
         if (!email) return false;
         try {
+            const attachments = [];
+            if (data.receiptPath && require('fs').existsSync(data.receiptPath)) {
+                attachments.push({
+                    filename: `Payment_Receipt_${String(data.reference || 'IHWE').replace(/[^\w-]+/g, '_')}.pdf`,
+                    path: data.receiptPath,
+                });
+            }
+
             const html = `
                 <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea;">
                     <h2 style="color: #194090; margin-top: 0; text-align: center; border-bottom: 2px solid #f0f4fa; padding-bottom: 15px;">Payment Received ✅</h2>
@@ -2377,7 +2400,8 @@ class EmailService {
                 to: email,
                 subject: "Payment Received ✅ - 9th IHWE",
                 html,
-                profile: 'EXHIBITOR'
+                profile: 'EXHIBITOR',
+                attachments
             });
         } catch (err) {
             console.error('sendManualPaymentReceipt Email error:', err.message);

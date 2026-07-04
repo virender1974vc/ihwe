@@ -38,6 +38,7 @@ router.post('/send-email-otp', (req, res) => exhibitorAuthController.sendEmailOt
 router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobileOtp(req, res));
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
+router.get('/account-overview', protectExhibitor, (req, res) => exhibitorAuthController.getMyAccountOverview(req, res));
 router.get('/updates', protectExhibitor, (req, res) => exhibitorAuthController.getUpdates(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
 router.post('/pass-order', protectExhibitor, (req, res) => exhibitorAuthController.createPassOrder(req, res));
@@ -67,5 +68,10 @@ router.put('/update-profile', protectExhibitor, (req, res, next) => {
     });
 }, (req, res) => exhibitorAuthController.updateProfile(req, res));
 router.post('/register-seller', protectExhibitor, (req, res) => exhibitorAuthController.registerSeller(req, res));
+
+const exhibitorDocumentPaymentController = require('../controllers/exhibitorDocumentPaymentController');
+router.get('/documents/:docType/:docId', protectExhibitor, exhibitorDocumentPaymentController.getDocument);
+router.post('/documents/:docType/:docId/create-order', protectExhibitor, exhibitorDocumentPaymentController.createOrder);
+router.post('/documents/verify-payment', protectExhibitor, exhibitorDocumentPaymentController.verifyPayment);
 
 module.exports = router;

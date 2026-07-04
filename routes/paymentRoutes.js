@@ -9,6 +9,7 @@ const {
   updatePayment,
   deletePayment,
   sendPaymentReceipt,
+  downloadPaymentReceipt,
 } = require("../controllers/paymentController.js");
 
 const router = express.Router();
@@ -27,6 +28,7 @@ const proofUpload = multer({ storage: proofStorage });
 
 router.post("/", proofUpload.single("paymentProof"), addPayment); // Create
 router.get("/", getAllPayments); // Read all
+router.get("/:id/receipt", downloadPaymentReceipt); // Receipt PDF
 router.get("/:id", getPaymentById); // Read one
 router.put("/:id", updatePayment); // Update
 router.delete("/:id", deletePayment); // Delete
