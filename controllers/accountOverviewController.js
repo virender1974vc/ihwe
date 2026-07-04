@@ -266,15 +266,21 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       timestamp: dn.added || new Date(),
     }));
 
-    deliveryChallans.forEach((challan) => recentDocs.push({
-      documentType: "Delivery Challan",
-      documentNo: challan.challan_no,
-      date: challan.challan_date || challan.added,
-      amount: 0,
-      status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
-      id: challan._id,
-      timestamp: challan.added || new Date(),
-    }));
+    deliveryChallans.forEach((challan) => {
+      const challanAmount = (challan.items || []).reduce(
+        (sum, it) => sum + ((parseFloat(it.finalAmount) || 0) || ((parseFloat(it.taxable) || 0) + (parseFloat(it.gstAmount) || 0))),
+        0
+      );
+      recentDocs.push({
+        documentType: "Delivery Challan",
+        documentNo: challan.challan_no,
+        date: challan.challan_date || challan.added,
+        amount: challanAmount,
+        status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
+        id: challan._id,
+        timestamp: challan.added || new Date(),
+      });
+    });
 
     allPayments.forEach((pmt) => recentDocs.push({
       documentType: "Payment",
