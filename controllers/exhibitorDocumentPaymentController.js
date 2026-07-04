@@ -10,6 +10,54 @@ const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const DOC_MODELS = { invoice: Invoice, proforma: Estimate };
 const VIEW_DOC_MODELS = { invoice: Invoice, proforma: Estimate, challan: DeliveryChallan };
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+const toNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+
+const getEstimateItemFinancials = (item = {}) => {
+  const qty = toNumber(item.qty);
+  const rate = toNumber(item.rate);
+  const amount = toNumber(item.amount) || rate * qty;
+  const discountPercent = toNumber(item.disc ?? item.discountPct);
+  const discount = toNumber(item.discountAmount ?? item.discount) || (amount * discountPercent) / 100;
+  const taxable = toNumber(item.tax ?? item.taxable ?? item.taxableValue) || Math.max(0, amount - discount);
+  const gstRate = toNumber(item.gstRate ?? item.gst_per ?? item.gstPct)
+    || toNumber(item.igst_per)
+    || toNumber(item.cgst_per) * 2;
+  const gstAmount = toNumber(item.gstAmount)
+    || (gstRate ? (taxable * gstRate) / 100 : toNumber(item.igst) + toNumber(item.cgst) + toNumber(item.sgst));
+  return { rate, amount, discount, taxable, gstRate, gstAmount, finalAmount: taxable + gstAmount };
+};
+
+const enrichChallanFromEstimate = async (challan) => {
+  if (!challan?.source_estimate_id) return challan;
+  const estimate = await Estimate.findById(challan.source_estimate_id).lean();
+  if (!estimate) return challan;
+
+  const estimateById = new Map(
+    (estimate.items || []).filter((item) => item._id).map((item) => [`item:${String(item._id)}`, item])
+  );
+
+  return {
+    ...challan,
+    items: (challan.items || []).map((item, index) => {
+      const source = estimateById.get(String(item.sourceItemKey)) || estimate.items?.[index];
+      if (!source) return item;
+
+      const sourceFinancials = getEstimateItemFinancials(source);
+      const sourceQty = toNumber(item.sourceQty) || toNumber(source.qty);
+      return {
+        ...item,
+        sourceQty,
+        rate: toNumber(item.rate) || sourceFinancials.rate,
+        amount: toNumber(item.amount) || sourceFinancials.amount,
+        discount: toNumber(item.discount) || sourceFinancials.discount,
+        taxable: toNumber(item.taxable) || sourceFinancials.taxable,
+        gstRate: toNumber(item.gstRate) || sourceFinancials.gstRate,
+        gstAmount: toNumber(item.gstAmount) || sourceFinancials.gstAmount,
+        finalAmount: toNumber(item.finalAmount) || sourceFinancials.finalAmount,
+      };
+    }),
+  };
+};
 
 // An exhibitor may have more than one registration (and a linked CRM Company);
 // a document is payable by this exhibitor if its companyId matches any of those ids.
@@ -55,7 +103,7 @@ const createOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid document reference" });
     }
 
-    const doc = await Model.findById(docId).lean();
+    let doc = await Model.findById(docId).lean();
     if (!doc) {
       return res.status(404).json({ success: false, message: "Document not found" });
     }
@@ -162,7 +210,7 @@ const getDocument = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid document reference" });
     }
 
-    const doc = await Model.findById(docId).lean();
+    let doc = await Model.findById(docId).lean();
     if (!doc) {
       return res.status(404).json({ success: false, message: "Document not found" });
     }
@@ -171,6 +219,57 @@ const getDocument = async (req, res) => {
     const isOwned = authorizedIds.has(String(doc.companyId)) || authorizedIds.has(String(doc.account_ref_id));
     if (!isOwned) {
       return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    if (docType === "challan") {
+      doc = await enrichChallanFromEstimate(doc);
+    }
+
+    // The invoice's own embedded delivery_challans snapshot only carries
+    // description/hsn/qty/unit per item (no pricing) — enrich it from the real
+    // DeliveryChallan documents so the print view can show Rate/Discount/Amount/GST.
+    // delivery_challan_id isn't always a trustworthy link (older/seeded invoices may
+    // have a stale one), so we also fall back to the challan's unique challan_no.
+    if (docType === "invoice" && Array.isArray(doc.delivery_challans) && doc.delivery_challans.length > 0) {
+      const challanIds = doc.delivery_challans
+        .map((c) => c.delivery_challan_id)
+        .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
+      const challanNos = doc.delivery_challans.map((c) => c.challan_no).filter(Boolean);
+
+      const orClauses = [];
+      if (challanIds.length) orClauses.push({ _id: { $in: challanIds } });
+      if (challanNos.length) orClauses.push({ challan_no: { $in: challanNos } });
+
+      const fullChallans = orClauses.length
+        ? await DeliveryChallan.find({ $or: orClauses }).lean()
+        : [];
+      const byId = new Map(fullChallans.map((c) => [String(c._id), c]));
+      const byNo = new Map(fullChallans.map((c) => [String(c.challan_no), c]));
+
+      doc.delivery_challans = doc.delivery_challans.map((embedded) => {
+        const full = byId.get(String(embedded.delivery_challan_id)) || byNo.get(String(embedded.challan_no));
+        if (!full) return embedded;
+
+        const fullItemsByKey = new Map(
+          (full.items || []).map((it) => [`${it.description}|${it.hsn}|${it.qty}`, it])
+        );
+
+        return {
+          ...embedded,
+          items: (embedded.items || []).map((item, idx) => {
+            const fullItem = fullItemsByKey.get(`${item.description}|${item.hsn}|${item.qty}`) || full.items?.[idx];
+            return fullItem ? {
+              ...item,
+              rate: fullItem.rate,
+              discount: fullItem.discount,
+              taxable: fullItem.taxable,
+              gstRate: fullItem.gstRate,
+              gstAmount: fullItem.gstAmount,
+              finalAmount: fullItem.finalAmount,
+            } : item;
+          }),
+        };
+      });
     }
 
     res.json({ success: true, document: doc });
