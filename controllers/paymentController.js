@@ -8,6 +8,211 @@ const { logActivity } = require("../utils/logger");
 const { getAccountNameById, getDocumentAccountName } = require("../utils/accountActivityDetails");
 const emailService = require("../utils/emailService");
 const whatsappService = require("../utils/whatsappService");
+const pdfGenerator = require("../utils/pdfGenerator");
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
+const path = require("path");
+
+const RECEIPT_DIR = path.join(__dirname, "../uploads/payment_receipts");
+if (!fs.existsSync(RECEIPT_DIR)) fs.mkdirSync(RECEIPT_DIR, { recursive: true });
+
+const formatMoney = (value) => Number(value || 0).toLocaleString("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const parseAmount = (value) => {
+  const amount = Number(String(value || 0).replace(/,/g, ""));
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const resolvePaymentDocument = async (payment) => {
+  const mongoose = require("mongoose");
+  if (!payment?.invoice_id || !mongoose.Types.ObjectId.isValid(payment.invoice_id)) return null;
+  return (
+    await Invoice.findById(payment.invoice_id).lean() ||
+    await Estimate.findById(payment.invoice_id).lean() ||
+    await PerformaInvoice.findById(payment.invoice_id).lean()
+  );
+};
+
+const getDocumentNo = (doc, payment) => doc?.invoice_no || doc?.est_no || payment?.invoice_no || payment?.invoice_id || "-";
+const getDocumentDate = (doc) => doc?.invoice_date || doc?.supply_date || doc?.added || "";
+const getDocumentAmount = (doc, payment) => doc?.finalAmount ?? payment?.f_amount ?? 0;
+
+const getPaymentReference = (payment) => (
+  payment.utr_no ||
+  payment.cash_receipt_no ||
+  payment.cheque_no ||
+  payment.card_transaction_no ||
+  payment.wallet_transaction_no ||
+  payment.ex_no ||
+  payment.invoice_id ||
+  "-"
+);
+
+const buildPaymentDetails = (payment) => {
+  const rows = [];
+  if (payment.payment_mode) rows.push(["Payment Mode", payment.payment_mode]);
+  if (payment.pymnt_type) rows.push(["Payment Type", payment.pymnt_type]);
+  if (payment.bankId) rows.push(["Bank", payment.bankId]);
+  if (payment.utr_no) rows.push(["UTR / Ref No.", payment.utr_no]);
+  if (payment.cash_receipt_no) rows.push(["Cash Receipt No.", payment.cash_receipt_no]);
+  if (payment.cheque_no) rows.push(["Cheque No.", payment.cheque_no]);
+  if (payment.cheque_bank) rows.push(["Cheque Bank", payment.cheque_bank]);
+  if (payment.card_transaction_no) rows.push(["Card Txn No.", payment.card_transaction_no]);
+  if (payment.wallet_transaction_no) rows.push(["Wallet Txn No.", payment.wallet_transaction_no]);
+  return rows;
+};
+
+const getReceiptContact = async (payment) => {
+  const companyId = payment.companyId;
+  const exhibitor = companyId ? await ExhibitorRegistration.findById(companyId).lean() : null;
+  const company = companyId ? await Company.findById(companyId).lean() : null;
+
+  let email = "";
+  let mobile = "";
+  let name = "Contact";
+  let companyName = payment.company_name || "";
+  let address = "";
+  let city = "";
+  let state = "";
+  let country = "";
+  let pincode = "";
+  let gstNo = "";
+
+  if (exhibitor) {
+    const contact1 = exhibitor.contact1 || {};
+    email = contact1.email || "";
+    mobile = contact1.whatsapp || contact1.mobile || "";
+    name = contact1.name || `${contact1.firstName || ""} ${contact1.lastName || ""}`.trim() || exhibitor.companyName || "Contact";
+    companyName = exhibitor.exhibitorName || exhibitor.companyName || exhibitor.companyFirmName || companyName;
+    address = exhibitor.address || "";
+    city = exhibitor.city || "";
+    state = exhibitor.state || "";
+    country = exhibitor.country || "";
+    pincode = exhibitor.pincode || "";
+    gstNo = exhibitor.gstNo || "";
+  } else if (company) {
+    const contact = company.contacts && company.contacts.length > 0 ? company.contacts[0] : {};
+    email = contact.email || company.email || "";
+    mobile = contact.mobile || company.landline || "";
+    name = contact.name || contact.firstName || company.companyName || "Contact";
+    companyName = company.companyName || companyName;
+    address = company.address || company.companyAddress || "";
+    city = company.city || "";
+    state = company.state || "";
+    country = company.country || "";
+    pincode = company.pincode || company.pinCode || "";
+    gstNo = company.gstNo || company.gstin || "";
+  }
+
+  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo };
+};
+
+const generateAccountPaymentReceipt = async (payment) => {
+  const docData = await resolvePaymentDocument(payment);
+  const contact = await getReceiptContact(payment);
+  const receiptNo = `PAY-RCPT-${String(payment._id).slice(-8).toUpperCase()}`;
+  const invoiceAmount = parseAmount(getDocumentAmount(docData, payment));
+  const receivedAmount = parseAmount(payment.amount_text);
+  const tdsAmount = parseAmount(payment.tds_text);
+  const relatedPayments = payment.invoice_id
+    ? await Payment.find({ invoice_id: payment.invoice_id }).sort({ added: 1 }).lean()
+    : [payment];
+  const currentIndex = Math.max(0, relatedPayments.findIndex((p) => String(p._id) === String(payment._id)));
+  const paymentsUpToCurrent = relatedPayments.slice(0, currentIndex + 1);
+  const cumulativeReceived = paymentsUpToCurrent.reduce((sum, p) => sum + parseAmount(p.amount_text), 0);
+  const cumulativeTds = paymentsUpToCurrent.reduce((sum, p) => sum + parseAmount(p.tds_text), 0);
+  const taxableAmount = invoiceAmount > 0 ? Math.round((invoiceAmount / 1.18) * 100) / 100 : 0;
+  const gstAmount = Math.max(0, Math.round((invoiceAmount - taxableAmount) * 100) / 100);
+  const netPayable = Math.max(0, invoiceAmount - cumulativeTds);
+  const balanceAmount = Math.max(0, invoiceAmount - cumulativeReceived);
+  const [firstName, ...lastNameParts] = String(contact.name || "Contact").trim().split(/\s+/);
+
+  const paymentMode = payment.payment_mode || "manual";
+  const reference = getPaymentReference(payment);
+  const paymentHistory = paymentsUpToCurrent.map((p) => ({
+    amount: parseAmount(p.amount_text),
+    paymentType: p.pymnt_type || "manual",
+    paymentMode: p.payment_mode || "manual",
+    method: p.payment_mode || "manual",
+    transactionId: getPaymentReference(p),
+    paidAt: p.payment_date || p.added,
+  }));
+
+  const registrationLike = {
+    _id: payment._id,
+    customReceiptNo: receiptNo,
+    registrationId: getDocumentNo(docData, payment),
+    exhibitorName: contact.companyName || contact.name || "Client",
+    companyEmail: contact.email,
+    address: contact.address,
+    city: contact.city,
+    state: contact.state,
+    country: contact.country || "India",
+    pincode: contact.pincode,
+    gstNo: contact.gstNo,
+    contact1: {
+      firstName: firstName || contact.name || "Contact",
+      lastName: lastNameParts.join(" "),
+      email: contact.email,
+      mobile: contact.mobile,
+      whatsapp: contact.mobile,
+    },
+    eventId: { name: "IHWE 2026" },
+    participation: {
+      currency: "INR",
+      stallFor: getDocumentNo(docData, payment),
+      stallType: docData?.invoice_no ? "Tax Invoice" : "Proforma Invoice",
+      stallScheme: payment.pymnt_type || paymentMode,
+      dimension: "Payment Receipt",
+      stallSize: 1,
+      rate: taxableAmount || invoiceAmount,
+      amount: taxableAmount || invoiceAmount,
+      gstPercent: invoiceAmount > 0 ? 18 : 0,
+      total: invoiceAmount,
+    },
+    financeBreakdown: {
+      grossAmount: taxableAmount || invoiceAmount,
+      subtotal: taxableAmount || invoiceAmount,
+      gstAmount,
+      tdsAmount: cumulativeTds,
+      tdsPercent: payment.tds_rate || 0,
+      netPayable,
+    },
+    chosenTdsPercent: payment.tds_rate || 0,
+    amountPaid: cumulativeReceived,
+    balanceAmount,
+    paymentMode: paymentMode.toLowerCase() === "online" ? "online" : "manual",
+    paymentId: reference,
+    manualPaymentDetails: {
+      method: paymentMode,
+      transactionId: reference,
+      paidAt: payment.payment_date || payment.added,
+    },
+    paymentHistory,
+  };
+
+  const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, { paymentIndex: paymentHistory.length - 1 });
+  const filePath = (pdfResult && typeof pdfResult === "object") ? pdfResult.filePath : pdfResult;
+
+  return { filePath, receiptNo, docData, contact, registrationLike };
+};
 
 const resolvePaymentAccount = async (payment) => {
   if (payment.companyId) {
@@ -65,19 +270,25 @@ const getAllPayments = async (req, res) => {
 
     const mongoose = require("mongoose");
     const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
-    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, "invoice_no").lean();
-    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, "est_no").lean();
-    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, "est_no").lean();
+    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, "invoice_no invoice_date supply_date finalAmount added").lean();
+    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added").lean();
+    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added").lean();
 
     const invoiceMap = {};
-    invoices.forEach(i => invoiceMap[i._id.toString()] = i.invoice_no);
-    estimates.forEach(e => invoiceMap[e._id.toString()] = e.est_no);
-    proformas.forEach(p => invoiceMap[p._id.toString()] = p.est_no);
+    invoices.forEach(i => invoiceMap[i._id.toString()] = i);
+    estimates.forEach(e => invoiceMap[e._id.toString()] = e);
+    proformas.forEach(p => invoiceMap[p._id.toString()] = p);
 
-    const populatedPayments = payments.map(p => ({
-      ...p,
-      invoice_no: invoiceMap[p.invoice_id] || p.invoice_id
-    }));
+    const populatedPayments = payments.map(p => {
+      const doc = invoiceMap[p.invoice_id] || null;
+      return {
+        ...p,
+        invoice_no: getDocumentNo(doc, p),
+        invoice_date: getDocumentDate(doc),
+        invoice_amount: getDocumentAmount(doc, p),
+        receipt_url: `/api/payments/${p._id}/receipt`,
+      };
+    });
 
     res.status(200).json(populatedPayments);
   } catch (error) {
@@ -172,36 +383,8 @@ const sendPaymentReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Payment not found" });
     }
     
-    const companyId = payment.companyId;
-    if (!companyId) {
-      return res.status(400).json({ success: false, message: "No company associated with this payment." });
-    }
-
-    const exhibitor = await ExhibitorRegistration.findById(companyId).lean();
-    const company = await Company.findById(companyId).lean();
-
-    if (!exhibitor && !company) {
-      return res.status(404).json({ success: false, message: "Company details not found." });
-    }
-
-    let email = "";
-    let mobile = "";
-    let name = "Contact";
-    let companyName = "";
-
-    if (exhibitor) {
-      const contact1 = exhibitor.contact1 || {};
-      email = contact1.email || "";
-      mobile = contact1.whatsapp || contact1.mobile || "";
-      name = contact1.name || exhibitor.companyName || "Contact";
-      companyName = exhibitor.companyName || exhibitor.companyFirmName;
-    } else if (company) {
-      const contact = company.contacts && company.contacts.length > 0 ? company.contacts[0] : {};
-      email = contact.email || company.email || "";
-      mobile = contact.mobile || company.landline || "";
-      name = contact.name || contact.firstName || company.companyName || "Contact";
-      companyName = company.companyName;
-    }
+    const { filePath, docData, contact, registrationLike } = await generateAccountPaymentReceipt(payment);
+    const { email, mobile, name, companyName } = contact;
 
     if (!email && !mobile) {
       return res.status(400).json({ success: false, message: "No email or mobile found for Contact Person 1." });
@@ -212,15 +395,16 @@ const sendPaymentReceipt = async (req, res) => {
       amount: payment.amount_text,
       mode: payment.payment_mode,
       date: payment.payment_date,
-      reference: payment.ex_no || payment.invoice_id || 'N/A',
-      companyName: companyName
+      reference: getDocumentNo(docData, payment),
+      companyName,
+      receiptPath: filePath,
     };
 
     let emailSent = false;
     let whatsappSent = false;
 
     if (email && (!type || type === 'email')) {
-      emailSent = await emailService.sendManualPaymentReceipt(email, receiptData);
+      emailSent = await emailService.sendPaymentReceipt(registrationLike, filePath);
     }
     
     if (mobile && (!type || type === 'whatsapp')) {
@@ -232,12 +416,28 @@ const sendPaymentReceipt = async (req, res) => {
       success: true,
       message: `Receipt sent successfully${type ? ' via ' + type : ''}.`,
       emailSent,
-      whatsappSent
+      whatsappSent,
+      receiptUrl: `/api/payments/${payment._id}/receipt`,
     });
 
   } catch (error) {
     console.error("sendPaymentReceipt error:", error);
     res.status(500).json({ success: false, message: "Error sending receipt.", error: error.message });
+  }
+};
+
+const downloadPaymentReceipt = async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id).lean();
+    if (!payment) return res.status(404).json({ success: false, message: "Payment not found" });
+
+    const { filePath, receiptNo } = await generateAccountPaymentReceipt(payment);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${receiptNo}.pdf"`);
+    return res.sendFile(filePath);
+  } catch (error) {
+    console.error("downloadPaymentReceipt error:", error);
+    res.status(500).json({ success: false, message: "Error generating receipt.", error: error.message });
   }
 };
 
@@ -249,4 +449,5 @@ module.exports = {
   updatePayment,
   deletePayment,
   sendPaymentReceipt,
+  downloadPaymentReceipt,
 };
