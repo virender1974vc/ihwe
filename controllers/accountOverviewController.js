@@ -81,15 +81,7 @@ const EXHIBITOR_STATUS_LABELS = {
   "payment-failed": { label: "Payment Failed", color: "red" },
 };
 
-const getAccountOverview = async (req, res) => {
-  try {
-    const { companyId } = req.params;
-
-    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
-
-    if (!company && !exhibitor) {
-      return res.status(404).json({ message: "Company not found" });
-    }
+const buildAccountOverview = async (companyId, company, exhibitor) => {
     const lookupIds = Array.from(
       new Set(
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
@@ -482,9 +474,7 @@ const getAccountOverview = async (req, res) => {
       return isGenericUserName(existingUser) ? "Admin" : existingUser;
     };
 
-    res.status(200).json({
-      success: true,
-      data: {
+    return {
         companyInfo: {
           id: company?._id || exhibitor?._id,
           name: company?.companyName || exhibitor?.exhibitorName || "Unknown Company",
@@ -547,8 +537,21 @@ const getAccountOverview = async (req, res) => {
           ip_address: log.ip_address,
           timestamp: log.createdAt,
         })),
-      },
-    });
+    };
+};
+
+const getAccountOverview = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
+
+    if (!company && !exhibitor) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    const data = await buildAccountOverview(companyId, company, exhibitor);
+    res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Error in getAccountOverview:", error);
     res.status(500).json({ success: false, message: "Error fetching account overview", error: error.message });
@@ -557,4 +560,6 @@ const getAccountOverview = async (req, res) => {
 
 module.exports = {
   getAccountOverview,
+  buildAccountOverview,
+  resolveCompanyAndExhibitor,
 };
