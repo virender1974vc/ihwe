@@ -17,6 +17,29 @@ const itemKey = (item = {}) => item._id
     normalize(item.area),
   ].join("|");
 const isCancelled = (doc) => normalize(doc?.status) === "cancelled";
+const toNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+
+const getGstRate = (item = {}) => {
+  const directRate = toNumber(item.gstRate ?? item.gst_per ?? item.gstPct);
+  if (directRate) return directRate;
+  const igstRate = toNumber(item.igst_per);
+  if (igstRate) return igstRate;
+  const cgstRate = toNumber(item.cgst_per);
+  return cgstRate ? cgstRate * 2 : 0;
+};
+
+const getFinancials = (item = {}) => {
+  const qty = toNumber(item.qty);
+  const rate = toNumber(item.rate);
+  const amount = toNumber(item.amount) || rate * qty;
+  const discountPercent = toNumber(item.disc ?? item.discountPct);
+  const discountAmount = toNumber(item.discountAmount ?? item.discount) || (amount * discountPercent) / 100;
+  const taxable = toNumber(item.tax ?? item.taxable ?? item.taxableValue) || Math.max(0, amount - discountAmount);
+  const gstRate = getGstRate(item);
+  const gstAmount = toNumber(item.gstAmount) || (gstRate ? (taxable * gstRate) / 100 : toNumber(item.igst ?? item.cgst) + toNumber(item.sgst));
+  const finalAmount = toNumber(item.finalAmount ?? item.total) || taxable + gstAmount;
+  return { amount, discountAmount, taxable, gstRate, gstAmount, finalAmount };
+};
 
 const findCompany = async (id) => {
   let company = await Company.findById(id).lean();
@@ -130,6 +153,7 @@ const getSourceSummary = async (estimate, excludeId) => {
     const key = itemKey(item);
     const sourceQty = Number(item.qty || 0);
     const deliveredQty = used.get(key) || 0;
+    const financials = getFinancials(item);
     return {
       sourceItemKey: key,
       description: item.description,
@@ -138,11 +162,55 @@ const getSourceSummary = async (estimate, excludeId) => {
       size: item.size || "",
       area: item.area || "",
       remarks: item.remarks || "",
+      rate: toNumber(item.rate),
+      discount: financials.discountAmount,
+      amount: financials.amount,
+      taxable: financials.taxable,
+      gstRate: financials.gstRate,
+      gstAmount: financials.gstAmount,
+      finalAmount: financials.finalAmount,
       sourceQty,
       deliveredQty,
       remainingQty: Math.max(0, sourceQty - deliveredQty),
     };
   });
+};
+
+const enrichChallan = async (challan) => {
+  if (!challan?.source_estimate_id) return challan;
+  const estimate = await Estimate.findById(challan.source_estimate_id).lean();
+  if (!estimate) return challan;
+  const sourceItems = await getSourceSummary(estimate, challan._id);
+  const sourceByKey = new Map(sourceItems.map((item) => [item.sourceItemKey, item]));
+  return {
+    ...challan,
+    event_name: challan.event_name || estimate.event_name || "",
+    delivery_address: challan.delivery_address || estimate.event_place_of_supply || estimate.consignee_addr || "",
+    remarks: challan.remarks || estimate.remarks || "",
+    terms: challan.terms || estimate.terms || "",
+    items: (challan.items || []).map((item) => {
+      const source = sourceByKey.get(item.sourceItemKey);
+      if (!source) return item;
+      return {
+        ...source,
+        ...item,
+        description: item.description || source.description,
+        hsn: item.hsn || source.hsn,
+        unit: item.unit || source.unit,
+        size: item.size || source.size,
+        area: item.area || source.area,
+        remarks: item.remarks || source.remarks,
+        rate: toNumber(item.rate) || source.rate,
+        discount: toNumber(item.discount) || source.discount,
+        amount: toNumber(item.amount) || source.amount,
+        taxable: toNumber(item.taxable) || source.taxable,
+        gstRate: toNumber(item.gstRate) || source.gstRate,
+        gstAmount: toNumber(item.gstAmount) || source.gstAmount,
+        finalAmount: toNumber(item.finalAmount) || source.finalAmount,
+        sourceQty: toNumber(item.sourceQty) || source.sourceQty,
+      };
+    }),
+  };
 };
 
 const validatePayload = async (payload, excludeId) => {
@@ -182,7 +250,8 @@ exports.getChallans = async (req, res) => {
       query.$or = [{ companyId: req.query.companyId }, { account_ref_id: req.query.companyId }];
     }
     if (req.query.estimateId) query.source_estimate_id = req.query.estimateId;
-    const data = await DeliveryChallan.find(query).sort({ added: -1 }).lean();
+    const challans = await DeliveryChallan.find(query).sort({ added: -1 }).lean();
+    const data = await Promise.all(challans.map(enrichChallan));
     res.json(data);
   } catch (error) {
     res.status(500).json({ message: "Error fetching delivery challans", error: error.message });
@@ -193,8 +262,9 @@ exports.getChallan = async (req, res) => {
   try {
     const challan = await DeliveryChallan.findById(req.params.id).lean();
     if (!challan) return res.status(404).json({ message: "Delivery challan not found" });
-    challan.company = await findCompany(challan.companyId);
-    res.json(challan);
+    const enriched = await enrichChallan(challan);
+    enriched.company = await findCompany(enriched.companyId);
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ message: "Error fetching delivery challan", error: error.message });
   }
@@ -248,6 +318,8 @@ exports.getProformaOptions = async (req, res) => {
         contact_phone: estimate.consignee_phone || primaryContact.mobile || primaryContact.phone || client?.mobile || client?.landline || "",
         event_name: estimate.event_name,
         delivery_address: estimate.event_place_of_supply || estimate.consignee_addr,
+        remarks: estimate.remarks || "",
+        terms: estimate.terms || "",
         country: estimate.country,
         state: estimate.state,
         city: estimate.city,

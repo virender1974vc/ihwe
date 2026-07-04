@@ -4,6 +4,7 @@ const {
   getGroupedEstimateData,
   getAllEstimates,
   getEstimateById,
+  getEstimateImpactPreview,
   updateEstimate,
   deleteEstimate,
   getNextEstimateNumber,
@@ -21,6 +22,7 @@ router.get("/", getAllEstimates);
 
 router.post("/", addEstimate);
 
+router.post("/:id/impact-preview", getEstimateImpactPreview);
 router.get("/:id", getEstimateById);
 router.put("/:id", updateEstimate);
 router.delete("/:id", deleteEstimate);

@@ -371,7 +371,8 @@ class PDFGenerator {
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
                 const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
                 const suffix = paymentIndex >= 0 ? `_P${paymentIndex + 1}` : '';
-                const fileName = `receipt_${registration.registrationId || registration._id}${suffix}_${Date.now()}.pdf`;
+                const safeReceiptBase = String(registration.registrationId || registration._id || 'receipt').replace(/[\\/:*?"<>|]+/g, '_');
+                const fileName = `receipt_${safeReceiptBase}${suffix}_${Date.now()}.pdf`;
                 const filePath = path.join(TEMP_DIR, fileName);
                 const stream = fs.createWriteStream(filePath);
                 doc.pipe(stream);
@@ -521,7 +522,7 @@ class PDFGenerator {
                 }
 
                 const history = registration.paymentHistory || [];
-                const latestPayment = history.length > 0 ? history[history.length - 1] : { amount: registration.amountPaid };
+                const latestPayment = paymentHistoryEntry || (history.length > 0 ? history[history.length - 1] : { amount: registration.amountPaid });
                 const priorPaid = registration.amountPaid - latestPayment.amount;
 
                 if (priorPaid > 0) {
@@ -552,7 +553,7 @@ class PDFGenerator {
                     { label: 'Payment Mode:', value: (latestPayment.paymentMode || registration.paymentMode || 'N/A').toUpperCase() },
                     { label: 'Transaction / Reference No.:', value: latestPayment.transactionId || m.transactionId || registration.paymentId || 'N/A' },
                     { label: 'Total Paid (Cumulative):', value: fmt(registration.amountPaid) },
-                    { label: 'Payment Date:', value: new Date(latestPayment.paidAt || m.paidAt || registration.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) },
+                    { label: 'Payment Date:', value: new Date(latestPayment.paidAt || m.paidAt || registration.updatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) },
                 ];
                 payRows.forEach(row => {
                     this._label(doc, row.label, 60, y, 140);

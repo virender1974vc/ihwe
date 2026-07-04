@@ -81,15 +81,7 @@ const EXHIBITOR_STATUS_LABELS = {
   "payment-failed": { label: "Payment Failed", color: "red" },
 };
 
-const getAccountOverview = async (req, res) => {
-  try {
-    const { companyId } = req.params;
-
-    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
-
-    if (!company && !exhibitor) {
-      return res.status(404).json({ message: "Company not found" });
-    }
+const buildAccountOverview = async (companyId, company, exhibitor) => {
     const lookupIds = Array.from(
       new Set(
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
@@ -127,24 +119,20 @@ const getAccountOverview = async (req, res) => {
     const payments = allPayments.filter((payment) => payableDocIds.has(String(payment.invoice_id)));
     let totalDue = 0;
     let dueBreakdown = [];
-    if (exhibitor?.financeBreakdown?.netPayable) {
+
+    if (activeInvoices.length > 0) {
+      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
+    } else if (activeProformaInvoices.length > 0) {
+      totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+      dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
+    } else if (exhibitor?.financeBreakdown?.netPayable) {
       totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     } else if (exhibitor?.totalPayable) {
       totalDue = parseFloat(exhibitor.totalPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Total Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
-    } else if (activeProformaInvoices.length > 0) {
-      totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-      dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
-    } else if (activeInvoices.length > 0) {
-      totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-      dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
     }
-
-    // 2. Compute Paid Amount
-    // NOTE: on the Payment model, f_amount is the document's TOTAL amount and
-    // amount_text is the amount actually RECEIVED in that payment (see PaymentTable.jsx
-    // where Balance = f_amount - amount_text). Paid amount must sum amount_text.
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
     let paidBreakdown = [];
     if (payments.length > 0) {
@@ -278,14 +266,30 @@ const getAccountOverview = async (req, res) => {
       timestamp: dn.added || new Date(),
     }));
 
-    deliveryChallans.forEach((challan) => recentDocs.push({
-      documentType: "Delivery Challan",
-      documentNo: challan.challan_no,
-      date: challan.challan_date || challan.added,
-      amount: 0,
-      status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
-      id: challan._id,
-      timestamp: challan.added || new Date(),
+    deliveryChallans.forEach((challan) => {
+      const challanAmount = (challan.items || []).reduce(
+        (sum, it) => sum + ((parseFloat(it.finalAmount) || 0) || ((parseFloat(it.taxable) || 0) + (parseFloat(it.gstAmount) || 0))),
+        0
+      );
+      recentDocs.push({
+        documentType: "Delivery Challan",
+        documentNo: challan.challan_no,
+        date: challan.challan_date || challan.added,
+        amount: challanAmount,
+        status: String(challan.status || "issued").replace(/^\w/, (letter) => letter.toUpperCase()),
+        id: challan._id,
+        timestamp: challan.added || new Date(),
+      });
+    });
+
+    allPayments.forEach((pmt) => recentDocs.push({
+      documentType: "Payment",
+      documentNo: pmt.ex_no || pmt.payment_no || 'Payment',
+      date: pmt.payment_date || pmt.added,
+      amount: parseFloat(pmt.amount_text) || 0,
+      status: "Received",
+      id: pmt._id,
+      timestamp: pmt.added || new Date(),
     }));
     let recentDocsUnallocated = onlinePaidAmount;
     recentDocs = recentDocs.map((doc) => {
@@ -476,9 +480,7 @@ const getAccountOverview = async (req, res) => {
       return isGenericUserName(existingUser) ? "Admin" : existingUser;
     };
 
-    res.status(200).json({
-      success: true,
-      data: {
+    return {
         companyInfo: {
           id: company?._id || exhibitor?._id,
           name: company?.companyName || exhibitor?.exhibitorName || "Unknown Company",
@@ -541,8 +543,21 @@ const getAccountOverview = async (req, res) => {
           ip_address: log.ip_address,
           timestamp: log.createdAt,
         })),
-      },
-    });
+    };
+};
+
+const getAccountOverview = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+
+    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
+
+    if (!company && !exhibitor) {
+      return res.status(404).json({ message: "Company not found" });
+    }
+
+    const data = await buildAccountOverview(companyId, company, exhibitor);
+    res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Error in getAccountOverview:", error);
     res.status(500).json({ success: false, message: "Error fetching account overview", error: error.message });
@@ -551,4 +566,6 @@ const getAccountOverview = async (req, res) => {
 
 module.exports = {
   getAccountOverview,
+  buildAccountOverview,
+  resolveCompanyAndExhibitor,
 };
