@@ -3,10 +3,12 @@ const crypto = require("crypto");
 const razorpay = require("../utils/razorpay");
 const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
+const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 
 const DOC_MODELS = { invoice: Invoice, proforma: Estimate };
+const VIEW_DOC_MODELS = { invoice: Invoice, proforma: Estimate, challan: DeliveryChallan };
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 
 // An exhibitor may have more than one registration (and a linked CRM Company);
@@ -148,4 +150,34 @@ const verifyPayment = async (req, res) => {
   }
 };
 
-module.exports = { createOrder, verifyPayment };
+const getDocument = async (req, res) => {
+  try {
+    if (req.user.role !== "exhibitor") {
+      return res.status(403).json({ success: false, message: "Access denied. Exhibitors only." });
+    }
+
+    const { docType, docId } = req.params;
+    const Model = VIEW_DOC_MODELS[docType];
+    if (!Model || !mongoose.Types.ObjectId.isValid(docId)) {
+      return res.status(400).json({ success: false, message: "Invalid document reference" });
+    }
+
+    const doc = await Model.findById(docId).lean();
+    if (!doc) {
+      return res.status(404).json({ success: false, message: "Document not found" });
+    }
+
+    const authorizedIds = await getAuthorizedCompanyIds(req.user);
+    const isOwned = authorizedIds.has(String(doc.companyId)) || authorizedIds.has(String(doc.account_ref_id));
+    if (!isOwned) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    res.json({ success: true, document: doc });
+  } catch (error) {
+    console.error("Exhibitor get-document error:", error);
+    res.status(500).json({ success: false, message: error?.message || "Failed to load document" });
+  }
+};
+
+module.exports = { createOrder, verifyPayment, getDocument };

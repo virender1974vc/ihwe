@@ -70,6 +70,7 @@ router.put('/update-profile', protectExhibitor, (req, res, next) => {
 router.post('/register-seller', protectExhibitor, (req, res) => exhibitorAuthController.registerSeller(req, res));
 
 const exhibitorDocumentPaymentController = require('../controllers/exhibitorDocumentPaymentController');
+router.get('/documents/:docType/:docId', protectExhibitor, exhibitorDocumentPaymentController.getDocument);
 router.post('/documents/:docType/:docId/create-order', protectExhibitor, exhibitorDocumentPaymentController.createOrder);
 router.post('/documents/verify-payment', protectExhibitor, exhibitorDocumentPaymentController.verifyPayment);
 
