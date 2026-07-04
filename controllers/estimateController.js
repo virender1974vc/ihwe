@@ -1,5 +1,9 @@
 const Estimate = require("../models/Estimate");
 const Invoice = require("../models/Invoice");
+const DeliveryChallan = require("../models/DeliveryChallan");
+const Payment = require("../models/Payment");
+const CreditNote = require("../models/CreditNote");
+const DebitNote = require("../models/DebitNote");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const ChatMessage = require('../models/ChatMessage');
@@ -376,6 +380,135 @@ const updateEstimate = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       message: "Error updating estimate",
+      error: error.message,
+    });
+  }
+};
+
+const IMPACT_FIELDS = [
+  ["est_type", "Estimate type"],
+  ["gst_no", "GST number"],
+  ["supply_date", "Supply date"],
+  ["company_name", "Company name"],
+  ["company_addr", "Company address"],
+  ["company_gst_no", "Company GST number"],
+  ["event_name", "Event / consignee name"],
+  ["event_place_of_supply", "Event / delivery address"],
+  ["event_gst_no", "Event GST number"],
+  ["consignee_person", "Contact person"],
+  ["consignee_phone", "Contact phone"],
+  ["country", "Country"],
+  ["state", "State"],
+  ["city", "City"],
+  ["pincode", "PIN code"],
+  ["finalAmount", "Grand total"],
+  ["remarks", "Remarks"],
+  ["terms", "Terms"],
+];
+
+const normalizeImpactValue = (value) => {
+  if (value === undefined || value === null) return "";
+  return typeof value === "number" ? Number(value) : String(value).trim();
+};
+
+const summarizeItemChanges = (oldItems = [], newItems = []) => {
+  const comparableFields = [
+    "description", "hsn", "qty", "size", "area", "unit", "rate",
+    "amount", "disc", "gstRate", "tax", "finalAmount",
+  ];
+  const maxLength = Math.max(oldItems.length, newItems.length);
+  let added = 0;
+  let removed = 0;
+  let modified = 0;
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (!oldItems[index]) {
+      added += 1;
+      continue;
+    }
+    if (!newItems[index]) {
+      removed += 1;
+      continue;
+    }
+    const changed = comparableFields.some(
+      (field) => normalizeImpactValue(oldItems[index][field])
+        !== normalizeImpactValue(newItems[index][field]),
+    );
+    if (changed) modified += 1;
+  }
+
+  return { added, removed, modified };
+};
+
+// Read-only preflight used before editing a PI. Existing downstream documents
+// remain historical snapshots and are never changed by this endpoint.
+const getEstimateImpactPreview = async (req, res) => {
+  try {
+    const estimate = await Estimate.findById(req.params.id).lean();
+    if (!estimate) {
+      return res.status(404).json({ message: "Estimate not found" });
+    }
+
+    const changedFields = IMPACT_FIELDS.reduce((changes, [field, label]) => {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field)) return changes;
+      const before = normalizeImpactValue(estimate[field]);
+      const after = normalizeImpactValue(req.body[field]);
+      if (before !== after) changes.push({ field, label, before, after });
+      return changes;
+    }, []);
+    const itemChanges = summarizeItemChanges(estimate.items, req.body.items);
+
+    const estimateId = String(estimate._id);
+    const invoices = await Invoice.find({
+      $or: [
+        { source_estimate_id: estimateId },
+        { companyId: String(estimate.companyId), estimate_no: estimate.est_no },
+      ],
+    }).select("_id invoice_no status finalAmount").lean();
+
+    const invoiceIds = invoices.map((invoice) => String(invoice._id));
+    const invoiceNumbers = invoices.map((invoice) => invoice.invoice_no).filter(Boolean);
+
+    const [deliveryChallans, payments, creditNotes, debitNotes] = await Promise.all([
+      DeliveryChallan.find({ source_estimate_id: estimateId })
+        .select("_id challan_no status challan_date").lean(),
+      invoiceIds.length
+        ? Payment.find({ invoice_id: { $in: invoiceIds } })
+          .select("_id ex_no invoice_id amount_text f_amount payment_date status").lean()
+        : [],
+      CreditNote.find({
+        companyId: String(estimate.companyId),
+        est_no: estimate.est_no,
+      }).select("_id create_note_no status").lean(),
+      DebitNote.find({
+        companyId: String(estimate.companyId),
+        $or: [
+          { toInvoiceId: { $in: [estimateId, ...invoiceIds] } },
+          { toInvoiceNo: { $in: [estimate.est_no, ...invoiceNumbers] } },
+        ],
+      }).select("_id debit_note_no status totalAmount").lean(),
+    ]);
+
+    const hasItemChanges = Object.values(itemChanges).some((count) => count > 0);
+    const dependencyCount = invoices.length + deliveryChallans.length
+      + payments.length + creditNotes.length + debitNotes.length;
+
+    return res.status(200).json({
+      hasChanges: changedFields.length > 0 || hasItemChanges,
+      hasImpact: dependencyCount > 0,
+      changedFields,
+      itemChanges,
+      dependencies: {
+        invoices,
+        deliveryChallans,
+        payments,
+        creditNotes,
+        debitNotes,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error checking Proforma Invoice impact",
       error: error.message,
     });
   }
@@ -1044,6 +1177,7 @@ module.exports = {
   getGroupedEstimateData,
   getAllEstimates,
   getEstimateById,
+  getEstimateImpactPreview,
   updateEstimate,
   deleteEstimate,
   getNextEstimateNumber,

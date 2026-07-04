@@ -8,6 +8,7 @@ const {
   getPaymentById,
   updatePayment,
   deletePayment,
+  sendPaymentReceipt,
 } = require("../controllers/paymentController.js");
 
 const router = express.Router();
@@ -29,5 +30,6 @@ router.get("/", getAllPayments); // Read all
 router.get("/:id", getPaymentById); // Read one
 router.put("/:id", updatePayment); // Update
 router.delete("/:id", deletePayment); // Delete
+router.post("/:id/send-receipt", sendPaymentReceipt); // Send Receipt
 
 module.exports = router;

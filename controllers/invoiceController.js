@@ -1,5 +1,9 @@
 const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
+const DeliveryChallan = require("../models/DeliveryChallan");
+const Payment = require("../models/Payment");
+const CreditNote = require("../models/CreditNote");
+const DebitNote = require("../models/DebitNote");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const { sendWhatsAppMessage, sendTaxInvoiceWhatsApp } = require('../utils/whatsapp');
@@ -17,6 +21,69 @@ const getItemKey = (item = {}) => [
   Number(item.rate || 0).toFixed(2),
 ].join("|");
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+
+const buildDeliveryChallanSnapshots = async (payload) => {
+  const rawIds = Array.isArray(payload.delivery_challan_ids)
+    ? payload.delivery_challan_ids.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  const ids = [...new Set(rawIds)];
+
+  if (ids.length !== rawIds.length) {
+    return { error: "A delivery challan cannot be selected more than once." };
+  }
+  if (ids.length === 0) return { ids: [], snapshots: [] };
+
+  const estimate = payload.source_estimate_id
+    ? await Estimate.findById(payload.source_estimate_id).lean().catch(() => null)
+    : await Estimate.findOne({
+      est_no: payload.estimate_no,
+      companyId: payload.companyId,
+    }).lean();
+  if (!estimate) {
+    return { error: "The invoice proforma could not be found for delivery challan validation." };
+  }
+
+  const challans = await DeliveryChallan.find({ _id: { $in: ids } }).lean().catch(() => []);
+  if (challans.length !== ids.length) {
+    return { error: "One or more selected delivery challans were not found." };
+  }
+
+  const byId = new Map(challans.map((challan) => [String(challan._id), challan]));
+  const snapshots = [];
+  for (const id of ids) {
+    const challan = byId.get(id);
+    if (isCancelledDoc(challan)) {
+      return { error: `Cancelled delivery challan ${challan.challan_no || id} cannot be linked.` };
+    }
+    if (String(challan.source_estimate_id) !== String(estimate._id)) {
+      return { error: `Delivery challan ${challan.challan_no || id} does not belong to this proforma.` };
+    }
+    const belongsToCompany = String(challan.companyId) === String(payload.companyId)
+      || String(challan.account_ref_id || "") === String(payload.companyId)
+      || String(challan.companyId) === String(estimate.companyId);
+    if (!belongsToCompany) {
+      return { error: `Delivery challan ${challan.challan_no || id} does not belong to this client.` };
+    }
+    snapshots.push({
+      delivery_challan_id: id,
+      challan_no: challan.challan_no,
+      challan_date: challan.challan_date || "",
+      status: challan.status || "",
+      delivery_address: challan.delivery_address || "",
+      transporter_name: challan.transporter_name || "",
+      vehicle_no: challan.vehicle_no || "",
+      eway_bill: challan.eway_bill || "",
+      bilty_no: challan.bilty_no || "",
+      items: (challan.items || []).map((item) => ({
+        description: item.description || "",
+        hsn: item.hsn || "",
+        qty: Number(item.qty || 0),
+        unit: item.unit || "",
+      })),
+    });
+  }
+  return { ids, snapshots };
+};
 
 const validateInvoiceItemsAgainstEstimate = async (payload, excludeInvoiceId = null) => {
   if (!payload?.estimate_no && !payload?.source_estimate_id) return null;
@@ -137,11 +204,18 @@ const createInvoice = async (req, res) => {
       return res.status(400).json({ message: validationError });
     }
 
+    const challanResult = await buildDeliveryChallanSnapshots(req.body);
+    if (challanResult.error) {
+      return res.status(400).json({ message: challanResult.error });
+    }
+
     // Generate invoice number
     const invoice_no = await Invoice.generateNextInvoiceNumber();
 
     const newInvoice = new Invoice({
       ...req.body,
+      delivery_challan_ids: challanResult.ids,
+      delivery_challans: challanResult.snapshots,
       invoice_no,
     });
 
@@ -171,14 +245,21 @@ const createInvoice = async (req, res) => {
 // 📍 UPDATE invoice
 const updateInvoice = async (req, res) => {
   try {
-    const validationError = await validateInvoiceItemsAgainstEstimate(req.body, req.params.id);
-    if (validationError) {
-      return res.status(400).json({ message: validationError });
+    const existingInvoice = await Invoice.findById(req.params.id).lean();
+    if (!existingInvoice) return res.status(404).json({ message: "Invoice not found" });
+    const updateKeys = Object.keys(req.body || {});
+    const isCancellationOnly = updateKeys.length === 1
+      && updateKeys[0] === "status"
+      && String(req.body.status || "").toLowerCase() === "cancelled";
+    if (!isCancellationOnly) {
+      return res.status(409).json({
+        message: "Issued invoices cannot be edited. Mark the incorrect invoice as cancelled and create a corrected invoice, or use a credit/debit note.",
+      });
     }
 
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      { status: "cancelled" },
       { returnDocument: 'after' },
     );
 
@@ -205,8 +286,174 @@ const updateInvoice = async (req, res) => {
 };
 
 // 📍 DELETE invoice
+const getSourceEstimateForInvoice = async (invoice) => {
+  if (invoice.source_estimate_id) {
+    const estimate = await Estimate.findById(invoice.source_estimate_id).lean().catch(() => null);
+    if (estimate) return estimate;
+  }
+  return Estimate.findOne({ est_no: invoice.estimate_no, companyId: invoice.companyId }).lean();
+};
+
+const estimateItemToInvoiceItem = (item = {}) => {
+  const amount = Number(item.amount || 0);
+  const discountPct = Number(item.disc || 0);
+  const taxableValue = Math.max(0, amount - ((amount * discountPct) / 100));
+  const gstPct = String(item.gstRate || "0").replace(/[^\d.]/g, "") || "0";
+  const gstAmount = Number(item.tax || 0) || (taxableValue * Number(gstPct) / 100);
+  return {
+    description: item.description || "", hsn: item.hsn || "", qty: Number(item.qty || 0),
+    size: String(item.size ?? ""), area: String(item.area ?? ""), unit: item.unit || "Nos",
+    rate: Number(item.rate || 0), amount, discountPct, taxableValue, gstPct, gstAmount,
+    total: Number(item.finalAmount || (taxableValue + gstAmount)),
+  };
+};
+
+const buildRevisedInvoiceData = (invoice, estimate) => ({
+  source_estimate_id: String(estimate._id),
+  estimate_no: estimate.est_no,
+  type_of_invoice: estimate.est_type || invoice.type_of_invoice,
+  gst_no: estimate.gst_no || "",
+  supply_date: estimate.supply_date || invoice.supply_date,
+  company_name: estimate.company_name || "",
+  company_addr: estimate.company_addr || "",
+  company_gst_no: estimate.company_gst_no || "",
+  event_name: estimate.event_name || "",
+  event_place_of_supply: estimate.event_place_of_supply || "",
+  event_gst_no: estimate.event_gst_no || "",
+  consignee_name: estimate.consignee_name || estimate.event_name || "",
+  consignee_addr: estimate.consignee_addr || estimate.event_place_of_supply || "",
+  billing_address: estimate.company_addr || invoice.billing_address,
+  country: estimate.country || "", state: estimate.state || "", city: estimate.city || "",
+  pincode: String(estimate.pincode || ""),
+  items: (estimate.items || []).map(estimateItemToInvoiceItem),
+  finalAmount: Number(estimate.finalAmount || 0),
+  remarks: estimate.remarks || "",
+  terms: estimate.terms || "",
+});
+
+const getInvoiceRevisionDependencies = async (invoice) => {
+  const invoiceId = String(invoice._id);
+  const [payments, creditNotes, debitNotes] = await Promise.all([
+    Payment.find({ invoice_id: invoiceId }).select("_id ex_no amount_text f_amount payment_date status").lean(),
+    CreditNote.find({ companyId: String(invoice.companyId), est_no: invoice.estimate_no })
+      .select("_id create_note_no status").lean(),
+    DebitNote.find({
+      companyId: String(invoice.companyId),
+      $or: [{ toInvoiceId: invoiceId }, { toInvoiceNo: invoice.invoice_no }],
+    }).select("_id debit_note_no status totalAmount").lean(),
+  ]);
+  return { payments, creditNotes, debitNotes };
+};
+
+const summarizeInvoiceRevision = (invoice, revisedData) => {
+  const fields = [
+    ["type_of_invoice", "Invoice type"], ["gst_no", "GST number"],
+    ["company_name", "Company name"], ["company_addr", "Company address"],
+    ["consignee_name", "Consignee name"], ["consignee_addr", "Delivery address"],
+    ["state", "State"], ["city", "City"], ["pincode", "PIN code"],
+    ["finalAmount", "Grand total"], ["remarks", "Remarks"], ["terms", "Terms"],
+  ];
+  const changedFields = fields.reduce((result, [field, label]) => {
+    const before = String(invoice[field] ?? "").trim();
+    const after = String(revisedData[field] ?? "").trim();
+    if (before !== after) result.push({ field, label, before, after });
+    return result;
+  }, []);
+  const cleanItem = (item) => {
+    const plain = item?.toObject ? item.toObject() : item;
+    const { _id, ...rest } = plain || {};
+    return rest;
+  };
+  const oldItems = (invoice.items || []).map(cleanItem);
+  const newItems = revisedData.items || [];
+  let modified = 0;
+  for (let index = 0; index < Math.min(oldItems.length, newItems.length); index += 1) {
+    if (JSON.stringify(oldItems[index]) !== JSON.stringify(newItems[index])) modified += 1;
+  }
+  const itemChanges = {
+    added: Math.max(0, newItems.length - oldItems.length),
+    removed: Math.max(0, oldItems.length - newItems.length),
+    modified,
+  };
+  return {
+    changedFields, itemChanges,
+    hasChanges: changedFields.length > 0 || Object.values(itemChanges).some(Boolean),
+  };
+};
+
+const previewInvoiceRevision = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id).lean();
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    if (isCancelledDoc(invoice)) return res.status(409).json({ message: "Cancelled invoice cannot be revised." });
+    const estimate = await getSourceEstimateForInvoice(invoice);
+    if (!estimate) return res.status(404).json({ message: "Linked Proforma Invoice was not found." });
+    const revisedData = buildRevisedInvoiceData(invoice, estimate);
+    return res.status(200).json({
+      ...summarizeInvoiceRevision(invoice, revisedData),
+      invoice_no: invoice.invoice_no,
+      current_revision: Number(invoice.revision_no || 0),
+      next_revision: Number(invoice.revision_no || 0) + 1,
+      dependencies: await getInvoiceRevisionDependencies(invoice),
+      deliveryChallans: invoice.delivery_challans || [],
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Error checking invoice revision", error: error.message });
+  }
+};
+
+const reviseInvoiceFromEstimate = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    if (isCancelledDoc(invoice)) return res.status(409).json({ message: "Cancelled invoice cannot be revised." });
+    const estimate = await getSourceEstimateForInvoice(invoice);
+    if (!estimate) return res.status(404).json({ message: "Linked Proforma Invoice was not found." });
+
+    const currentInvoice = invoice.toObject();
+    const revisedData = buildRevisedInvoiceData(currentInvoice, estimate);
+    if (!summarizeInvoiceRevision(currentInvoice, revisedData).hasChanges) {
+      return res.status(409).json({ message: "Invoice already matches the latest Proforma Invoice." });
+    }
+    const validationError = await validateInvoiceItemsAgainstEstimate(
+      { ...currentInvoice, ...revisedData }, invoice._id,
+    );
+    if (validationError) return res.status(400).json({ message: validationError });
+
+    const snapshot = { ...currentInvoice };
+    delete snapshot.revisions;
+    delete snapshot._id;
+    delete snapshot.__v;
+    const nextRevision = Number(invoice.revision_no || 0) + 1;
+    invoice.revisions.push({
+      revision: nextRevision, revised_at: new Date(),
+      revised_by: String(req.body?.revised_by || ""), reason: String(req.body?.reason || ""), snapshot,
+    });
+    Object.assign(invoice, revisedData, { revision_no: nextRevision, revised_at: new Date() });
+    await invoice.save();
+
+    const accountName = await getDocumentAccountName(invoice, "account");
+    await logActivity(
+      req, "Revised", "Accounts",
+      `Revised Invoice ${invoice.invoice_no} to Rev ${nextRevision} for ${accountName}. Amount: ₹${invoice.finalAmount || 0}`,
+    );
+    return res.status(200).json({
+      message: `Invoice revised successfully. Invoice number remains ${invoice.invoice_no}.`,
+      data: invoice,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Error revising invoice", error: error.message });
+  }
+};
+
 const deleteInvoice = async (req, res) => {
   try {
+    const existing = await Invoice.findById(req.params.id).select("_id").lean();
+    if (!existing) return res.status(404).json({ message: "Invoice not found" });
+    return res.status(409).json({
+      message: "Invoices cannot be deleted because their number and audit history must be preserved. Mark the invoice as cancelled instead.",
+    });
+
     const deletedInvoice = await Invoice.findByIdAndDelete(req.params.id);
 
     if (!deletedInvoice)
@@ -802,6 +1049,8 @@ module.exports = {
   getAllInvoices,
   getInvoiceById,
   createInvoice,
+  previewInvoiceRevision,
+  reviseInvoiceFromEstimate,
   updateInvoice,
   deleteInvoice,
   sendWhatsAppInvoice,
