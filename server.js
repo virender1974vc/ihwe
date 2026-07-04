@@ -533,17 +533,17 @@ io.on('connection', (socket) => {
         const ExhibitorRegistration = require('./models/ExhibitorRegistration');
         const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
         const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
-        
+
         const payload = {
           roomId, exhibitorName, lastMessage: message,
           lastMessageAt: msg.createdAt, lastSenderType: senderType,
           unreadIncrement: !otherOnline ? 1 : 0,
           spokenWith: exhibitor?.spokenWith || ''
         };
-        
+
         io.to(targetRoom).emit('room_updated', payload);
         if (targetRoom !== 'admin_room') {
-           io.to('admin_room').emit('room_updated', payload);
+          io.to('admin_room').emit('room_updated', payload);
         }
       } else if (senderType === 'buyer') {
         // Buyer notification to admin
