@@ -396,6 +396,7 @@ app.use("/api/delivery-challans", deliveryChallanRoutes);
 app.use("/api/creditnotes", creditNoteRoutes);
 app.use("/api/debitnotes", debitNoteRoutes);
 app.use("/api/account-overview", require("./routes/accountOverviewRoutes"));
+app.use("/api/client-ledger", require("./routes/clientLedgerRoutes"));
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
 app.use("/api/group-visitors", groupVisitorRoutes);
