@@ -95,6 +95,17 @@ const getCompanyDebitNoteContext = async (req, res) => {
         eventName: inv.event_name || "",
         gstNo: inv.company_gst_no || inv.gst_no || exhibitor?.gstNo || company?.gstNumber || "",
         state: inv.state || exhibitor?.state || company?.state || "",
+        items: (inv.items || []).map((it) => ({
+          description: it.description || "",
+          hsn: it.hsn || "",
+          qty: it.qty || 1,
+          unit: it.unit || "Nos",
+          rate: it.rate || 0,
+          amount: it.amount || 0,
+          gstPct: it.gstPct || "18%",
+          gstAmount: it.gstAmount || 0,
+          total: it.total || 0,
+        })),
       };
     });
 
