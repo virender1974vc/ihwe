@@ -121,7 +121,7 @@ const getReceiptContact = async (payment) => {
     gstNo = company.gstNo || company.gstin || "";
   }
 
-  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo };
+  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo, exhibitor };
 };
 
 const generateAccountPaymentReceipt = async (payment) => {
@@ -207,6 +207,17 @@ const generateAccountPaymentReceipt = async (payment) => {
     },
     paymentHistory,
   };
+
+  if (contact.exhibitor) {
+    if (contact.exhibitor.participation) {
+      registrationLike.participation = contact.exhibitor.participation;
+    }
+    if (contact.exhibitor.financeBreakdown) {
+      registrationLike.financeBreakdown = contact.exhibitor.financeBreakdown;
+    }
+    registrationLike.chosenTdsPercent = contact.exhibitor.chosenTdsPercent || registrationLike.chosenTdsPercent;
+    // We keep amountPaid and balanceAmount as computed from the payments to reflect the current state
+  }
 
   const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, { paymentIndex: paymentHistory.length - 1 });
   const filePath = (pdfResult && typeof pdfResult === "object") ? pdfResult.filePath : pdfResult;
