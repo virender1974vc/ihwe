@@ -1,8 +1,18 @@
 const mongoose = require("mongoose");
 const { secondaryDB } = require("../config/secondaryDb");
+const getFiscalYear = (forDate) => {
+  const date = forDate ? new Date(forDate) : new Date();
+  const currentYear = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const startYear = month >= 4 ? currentYear : currentYear - 1;
+  const endYear = month >= 4 ? currentYear + 1 : currentYear;
+  return `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
+};
+
 const paymentSchema = new mongoose.Schema(
   {
     ex_no: { type: String, default: "" },
+    receipt_no: { type: String, default: "" },
     companyId: { type: String, default: "" },
     invoice_id: { type: String, required: true },
     f_amount: { type: String, required: true },
@@ -42,5 +52,25 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );
+
+// Static method: Auto-generate next Receipt number in RCP/YY-YY/NNNN format
+paymentSchema.statics.generateNextReceiptNo = async function (forDate) {
+  const fiscalYear = getFiscalYear(forDate);
+  const prefix = `RCP/${fiscalYear}/`;
+
+  const lastPayment = await this.findOne({
+    receipt_no: { $regex: `^${prefix}` },
+  }).sort({ receipt_no: -1 });
+
+  let nextSeq = 1;
+  if (lastPayment) {
+    const lastParts = lastPayment.receipt_no.split("/");
+    const lastNum = parseInt(lastParts[lastParts.length - 1], 10);
+    if (!isNaN(lastNum)) nextSeq = lastNum + 1;
+  }
+
+  const padded = String(nextSeq).padStart(4, "0");
+  return `${prefix}${padded}`;
+};
 
 module.exports = secondaryDB.model("Payment", paymentSchema);

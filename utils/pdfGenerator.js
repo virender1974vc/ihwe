@@ -135,6 +135,34 @@ class PDFGenerator {
         });
         return y + 18;
     }
+
+    // Measures how tall a row needs to be given each cell's wrapped text, so rows
+    // with long narration/description text never overlap the row drawn after them.
+    _measureRowHeight(doc, cols, minHeight = 18) {
+        let maxHeight = minHeight;
+        cols.forEach(({ text, w, bold }) => {
+            doc.fontSize(8).font(bold ? 'Helvetica-Bold' : 'Helvetica');
+            const h = doc.heightOfString(String(text ?? ''), { width: w - 8 });
+            maxHeight = Math.max(maxHeight, h + 8);
+        });
+        return maxHeight;
+    }
+
+    // Like _tableRow, but sizes the row to fit wrapped multi-line cell content instead
+    // of assuming a fixed single-line height (which caused overlapping/garbled rows
+    // whenever a cell's text — e.g. a long item description — wrapped to 2+ lines).
+    _wrappedTableRow(doc, cols, y, bg) {
+        const pageW = doc.page.width;
+        const rowHeight = this._measureRowHeight(doc, cols);
+        if (bg) doc.rect(40, y, pageW - 80, rowHeight).fill(bg);
+        let x = 40;
+        cols.forEach(({ text, w, align, bold, color }) => {
+            doc.fillColor(color || DARK).fontSize(8).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+                .text(text || '', x + 4, y + 4, { width: w - 8, align: align || 'left' });
+            x += w;
+        });
+        return y + rowHeight;
+    }
     async generateRegistrationForm(registration, options = {}) {
         return new Promise(async (resolve, reject) => {
             try {
@@ -739,6 +767,162 @@ class PDFGenerator {
                 this._footerImg(doc, footerPath);
                 doc.end();
 
+                stream.on('finish', () => {
+                    const publicUrl = getTempPdfUrl(filePath);
+                    resolve({ filePath, cloudUrl: publicUrl });
+                });
+                stream.on('error', reject);
+            } catch (err) { reject(err); }
+        });
+    }
+
+    async generateClientStatement(ledger, options = {}) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const { headerPath, footerPath } = await resolveHeaderFooterPaths(
+                    options.headerImage,
+                    options.footerImage
+                );
+                const settings = await Settings.findOne();
+                const doc = new PDFDocument({ margin: 0, size: 'A4' });
+                const safeBase = String(ledger.companyInfo?.name || 'client').replace(/[^a-z0-9]+/gi, '_');
+                const fileName = `statement_${safeBase}_${Date.now()}.pdf`;
+                const filePath = path.join(TEMP_DIR, fileName);
+                const stream = fs.createWriteStream(filePath);
+                doc.pipe(stream);
+
+                const pageW = doc.page.width;
+                const pageH = doc.page.height;
+                const fmt = (n) => `Rs. ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+
+                this._headerImg(doc, headerPath);
+                let y = doc.y;
+                if (!headerPath) {
+                    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                        .text(settings?.companyAddress || '', 40, y, { width: pageW - 80, align: 'center' });
+                    y += 20;
+                }
+
+                doc.rect(40, y, pageW - 80, 26).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(13).font('Helvetica-Bold')
+                    .text('STATEMENT OF ACCOUNT', 40, y + 7, { width: pageW - 80, align: 'center', characterSpacing: 1 });
+                y += 36;
+
+                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                    .text(`Generated On: ${fmtDate(new Date())}`, 40, y, { width: pageW - 80, align: 'right' });
+                y += 16;
+
+                // ── Client Information ──
+                const info = ledger.companyInfo || {};
+                doc.rect(40, y, 160, 16).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(8).font('Helvetica-Bold').text('Client Information', 45, y + 4);
+                y += 22;
+                const colW = (pageW - 100) / 2;
+                const leftRows = [
+                    ['Client Name:', info.name],
+                    ['Contact Person:', info.contactPerson],
+                    ['Mobile:', info.mobile],
+                    ['Email:', info.email],
+                ];
+                const rightRows = [
+                    ['Stall No.:', info.stallNo],
+                    ['GST No.:', info.gstNo],
+                    ['PAN No.:', info.panNo],
+                    ['State:', info.state],
+                ];
+                let ly = y, ry = y;
+                leftRows.forEach(([label, value]) => {
+                    this._label(doc, label, 40, ly, 100);
+                    this._value(doc, value, 130, ly, colW - 90);
+                    ly += 16;
+                });
+                rightRows.forEach(([label, value]) => {
+                    this._label(doc, label, 60 + colW, ry, 90);
+                    this._value(doc, value, 150 + colW, ry, colW - 110);
+                    ry += 16;
+                });
+                y = Math.max(ly, ry) + 10;
+
+                // ── Summary boxes ──
+                const fin = ledger.financials || {};
+                const boxes = [
+                    { label: 'Total Invoiced', value: fmt(fin.totalInvoiced), color: BLUE_NAVY },
+                    { label: 'Total Received', value: fmt(fin.totalReceived), color: GREEN },
+                    { label: 'Total Adjustments', value: fmt(fin.totalAdjustments), color: ORANGE },
+                    { label: 'Outstanding', value: fmt(fin.outstandingAmount), color: '#b91c1c' },
+                ];
+                const boxW = (pageW - 80) / boxes.length;
+                boxes.forEach((box, i) => {
+                    const bx = 40 + i * boxW;
+                    doc.rect(bx, y, boxW - 6, 38).fill(LGRAY);
+                    this._label(doc, box.label, bx + 6, y + 6, boxW - 18);
+                    doc.fillColor(box.color).fontSize(9).font('Helvetica-Bold').text(box.value, bx + 6, y + 18, { width: boxW - 18 });
+                });
+                y += 48;
+
+                // ── Ledger table ──
+                const tW = pageW - 80;
+                const cols = [
+                    { label: 'Date', w: tW * 0.11 },
+                    { label: 'Type', w: tW * 0.11 },
+                    { label: 'Document No.', w: tW * 0.16 },
+                    { label: 'Reference / Narration', w: tW * 0.23 },
+                    { label: 'Debit', w: tW * 0.125, align: 'right' },
+                    { label: 'Credit', w: tW * 0.125, align: 'right' },
+                    { label: 'Balance', w: tW * 0.14, align: 'right' },
+                ];
+                const drawTableHeader = (yy) => {
+                    doc.rect(40, yy, tW, 18).fill(DARK);
+                    let tx = 40;
+                    cols.forEach((col) => {
+                        doc.fillColor(WHITE).fontSize(7.5).font('Helvetica-Bold')
+                            .text(col.label, tx + 4, yy + 5, { width: col.w - 8, align: col.align || 'left' });
+                        tx += col.w;
+                    });
+                    return yy + 18;
+                };
+                y = drawTableHeader(y);
+
+                doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold')
+                    .text('Opening Balance', 40, y + 4, { width: tW - 100 });
+                doc.fillColor(DARK).text(fmt(ledger.openingBalance), 40, y + 4, { width: tW, align: 'right' });
+                y += 16;
+
+                (ledger.ledger || []).forEach((row, idx) => {
+                    const rowCols = [
+                        { text: fmtDate(row.date), w: cols[0].w },
+                        { text: row.type, w: cols[1].w },
+                        { text: row.documentNo, w: cols[2].w },
+                        { text: (row.reference || '').replace(/\s*\n\s*/g, ' ').trim(), w: cols[3].w },
+                        { text: row.debit ? fmt(row.debit) : '-', w: cols[4].w, align: 'right', color: row.debit ? '#b91c1c' : GRAY },
+                        { text: row.credit ? fmt(row.credit) : '-', w: cols[5].w, align: 'right', color: row.credit ? GREEN : GRAY },
+                        { text: fmt(row.balance), w: cols[6].w, align: 'right', bold: true },
+                    ];
+                    const rowHeight = this._measureRowHeight(doc, rowCols);
+                    if (y + rowHeight > pageH - 100) {
+                        doc.addPage();
+                        y = 40;
+                        y = drawTableHeader(y);
+                    }
+                    y = this._wrappedTableRow(doc, rowCols, y, idx % 2 === 0 ? '#fafafa' : null);
+                });
+
+                if (y > pageH - 100) {
+                    doc.addPage();
+                    y = 40;
+                }
+                y += 6;
+                this._line(doc, 40, y, pageW - 40, BLUE_NAVY, 1);
+                y += 8;
+                doc.fillColor(BLUE_NAVY).fontSize(9).font('Helvetica-Bold')
+                    .text(`Closing Balance as on ${fmtDate(new Date())}`, 40, y, { width: tW - 120 });
+                doc.fillColor(DARK).fontSize(10).font('Helvetica-Bold')
+                    .text(fmt(ledger.closingBalance), 40, y, { width: tW, align: 'right' });
+
+                if (footerPath) this._footerImg(doc, footerPath);
+
+                doc.end();
                 stream.on('finish', () => {
                     const publicUrl = getTempPdfUrl(filePath);
                     resolve({ filePath, cloudUrl: publicUrl });

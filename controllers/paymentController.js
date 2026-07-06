@@ -4,6 +4,7 @@ const Estimate = require("../models/Estimate");
 const PerformaInvoice = require("../models/PerformaInvoice");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Company = require("../models/Company");
+const Stall = require("../models/Stall");
 const { logActivity } = require("../utils/logger");
 const { getAccountNameById, getDocumentAccountName } = require("../utils/accountActivityDetails");
 const emailService = require("../utils/emailService");
@@ -15,6 +16,17 @@ const path = require("path");
 
 const RECEIPT_DIR = path.join(__dirname, "../uploads/payment_receipts");
 if (!fs.existsSync(RECEIPT_DIR)) fs.mkdirSync(RECEIPT_DIR, { recursive: true });
+
+// Helper: Get fiscal year in YY-YY format for a given date (defaults to now)
+const getFiscalYear = (forDate) => {
+  const date = forDate ? new Date(forDate) : new Date();
+  if (isNaN(date.getTime())) return getFiscalYear();
+  const currentYear = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const startYear = month >= 4 ? currentYear : currentYear - 1;
+  const endYear = month >= 4 ? currentYear + 1 : currentYear;
+  return `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
+};
 
 const formatMoney = (value) => Number(value || 0).toLocaleString("en-IN", {
   minimumFractionDigits: 2,
@@ -121,7 +133,7 @@ const getReceiptContact = async (payment) => {
     gstNo = company.gstNo || company.gstin || "";
   }
 
-  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo };
+  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo, exhibitor };
 };
 
 const generateAccountPaymentReceipt = async (payment) => {
@@ -208,6 +220,17 @@ const generateAccountPaymentReceipt = async (payment) => {
     paymentHistory,
   };
 
+  if (contact.exhibitor) {
+    if (contact.exhibitor.participation) {
+      registrationLike.participation = contact.exhibitor.participation;
+    }
+    if (contact.exhibitor.financeBreakdown) {
+      registrationLike.financeBreakdown = contact.exhibitor.financeBreakdown;
+    }
+    registrationLike.chosenTdsPercent = contact.exhibitor.chosenTdsPercent || registrationLike.chosenTdsPercent;
+    // We keep amountPaid and balanceAmount as computed from the payments to reflect the current state
+  }
+
   const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, { paymentIndex: paymentHistory.length - 1 });
   const filePath = (pdfResult && typeof pdfResult === "object") ? pdfResult.filePath : pdfResult;
 
@@ -241,6 +264,9 @@ const addPayment = async (req, res) => {
     if (req.file) {
       payload.proofUrl = `/uploads/payment_proofs/${req.file.filename}`;
     }
+    if (!payload.receipt_no) {
+      payload.receipt_no = await Payment.generateNextReceiptNo(payload.payment_date);
+    }
     const payment = new Payment(payload);
     await payment.save();
     const { accountName } = await resolvePaymentAccount(payment);
@@ -263,29 +289,132 @@ const addPayment = async (req, res) => {
   }
 };
 
+// ➤ Backfill receipt_no for legacy payments that predate the Receipts feature
+const backfillReceiptNumbers = async (payments) => {
+  const missing = payments.filter((p) => !p.receipt_no);
+  if (!missing.length) return;
+
+  missing.sort((a, b) => new Date(a.added) - new Date(b.added));
+
+  // Seed the per-fiscal-year sequence counter from already-numbered receipts
+  const seqByYear = {};
+  payments.forEach((p) => {
+    if (!p.receipt_no) return;
+    const parts = p.receipt_no.split("/");
+    const fy = parts[1];
+    const num = parseInt(parts[parts.length - 1], 10);
+    if (fy && !isNaN(num)) seqByYear[fy] = Math.max(seqByYear[fy] || 0, num);
+  });
+
+  const bulkOps = [];
+  missing.forEach((p) => {
+    const fy = getFiscalYear(p.payment_date || p.added);
+    seqByYear[fy] = (seqByYear[fy] || 0) + 1;
+    const receiptNo = `RCP/${fy}/${String(seqByYear[fy]).padStart(4, "0")}`;
+    p.receipt_no = receiptNo;
+    bulkOps.push({ updateOne: { filter: { _id: p._id }, update: { $set: { receipt_no: receiptNo } } } });
+  });
+
+  if (bulkOps.length) await Payment.bulkWrite(bulkOps);
+};
+
 // ➤ Get all payments
 const getAllPayments = async (req, res) => {
   try {
     const payments = await Payment.find().sort({ added: -1 }).lean();
+    await backfillReceiptNumbers(payments);
 
     const mongoose = require("mongoose");
     const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
-    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, "invoice_no invoice_date supply_date finalAmount added").lean();
-    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added").lean();
-    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added").lean();
+    const documentFields = "companyId invoice_no invoice_date supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
+    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, documentFields).lean();
+    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, documentFields.replace("invoice_no invoice_date", "est_no")).lean();
+    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, documentFields.replace("invoice_no invoice_date", "est_no")).lean();
 
     const invoiceMap = {};
     invoices.forEach(i => invoiceMap[i._id.toString()] = i);
     estimates.forEach(e => invoiceMap[e._id.toString()] = e);
     proformas.forEach(p => invoiceMap[p._id.toString()] = p);
 
+    const validCompanyIds = [
+      ...new Set([
+        ...payments.map(p => p.companyId),
+        ...Object.values(invoiceMap).map(doc => doc?.companyId),
+      ].filter(id => id && mongoose.Types.ObjectId.isValid(id)).map(String)),
+    ];
+    const companies = await Company.find(
+      { _id: { $in: validCompanyIds } },
+      "companyName exhibitorRegistrationId stallNo stall_no hallNo hall_no",
+    ).lean();
+    const companyMap = {};
+    const exhibitorIds = new Set(validCompanyIds);
+    companies.forEach(c => {
+      companyMap[c._id.toString()] = c;
+      if (c.exhibitorRegistrationId && mongoose.Types.ObjectId.isValid(c.exhibitorRegistrationId)) {
+        exhibitorIds.add(String(c.exhibitorRegistrationId));
+      }
+    });
+    const exhibitors = await ExhibitorRegistration.find(
+      {
+        $or: [
+          { _id: { $in: [...exhibitorIds] } },
+          { clientId: { $in: validCompanyIds } },
+        ],
+      },
+      "clientId participation.stallNo participation.hallNo companyName",
+    ).lean();
+    const stallMap = {};
+    const hallMap = {};
+    exhibitors.forEach(e => {
+      const stallNo = e.participation?.stallNo;
+      if (stallNo) stallMap[e._id.toString()] = stallNo;
+      if (stallNo && e.clientId) stallMap[String(e.clientId)] = stallNo;
+      const hallNo = e.participation?.hallNo;
+      if (hallNo) hallMap[e._id.toString()] = hallNo;
+      if (hallNo && e.clientId) hallMap[String(e.clientId)] = hallNo;
+    });
+    const stallIds = [
+      ...new Set([
+        ...Object.values(stallMap),
+        ...payments.flatMap(p => [p.stall_no, p.stallNo]),
+        ...Object.values(invoiceMap).flatMap(doc => [doc?.stall_no, doc?.stallNo]),
+        ...companies.flatMap(c => [c.stallNo, c.stall_no]),
+      ].filter(id => id && mongoose.Types.ObjectId.isValid(id)).map(String)),
+    ];
+    const stalls = stallIds.length
+      ? await Stall.find({ _id: { $in: stallIds } }, "stallNumber").lean()
+      : [];
+    const stallNumberMap = {};
+    stalls.forEach(s => {
+      stallNumberMap[s._id.toString()] = s.stallNumber;
+    });
+    const normalizeStallNo = (value) => {
+      if (!value) return "";
+      const str = String(value);
+      return stallNumberMap[str] || str;
+    };
+
     const populatedPayments = payments.map(p => {
       const doc = invoiceMap[p.invoice_id] || null;
+      const companyId = String(p.companyId || doc?.companyId || "");
+      const company = companyMap[companyId] || null;
+      const exhibitorId = String(company?.exhibitorRegistrationId || companyId || "");
+      const rawStallNo = p.stall_no || p.stallNo || doc?.stall_no || doc?.stallNo || stallMap[companyId] || stallMap[exhibitorId] || company?.stallNo || company?.stall_no || "";
+      const stallNo = normalizeStallNo(rawStallNo);
+      const hallMatch = stallNo.match(/^H(\d+)/i);
+      const hallNo = p.hall_no || p.hallNo || doc?.hall_no || doc?.hallNo || hallMap[companyId] || hallMap[exhibitorId] || company?.hallNo || company?.hall_no || (hallMatch ? hallMatch[1] : "");
+      const bankName = p.neft_bank || p.cheque_bank || p.card_bank || p.bankId || p.wallet_name || "";
+      const paymentRef = p.utr_no || p.cheque_no || p.card_transaction_no || p.wallet_transaction_no || p.cash_receipt_no || p.ex_no || p.receipt_no || "";
       return {
         ...p,
         invoice_no: getDocumentNo(doc, p),
         invoice_date: getDocumentDate(doc),
         invoice_amount: getDocumentAmount(doc, p),
+        client_name: p.company_name || doc?.company_name || doc?.consignee_name || company?.companyName || "Unknown Client",
+        stall_no: stallNo,
+        hall_no: hallNo,
+        bank_name: bankName,
+        payment_ref: paymentRef,
         receipt_url: `/api/payments/${p._id}/receipt`,
       };
     });

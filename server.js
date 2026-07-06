@@ -96,6 +96,7 @@ const invoiceRoutes = require("./routes/invoiceRoutes");
 const deliveryChallanRoutes = require("./routes/deliveryChallanRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
 const debitNoteRoutes = require("./routes/debitNoteRoutes");
+const accountDebitNoteRoutes = require("./routes/accountDebitNoteRoutes");
 const activityLogRoutes = require("./routes/activity/activityLogRoutes");
 const exhibitorActivityLogRoutes = require("./routes/exhibitorActivityLogRoutes");
 const corporateVisitorRoutes = require("./routes/visitor/corporateVisitorRoutes");
@@ -381,6 +382,9 @@ app.use('/api/dashboard-banners', require('./routes/dashboardBannerRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
 app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
 app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
+app.use('/api/paper-presentation', require('./routes/paperPresentationRoutes'));
+app.use('/api/poster-presentation', require('./routes/posterPresentationRoutes'));
+app.use('/api/abstract-presentation', require('./routes/abstractPresentationRoutes'));
 app.use("/api/media-registration", mediaRegistrationRoutes);
 app.use("/api/partner-registration", require("./routes/partnerRegistration"));
 app.use("/api/exhibitor-hero-slider", exhibitorHeroSliderRoutes);
@@ -416,7 +420,10 @@ app.use("/api/invoices", invoiceRoutes);
 app.use("/api/delivery-challans", deliveryChallanRoutes);
 app.use("/api/creditnotes", creditNoteRoutes);
 app.use("/api/debitnotes", debitNoteRoutes);
+app.use("/api/account-debit-notes", accountDebitNoteRoutes);
 app.use("/api/account-overview", require("./routes/accountOverviewRoutes"));
+app.use("/api/client-ledger", require("./routes/clientLedgerRoutes"));
+app.use("/api/imprest", require("./routes/imprestRoutes"));
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
 app.use("/api/group-visitors", groupVisitorRoutes);
@@ -554,17 +561,17 @@ io.on('connection', (socket) => {
         const ExhibitorRegistration = require('./models/ExhibitorRegistration');
         const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
         const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
-        
+
         const payload = {
           roomId, exhibitorName, lastMessage: message,
           lastMessageAt: msg.createdAt, lastSenderType: senderType,
           unreadIncrement: !otherOnline ? 1 : 0,
           spokenWith: exhibitor?.spokenWith || ''
         };
-        
+
         io.to(targetRoom).emit('room_updated', payload);
         if (targetRoom !== 'admin_room') {
-           io.to('admin_room').emit('room_updated', payload);
+          io.to('admin_room').emit('room_updated', payload);
         }
       } else if (senderType === 'buyer') {
         // Buyer notification to admin
