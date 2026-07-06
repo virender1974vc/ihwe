@@ -281,9 +281,9 @@ const getAllPayments = async (req, res) => {
 
     const mongoose = require("mongoose");
     const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
-    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, "invoice_no invoice_date supply_date finalAmount added").lean();
-    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added").lean();
-    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added").lean();
+    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, "invoice_no invoice_date supply_date finalAmount added company_name consignee_name").lean();
+    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added company_name consignee_name").lean();
+    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, "est_no supply_date finalAmount added company_name consignee_name").lean();
 
     const invoiceMap = {};
     invoices.forEach(i => invoiceMap[i._id.toString()] = i);
@@ -297,6 +297,7 @@ const getAllPayments = async (req, res) => {
         invoice_no: getDocumentNo(doc, p),
         invoice_date: getDocumentDate(doc),
         invoice_amount: getDocumentAmount(doc, p),
+        client_name: p.company_name || doc?.company_name || doc?.consignee_name || "Unknown Client",
         receipt_url: `/api/payments/${p._id}/receipt`,
       };
     });
