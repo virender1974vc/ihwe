@@ -16,6 +16,17 @@ const path = require("path");
 const RECEIPT_DIR = path.join(__dirname, "../uploads/payment_receipts");
 if (!fs.existsSync(RECEIPT_DIR)) fs.mkdirSync(RECEIPT_DIR, { recursive: true });
 
+// Helper: Get fiscal year in YY-YY format for a given date (defaults to now)
+const getFiscalYear = (forDate) => {
+  const date = forDate ? new Date(forDate) : new Date();
+  if (isNaN(date.getTime())) return getFiscalYear();
+  const currentYear = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const startYear = month >= 4 ? currentYear : currentYear - 1;
+  const endYear = month >= 4 ? currentYear + 1 : currentYear;
+  return `${String(startYear).slice(-2)}-${String(endYear).slice(-2)}`;
+};
+
 const formatMoney = (value) => Number(value || 0).toLocaleString("en-IN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -252,6 +263,9 @@ const addPayment = async (req, res) => {
     if (req.file) {
       payload.proofUrl = `/uploads/payment_proofs/${req.file.filename}`;
     }
+    if (!payload.receipt_no) {
+      payload.receipt_no = await Payment.generateNextReceiptNo(payload.payment_date);
+    }
     const payment = new Payment(payload);
     await payment.save();
     const { accountName } = await resolvePaymentAccount(payment);
@@ -274,10 +288,40 @@ const addPayment = async (req, res) => {
   }
 };
 
+// ➤ Backfill receipt_no for legacy payments that predate the Receipts feature
+const backfillReceiptNumbers = async (payments) => {
+  const missing = payments.filter((p) => !p.receipt_no);
+  if (!missing.length) return;
+
+  missing.sort((a, b) => new Date(a.added) - new Date(b.added));
+
+  // Seed the per-fiscal-year sequence counter from already-numbered receipts
+  const seqByYear = {};
+  payments.forEach((p) => {
+    if (!p.receipt_no) return;
+    const parts = p.receipt_no.split("/");
+    const fy = parts[1];
+    const num = parseInt(parts[parts.length - 1], 10);
+    if (fy && !isNaN(num)) seqByYear[fy] = Math.max(seqByYear[fy] || 0, num);
+  });
+
+  const bulkOps = [];
+  missing.forEach((p) => {
+    const fy = getFiscalYear(p.payment_date || p.added);
+    seqByYear[fy] = (seqByYear[fy] || 0) + 1;
+    const receiptNo = `RCP/${fy}/${String(seqByYear[fy]).padStart(4, "0")}`;
+    p.receipt_no = receiptNo;
+    bulkOps.push({ updateOne: { filter: { _id: p._id }, update: { $set: { receipt_no: receiptNo } } } });
+  });
+
+  if (bulkOps.length) await Payment.bulkWrite(bulkOps);
+};
+
 // ➤ Get all payments
 const getAllPayments = async (req, res) => {
   try {
     const payments = await Payment.find().sort({ added: -1 }).lean();
+    await backfillReceiptNumbers(payments);
 
     const mongoose = require("mongoose");
     const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
@@ -290,14 +334,29 @@ const getAllPayments = async (req, res) => {
     estimates.forEach(e => invoiceMap[e._id.toString()] = e);
     proformas.forEach(p => invoiceMap[p._id.toString()] = p);
 
+    const validCompanyIds = payments.map(p => p.companyId).filter(id => id && mongoose.Types.ObjectId.isValid(id));
+    const exhibitors = await ExhibitorRegistration.find(
+      { _id: { $in: validCompanyIds } },
+      "participation.stallNo",
+    ).lean();
+    const stallMap = {};
+    exhibitors.forEach(e => {
+      const stallNo = e.participation?.stallNo;
+      if (stallNo) stallMap[e._id.toString()] = stallNo;
+    });
+
     const populatedPayments = payments.map(p => {
       const doc = invoiceMap[p.invoice_id] || null;
+      const stallNo = stallMap[p.companyId] || "";
+      const hallMatch = stallNo.match(/^H(\d+)/i);
       return {
         ...p,
         invoice_no: getDocumentNo(doc, p),
         invoice_date: getDocumentDate(doc),
         invoice_amount: getDocumentAmount(doc, p),
         client_name: p.company_name || doc?.company_name || doc?.consignee_name || "Unknown Client",
+        stall_no: stallNo,
+        hall_no: hallMatch ? hallMatch[1] : "",
         receipt_url: `/api/payments/${p._id}/receipt`,
       };
     });
