@@ -3,10 +3,30 @@ const AccountDebitNote = require("../models/AccountDebitNote");
 const Invoice = require("../models/Invoice");
 const Payment = require("../models/Payment");
 const DebitNote = require("../models/DebitNote"); // the existing "Credit Note" feature's model
-const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const Stall = require("../models/Stall");
 const { resolveCompanyAndExhibitor, buildAccountOverview } = require("./accountOverviewController");
 const { getAccountNameById } = require("../utils/accountActivityDetails");
 const { logActivity } = require("../utils/logger");
+
+const isValidObjectId = (val) => val && mongoose.Types.ObjectId.isValid(val);
+
+// Same stall resolution accountOverviewController.buildAccountOverview uses: a company's
+// stall number is often stored as a Stall document reference (an ObjectId), not a plain
+// string, so it has to be looked up in the Stall collection to get the real stall number.
+const resolveStallNo = async (companyId) => {
+  const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
+  let stallNoToDisplay = company?.stallNo || company?.stall_no || "";
+  const rawStallNo = exhibitor?.participation?.stallNo;
+  if (rawStallNo) {
+    if (isValidObjectId(rawStallNo)) {
+      const stallDoc = await Stall.findById(rawStallNo).lean();
+      stallNoToDisplay = stallDoc ? stallDoc.stallNumber : rawStallNo;
+    } else {
+      stallNoToDisplay = rawStallNo;
+    }
+  }
+  return stallNoToDisplay || "";
+};
 
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 const parseAmount = (value) => {
@@ -267,16 +287,11 @@ const getAccountDebitNotes = async (req, res) => {
     const notes = await AccountDebitNote.find(filter).sort({ added: -1 }).lean();
     const enriched = await enrichWithSettlementStatus(notes);
 
-    const companyIds = [...new Set(notes.map((n) => n.companyId).filter((id) => mongoose.Types.ObjectId.isValid(id)))];
-    const exhibitors = await ExhibitorRegistration.find(
-      { _id: { $in: companyIds } },
-      "participation.stallNo",
-    ).lean();
+    const companyIds = [...new Set(notes.map((n) => n.companyId).filter(Boolean))];
     const stallMap = {};
-    exhibitors.forEach((e) => {
-      const stallNo = e.participation?.stallNo;
-      if (stallNo) stallMap[e._id.toString()] = stallNo;
-    });
+    await Promise.all(companyIds.map(async (companyId) => {
+      stallMap[companyId] = await resolveStallNo(companyId);
+    }));
 
     const withStall = enriched.map((note) => {
       const stallNo = stallMap[note.companyId] || "";
