@@ -187,6 +187,7 @@ const generateAccountPaymentReceipt = async (payment) => {
       whatsapp: contact.mobile,
     },
     eventId: { name: "IHWE 2026" },
+    isGenericInvoice: true,
     participation: {
       currency: "INR",
       stallFor: getDocumentNo(docData, payment),
@@ -226,6 +227,10 @@ const generateAccountPaymentReceipt = async (payment) => {
     }
     if (contact.exhibitor.financeBreakdown) {
       registrationLike.financeBreakdown = contact.exhibitor.financeBreakdown;
+    }
+    // If it's linked to an exhibitor with actual participation, it's not a generic invoice anymore
+    if (contact.exhibitor.participation && contact.exhibitor.participation.stallNo) {
+      registrationLike.isGenericInvoice = false;
     }
     registrationLike.chosenTdsPercent = contact.exhibitor.chosenTdsPercent || registrationLike.chosenTdsPercent;
     // We keep amountPaid and balanceAmount as computed from the payments to reflect the current state
@@ -519,6 +524,14 @@ const sendPaymentReceipt = async (req, res) => {
       return res.status(400).json({ success: false, message: "No email or mobile found for Contact Person 1." });
     }
 
+    if (type === 'email' && !email) {
+      return res.status(400).json({ success: false, message: "No email found for Contact Person 1." });
+    }
+
+    if (type === 'whatsapp' && !mobile) {
+      return res.status(400).json({ success: false, message: "No mobile number found for Contact Person 1." });
+    }
+
     const receiptData = {
       name,
       amount: payment.amount_text,
@@ -535,10 +548,23 @@ const sendPaymentReceipt = async (req, res) => {
     if (email && (!type || type === 'email')) {
       emailSent = await emailService.sendPaymentReceipt(registrationLike, filePath);
     }
-    
+
     if (mobile && (!type || type === 'whatsapp')) {
       const normalizedMobile = whatsappService.formatPhoneNumber(mobile) || mobile;
       whatsappSent = await whatsappService.sendManualPaymentReceipt(normalizedMobile, receiptData);
+    }
+
+    const sentOk = type === 'email' ? emailSent
+      : type === 'whatsapp' ? whatsappSent
+      : (emailSent || whatsappSent);
+
+    if (!sentOk) {
+      return res.status(502).json({
+        success: false,
+        message: `Failed to send receipt${type ? ' via ' + type : ''}.`,
+        emailSent,
+        whatsappSent,
+      });
     }
 
     res.status(200).json({
