@@ -188,7 +188,7 @@ const getAccountsReceivable = async (req, res) => {
         netReceived,
         outstanding,
         paymentMode: lastPayment?.payment_mode || "-",
-        bank: lastPayment?.cheque_bank || lastPayment?.neft_bank || lastPayment?.card_bank || (lastPayment?.pymnt_type === "Online" ? "Razorpay" : "-"),
+        bank: lastPayment?.bankId || lastPayment?.cheque_bank || lastPayment?.neft_bank || lastPayment?.card_bank || (lastPayment?.pymnt_type === "Online" ? "Razorpay" : "-"),
         utr: lastPayment?.utr_no || lastPayment?.cheque_no || lastPayment?.card_transaction_no || lastPayment?.wallet_transaction_no || lastPayment?.cash_receipt_no || "-",
         utrDate: lastPayment?.payment_date || null,
         dueDate: inv.due_date || null,
