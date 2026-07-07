@@ -2146,9 +2146,7 @@ class EmailService {
                             </tr>
                             <tr>
                                 <td align="center" style="padding: 8px 28px 28px 28px; background-color: ${accentColor};">
-                                    <p style="margin: 0 0 8px 0; font-size: 12px; line-height: 16px; color: #ffffff; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
-                                        India Health & Wellness Expo
-                                    </p>
+                                    
                                     <h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 800; color: #ffffff;">
                                         ${reminderTitle}
                                     </h1>
