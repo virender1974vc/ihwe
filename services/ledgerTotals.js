@@ -28,9 +28,10 @@ const getCreditedByInvoiceId = (activeInvoices, creditNotes, legacyDebitNotesAsC
     });
 
   creditNotes
-    .filter((cn) => !isCancelledDoc(cn) && cn.est_no)
+    .filter((cn) => !isCancelledDoc(cn) && (cn.est_no || cn.reference_invoice_no))
     .forEach((cn) => {
-      const matchedInvoice = activeInvoices.find((inv) => inv.estimate_no === cn.est_no);
+      const matchInvNo = cn.reference_invoice_no || cn.est_no;
+      const matchedInvoice = activeInvoices.find((inv) => inv.estimate_no === matchInvNo || inv.invoice_no === matchInvNo);
       if (!matchedInvoice) return;
       const key = String(matchedInvoice._id);
       creditedByInvoiceId[key] = (creditedByInvoiceId[key] || 0) + legacyCreditNoteAmount(cn);
