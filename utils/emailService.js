@@ -2112,6 +2112,28 @@ class EmailService {
             const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
             const fmt = (n) => `${cur} ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
+            const daysOverdue = Number(templateData.daysOverdue || 0);
+            const daysUntilDue = Number(templateData.daysUntilDue || 0);
+            const isOverdue = daysOverdue > 0;
+            const isDueToday = !isOverdue && daysUntilDue === 0;
+            const reminderTitle = templateData.reminderTitle || (isOverdue ? 'PAYMENT OVERDUE' : isDueToday ? 'PAYMENT DUE TODAY' : 'PAYMENT REMINDER');
+            const reminderLine = templateData.reminderLine || (
+                isOverdue
+                    ? `Your payment is overdue by ${daysOverdue} day${daysOverdue === 1 ? '' : 's'}.`
+                    : isDueToday
+                        ? 'Your payment is due today.'
+                        : `Your payment is due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}.`
+            );
+            const accentColor = isOverdue ? '#dc2626' : isDueToday ? '#d97706' : '#2563eb';
+            const softBg = isOverdue ? '#fef2f2' : isDueToday ? '#fffbeb' : '#eff6ff';
+            const subjectStatus = isOverdue
+                ? `${daysOverdue} Day${daysOverdue === 1 ? '' : 's'} Overdue`
+                : isDueToday
+                    ? 'Due Today'
+                    : `Due in ${daysUntilDue} Day${daysUntilDue === 1 ? '' : 's'}`;
+            const installmentLabel = templateData.installmentLabel || '';
+            const installmentAmount = Number(templateData.installmentAmount || 0);
+
             const html = this.emailShell(`
                 <tr>
                     <td style="padding: 40px 30px; background-color: #ffffff;">
@@ -2123,11 +2145,11 @@ class EmailService {
                             </tr>
                             <tr>
                                 <td align="center" style="padding-bottom: 30px;">
-                                    <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: #dc2626;">
-                                        PAYMENT REMINDER
+                                    <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: ${accentColor};">
+                                        ${reminderTitle}
                                     </h1>
                                     <p style="margin: 10px 0 0 0; font-size: 16px; color: #666;">
-                                        Your payment is <strong style="color: #dc2626;">${templateData.daysOverdue || 0} days overdue</strong>
+                                        <strong style="color: ${accentColor};">${reminderLine}</strong>
                                     </p>
                                 </td>
                             </tr>
@@ -2147,7 +2169,7 @@ class EmailService {
                                     </p>
                                     <p style="margin: 0; font-size: 14px; color: #555; line-height: 1.6;">
                                         This is a reminder regarding your pending payment for <strong>${templateData.eventName || 'the Exhibition'}</strong>.
-                                        Please complete your payment at the earliest to avoid any inconvenience.
+                                        Please complete the payment at the earliest so your exhibition participation and onboarding remain smooth.
                                     </p>
                                 </td>
                             </tr>
@@ -2169,6 +2191,18 @@ class EmailService {
                                             <td style="padding: 8px 0; color: #64748b;">Stall Type:</td>
                                             <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${templateData.stallType || 'N/A'}</td>
                                         </tr>
+                                        ${installmentLabel ? `
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Pending Stage:</td>
+                                            <td style="padding: 8px 0; color: #1e293b; font-weight: 700; text-align: right;">${installmentLabel}</td>
+                                        </tr>
+                                        ` : ''}
+                                        ${installmentAmount > 0 ? `
+                                        <tr>
+                                            <td style="padding: 8px 0; color: #64748b;">Stage Amount Due:</td>
+                                            <td style="padding: 8px 0; color: ${accentColor}; font-weight: 700; text-align: right;">${fmt(installmentAmount)}</td>
+                                        </tr>
+                                        ` : ''}
                                         <tr>
                                             <td colspan="2" style="padding: 15px 0; border-top: 1px dashed #e2e8f0;"></td>
                                         </tr>
@@ -2195,7 +2229,7 @@ class EmailService {
                                         </tr>
                                         <tr>
                                             <td style="padding: 12px 0; color: #1e293b; font-size: 16px; font-weight: 700;">TOTAL PAYABLE:</td>
-                                            <td style="padding: 12px 0; color: #dc2626; font-size: 18px; font-weight: 800; text-align: right;">${fmt(templateData.totalPayable || 0)}</td>
+                                            <td style="padding: 12px 0; color: ${accentColor}; font-size: 18px; font-weight: 800; text-align: right;">${fmt(templateData.totalPayable || 0)}</td>
                                         </tr>
                                     </table>
                                 </td>
@@ -2209,8 +2243,8 @@ class EmailService {
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td style="padding: 8px 0; color: #dc2626; font-size: 14px; font-weight: 600;">
-                                                Days Overdue: ${templateData.daysOverdue || 0} days
+                                            <td style="padding: 8px 0; color: ${accentColor}; font-size: 14px; font-weight: 600;">
+                                                ${reminderLine}
                                             </td>
                                         </tr>
                                     </table>
@@ -2219,7 +2253,7 @@ class EmailService {
                             <tr>
                                 <td align="center" style="padding: 30px 0;">
                                     <a href="${templateData.paymentLink || '#'}" 
-                                       style="display: inline-block; padding: 16px 40px; background-color: #dc2626; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px;">
+                                       style="display: inline-block; padding: 16px 40px; background-color: ${accentColor}; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px;">
                                         💳 PAY NOW
                                     </a>
                                 </td>
@@ -2244,6 +2278,8 @@ class EmailService {
                 subject: `⚠️ Payment Reminder - ${registration.exhibitorName} - ${templateData.daysOverdue || 0} Days Overdue`,
                 html
             };
+
+            data.subject = `Payment Reminder - ${registration.exhibitorName} - ${subjectStatus}`;
 
             const attachments = [];
             if (data.receiptPath && require('fs').existsSync(data.receiptPath)) {

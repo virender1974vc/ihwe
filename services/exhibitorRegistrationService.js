@@ -769,6 +769,32 @@ class ExhibitorRegistrationService {
             delete data._stallDiscountAmount;
         }
 
+        if (!data.installments && data.amountPaid != null && current.installments?.length) {
+            let remainingPaid = Number(data.amountPaid || 0);
+            data.installments = current.installments
+                .slice()
+                .sort((a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0))
+                .map((inst) => {
+                    const dueAmount = Number(inst.dueAmount || 0);
+                    const paidAmount = Math.min(dueAmount, Math.max(0, remainingPaid));
+                    remainingPaid = Math.max(0, remainingPaid - dueAmount);
+
+                    let status = 'pending';
+                    if (paidAmount >= dueAmount && dueAmount > 0) status = 'paid';
+                    else if (paidAmount > 0) status = 'partial';
+
+                    return {
+                        ...inst.toObject(),
+                        paidAmount,
+                        status,
+                        paidAt: status === 'paid' ? (inst.paidAt || new Date()) : inst.paidAt
+                    };
+                });
+
+            const firstUnpaid = data.installments.find((inst) => inst.status !== 'paid');
+            data.paymentDueDate = firstUnpaid?.dueDate || null;
+        }
+
         // --- ALWAYS Update totalPayable (balance + penalty) ---
         const finalBalance = data.balanceAmount ?? current.balanceAmount ?? 0;
         const penalty = data.penaltyAmount ?? current.penaltyAmount ?? 0;
