@@ -3,10 +3,12 @@ const AccountDebitNote = require("../models/AccountDebitNote");
 const Invoice = require("../models/Invoice");
 const Payment = require("../models/Payment");
 const DebitNote = require("../models/DebitNote"); // the existing "Credit Note" feature's model
+const CreditNote = require("../models/CreditNote"); // the other credit-note model — must be netted too, see below
 const Stall = require("../models/Stall");
 const { resolveCompanyAndExhibitor, buildAccountOverview } = require("./accountOverviewController");
 const { getAccountNameById } = require("../utils/accountActivityDetails");
 const { logActivity } = require("../utils/logger");
+const { getCreditedByInvoiceId } = require("../services/ledgerTotals");
 
 const isValidObjectId = (val) => val && mongoose.Types.ObjectId.isValid(val);
 
@@ -61,23 +63,26 @@ const parseAllocations = (allocations) => {
 };
 
 // Real (not stored/cached) per-invoice outstanding: finalAmount minus payments minus
-// any credit notes (the existing DebitNote model) already applied to that invoice.
-const computeInvoiceOutstandingMap = async (invoiceIds) => {
-  if (!invoiceIds.length) return {};
-  const [payments, creditNotes] = await Promise.all([
+// any credit notes already applied to that invoice — nets BOTH credit-note models
+// (CreditNote and the legacy "DebitNote", which despite its name behaves as a second
+// credit-note mechanism) via the same shared logic the Client Ledger uses, so this
+// screen's "outstanding" always agrees with the Client Ledger's.
+const computeInvoiceOutstandingMap = async (invoices) => {
+  const invoiceIds = invoices.map((inv) => String(inv._id));
+  if (!invoiceIds.length) return { paidByInvoice: {}, creditedByInvoice: {} };
+
+  const companyIds = [...new Set(invoices.map((inv) => inv.companyId).filter(Boolean))];
+  const [payments, legacyDebitNotes, creditNotes] = await Promise.all([
     Payment.find({ invoice_id: { $in: invoiceIds } }).lean(),
     DebitNote.find({ toInvoiceId: { $in: invoiceIds }, status: { $ne: "cancelled" } }).lean(),
+    companyIds.length ? CreditNote.find({ companyId: { $in: companyIds } }).lean() : Promise.resolve([]),
   ]);
   const paidByInvoice = {};
   payments.forEach((p) => {
     const key = String(p.invoice_id);
     paidByInvoice[key] = (paidByInvoice[key] || 0) + parseAmount(p.amount_text);
   });
-  const creditedByInvoice = {};
-  creditNotes.forEach((cn) => {
-    const key = String(cn.toInvoiceId);
-    creditedByInvoice[key] = (creditedByInvoice[key] || 0) + parseAmount(cn.totalAmount);
-  });
+  const creditedByInvoice = getCreditedByInvoiceId(invoices, creditNotes, legacyDebitNotes);
   return { paidByInvoice, creditedByInvoice };
 };
 
@@ -98,8 +103,7 @@ const getCompanyDebitNoteContext = async (req, res) => {
     );
     const invoices = await Invoice.find({ companyId: { $in: lookupIds } }).lean();
     const activeInvoices = invoices.filter((inv) => !isCancelledDoc(inv));
-    const invoiceIds = activeInvoices.map((inv) => inv._id.toString());
-    const { paidByInvoice = {}, creditedByInvoice = {} } = await computeInvoiceOutstandingMap(invoiceIds);
+    const { paidByInvoice = {}, creditedByInvoice = {} } = await computeInvoiceOutstandingMap(activeInvoices);
 
     const invoiceList = activeInvoices.map((inv) => {
       const id = inv._id.toString();
@@ -260,7 +264,7 @@ const enrichWithSettlementStatus = async (notes) => {
   const invoices = await Invoice.find({ _id: { $in: allInvoiceIds } }).lean();
   const invoiceById = {};
   invoices.forEach((inv) => { invoiceById[inv._id.toString()] = inv; });
-  const { paidByInvoice = {}, creditedByInvoice = {} } = await computeInvoiceOutstandingMap(allInvoiceIds);
+  const { paidByInvoice = {}, creditedByInvoice = {} } = await computeInvoiceOutstandingMap(invoices);
 
   return notes.map((note) => {
     let settledAmount = 0;
