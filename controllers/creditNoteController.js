@@ -45,12 +45,17 @@ const generateCreditNoteNo = async () => {
 // CREATE CREDIT NOTE
 const createCreditNote = async (req, res) => {
   try {
+    // Parse nested objects if they come as strings from FormData
+    if (typeof req.body.items === 'string') req.body.items = JSON.parse(req.body.items);
+    if (typeof req.body.adjusted_invoices === 'string') req.body.adjusted_invoices = JSON.parse(req.body.adjusted_invoices);
+
     const creditNo = await generateCreditNoteNo();
 
     const creditNote = new CreditNote({
       ...req.body,
       create_note_no: creditNo,
       updated_date: new Date(),
+      attachment: req.file ? `/uploads/${req.file.filename}` : "",
     });
 
     await creditNote.save();
@@ -110,12 +115,21 @@ const getCreditNoteById = async (req, res) => {
 // UPDATE CREDIT NOTE
 const updateCreditNote = async (req, res) => {
   try {
+    // Parse nested objects if they come as strings from FormData
+    if (typeof req.body.items === 'string') req.body.items = JSON.parse(req.body.items);
+    if (typeof req.body.adjusted_invoices === 'string') req.body.adjusted_invoices = JSON.parse(req.body.adjusted_invoices);
+
+    const updateData = {
+      ...req.body,
+      updated_date: new Date(),
+    };
+    if (req.file) {
+      updateData.attachment = `/uploads/${req.file.filename}`;
+    }
+
     const updated = await CreditNote.findByIdAndUpdate(
       req.params.id,
-      {
-        ...req.body,
-        updated_date: new Date(),
-      },
+      updateData,
       { returnDocument: 'after' },
     );
     if (!updated) {

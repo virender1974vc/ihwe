@@ -399,6 +399,7 @@ app.use("/api/debitnotes", debitNoteRoutes);
 app.use("/api/account-debit-notes", accountDebitNoteRoutes);
 app.use("/api/account-overview", require("./routes/accountOverviewRoutes"));
 app.use("/api/client-ledger", require("./routes/clientLedgerRoutes"));
+app.use("/api/accounts-receivable", require("./routes/accountsReceivableRoutes"));
 app.use("/api/imprest", require("./routes/imprestRoutes"));
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
@@ -471,6 +472,8 @@ const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
 initPaymentWarningCron();
 const { initReminderCron } = require('./jobs/reminderCron');
 initReminderCron();
+const { initExhibitionReminderCron } = require('./jobs/exhibitionReminderCron');
+initExhibitionReminderCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);
