@@ -5,6 +5,7 @@ const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
 const AccountDebitNote = require("../models/AccountDebitNote");
 const { resolveCompanyAndExhibitor, buildAccountOverview } = require("./accountOverviewController");
+const { getCreditedByInvoiceId, legacyCreditNoteAmount } = require("../services/ledgerTotals");
 const pdfGenerator = require("../utils/pdfGenerator");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
@@ -58,22 +59,9 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
   // Credit notes that are tied to a specific invoice must reduce THAT invoice's
   // remaining balance too, not just the global running total — otherwise per-invoice
   // aging/overdue figures double-count what a credit note already adjusted.
-  const creditedByInvoiceId = {};
-  debitNotes
-    .filter((dn) => String(dn.status || "active").toLowerCase() !== "cancelled" && dn.toInvoiceId)
-    .forEach((dn) => {
-      const key = String(dn.toInvoiceId);
-      creditedByInvoiceId[key] = (creditedByInvoiceId[key] || 0) + parseAmount(dn.totalAmount);
-    });
-  legacyCreditNotes
-    .filter((cn) => String(cn.status || "active").toLowerCase() !== "cancelled" && cn.est_no)
-    .forEach((cn) => {
-      const matchedInvoice = activeInvoices.find((inv) => inv.estimate_no === cn.est_no);
-      if (!matchedInvoice) return;
-      const amount = (cn.items || []).reduce((sum, it) => sum + (parseAmount(it.cn_amount) * (it.quantity || 1)), 0);
-      const key = String(matchedInvoice._id);
-      creditedByInvoiceId[key] = (creditedByInvoiceId[key] || 0) + amount;
-    });
+  // Uses the shared helper so this matches the same est_no/invoice_no/reference_invoice_no
+  // logic as accountOverviewController and accountsReceivableController.
+  const creditedByInvoiceId = getCreditedByInvoiceId(activeInvoices, legacyCreditNotes, debitNotes);
 
   const overview = await buildAccountOverview(companyId, company, exhibitor);
 
