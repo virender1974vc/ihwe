@@ -472,6 +472,8 @@ const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
 initPaymentWarningCron();
 const { initReminderCron } = require('./jobs/reminderCron');
 initReminderCron();
+const { initExhibitionReminderCron } = require('./jobs/exhibitionReminderCron');
+initExhibitionReminderCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);
