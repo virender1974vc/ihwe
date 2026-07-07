@@ -275,7 +275,15 @@ const getAccountsReceivable = async (req, res) => {
       else if (settled > 0) paymentType = "Partial Payment";
 
       const installmentDue = getInstallmentDueInfo(doc.companyId, lookups, today);
-      const dueDate = formatDateOnly(doc.dueDate || (doc.docType === "Proforma Invoice" ? installmentDue?.dueDate : null));
+      const fallbackInvoiceDueDate = (() => {
+        if (doc.docType !== "Invoice") return null;
+        const docDate = formatDateOnly(doc.docDate);
+        if (!docDate) return null;
+        const fallback = new Date(docDate);
+        fallback.setDate(fallback.getDate() + 30);
+        return fallback;
+      })();
+      const dueDate = formatDateOnly(doc.dueDate) || fallbackInvoiceDueDate || (doc.docType === "Proforma Invoice" ? formatDateOnly(installmentDue?.dueDate) : null);
       const invoiceOverdue = outstanding > 0 && dueDate && dueDate < today;
       const installmentOverdue = outstanding > 0 && doc.docType === "Proforma Invoice" && installmentDue?.isOverdue;
       const isOverdue = Boolean(invoiceOverdue || installmentOverdue);
