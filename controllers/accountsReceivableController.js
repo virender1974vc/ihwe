@@ -275,25 +275,35 @@ const getAccountsReceivable = async (req, res) => {
       else if (settled > 0) paymentType = "Partial Payment";
 
       const installmentDue = getInstallmentDueInfo(doc.companyId, lookups, today);
+      const exhibitor = lookups.exhibitorById[doc.companyId];
+      const event = exhibitor ? lookups.eventById[String(exhibitor.eventId)] : null;
+      const defaultPlan = event?.paymentPlans?.find(p => p.isDefault);
+      const eventGeneralDueDate = defaultPlan?.dueDate ? formatDateOnly(defaultPlan.dueDate) : null;
+
       const fallbackInvoiceDueDate = (() => {
         if (doc.docType !== "Invoice") return null;
+        if (eventGeneralDueDate) return eventGeneralDueDate;
         const docDate = formatDateOnly(doc.docDate);
         if (!docDate) return null;
         const fallback = new Date(docDate);
         fallback.setDate(fallback.getDate() + 30);
         return fallback;
       })();
-      const dueDate = formatDateOnly(doc.dueDate) || fallbackInvoiceDueDate || (doc.docType === "Proforma Invoice" ? formatDateOnly(installmentDue?.dueDate) : null);
+
+      const dueDate = formatDateOnly(doc.dueDate) || fallbackInvoiceDueDate || (doc.docType === "Proforma Invoice" ? (formatDateOnly(installmentDue?.dueDate) || eventGeneralDueDate) : null);
       const invoiceOverdue = outstanding > 0 && dueDate && dueDate < today;
       const installmentOverdue = outstanding > 0 && doc.docType === "Proforma Invoice" && installmentDue?.isOverdue;
       const isOverdue = Boolean(invoiceOverdue || installmentOverdue);
       const dueDayDiff = dueDate ? Math.floor((dueDate - today) / (1000 * 60 * 60 * 24)) : null;
       const hasInstallmentDue = Boolean(installmentDue?.dueDate);
+      
       const dueType = doc.docType === "Proforma Invoice" && hasInstallmentDue
         ? "Installment"
-        : doc.docType === "Proforma Invoice"
-          ? "Payment Due"
-          : "Invoice Due";
+        : (!formatDateOnly(doc.dueDate) && !hasInstallmentDue && eventGeneralDueDate && dueDate === eventGeneralDueDate)
+          ? "General Event Due"
+          : doc.docType === "Proforma Invoice"
+            ? "Payment Due"
+            : "Invoice Due";
 
       let status = "Unpaid";
       if (totalOwed > 0 && settled >= totalOwed) status = "Paid";
@@ -331,12 +341,12 @@ const getAccountsReceivable = async (req, res) => {
         bank: lastPayment?.bankId || lastPayment?.cheque_bank || lastPayment?.neft_bank || lastPayment?.card_bank || (lastPayment?.pymnt_type === "Online" ? "Razorpay" : "-"),
         utr: lastPayment?.utr_no || lastPayment?.cheque_no || lastPayment?.card_transaction_no || lastPayment?.wallet_transaction_no || lastPayment?.cash_receipt_no || "-",
         utrDate: lastPayment?.payment_date || null,
-        dueDate: doc.dueDate || (doc.docType === "Proforma Invoice" ? installmentDue?.dueDate || null : null),
+        dueDate: dueDate || null,
         invoiceOverdue: Boolean(invoiceOverdue),
         installmentOverdue: Boolean(installmentOverdue),
         hasInstallmentDue,
         dueType,
-        dueLabel: doc.docType === "Proforma Invoice" ? (installmentDue?.label || "Payment Due") : "Invoice Due",
+        dueLabel: dueType === "General Event Due" ? "General Event Due" : doc.docType === "Proforma Invoice" ? (installmentDue?.label || "Payment Due") : "Invoice Due",
         dueDaysDiff: dueDayDiff,
         installmentDueDate: installmentDue?.dueDate || null,
         installmentDueLabel: installmentDue?.label || "",
