@@ -112,7 +112,7 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
   legacyCreditNotes
     .filter((cn) => String(cn.status || "active").toLowerCase() !== "cancelled")
     .forEach((cn) => {
-      const amount = (cn.items || []).reduce((sum, it) => sum + (parseAmount(it.cn_amount) * (it.quantity || 1)), 0);
+      const amount = legacyCreditNoteAmount(cn);
       entries.push({
         id: cn._id,
         date: cn.created_at || cn.updated_date,
