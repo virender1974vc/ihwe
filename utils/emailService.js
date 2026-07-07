@@ -1290,6 +1290,18 @@ class EmailService {
 
             const headerBuf = getImageBuffer(template.headerImage);
             const footerBuf = getImageBuffer(template.footerImage);
+            
+            if (registration.isGenericInvoice) {
+                bodyContent = bodyContent.replace(/Stall Details/gi, 'Invoice Details');
+                bodyContent = bodyContent.replace(/Stall No\./gi, 'Invoice No.');
+                bodyContent = bodyContent.replace(/Stall Type/gi, 'Invoice Type');
+                bodyContent = bodyContent.replace(/Scheme/g, 'Payment Type');
+                bodyContent = bodyContent.replace(/Dimension/g, 'Doc Type');
+                bodyContent = bodyContent.replace(/Stall Size/g, 'Qty');
+                bodyContent = bodyContent.replace(/Rate \/ SQM/gi, 'Rate/Unit');
+                bodyContent = bodyContent.replace(/SQM/g, '');
+            }
+
             const html = this.emailShell(bodyContent, {
                 headerCid: headerBuf ? 'email_header_img' : null,
                 footerCid: footerBuf ? 'email_footer_img' : null,
@@ -1432,8 +1444,8 @@ class EmailService {
         rowsHtml += `
             <tr style="background-color: #ffffff;">
                 <td width="230" style="padding: 1px 10px; font-size: 11px; line-height: 1.2; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-family: Arial, sans-serif;">
-                    <strong>${p.stallType || 'N/A'}</strong><br/>
-                    <span style="font-size: 9px; color: #64748b;">Stall Booking No: ${p.stallFor || 'N/A'}</span>
+                    <strong>${registration.isGenericInvoice ? (p.stallType || 'Invoice') : (p.stallType || 'Shell Space')}</strong><br/>
+                    <span style="font-size: 9px; color: #64748b;">${registration.isGenericInvoice ? 'Invoice No' : 'Stall Booking No'}: ${p.stallFor || 'N/A'}</span>
                 </td>
                 <td width="100" align="center" style="padding: 1px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.dimension || 'N/A'}</td>
                 <td width="100" align="center" style="padding: 1px 10px; font-size: 11px; border-bottom: 1px solid #e2e8f0; color: #334155; font-family: Arial, sans-serif;">${p.stallScheme || 'N/A'}</td>

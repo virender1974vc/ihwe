@@ -187,6 +187,7 @@ const generateAccountPaymentReceipt = async (payment) => {
       whatsapp: contact.mobile,
     },
     eventId: { name: "IHWE 2026" },
+    isGenericInvoice: true,
     participation: {
       currency: "INR",
       stallFor: getDocumentNo(docData, payment),
@@ -226,6 +227,10 @@ const generateAccountPaymentReceipt = async (payment) => {
     }
     if (contact.exhibitor.financeBreakdown) {
       registrationLike.financeBreakdown = contact.exhibitor.financeBreakdown;
+    }
+    // If it's linked to an exhibitor with actual participation, it's not a generic invoice anymore
+    if (contact.exhibitor.participation && contact.exhibitor.participation.stallNo) {
+      registrationLike.isGenericInvoice = false;
     }
     registrationLike.chosenTdsPercent = contact.exhibitor.chosenTdsPercent || registrationLike.chosenTdsPercent;
     // We keep amountPaid and balanceAmount as computed from the payments to reflect the current state

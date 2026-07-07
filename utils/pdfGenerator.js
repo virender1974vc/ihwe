@@ -14,12 +14,9 @@ function getTempPdfUrl(filePath) {
 
 // Resolve header/footer image paths dynamically from Settings, with hardcoded filenames as fallback
 async function resolveHeaderFooterPaths(optionsHeaderImage, optionsFooterImage) {
-    // If caller already passed explicit paths, use them
     if (optionsHeaderImage && fs.existsSync(optionsHeaderImage)) {
         return { headerPath: optionsHeaderImage, footerPath: optionsFooterImage || null };
     }
-
-    // Try to load from Settings model (emailTemplateHeader / emailTemplateFooter fields)
     try {
         const settings = await Settings.findOne().lean();
         const uploadsBase = path.join(__dirname, '..');
@@ -395,7 +392,6 @@ class PDFGenerator {
                     options.footerImage
                 );
 
-                const settings = await Settings.findOne();
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
                 const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
                 const suffix = paymentIndex >= 0 ? `_P${paymentIndex + 1}` : '';
@@ -406,18 +402,20 @@ class PDFGenerator {
                 doc.pipe(stream);
 
                 const pageW = doc.page.width;
+                const pageH = doc.page.height;
                 const p = registration.participation || {};
+                const c1 = registration.contact1 || {};
                 const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex]
                     ? registration.paymentHistory[paymentIndex]
                     : null;
                 const m = paymentHistoryEntry || registration.manualPaymentDetails || {};
-                const fb = registration.financeBreakdown || {};
                 const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
-                const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN')}`;
+                const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                
                 // --- Generate Receipt Number ---
                 const Counter = require('../models/visitor/CounterModel');
                 const year = new Date().getFullYear();
-                let rNo = registration.customReceiptNo;
+                let rNo = registration.customReceiptNo || registration.receiptNo;
                 if (!rNo) {
                     const counter = await Counter.findOneAndUpdate(
                         { type: `receipt-ngw-${year}` },
@@ -425,215 +423,315 @@ class PDFGenerator {
                         { upsert: true, returnDocument: 'after' }
                     );
                     rNo = `NGW/IHWE/${year}/${String(counter.seq).padStart(3, '0')}`;
-                    await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
+                    try {
+                        if (registration._id && registration.constructor && typeof registration.constructor.findByIdAndUpdate === 'function') {
+                            await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
+                        }
+                    } catch (e) { /* ignore if mock object */ }
                 }
 
-                this._headerImg(doc, headerPath);
-                let y = doc.y;
-                const hasCustomHeader = !!headerPath;
-                if (!hasCustomHeader) {
-                    const addr = settings?.companyAddress || '12/51, Site 2, Sunrise Industrial Area, Mohan Nagar, Ghaziabad - 200107, UP, India';
-                    doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                        .text(addr, 40, y, { width: pageW - 80, align: 'center' });
+                // Fetch settings once for the whole receipt
+                const Settings = require('../models/Settings');
+                const settings = await Settings.findOne();
 
-                    const addrHeight = doc.heightOfString(addr, { width: pageW - 80 });
-                    y += addrHeight + 4;
+                // ── Header image ──
+                this._headerImg(doc, headerPath, true);
+                let y = doc.y + 15;
 
-                    doc.text(`GSTIN: ${settings?.companyGst || 'N/A'}  |  CIN: ${settings?.companyCin || 'N/A'}`, 40, y, { width: pageW - 80, align: 'center' });
-                    y += 18;
-                } else {
-                    y += 10;
+                // ── 3-Column Header Row ──
+                // Column 1: Event Logo
+                let logoPath = path.join(__dirname, '../public/logo.png');
+                const targetLogo = settings ? (settings.emailLogo || settings.logo) : null;
+                if (targetLogo) {
+                    // Try to resolve the settings logo path
+                    const customLogoPath = path.join(__dirname, '..', targetLogo.replace(/^\//, ''));
+                    if (fs.existsSync(customLogoPath)) {
+                        logoPath = customLogoPath;
+                    }
                 }
+                
+                if (fs.existsSync(logoPath)) {
+                    try {
+                        doc.image(logoPath, 40, y, { fit: [190, 90], align: 'left', valign: 'center' });
+                    } catch (e) {
+                        // Ignore if invalid image
+                    }
+                }
+                
+                // Column 2: Date & Venue (Middle)
+                const midX = 230;
+                doc.fillColor('#334155').fontSize(9).font('Helvetica-Bold')
+                    .text('DATE: ', midX, y + 25, { continued: true })
+                    .text('21 - 23 AUGUST 2026');
+                
+                doc.text('VENUE: ', midX, y + 45, { continued: true })
+                    .text('PRAGATI MAIDAN,');
+                doc.font('Helvetica').text('       NEW DELHI, INDIA', midX, y + 57);
 
-                // ── Title strip ──
-                doc.rect(40, y, pageW - 80, 30).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(16).font('Helvetica-Bold')
-                    .text('PAYMENT RECEIPT', 40, y + 8, { width: pageW - 80, align: 'center', characterSpacing: 1 });
-                y += 45;
+                // Column 3: PAYMENT RECEIPT Box (Top Right)
+                const topBoxW = 200;
+                const topBoxX = pageW - 40 - topBoxW;
+                doc.rect(topBoxX, y, topBoxW, 90).lineWidth(0.5).stroke('#e2e8f0');
+                doc.rect(topBoxX, y, topBoxW, 85).fill('#f8fafc');
+                
+                doc.fillColor('#0c2b5c').fontSize(10).font('Helvetica-Bold')
+                    .text('PAYMENT RECEIPT', topBoxX, y + 15, { width: topBoxW, align: 'center', characterSpacing: 0.5 });
+                
+                this._line(doc, topBoxX + 15, y + 35, topBoxX + topBoxW - 15, '#cbd5e1');
 
-                // ── Receipt Meta ──
-                doc.fillColor(BLUE_NAVY).fontSize(9).font('Helvetica-Bold').text(`Receipt No.: ${rNo}`, 40, y);
-                doc.fillColor(GRAY).fontSize(9).font('Helvetica').text(`Date: ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`, 40, y, { width: pageW - 80, align: 'right' });
-                y += 25;
+                const paymentDateObj = new Date(m.paidAt || registration.updatedAt || Date.now());
+                const formattedDate = paymentDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-                // ── Client Information ──
-                doc.rect(40, y, 160, 18).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Client Information', 45, y + 5);
-                y += 25;
+                const infoY = y + 45;
+                doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('Receipt No:', topBoxX + 15, infoY);
+                doc.fillColor('#0f172a').font('Helvetica').text(rNo || 'N/A', topBoxX + 75, infoY, { width: topBoxW - 90, align: 'right' });
+                
+                doc.fillColor('#64748b').font('Helvetica-Bold').text('Reg ID:', topBoxX + 15, infoY + 14);
+                doc.fillColor('#0f172a').font('Helvetica').text(registration.registrationId || 'N/A', topBoxX + 75, infoY + 14, { width: topBoxW - 90, align: 'right' });
 
-                const clientRows = [
-                    { label: 'Client Name:', value: registration.exhibitorName },
-                    { label: 'Contact Person:', value: `${registration.contact1?.title || ''} ${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim() },
-                    { label: 'Mobile No.:', value: registration.contact1?.mobile || 'N/A' },
-                    { label: 'Email ID:', value: registration.contact1?.email || 'N/A' },
-                    { label: 'Address:', value: `${registration.address || ''}, ${registration.city || ''}, ${registration.state || ''}, ${registration.country || ''}`.trim() },
+                doc.fillColor('#64748b').font('Helvetica-Bold').text('Date:', topBoxX + 15, infoY + 28);
+                doc.fillColor('#0f172a').font('Helvetica').text(formattedDate, topBoxX + 75, infoY + 28, { width: topBoxW - 90, align: 'right' });
+
+                y += 110;
+
+                this._line(doc, 40, y, pageW - 40, '#e5e7eb');
+                y += 8;
+
+                // ── Two-column: IHWE details | Client details ──
+                const colW = (pageW - 100) / 2;
+                const lx = 40, rx = 60 + colW;
+                // Left box - IHWE / FROM
+                doc.rect(lx, y, colW, 105).lineWidth(0.5).stroke('#e5e7eb');
+                doc.rect(lx, y, colW, 22).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
+                    .text('FROM (ORGANISER)', lx + 8, y + 6, { width: colW - 16, characterSpacing: 0.5 });
+                
+                doc.fillColor(BLUE_NAVY).fontSize(10).font('Helvetica-Bold')
+                    .text(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 32, { width: colW - 16 });
+                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
+                    .text(settings?.companyAddress || '12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India', { width: colW - 16 })
+                    .moveDown(1)
+                    .text('info@namogangewellness.com  |  www.ihwe.in', { width: colW - 16 });
+
+                // Right box - Client / TO
+                doc.rect(rx, y, colW, 105).lineWidth(0.5).stroke('#e5e7eb');
+                doc.rect(rx, y, colW, 22).fill(GREEN);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
+                    .text('TO (EXHIBITOR)', rx + 8, y + 6, { width: colW - 16, characterSpacing: 0.5 });
+
+                doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
+                    .text(registration.exhibitorName || 'N/A', rx + 8, y + 32, { width: colW - 16 });
+                doc.fillColor(GRAY).fontSize(8).font('Helvetica');
+                
+                if (registration.typeOfBusiness) {
+                    doc.text(registration.typeOfBusiness, { width: colW - 16 });
+                }
+                const addrParts = [registration.address, registration.city, registration.state].filter(Boolean).join(', ');
+                if (addrParts) {
+                    doc.text(addrParts, { width: colW - 16 });
+                }
+                const countryParts = `${registration.country || ''} ${registration.pincode ? '– ' + registration.pincode : ''}`.trim();
+                if (countryParts && countryParts !== '–') {
+                    doc.text(countryParts, { width: colW - 16 });
+                }
+                if (c1.mobile || c1.email) doc.moveDown(0.5);
+                if (c1.mobile) doc.text(c1.mobile, { width: colW - 16 });
+                if (c1.email) doc.text(c1.email, { width: colW - 16 });
+
+                y += 115;
+                const infoW = (pageW - 80) / 6;
+                const isGen = registration.isGenericInvoice;
+                const infos = [
+                    { label: isGen ? 'Invoice No.' : 'Stall No.', value: p.stallFor || 'N/A' },
+                    { label: isGen ? 'Invoice Type' : 'Stall Type', value: p.stallType || 'N/A' },
+                    { label: isGen ? 'Payment Type' : 'Scheme', value: p.stallScheme || 'N/A' },
+                    { label: isGen ? 'Doc Type' : 'Dimension', value: p.dimension || 'N/A' },
+                    { label: isGen ? 'Qty' : 'Stall Size', value: p.stallSize ? (isGen ? String(p.stallSize) : `${p.stallSize} SQM`) : 'N/A' },
+                    { label: 'Event', value: registration.eventId?.name || '9IHWE 2026' },
                 ];
-                clientRows.forEach(row => {
-                    this._label(doc, row.label, 60, y, 100);
-                    this._value(doc, row.value, 160, y, pageW - 200);
-                    y += 18;
-                    this._line(doc, 60, y - 4, pageW - 40, '#f1f5f9');
-                });
+                
+                doc.fillColor(BLUE_NAVY).fontSize(11).font('Helvetica-Bold')
+                    .text(isGen ? 'INVOICE DETAILS' : 'STALL DETAILS', 40, y, { width: pageW - 80, align: 'center' });
                 y += 15;
-
-                // ── Two Column: Booking & Financial ──
-                const bookingY = y;
-                // LEFT: Booking Details
-                doc.rect(40, y, 160, 18).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Booking Details', 45, y + 5);
-                y += 25;
-                const bookingRows = [
-                    { label: 'Event:', value: registration.eventId?.name || 'IHWE 2026' },
-                    { label: 'Stall Booking No.:', value: registration.registrationId || 'N/A' },
-                    { label: 'Stall Size:', value: `${p.stallSize || 0} Sq. Meter` },
-                    { label: 'Rate per Sq. Meter:', value: fmt(p.rate) },
-                    { label: 'Stall Number:', value: p.stallFor || 'N/A' },
-                ];
-                bookingRows.forEach(row => {
-                    this._label(doc, row.label, 60, y, 100);
-                    this._value(doc, row.value, 160, y, 140);
-                    y += 18;
-                    this._line(doc, 60, y - 4, 300, '#f1f5f9');
+                
+                infos.forEach((info, i) => {
+                    const ix = 40 + i * infoW;
+                    doc.rect(ix, y, infoW, 36).fill('#f8fafc').stroke('#e2e8f0').lineWidth(0.5).stroke();
+                    doc.fillColor('#64748b').fontSize(7).font('Helvetica-Bold').text(info.label.toUpperCase(), ix + 6, y + 6, { width: infoW - 12 });
+                    doc.fillColor(BLUE_NAVY).fontSize(8).font('Helvetica-Bold')
+                        .text(info.value, ix + 6, y + 18, { width: infoW - 12 });
                 });
-                let fy = bookingY;
-                const fx = 320;
-                const fw = pageW - fx - 40;
-                doc.rect(fx, fy, fw, 18).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Financial Summary', fx + 5, fy + 5);
-                fy += 25;
+                y += 44;
 
+                // ── Items table ──
+                const tW = pageW - 80;
+                const cols = [
+                    { label: 'Description', w: tW * 0.40 },
+                    { label: isGen ? 'Doc Type' : 'Dimensions', w: tW * 0.15 },
+                    { label: isGen ? 'Payment Type' : 'Scheme', w: tW * 0.15 },
+                    { label: isGen ? 'Rate/Unit' : 'Rate/SQM', w: tW * 0.15, align: 'right' },
+                    { label: 'Amount', w: tW * 0.15, align: 'right' },
+                ];
+
+                // Table header
+                doc.rect(40, y, tW, 18).fill(DARK);
+                let tx = 40;
+                cols.forEach(col => {
+                    doc.fillColor(WHITE).fontSize(8).font('Helvetica-Bold')
+                        .text(col.label, tx + 4, y + 5, { width: col.w - 8, align: col.align || 'left' });
+                    tx += col.w;
+                });
+                y += 18;
+                y = this._tableRow(doc, [
+                    { text: isGen ? `${p.stallType || 'Invoice'} – ${p.stallFor || 'N/A'}` : `${p.stallType || 'Shell Space'} – Stall ${p.stallFor || 'N/A'}`, w: tW * 0.40 },
+                    { text: p.dimension || 'N/A', w: tW * 0.15 },
+                    { text: p.stallScheme || 'N/A', w: tW * 0.15 },
+                    { text: fmt(p.rate), w: tW * 0.15, align: 'right' },
+                    { text: fmt(p.amount), w: tW * 0.15, align: 'right' },
+                ], y, '#f9fafb');
+                this._line(doc, 40, y, 40 + tW, '#e5e7eb');
+                y += 4;
+
+                // ── Summary box (right-aligned) ──
+                const sumX = 40 + tW * 0.55;
+                const sumW = tW * 0.45;
+                const fb = registration.financeBreakdown || {};
                 const subtotalVal = fb.subtotal || p.amount || 0;
                 const gstVal = fb.gstAmount || Math.round(subtotalVal * 0.18);
                 const tdsVal = fb.tdsAmount || Math.round(subtotalVal * (registration.chosenTdsPercent || 0) / 100);
                 const netVal = fb.netPayable || (subtotalVal + gstVal - tdsVal);
                 const grossVal = fb.grossAmount || subtotalVal;
-                const invoiceTotalVal = subtotalVal + gstVal;
 
                 const summaryRows = [
-                    { label: `Total Stall Cost (${fmt(p.rate)} x ${p.stallSize} Sqm)`, value: fmt(grossVal), bg: LGRAY },
+                    { label: 'Gross Amount', value: fmt(grossVal) },
                 ];
 
                 if (fb.stallDiscountAmount > 0) {
-                    summaryRows.push({ label: `Less: Stall Discount (${fb.stallDiscountPercent || 0}%)`, value: `- ${fmt(fb.stallDiscountAmount)}`, bg: WHITE, color: BLUE_NAVY });
+                    summaryRows.push({ label: `Less: Stall Discount (${fb.stallDiscountPercent || 0}%)`, value: `- ${fmt(fb.stallDiscountAmount)}` });
                 }
-
-                if (fb.discountAmount > 0) {
-                    summaryRows.push({ label: `Less: Full Payment Discount (${fb.discountPercent || 0}%)`, value: `- ${fmt(fb.discountAmount)}`, bg: WHITE, color: BLUE_NAVY });
+                const isFullPlan = registration.paymentPlanType === 'full' || fb.isFullPayment === true;
+                if (isFullPlan && fb.discountAmount > 0) {
+                    summaryRows.push({ label: `Less: Full Payment Discount (${fb.discountPercent || 0}%)`, value: `- ${fmt(fb.discountAmount)}` });
                 }
 
                 summaryRows.push(
-                    { label: 'Subtotal (Taxable Value)', value: fmt(subtotalVal), bg: LGRAY, bold: true },
-                    { label: 'Add: GST @ 18%', value: `+ ${fmt(gstVal)}`, bg: WHITE, color: BLUE_NAVY },
+                    { label: 'Taxable Value', value: fmt(subtotalVal), bold: true },
+                    { label: 'Add: GST @ 18%', value: `+ ${fmt(gstVal)}` },
                 );
-                summaryRows.forEach(row => {
-                    doc.rect(fx, fy, fw, 18).fill(row.bg);
-                    doc.fillColor(BLUE_NAVY).fontSize(8).font(row.bold ? 'Helvetica-Bold' : 'Helvetica')
-                        .text(row.label, fx + 6, fy + 5, { width: fw * 0.65 });
-                    doc.fillColor(row.color || DARK).fontSize(8).font('Helvetica-Bold')
-                        .text(row.value, fx + fw * 0.65, fy + 5, { width: fw * 0.35 - 6, align: 'right' });
-                    fy += 19;
-                });
 
-                doc.rect(fx, fy, fw, 1).fill(BLUE_NAVY);
-                fy += 4;
-                const contractTotal = invoiceTotalVal;
-                doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold').text('CONTRACT TOTAL (Incl. GST)', fx + 6, fy, { width: fw * 0.65 });
-                doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text(fmt(contractTotal), fx + fw * 0.65, fy, { width: fw * 0.35 - 6, align: 'right' });
-                fy += 16;
-                this._line(doc, fx, fy, fx + fw, '#e5e7eb');
-                fy += 6;
                 if (tdsVal > 0) {
-                    doc.rect(fx, fy, fw, 18).fill(LGRAY);
-                    doc.fillColor(BLUE_NAVY).fontSize(8).font('Helvetica').text(`Less: TDS @ ${registration.chosenTdsPercent || 0}%`, fx + 6, fy + 5, { width: fw * 0.65 });
-                    doc.fillColor('#dc2626').fontSize(8).font('Helvetica-Bold').text(`- ${fmt(tdsVal)}`, fx + fw * 0.65, fy + 5, { width: fw * 0.35 - 6, align: 'right' });
-                    fy += 24;
+                    summaryRows.push({ label: `Less: TDS Deduction (${registration.chosenTdsPercent || 0}%)`, value: `- ${fmt(tdsVal)}`, color: '#dc2626' });
                 }
 
-                const history = registration.paymentHistory || [];
-                const latestPayment = paymentHistoryEntry || (history.length > 0 ? history[history.length - 1] : { amount: registration.amountPaid });
-                const priorPaid = registration.amountPaid - latestPayment.amount;
-
-                if (priorPaid > 0) {
-                    doc.fillColor(GRAY).fontSize(7).font('Helvetica-Bold').text('ALREADY RECEIVED (PRIOR)', fx + 6, fy, { width: fw * 0.55 });
-                    doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text(fmt(priorPaid), fx + fw * 0.55, fy, { width: fw * 0.45 - 6, align: 'right' });
-                    fy += 14;
-                }
-
-                doc.rect(fx, fy, fw, 24).fill('#fef3c7');
-                doc.fillColor(BLUE_NAVY).fontSize(10).font('Helvetica-Bold')
-                    .text('RECEIVED NOW', fx + 6, fy + 7, { width: fw * 0.55 })
-                    .text(fmt(latestPayment.amount), fx + fw * 0.55, fy + 7, { width: fw * 0.45 - 6, align: 'right' });
-                fy += 28;
-
-                const balanceVal = registration.balanceAmount || 0;
-                doc.rect(fx, fy, fw, 22).fill('#fef2f2');
-                doc.fillColor('#b91c1c').fontSize(9).font('Helvetica-Bold')
-                    .text('BALANCE REMAINING', fx + 6, fy + 7, { width: fw * 0.55 })
-                    .text(fmt(balanceVal), fx + fw * 0.55, fy + 7, { width: fw * 0.45 - 6, align: 'right' });
-                fy += 32;
-
-                // ── Payment Details ──
-                y = Math.max(y, fy + 20);
-                doc.rect(40, y, 160, 18).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Payment Details', 45, y + 5);
-                y += 25;
-                const payRows = [
-                    { label: 'Payment Mode:', value: (latestPayment.paymentMode || registration.paymentMode || 'N/A').toUpperCase() },
-                    { label: 'Transaction / Reference No.:', value: latestPayment.transactionId || m.transactionId || registration.paymentId || 'N/A' },
-                    { label: 'Total Paid (Cumulative):', value: fmt(registration.amountPaid) },
-                    { label: 'Payment Date:', value: new Date(latestPayment.paidAt || m.paidAt || registration.updatedAt).toLocaleString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) },
-                ];
-                payRows.forEach(row => {
-                    this._label(doc, row.label, 60, y, 140);
-                    this._value(doc, row.value, 200, y, pageW - 240);
-                    y += 18;
-                    this._line(doc, 60, y - 4, pageW - 40, '#f1f5f9');
-                });
-                const endPaymentY = y;
-
-                // ── Declaration ──
-                y = endPaymentY + 30;
-                doc.rect(40, y, 75, 18).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold').text('Declaration', 45, y + 5);
-                y += 25;
-                const isFull = registration.balanceAmount <= 1;
-                const decs = [
-                    isFull ? 'Full payment received. Booking confirmed.' : 'Partial payment received. Booking held until balance',
-                    'Receipt is valid subject to realization of funds.',
-                    'This receipt is non-transferable without prior written approval.'
-                ];
-                decs.forEach(dec => {
-                    doc.fillColor(ORANGE).fontSize(10).text('-', 40, y);
-                    doc.fillColor(GRAY).fontSize(8).font('Helvetica').text(dec, 55, y, { width: 340 });
+                summaryRows.forEach(row => {
+                    doc.fillColor('#64748b').fontSize(7).font('Helvetica-Bold')
+                        .text(row.label.toUpperCase(), sumX, y, { width: sumW * 0.65, align: 'left' });
+                    
+                    if (row.bold) {
+                        doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold')
+                            .text(row.value, sumX + sumW * 0.65, y, { width: sumW * 0.35, align: 'right' });
+                    } else {
+                        doc.fillColor(row.color || DARK).fontSize(8).font('Helvetica')
+                            .text(row.value, sumX + sumW * 0.65, y, { width: sumW * 0.35, align: 'right' });
+                    }
                     y += 14;
+                    this._line(doc, sumX, y - 4, sumX + sumW, '#f1f5f9');
                 });
+                y += 2;
 
-                // ── Signature & Stamp ──
-                let sigY = y + 20;
-                const sigX = 40;
+                doc.rect(sumX, y, sumW, 20).fill(BLUE_NAVY);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
+                    .text('GRAND TOTAL', sumX + 6, y + 6, { width: sumW * 0.55 })
+                    .text(fmt(netVal), sumX + sumW * 0.55, y + 6, { width: sumW * 0.45 - 6, align: 'right' });
+                y += 30;
 
-                const sigPath = settings?.authorizedSignature ? path.resolve(__dirname, '..', settings.authorizedSignature.replace(/^\//, '')) : null;
-                const stampPath = settings?.companyStamp ? path.resolve(__dirname, '..', settings.companyStamp.replace(/^\//, '')) : null;
+                // ── PAYMENT DETAILS ──
+                doc.fillColor(BLUE_NAVY).fontSize(11).font('Helvetica-Bold')
+                    .text('PAYMENT DETAILS', 40, y, { width: pageW - 80, align: 'center' });
+                y += 15;
+                
+                const payW = (pageW - 80) / 5;
+                const payMode = m.method || m.paymentMode || registration.paymentMode || 'N/A';
+                const transactionId = m.transactionId || m.razorpayPaymentId || registration.paymentId || 'N/A';
+                
+                const amountPaidVal = registration.amountPaid || 0;
+                const balanceVal = registration.balanceAmount || 0;
+                
+                const payInfos = [
+                    { label: 'Payment Mode', value: payMode.toUpperCase() },
+                    { label: 'Transaction No.', value: transactionId },
+                    { label: 'Payment Date', value: formattedDate },
+                    { label: 'Total Paid', value: fmt(amountPaidVal) },
+                    { label: 'Payment Status', value: balanceVal <= 0 ? 'Full Received' : 'Advance Received' },
+                ];
+                
+                payInfos.forEach((info, i) => {
+                    const ix = 40 + i * payW;
+                    doc.rect(ix, y, payW, 36).fill('#f8fafc').stroke('#e2e8f0').lineWidth(0.5).stroke();
+                    doc.fillColor('#64748b').fontSize(7).font('Helvetica-Bold').text(info.label.toUpperCase(), ix + 6, y + 6, { width: payW - 12 });
+                    doc.fillColor(GREEN).fontSize(8).font('Helvetica-Bold')
+                        .text(info.value, ix + 6, y + 18, { width: payW - 12 });
+                });
+                y += 44;
 
-                if (sigPath && fs.existsSync(sigPath)) {
-                    doc.image(sigPath, sigX + 10, sigY + 5, { height: 40 });
+                // ── Exhibitor Details & Important Note (Side by Side) ──
+                const halfW = (pageW - 100) / 2;
+                const botLx = 40, botRx = 60 + halfW;
+                const boxH = 90;
+
+                // Relationship Manager logic
+                let relationshipMgr = (registration.spokenWith && registration.spokenWith.trim())
+                    ? registration.spokenWith.trim()
+                    : (registration.referredBy && registration.referredBy.trim())
+                        ? registration.referredBy.trim()
+                        : 'Direct';
+                
+                if (relationshipMgr !== 'Direct') {
+                    const User = require('../models/User');
+                    const foundUser = await User.findOne({
+                        $or: [
+                            { username: new RegExp('^' + relationshipMgr + '$', 'i') },
+                            { fullName: new RegExp('^' + relationshipMgr + '$', 'i') }
+                        ]
+                    }).lean();
+                    if (foundUser && foundUser.fullName) {
+                        relationshipMgr = foundUser.fullName;
+                    }
                 }
-                if (stampPath && fs.existsSync(stampPath)) {
-                    doc.image(stampPath, sigX + 130, sigY, { height: 50 });
-                }
-                sigY += 50;
-                this._line(doc, sigX, sigY, sigX + 220, BLUE_NAVY);
-                doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold').text('Authorized Signatory', sigX, sigY + 5, { width: 220, align: 'center' });
+                
+                const contactPersonStr = `${c1.firstName || ''} ${c1.lastName || ''}`.trim() || 'N/A';
+                const contactMobileStr = c1.mobile || 'N/A';
 
-                // ── QR Code ──
-                const qrX = pageW - 120, qrY = y + 15;
-                try {
-                    const siteUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
-                    const loginUrl = `${siteUrl}/exhibitor-login`;
-                    const qrBuffer = await QRCode.toBuffer(loginUrl, { margin: 1, width: 80 });
-                    doc.image(qrBuffer, qrX, qrY, { width: 80 });
-                    doc.fillColor(GRAY).fontSize(7).text('Scan for Login', qrX, qrY + 85, { width: 80, align: 'center' });
-                } catch (qrErr) { console.error('QR Generate Error:', qrErr); }
+                // Exhibitor Info
+                doc.rect(botLx, y, halfW, boxH).lineWidth(0.5).stroke('#e2e8f0');
+                doc.rect(botLx, y, halfW, 20).fill(GREEN);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
+                    .text('EXHIBITOR DETAILS', botLx + 10, y + 6, { width: halfW - 20, characterSpacing: 0.5 });
+                
+                let textY = y + 30;
+                doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('Contact Person:', botLx + 10, textY);
+                doc.fillColor('#0f172a').font('Helvetica-Bold').text(`${contactPersonStr} / ${contactMobileStr}`, botLx + 110, textY, { width: halfW - 120 });
+                
+                textY += 18;
+                doc.fillColor('#64748b').font('Helvetica-Bold').text('Relationship Manager:', botLx + 10, textY);
+                doc.fillColor('#0f172a').font('Helvetica').text(relationshipMgr, botLx + 110, textY, { width: halfW - 120 });
+
+                // Important Note
+                doc.rect(botRx, y, halfW, boxH).lineWidth(0.5).stroke('#e2e8f0');
+                doc.rect(botRx, y, halfW, 20).fill(ORANGE);
+                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
+                    .text('IMPORTANT NOTE', botRx + 10, y + 6, { width: halfW - 20, characterSpacing: 0.5 });
+                
+                doc.fillColor('#475569').fontSize(8).font('Helvetica')
+                    .text('1. This is a system generated payment receipt and does not require any physical signature.', botRx + 10, y + 28, { width: halfW - 20 })
+                    .text('2. Subject to realization of cheque / DD.', botRx + 10, y + 54, { width: halfW - 20 })
+                    .text('3. All disputes are subject to Ghaziabad Jurisdiction only.', botRx + 10, y + 68, { width: halfW - 20 });
+                
+                y += boxH + 15;
+                
+                // ── Footer text ──
+                doc.fillColor(ORANGE).fontSize(9).font('Helvetica-Oblique')
+                    .text('Thank you for your participation in 9th International Health & Wellness Expo 2026.', 40, y, { width: pageW - 80, align: 'center' });
 
                 doc.end();
                 stream.on('finish', () => {
