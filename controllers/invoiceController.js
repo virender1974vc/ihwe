@@ -294,12 +294,20 @@ const getSourceEstimateForInvoice = async (invoice) => {
   return Estimate.findOne({ est_no: invoice.estimate_no, companyId: invoice.companyId }).lean();
 };
 
+const parseRate = (value) => {
+  const number = Number(String(value ?? "").replace(/[^\d.]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+};
+
 const estimateItemToInvoiceItem = (item = {}) => {
   const amount = Number(item.amount || 0);
   const discountPct = Number(item.disc || 0);
   const taxableValue = Math.max(0, amount - ((amount * discountPct) / 100));
-  const gstPct = String(item.gstRate || "0").replace(/[^\d.]/g, "") || "0";
-  const gstAmount = Number(item.tax || 0) || (taxableValue * Number(gstPct) / 100);
+  const gstPctValue = parseRate(item.gstRate) || parseRate(item.igst_per) || (parseRate(item.cgst_per) ? parseRate(item.cgst_per) * 2 : 0) || 18;
+  const gstPct = String(gstPctValue);
+  const explicitGstAmount = Number(item.gstAmount || item.gst_amount || item.totalTax || item.total_tax || 0);
+  const splitGstAmount = Number(item.igst || 0) + Number(item.cgst || 0) + Number(item.sgst || 0);
+  const gstAmount = explicitGstAmount || splitGstAmount || (taxableValue * Number(gstPct) / 100);
   return {
     description: item.description || "", hsn: item.hsn || "", qty: Number(item.qty || 0),
     size: String(item.size ?? ""), area: String(item.area ?? ""), unit: item.unit || "Nos",
@@ -326,7 +334,7 @@ const buildRevisedInvoiceData = (invoice, estimate) => ({
   country: estimate.country || "", state: estimate.state || "", city: estimate.city || "",
   pincode: String(estimate.pincode || ""),
   items: (estimate.items || []).map(estimateItemToInvoiceItem),
-  finalAmount: Number(estimate.finalAmount || 0),
+  finalAmount: (estimate.items || []).map(estimateItemToInvoiceItem).reduce((sum, item) => sum + Number(item.total || 0), 0) || Number(estimate.finalAmount || 0),
   remarks: estimate.remarks || "",
   terms: estimate.terms || "",
 });

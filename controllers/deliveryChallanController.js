@@ -17,7 +17,25 @@ const itemKey = (item = {}) => item._id
     normalize(item.area),
   ].join("|");
 const isCancelled = (doc) => normalize(doc?.status) === "cancelled";
-const toNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const toNumber = (value) => {
+  if (value === null || value === undefined || value === "") return 0;
+  const text = String(value).replace(/,/g, "").replace(/%/g, "").trim();
+  const number = Number(text);
+  if (Number.isFinite(number)) return number;
+  const match = text.match(/-?\d+(?:\.\d+)?/);
+  const parsed = match ? Number(match[0]) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getAreaMultiplier = (item = {}) => {
+  const candidates = [item.size, item.area, item.areaSqm, item.area_sqm, item.sqm];
+  for (const value of candidates) {
+    const match = String(value ?? "").match(/[\d.]+/);
+    const number = match ? Number(match[0]) : 0;
+    if (Number.isFinite(number) && number > 0) return number;
+  }
+  return 1;
+};
 
 const getGstRate = (item = {}) => {
   const directRate = toNumber(item.gstRate ?? item.gst_per ?? item.gstPct);
@@ -25,20 +43,27 @@ const getGstRate = (item = {}) => {
   const igstRate = toNumber(item.igst_per);
   if (igstRate) return igstRate;
   const cgstRate = toNumber(item.cgst_per);
-  return cgstRate ? cgstRate * 2 : 0;
+  return cgstRate ? cgstRate * 2 : 18;
 };
 
 const getFinancials = (item = {}) => {
   const qty = toNumber(item.qty);
   const rate = toNumber(item.rate);
-  const amount = toNumber(item.amount) || rate * qty;
+  const computedAmount = rate * getAreaMultiplier(item) * (qty || 1);
+  const explicitAmount = toNumber(item.amount ?? item.itemValue ?? item.item_value ?? item.totalBeforeTax ?? item.total_before_tax);
+  const amount = (explicitAmount && computedAmount && explicitAmount < computedAmount * 0.5)
+    ? computedAmount
+    : (explicitAmount || computedAmount);
   const discountPercent = toNumber(item.disc ?? item.discountPct);
-  const discountAmount = toNumber(item.discountAmount ?? item.discount) || (amount * discountPercent) / 100;
-  const taxable = toNumber(item.tax ?? item.taxable ?? item.taxableValue) || Math.max(0, amount - discountAmount);
+  const discountAmount = toNumber(item.discountAmount ?? item.discount_amount) || (amount * discountPercent) / 100;
+  const explicitTaxable = toNumber(item.taxable ?? item.taxableValue ?? item.taxable_value);
+  const taxable = (discountPercent || discountAmount)
+    ? Math.max(0, amount - discountAmount)
+    : (explicitTaxable || amount);
   const gstRate = getGstRate(item);
-  const gstAmount = toNumber(item.gstAmount) || (gstRate ? (taxable * gstRate) / 100 : toNumber(item.igst ?? item.cgst) + toNumber(item.sgst));
+  const gstAmount = toNumber(item.gstAmount ?? item.gst_amount ?? item.totalTax ?? item.total_tax) || (toNumber(item.igst) + toNumber(item.cgst) + toNumber(item.sgst)) || (gstRate ? (taxable * gstRate) / 100 : 0);
   const finalAmount = toNumber(item.finalAmount ?? item.total) || taxable + gstAmount;
-  return { amount, discountAmount, taxable, gstRate, gstAmount, finalAmount };
+  return { amount, discountPercent, discountAmount, taxable, gstRate, gstAmount, finalAmount };
 };
 
 const findCompany = async (id) => {
@@ -52,7 +77,7 @@ const resolveRecipient = async (challan) => {
   const contact = company?.contact1 || company?.contacts?.find((item) => item.isPrimary) || company?.contacts?.[0] || {};
   return {
     phone: challan.contact_phone || contact.mobile || contact.phone || company?.mobile || company?.landline || "",
-    email: contact.email || company?.companyEmail || company?.email || "",
+    email: challan.contact_email || challan.company_email || contact.email || company?.companyEmail || company?.email || "",
   };
 };
 
@@ -164,6 +189,7 @@ const getSourceSummary = async (estimate, excludeId) => {
       remarks: item.remarks || "",
       rate: toNumber(item.rate),
       discount: financials.discountAmount,
+      discountPct: financials.discountPercent,
       amount: financials.amount,
       taxable: financials.taxable,
       gstRate: financials.gstRate,
@@ -202,6 +228,7 @@ const enrichChallan = async (challan) => {
         remarks: item.remarks || source.remarks,
         rate: toNumber(item.rate) || source.rate,
         discount: toNumber(item.discount) || source.discount,
+        discountPct: toNumber(item.discountPct ?? item.disc) || source.discountPct,
         amount: toNumber(item.amount) || source.amount,
         taxable: toNumber(item.taxable) || source.taxable,
         gstRate: toNumber(item.gstRate) || source.gstRate,
@@ -295,6 +322,7 @@ exports.getProformaOptions = async (req, res) => {
         || client?.contacts?.[0]
         || client?.contact1
         || {};
+      const clientEmail = primaryContact.email || client?.companyEmail || client?.email || "";
       const contactName = [
         primaryContact.title,
         primaryContact.firstName,
@@ -316,6 +344,10 @@ exports.getProformaOptions = async (req, res) => {
         company_gst_no: estimate.company_gst_no || estimate.gst_no || client?.gstNo || client?.gstNumber || "",
         contact_person: estimate.consignee_person || contactName || client?.contactPerson || "",
         contact_phone: estimate.consignee_phone || primaryContact.mobile || primaryContact.phone || client?.mobile || client?.landline || "",
+        company_email: estimate.company_email || client?.companyEmail || clientEmail,
+        companyEmail: estimate.company_email || client?.companyEmail || clientEmail,
+        contact_email: estimate.contact_email || primaryContact.email || clientEmail,
+        contactEmail: estimate.contact_email || primaryContact.email || clientEmail,
         event_name: estimate.event_name,
         delivery_address: estimate.event_place_of_supply || estimate.consignee_addr,
         remarks: estimate.remarks || "",
