@@ -2126,6 +2126,7 @@ class EmailService {
             );
             const accentColor = isOverdue ? '#dc2626' : isDueToday ? '#d97706' : '#2563eb';
             const softBg = isOverdue ? '#fef2f2' : isDueToday ? '#fffbeb' : '#eff6ff';
+            const borderColor = isOverdue ? '#fecaca' : isDueToday ? '#fde68a' : '#bfdbfe';
             const subjectStatus = isOverdue
                 ? `${daysOverdue} Day${daysOverdue === 1 ? '' : 's'} Overdue`
                 : isDueToday
@@ -2136,49 +2137,52 @@ class EmailService {
 
             const html = this.emailShell(`
                 <tr>
-                    <td style="padding: 40px 30px; background-color: #ffffff;">
-                        <table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif;">
+                    <td style="padding: 0; background-color: #f8fafc;">
+                        <table width="100%" cellpadding="0" cellspacing="0" style="font-family: Arial, sans-serif; border-collapse: collapse;">
                             <tr>
-                                <td align="center" style="padding-bottom: 20px;">
+                                <td align="center" style="display: none; padding: 0; height: 0; overflow: hidden; background-color: ${accentColor};">
                                     <span style="font-size: 48px;">⚠️</span>
                                 </td>
                             </tr>
                             <tr>
-                                <td align="center" style="padding-bottom: 30px;">
-                                    <h1 style="margin: 0; font-size: 28px; font-weight: 800; color: ${accentColor};">
+                                <td align="center" style="padding: 8px 28px 28px 28px; background-color: ${accentColor};">
+                                    <p style="margin: 0 0 8px 0; font-size: 12px; line-height: 16px; color: #ffffff; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">
+                                        India Health & Wellness Expo
+                                    </p>
+                                    <h1 style="margin: 0; font-size: 28px; line-height: 34px; font-weight: 800; color: #ffffff;">
                                         ${reminderTitle}
                                     </h1>
-                                    <p style="margin: 10px 0 0 0; font-size: 16px; color: #666;">
-                                        <strong style="color: ${accentColor};">${reminderLine}</strong>
+                                    <p style="margin: 10px 0 0 0; font-size: 16px; line-height: 23px; color: #ffffff;">
+                                        <strong style="color: #ffffff;">${reminderLine}</strong>
                                     </p>
                                 </td>
                             </tr>
                             ${customMessage ? `
                             <tr>
-                                <td style="padding: 20px; background-color: #fef3c7; border-radius: 8px; margin-bottom: 20px;">
-                                    <p style="margin: 0; font-size: 14px; color: #92400e; font-style: italic;">
+                                <td style="padding: 18px 22px; background-color: ${softBg}; border: 1px solid ${borderColor}; border-radius: 8px;">
+                                    <p style="margin: 0; font-size: 14px; line-height: 22px; color: #0f172a; font-weight: 600;">
                                         "${customMessage}"
                                     </p>
                                 </td>
                             </tr>
                             ` : ''}
                             <tr>
-                                <td style="padding-bottom: 20px;">
-                                    <p style="margin: 0 0 10px 0; font-size: 16px; color: #333;">
+                                <td style="padding: 24px 28px 20px 28px; background-color: #ffffff;">
+                                    <p style="margin: 0 0 10px 0; font-size: 16px; line-height: 24px; color: #0f172a;">
                                         Dear <strong>${templateData.contactPerson || 'Customer'}</strong>,
                                     </p>
-                                    <p style="margin: 0; font-size: 14px; color: #555; line-height: 1.6;">
+                                    <p style="margin: 0; font-size: 14px; color: #475569; line-height: 22px;">
                                         This is a reminder regarding your pending payment for <strong>${templateData.eventName || 'the Exhibition'}</strong>.
                                         Please complete the payment at the earliest so your exhibition participation and onboarding remain smooth.
                                     </p>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="background-color: #f8fafc; border-radius: 8px; padding: 25px; margin: 20px 0;">
-                                    <h2 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 700; color: #1e293b; text-transform: uppercase; letter-spacing: 1px;">
+                                <td style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px; margin: 0 28px 20px 28px;">
+                                    <h2 style="margin: 0 0 18px 0; font-size: 15px; line-height: 20px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.8px;">
                                         Payment Details
                                     </h2>
-                                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px;">
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="font-size: 14px; border-collapse: collapse;">
                                         <tr>
                                             <td style="padding: 8px 0; color: #64748b;">Registration ID:</td>
                                             <td style="padding: 8px 0; color: #1e293b; font-weight: 600; text-align: right;">${templateData.registrationId || 'N/A'}</td>
@@ -2235,15 +2239,15 @@ class EmailService {
                                 </td>
                             </tr>
                             <tr>
-                                <td style="padding: 20px 0;">
-                                    <table width="100%" cellpadding="0" cellspacing="0">
+                                <td style="padding: 0 28px 20px 28px; background-color: #ffffff;">
+                                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: ${softBg}; border-left: 4px solid ${accentColor}; border-collapse: collapse;">
                                         <tr>
-                                            <td style="padding: 8px 0; color: #64748b; font-size: 14px;">
+                                            <td style="padding: 14px 16px 6px 16px; color: #64748b; font-size: 13px; line-height: 18px;">
                                                 <strong>Payment Due Date:</strong> ${templateData.dueDate || 'N/A'}
                                             </td>
                                         </tr>
                                         <tr>
-                                            <td style="padding: 8px 0; color: ${accentColor}; font-size: 14px; font-weight: 600;">
+                                            <td style="padding: 0 16px 14px 16px; color: ${accentColor}; font-size: 14px; line-height: 21px; font-weight: 800;">
                                                 ${reminderLine}
                                             </td>
                                         </tr>
@@ -2251,20 +2255,12 @@ class EmailService {
                                 </td>
                             </tr>
                             <tr>
-                                <td align="center" style="padding: 30px 0;">
-                                    <a href="${templateData.paymentLink || '#'}" 
-                                       style="display: inline-block; padding: 16px 40px; background-color: ${accentColor}; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 700; border-radius: 8px; text-transform: uppercase; letter-spacing: 1px;">
-                                        💳 PAY NOW
-                                    </a>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding: 20px 0; border-top: 1px solid #e2e8f0;">
-                                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #555; line-height: 1.6;">
+                                <td style="padding: 20px 28px 28px 28px; background-color: #ffffff; border-top: 1px solid #e2e8f0;">
+                                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #475569; line-height: 20px;">
                                         If you have already made the payment, please ignore this email and share the payment details with us.
                                     </p>
-                                    <p style="margin: 0; font-size: 14px; color: #555; line-height: 1.6;">
-                                        For any queries, please contact us at <a href="mailto:${templateData.supportEmail}" style="color: #23471d;">${templateData.supportEmail}</a> or call <a href="tel:${templateData.supportPhone}" style="color: #23471d;">${templateData.supportPhone}</a>.
+                                    <p style="margin: 0; font-size: 13px; color: #475569; line-height: 20px;">
+                                        For any queries, please contact us at <a href="mailto:${templateData.supportEmail}" style="color: #23471d; font-weight: 700; text-decoration: none;">${templateData.supportEmail}</a>${templateData.supportPhone ? ` or call <a href="tel:${templateData.supportPhone}" style="color: #23471d; font-weight: 700; text-decoration: none;">${templateData.supportPhone}</a>` : ''}.
                                     </p>
                                 </td>
                             </tr>

@@ -8,6 +8,7 @@ const AccountDebitNote = require("../models/AccountDebitNote");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Stall = require("../models/Stall");
+const Event = require("../models/Event");
 const { isCancelledDoc, parseAmount, getCreditedByInvoiceId } = require("../services/ledgerTotals");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
@@ -19,9 +20,10 @@ const formatDateOnly = (value) => {
 };
 const buildAccountLookups = async (companyIds) => {
   const validIds = companyIds.filter(isValidId);
-  const [companiesRound1, exhibitorsRound1] = await Promise.all([
+  const [companiesRound1, exhibitorsRound1, exhibitorsByClient] = await Promise.all([
     Company.find({ _id: { $in: validIds } }).lean(),
     ExhibitorRegistration.find({ _id: { $in: validIds } }).lean(),
+    ExhibitorRegistration.find({ clientId: { $in: validIds } }).lean(),
   ]);
   const extraExhibitorIds = companiesRound1.map((c) => c.exhibitorRegistrationId).filter(isValidId);
   const extraCompanyIds = exhibitorsRound1.map((e) => e.clientId).filter(isValidId);
@@ -32,7 +34,7 @@ const buildAccountLookups = async (companyIds) => {
   ]);
 
   const companies = [...companiesRound1, ...extraCompanies];
-  const exhibitors = [...exhibitorsRound1, ...extraExhibitors];
+  const exhibitors = [...exhibitorsRound1, ...extraExhibitors, ...exhibitorsByClient];
 
   const companyById = {};
   companies.forEach((c) => { companyById[String(c._id)] = c; });
@@ -44,6 +46,10 @@ const buildAccountLookups = async (companyIds) => {
       const linked = exhibitors.find((e) => String(e._id) === String(c.exhibitorRegistrationId));
       if (linked) exhibitorById[String(c._id)] = linked;
     }
+    if (!exhibitorById[String(c._id)]) {
+      const linked = exhibitors.find((e) => String(e.clientId) === String(c._id));
+      if (linked) exhibitorById[String(c._id)] = linked;
+    }
   });
   exhibitorsRound1.forEach((e) => {
     if (e.clientId && !companyById[String(e._id)]) {
@@ -53,11 +59,17 @@ const buildAccountLookups = async (companyIds) => {
   });
 
   const rawStallRefs = exhibitors.map((e) => e?.participation?.stallNo).filter((v) => v && isValidId(v));
-  const stalls = rawStallRefs.length ? await Stall.find({ _id: { $in: rawStallRefs } }).lean() : [];
+  const eventIds = [...new Set(exhibitors.map((e) => e?.eventId).filter(isValidId).map(String))];
+  const [stalls, events] = await Promise.all([
+    rawStallRefs.length ? Stall.find({ _id: { $in: rawStallRefs } }).lean() : [],
+    eventIds.length ? Event.find({ _id: { $in: eventIds } }).lean() : [],
+  ]);
   const stallById = {};
   stalls.forEach((s) => { stallById[String(s._id)] = s; });
+  const eventById = {};
+  events.forEach((e) => { eventById[String(e._id)] = e; });
 
-  return { companyById, exhibitorById, stallById };
+  return { companyById, exhibitorById, stallById, eventById };
 };
 
 const resolveClientInfo = (companyId, { companyById, exhibitorById, stallById }) => {
@@ -95,21 +107,36 @@ const resolveClientInfo = (companyId, { companyById, exhibitorById, stallById })
   };
 };
 
-const getInstallmentDueInfo = (companyId, { exhibitorById }, today) => {
+const getInstallmentDueInfo = (companyId, { exhibitorById, eventById }, today) => {
   const exhibitor = exhibitorById[companyId];
   if (!exhibitor || parseAmount(exhibitor.balanceAmount) <= 0) return null;
 
+  const event = eventById?.[String(exhibitor.eventId)];
+  const planById = {};
+  (event?.paymentPlans || []).forEach((plan) => {
+    if (plan?.id) planById[String(plan.id)] = plan;
+  });
+  const resolveInstallmentDueDate = (inst) => {
+    const eventPlanDueDate = inst?.planId ? planById[String(inst.planId)]?.dueDate : null;
+    return formatDateOnly(eventPlanDueDate || inst?.dueDate);
+  };
+
   const unpaidInstallments = (exhibitor.installments || [])
     .filter((inst) => inst && inst.status !== "paid" && parseAmount(inst.dueAmount) > parseAmount(inst.paidAmount))
-    .sort((a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0));
+    .map((inst) => ({
+      ...inst,
+      resolvedDueDate: resolveInstallmentDueDate(inst),
+      resolvedLabel: planById[String(inst.planId)]?.label || inst.label,
+    }))
+    .sort((a, b) => new Date(a.resolvedDueDate || 0) - new Date(b.resolvedDueDate || 0));
 
   const nextInstallment = unpaidInstallments[0] || null;
-  const dueDate = formatDateOnly(nextInstallment?.dueDate || exhibitor.paymentDueDate);
+  const dueDate = formatDateOnly(nextInstallment?.resolvedDueDate || exhibitor.paymentDueDate);
   if (!dueDate) return null;
 
   return {
     dueDate,
-    label: nextInstallment?.label || exhibitor.paymentPlanLabel || "Payment Due",
+    label: nextInstallment?.resolvedLabel || exhibitor.paymentPlanLabel || "Payment Due",
     dueAmount: parseAmount(nextInstallment?.dueAmount),
     paidAmount: parseAmount(nextInstallment?.paidAmount),
     balanceAmount: parseAmount(exhibitor.balanceAmount),
@@ -252,6 +279,13 @@ const getAccountsReceivable = async (req, res) => {
       const invoiceOverdue = outstanding > 0 && dueDate && dueDate < today;
       const installmentOverdue = outstanding > 0 && doc.docType === "Proforma Invoice" && installmentDue?.isOverdue;
       const isOverdue = Boolean(invoiceOverdue || installmentOverdue);
+      const dueDayDiff = dueDate ? Math.floor((dueDate - today) / (1000 * 60 * 60 * 24)) : null;
+      const hasInstallmentDue = Boolean(installmentDue?.dueDate);
+      const dueType = doc.docType === "Proforma Invoice" && hasInstallmentDue
+        ? "Installment"
+        : doc.docType === "Proforma Invoice"
+          ? "Payment Due"
+          : "Invoice Due";
 
       let status = "Unpaid";
       if (totalOwed > 0 && settled >= totalOwed) status = "Paid";
@@ -292,6 +326,10 @@ const getAccountsReceivable = async (req, res) => {
         dueDate: doc.dueDate || (doc.docType === "Proforma Invoice" ? installmentDue?.dueDate || null : null),
         invoiceOverdue: Boolean(invoiceOverdue),
         installmentOverdue: Boolean(installmentOverdue),
+        hasInstallmentDue,
+        dueType,
+        dueLabel: doc.docType === "Proforma Invoice" ? (installmentDue?.label || "Payment Due") : "Invoice Due",
+        dueDaysDiff: dueDayDiff,
         installmentDueDate: installmentDue?.dueDate || null,
         installmentDueLabel: installmentDue?.label || "",
         installmentBalanceAmount: installmentDue?.balanceAmount || 0,

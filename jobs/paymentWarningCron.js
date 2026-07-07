@@ -147,7 +147,7 @@ const sendAutomatedWarnings = async () => {
                 contactPerson: `${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim(),
                 eventName: registration.eventId?.name || 'Exhibition',
                 registrationId: registration.registrationId,
-                stallNo: registration.participation?.stallNo || 'N/A',
+                stallNo: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
                 stallType: registration.participation?.stallType || 'N/A',
                 originalAmount: registration.financeBreakdown?.netPayable || registration.participation?.total || 0,
                 amountPaid: registration.amountPaid || 0,
@@ -226,7 +226,7 @@ const sendAutomatedWarnings = async () => {
 };
 
 const initPaymentWarningCron = () => {
-    const schedule = process.env.PAYMENT_WARNING_CRON || '10 14 * * *';
+    const schedule = process.env.PAYMENT_WARNING_CRON || '23 14 * * *';
     cron.schedule(schedule, sendAutomatedWarnings, {
         timezone: 'Asia/Kolkata'
     });
