@@ -12,6 +12,21 @@ const creditNoteSchema = new mongoose.Schema(
     create_note_no: { type: String, required: true, unique: true },
 
     est_no: { type: String, required: true },
+    reference_invoice_no: { type: String },
+    invoice_date: { type: String },
+    credit_note_type: { type: String },
+    credit_note_date: { type: String },
+    reason: { type: String },
+    event: { type: String },
+    hall_stall: { type: String },
+    gstin: { type: String },
+    remarks: { type: String },
+    sub_total: { type: Number },
+    gst_reversal: { type: Number },
+    total_value: { type: Number },
+    adjusted_amount: { type: Number },
+    remaining_balance: { type: Number },
+    adjusted_invoices: { type: [mongoose.Schema.Types.Mixed] },
 
     companyId: { type: String, required: true },
 
@@ -20,6 +35,8 @@ const creditNoteSchema = new mongoose.Schema(
     added_by: { type: String, required: true },
 
     status: { type: String, default: "active" },
+
+    attachment: { type: String, default: "" },
 
     updated_date: { type: Date },
   },

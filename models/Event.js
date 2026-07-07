@@ -1,19 +1,19 @@
 const mongoose = require('mongoose');
 
 const eventSchema = new mongoose.Schema({
-    name: { 
-        type: String, 
-        required: true, 
+    name: {
+        type: String,
+        required: true,
         trim: true,
         unique: true
     },
     startDate: Date,
     endDate: Date,
     location: String,
-    status: { 
-        type: String, 
-        enum: ['active', 'inactive'], 
-        default: 'active' 
+    status: {
+        type: String,
+        enum: ['active', 'inactive'],
+        default: 'active'
     },
     ticketsStatus: {
         type: String,
@@ -41,7 +41,15 @@ const eventSchema = new mongoose.Schema({
         percentage: Number,
         isDefault: { type: Boolean, default: false },
         dueDate: { type: Date, default: null }
-    }]
+    }],
+    generalReminderDays: {
+        type: Number,
+        default: 10
+    },
+    installmentReminderDays: {
+        type: Number,
+        default: 15
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Event', eventSchema);

@@ -2,6 +2,7 @@ const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
 const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
+const AccountDebitNote = require("../models/AccountDebitNote");
 const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const Company = require("../models/Company");
@@ -10,6 +11,7 @@ const ActivityLog = require("../models/activity/activityLogModel");
 const Stall = require("../models/Stall");
 const mongoose = require("mongoose");
 const { cleanText, formatDetails } = require("../utils/activityLogFormatter");
+const { legacyCreditNoteAmount, getCreditedByInvoiceId } = require("../services/ledgerTotals");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -87,11 +89,12 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
       )
     );
-    const [invoices, proformaInvoices, creditNotes, debitNotes, deliveryChallans] = await Promise.all([
+    const [invoices, proformaInvoices, creditNotes, debitNotes, accountDebitNotes, deliveryChallans] = await Promise.all([
       Invoice.find({ companyId: { $in: lookupIds } }).lean(),
       Estimate.find({ companyId: { $in: lookupIds } }).lean(),
       CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
       DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
+      AccountDebitNote.find({ companyId: { $in: lookupIds }, status: "active" }).lean(),
       DeliveryChallan.find({
         $or: [
           { companyId: { $in: lookupIds } },
@@ -99,6 +102,17 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
         ],
       }).lean(),
     ]);
+
+    // Same balance math as the Client Ledger and the Debit Note allocation screen:
+    // CreditNote + the legacy "DebitNote" model (which actually behaves as a second
+    // credit-note mechanism — see backend/services/ledgerTotals.js) reduce what's owed;
+    // AccountDebitNote (real debit notes: additional charges/late fees/etc.) increase it.
+    // Every place in the app that shows "amount due" for an exhibitor now nets the same
+    // four collections the same way, instead of each screen computing its own total.
+    const creditNoteTotal =
+      creditNotes.filter((cn) => !isCancelledDoc(cn)).reduce((sum, cn) => sum + legacyCreditNoteAmount(cn), 0) +
+      debitNotes.filter((dn) => !isCancelledDoc(dn)).reduce((sum, dn) => sum + (parseFloat(dn.totalAmount) || 0), 0);
+    const debitNoteTotal = accountDebitNotes.reduce((sum, dn) => sum + (parseFloat(dn.totalAmount) || 0), 0);
 
     const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
 
@@ -133,6 +147,25 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       totalDue = parseFloat(exhibitor.totalPayable) || 0;
       dueBreakdown = [{ no: 'Registration (Total Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
     }
+
+    // Real debit notes (additional charges/late fees/etc.) increase what's due, the same
+    // way they increase the running balance on the Client Ledger.
+    if (debitNoteTotal > 0) {
+      totalDue += debitNoteTotal;
+      accountDebitNotes.forEach((dn) => dueBreakdown.push({
+        id: dn._id,
+        no: dn.debit_note_no,
+        amount: parseFloat(dn.totalAmount) || 0,
+        type: 'Debit Note',
+        date: dn.debit_note_date || dn.added,
+      }));
+    }
+
+    // Amount each invoice has already been credited by CreditNote/legacy-DebitNote,
+    // so payment-status and remaining-balance math below never double counts an
+    // invoice that's already been adjusted by a credit note.
+    const creditedByInvoiceId = getCreditedByInvoiceId(activeInvoices, creditNotes, debitNotes);
+
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
     let paidBreakdown = [];
     if (payments.length > 0) {
@@ -174,12 +207,13 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       paidBreakdown.push({ no: 'Registration Paid', amount: amt, type: 'Registration', date: exhibitor?.createdAt });
     }
 
-    // 3. Compute Remaining Balance
-    let remainingBalance = Math.max(0, totalDue - paidAmount);
+    // 3. Compute Remaining Balance — nets credit notes the same way the Client Ledger does,
+    // so a credit note reduces "amount due" here too instead of only appearing in the activity feed.
+    let remainingBalance = Math.max(0, totalDue - paidAmount - creditNoteTotal);
     let remainingBreakdown = [];
 
     if (dueBreakdown.length === 1 && dueBreakdown[0].type === 'Registration') {
-      const rem = Math.max(0, dueBreakdown[0].amount - paidAmount);
+      const rem = Math.max(0, dueBreakdown[0].amount - paidAmount - creditNoteTotal);
       if (rem > 0) {
         remainingBreakdown.push({
           ...dueBreakdown[0],
@@ -192,6 +226,7 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       dueBreakdown.forEach(doc => {
         const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
         let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+        docPaid += creditedByInvoiceId[String(doc.id)] || 0;
 
         let docRemaining = Math.max(0, doc.amount - docPaid);
         if (docRemaining > 0 && unallocatedOnlinePaid > 0) {
@@ -256,7 +291,20 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       });
     });
 
+    // Despite its model/field names, this legacy "DebitNote" collection is actually a
+    // second credit-note mechanism (reduces balance, see backend/services/ledgerTotals.js)
+    // — labelled distinctly here so it isn't confused with a real (AccountDebitNote) debit note.
     debitNotes.forEach((dn) => recentDocs.push({
+      documentType: "Credit Note (Legacy)",
+      documentNo: dn.debit_note_no,
+      date: dn.debit_note_date || dn.added,
+      amount: dn.totalAmount,
+      status: "Generated",
+      id: dn._id,
+      timestamp: dn.added || new Date(),
+    }));
+
+    accountDebitNotes.forEach((dn) => recentDocs.push({
       documentType: "Debit Note",
       documentNo: dn.debit_note_no,
       date: dn.debit_note_date || dn.added,
@@ -307,6 +355,7 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
         if (doc.cancelled) return doc;
         const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
         let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+        docPaid += creditedByInvoiceId[String(doc.id)] || 0;
 
         let docRemaining = Math.max(0, parseFloat(doc.amount) - docPaid);
         if (docRemaining > 0 && recentDocsUnallocated > 0) {
@@ -531,6 +580,8 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
           totalDue,
           paidAmount,
           remainingBalance,
+          creditNoteTotal,
+          debitNoteTotal,
           dueBreakdown,
           paidBreakdown,
           remainingBreakdown,
@@ -539,6 +590,8 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
           proformaInvoiceCount: proformaInvoices.length,
           activeProformaInvoiceCount: activeProformaInvoices.length,
           deliveryChallanCount: deliveryChallans.length,
+          creditNoteCount: creditNotes.filter((cn) => !isCancelledDoc(cn)).length + debitNotes.filter((dn) => !isCancelledDoc(dn)).length,
+          debitNoteCount: accountDebitNotes.length,
         },
         recentDocuments: recentDocs,
         paymentSchedule,

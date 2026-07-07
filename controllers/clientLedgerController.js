@@ -3,7 +3,9 @@ const Invoice = require("../models/Invoice");
 const Payment = require("../models/Payment");
 const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
+const AccountDebitNote = require("../models/AccountDebitNote");
 const { resolveCompanyAndExhibitor, buildAccountOverview } = require("./accountOverviewController");
+const { getCreditedByInvoiceId, legacyCreditNoteAmount } = require("../services/ledgerTotals");
 const pdfGenerator = require("../utils/pdfGenerator");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
@@ -35,10 +37,11 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
     new Set([companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)),
   );
 
-  const [invoices, legacyCreditNotes, debitNotes] = await Promise.all([
+  const [invoices, legacyCreditNotes, debitNotes, accountDebitNotes] = await Promise.all([
     Invoice.find({ companyId: { $in: lookupIds } }).lean(),
     CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
     DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
+    AccountDebitNote.find({ companyId: { $in: lookupIds }, status: "active" }).lean(),
   ]);
 
   const activeInvoices = invoices.filter((inv) => !isCancelledDoc(inv));
@@ -56,22 +59,9 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
   // Credit notes that are tied to a specific invoice must reduce THAT invoice's
   // remaining balance too, not just the global running total — otherwise per-invoice
   // aging/overdue figures double-count what a credit note already adjusted.
-  const creditedByInvoiceId = {};
-  debitNotes
-    .filter((dn) => String(dn.status || "active").toLowerCase() !== "cancelled" && dn.toInvoiceId)
-    .forEach((dn) => {
-      const key = String(dn.toInvoiceId);
-      creditedByInvoiceId[key] = (creditedByInvoiceId[key] || 0) + parseAmount(dn.totalAmount);
-    });
-  legacyCreditNotes
-    .filter((cn) => String(cn.status || "active").toLowerCase() !== "cancelled" && cn.est_no)
-    .forEach((cn) => {
-      const matchedInvoice = activeInvoices.find((inv) => inv.estimate_no === cn.est_no);
-      if (!matchedInvoice) return;
-      const amount = (cn.items || []).reduce((sum, it) => sum + (parseAmount(it.cn_amount) * (it.quantity || 1)), 0);
-      const key = String(matchedInvoice._id);
-      creditedByInvoiceId[key] = (creditedByInvoiceId[key] || 0) + amount;
-    });
+  // Uses the shared helper so this matches the same est_no/invoice_no/reference_invoice_no
+  // logic as accountOverviewController and accountsReceivableController.
+  const creditedByInvoiceId = getCreditedByInvoiceId(activeInvoices, legacyCreditNotes, debitNotes);
 
   const overview = await buildAccountOverview(companyId, company, exhibitor);
 
@@ -122,7 +112,7 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
   legacyCreditNotes
     .filter((cn) => String(cn.status || "active").toLowerCase() !== "cancelled")
     .forEach((cn) => {
-      const amount = (cn.items || []).reduce((sum, it) => sum + (parseAmount(it.cn_amount) * (it.quantity || 1)), 0);
+      const amount = legacyCreditNoteAmount(cn);
       entries.push({
         id: cn._id,
         date: cn.created_at || cn.updated_date,
@@ -149,6 +139,21 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
         status: "Adjusted",
       });
     });
+
+  // Real debit notes (additional charges/late fee/expense recovery/etc.) — these increase
+  // what the exhibitor owes, unlike the legacy CreditNote/DebitNote models above.
+  accountDebitNotes.forEach((dn) => {
+    entries.push({
+      id: dn._id,
+      date: dn.debit_note_date || dn.added,
+      type: "Debit Note",
+      documentNo: dn.debit_note_no,
+      reference: dn.reason || dn.remarks || `Debit note (${dn.debitNoteType || "additional charges"})`,
+      debit: parseAmount(dn.totalAmount),
+      credit: 0,
+      status: "Issued",
+    });
+  });
 
   entries.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
 
@@ -236,7 +241,10 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
     pct: Number(((amount / totalAgingBase) * 100).toFixed(1)),
   }));
 
-  const totalDue = totalInvoiced;
+  const debitNoteEntries = entries.filter((e) => e.type === "Debit Note");
+  const totalDebitNotes = debitNoteEntries.reduce((sum, e) => sum + e.debit, 0);
+
+  const totalDue = totalInvoiced + totalDebitNotes;
   const paidTotal = totalReceived + totalAdjustments;
   const percentPaid = totalDue > 0 ? Math.min(100, Math.round((paidTotal / totalDue) * 100)) : 0;
   const currentStatusLabel = totalDue === 0 ? "No Invoices" : percentPaid >= 100 ? "Fully Paid" : percentPaid > 0 ? "Partially Paid" : "Unpaid";
@@ -255,8 +263,8 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
       paymentCount: paymentEntries.length,
       totalAdjustments,
       creditNoteCount: creditNoteEntries.length,
-      debitNoteCount: 0,
-      debitNoteTotal: 0,
+      debitNoteCount: debitNoteEntries.length,
+      debitNoteTotal: totalDebitNotes,
       outstandingAmount,
       overdueAmount,
     },
@@ -264,7 +272,7 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
       invoices: { count: invoiceEntries.length, total: totalInvoiced },
       payments: { count: paymentEntries.length, total: totalReceived },
       creditNotes: { count: creditNoteEntries.length, total: totalCreditNotes },
-      debitNotes: { count: 0, total: 0 },
+      debitNotes: { count: debitNoteEntries.length, total: totalDebitNotes },
     },
     outstandingBreakdown: {
       currentOutstanding: outstandingAmount,
