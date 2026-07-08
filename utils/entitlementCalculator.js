@@ -19,6 +19,26 @@ function computeEntitlement(config, stallArea) {
   const multiplier = roundFn(area / ratioArea);
   return multiplier * (Number(config.ratioQty) || 0);
 }
+function computeVehicleEntitlements(config, stallArea) {
+  const twoWheelerCfg = config?.vehicleTypeConfig?.twoWheeler || {};
+  const fourWheelerCfg = config?.vehicleTypeConfig?.fourWheeler || {};
+  return {
+    twoWheeler: computeEntitlement({
+      allocationMode: twoWheelerCfg.allocationMode,
+      ratioQty: twoWheelerCfg.ratioQty,
+      ratioArea: twoWheelerCfg.ratioArea,
+      roundingMode: twoWheelerCfg.roundingMode,
+      fixedQty: twoWheelerCfg.complimentaryQuota,
+    }, stallArea),
+    fourWheeler: computeEntitlement({
+      allocationMode: fourWheelerCfg.allocationMode,
+      ratioQty: fourWheelerCfg.ratioQty,
+      ratioArea: fourWheelerCfg.ratioArea,
+      roundingMode: fourWheelerCfg.roundingMode,
+      fixedQty: fourWheelerCfg.complimentaryQuota,
+    }, stallArea),
+  };
+}
 
 async function getExhibitorStallArea(exhibitorRegistrationId) {
   const reg = await ExhibitorRegistration.findById(exhibitorRegistrationId).select(
@@ -32,4 +52,4 @@ async function getExhibitorStallArea(exhibitorRegistrationId) {
   return Number(area) || 0;
 }
 
-module.exports = { computeEntitlement, getExhibitorStallArea };
+module.exports = { computeEntitlement, computeVehicleEntitlements, getExhibitorStallArea };

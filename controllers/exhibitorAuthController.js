@@ -14,7 +14,7 @@ const { sendWhatsAppOTP } = require('../utils/whatsapp');
 const razorpay = require('../utils/razorpay');
 const crypto = require('crypto');
 const passEmailService = require('../utils/passEmailService');
-const { computeEntitlement, getExhibitorStallArea } = require('../utils/entitlementCalculator');
+const { computeEntitlement, computeVehicleEntitlements, getExhibitorStallArea } = require('../utils/entitlementCalculator');
 
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const DUMMY_MOBILE_NUMBERS = new Set([
@@ -159,6 +159,35 @@ async function deleteFileFromCloudinary(fileUrl) {
     } catch (err) {
         console.error('Cloudinary deletion error:', err);
     }
+}
+
+// The single "Vehicle Pass" gives 2-wheelers and cars independent free quotas and prices —
+// this splits a vehicle-pass request/order by vehicleType and prices each side separately.
+// Shared by createPassOrder (pricing preview) and requestPass (final submission).
+async function calculateVehiclePassSplit(exhibitorId, config, vehicles) {
+    const stallArea = await getExhibitorStallArea(exhibitorId);
+    const { twoWheeler: entitled2w, fourWheeler: entitled4w } = computeVehicleEntitlements(config, stallArea);
+
+    const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType: 'vehicle' });
+    let used2w = 0, used4w = 0;
+    existingRequests.forEach(reqDoc => {
+        if (reqDoc.status === 'rejected') return;
+        (reqDoc.vehicles || []).forEach(v => {
+            if (v.vehicleType === '2-wheeler') used2w += 1; else used4w += 1;
+        });
+    });
+
+    const requested2w = (vehicles || []).filter(v => v.vehicleType === '2-wheeler').length;
+    const requested4w = (vehicles || []).filter(v => v.vehicleType !== '2-wheeler').length;
+
+    const free2w = Math.min(requested2w, Math.max(0, entitled2w - used2w));
+    const free4w = Math.min(requested4w, Math.max(0, entitled4w - used4w));
+
+    const paidQuantity = (requested2w - free2w) + (requested4w - free4w);
+    const baseAmount = (requested2w - free2w) * (config.vehicleTypeConfig?.twoWheeler?.price || 0)
+        + (requested4w - free4w) * (config.vehicleTypeConfig?.fourWheeler?.price || 0);
+
+    return { paidQuantity, baseAmount };
 }
 
 class ExhibitorAuthController {
@@ -968,7 +997,7 @@ class ExhibitorAuthController {
     async createPassOrder(req, res) {
         try {
             const exhibitorId = req.user.id;
-            const { passType, quantity } = req.body;
+            const { passType, quantity, vehicles } = req.body;
 
             if (!passType || !quantity) {
                 return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
@@ -996,33 +1025,39 @@ class ExhibitorAuthController {
                 return res.status(404).json({ success: false, message: 'Pass configuration not found or inactive' });
             }
 
-            // Calculate existing passes
-            const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType });
-            const usedQuantity = existingRequests.reduce((sum, req) => {
-                if (req.status !== 'rejected') return sum + req.quantity;
-                return sum;
-            }, 0);
+            let paidQuantity, baseAmount;
 
-            const stallArea = await getExhibitorStallArea(exhibitorId);
-            const complimentary = computeEntitlement({
-                allocationMode: config.allocationMode,
-                ratioQty: config.ratioQty,
-                ratioArea: config.ratioArea,
-                roundingMode: config.roundingMode,
-                fixedQty: config.complimentaryQuota,
-            }, stallArea);
-            const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
+            if (passType === 'vehicle') {
+                ({ paidQuantity, baseAmount } = await calculateVehiclePassSplit(exhibitorId, config, vehicles));
+            } else {
+                // Calculate existing passes
+                const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType });
+                const usedQuantity = existingRequests.reduce((sum, req) => {
+                    if (req.status !== 'rejected') return sum + req.quantity;
+                    return sum;
+                }, 0);
 
-            let paidQuantity = quantity;
-            if (remainingComplimentary > 0) {
-                paidQuantity = Math.max(0, quantity - remainingComplimentary);
+                const stallArea = await getExhibitorStallArea(exhibitorId);
+                const complimentary = computeEntitlement({
+                    allocationMode: config.allocationMode,
+                    ratioQty: config.ratioQty,
+                    ratioArea: config.ratioArea,
+                    roundingMode: config.roundingMode,
+                    fixedQty: config.complimentaryQuota,
+                }, stallArea);
+                const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
+
+                paidQuantity = quantity;
+                if (remainingComplimentary > 0) {
+                    paidQuantity = Math.max(0, quantity - remainingComplimentary);
+                }
+                baseAmount = paidQuantity * (config.price || 0);
             }
 
             if (paidQuantity <= 0) {
                 return res.status(200).json({ success: true, isFree: true });
             }
 
-            const baseAmount = paidQuantity * (config.price || 0);
             const gstPercentage = config.gstPercentage || 18;
             const gstAmount = (baseAmount * gstPercentage) / 100;
             const totalAmount = baseAmount + gstAmount;
@@ -1065,28 +1100,33 @@ class ExhibitorAuthController {
             }
 
             // Calculate if any passes are paid
-            const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType });
-            const usedQuantity = existingRequests.reduce((sum, req) => {
-                if (req.status !== 'rejected') return sum + req.quantity;
-                return sum;
-            }, 0);
+            let paidQuantity, vehicleBaseAmount;
+            if (passType === 'vehicle') {
+                ({ paidQuantity, baseAmount: vehicleBaseAmount } = await calculateVehiclePassSplit(exhibitorId, config, vehicles));
+            } else {
+                const existingRequests = await ExhibitorPassRequest.find({ exhibitorId, passType });
+                const usedQuantity = existingRequests.reduce((sum, req) => {
+                    if (req.status !== 'rejected') return sum + req.quantity;
+                    return sum;
+                }, 0);
 
-            const stallArea = await getExhibitorStallArea(exhibitorId);
-            const complimentary = computeEntitlement({
-                allocationMode: config.allocationMode,
-                ratioQty: config.ratioQty,
-                ratioArea: config.ratioArea,
-                roundingMode: config.roundingMode,
-                fixedQty: config.complimentaryQuota,
-            }, stallArea);
-            const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
-            let paidQuantity = Math.max(0, quantity - remainingComplimentary);
+                const stallArea = await getExhibitorStallArea(exhibitorId);
+                const complimentary = computeEntitlement({
+                    allocationMode: config.allocationMode,
+                    ratioQty: config.ratioQty,
+                    ratioArea: config.ratioArea,
+                    roundingMode: config.roundingMode,
+                    fixedQty: config.complimentaryQuota,
+                }, stallArea);
+                const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
+                paidQuantity = Math.max(0, quantity - remainingComplimentary);
+            }
 
             let paymentStatus = paidQuantity > 0 ? 'pending' : 'free';
             let baseAmount = 0, gstAmount = 0, totalAmount = 0;
 
             if (paidQuantity > 0) {
-                baseAmount = paidQuantity * (config.price || 0);
+                baseAmount = passType === 'vehicle' ? vehicleBaseAmount : paidQuantity * (config.price || 0);
                 const gstPercentage = config.gstPercentage || 18;
                 gstAmount = (baseAmount * gstPercentage) / 100;
                 totalAmount = baseAmount + gstAmount;
@@ -1108,12 +1148,13 @@ class ExhibitorAuthController {
             }
 
             // Create new pass request
+            const isVehiclePassType = passType === 'vehicle';
             const newRequest = new ExhibitorPassRequest({
                 exhibitorId,
                 passType,
                 quantity,
-                vehicles: passType === 'vehicle' ? vehicles : undefined,
-                personnel: passType !== 'vehicle' ? personnel : undefined,
+                vehicles: isVehiclePassType ? vehicles : undefined,
+                personnel: !isVehiclePassType ? personnel : undefined,
                 paymentStatus,
                 status: (paymentStatus === 'paid' || paymentStatus === 'free') ? 'approved' : 'pending',
                 paidQuantity,
@@ -1127,7 +1168,7 @@ class ExhibitorAuthController {
 
             await newRequest.save();
 
-            const allocatedEntries = passType === 'vehicle' ? (vehicles || []) : (personnel || []);
+            const allocatedEntries = isVehiclePassType ? (vehicles || []) : (personnel || []);
             const allocatedTeamMemberIds = allocatedEntries
                 .map(entry => entry.teamMemberId)
                 .filter(Boolean);
