@@ -12,6 +12,7 @@ const { sendWhatsAppOTP } = require('../utils/whatsapp');
 const razorpay = require('../utils/razorpay');
 const crypto = require('crypto');
 const passEmailService = require('../utils/passEmailService');
+const { computeEntitlement, getExhibitorStallArea } = require('../utils/entitlementCalculator');
 
 const escapeRegex = (value) => String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const DUMMY_MOBILE_NUMBERS = new Set([
@@ -954,9 +955,16 @@ class ExhibitorAuthController {
                 return sum;
             }, 0);
 
-            const complimentary = config.complimentaryQuota || 0;
+            const stallArea = await getExhibitorStallArea(exhibitorId);
+            const complimentary = computeEntitlement({
+                allocationMode: config.allocationMode,
+                ratioQty: config.ratioQty,
+                ratioArea: config.ratioArea,
+                roundingMode: config.roundingMode,
+                fixedQty: config.complimentaryQuota,
+            }, stallArea);
             const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
-            
+
             let paidQuantity = quantity;
             if (remainingComplimentary > 0) {
                 paidQuantity = Math.max(0, quantity - remainingComplimentary);
@@ -1015,7 +1023,14 @@ class ExhibitorAuthController {
                 return sum;
             }, 0);
 
-            const complimentary = config.complimentaryQuota || 0;
+            const stallArea = await getExhibitorStallArea(exhibitorId);
+            const complimentary = computeEntitlement({
+                allocationMode: config.allocationMode,
+                ratioQty: config.ratioQty,
+                ratioArea: config.ratioArea,
+                roundingMode: config.roundingMode,
+                fixedQty: config.complimentaryQuota,
+            }, stallArea);
             const remainingComplimentary = Math.max(0, complimentary - usedQuantity);
             let paidQuantity = Math.max(0, quantity - remainingComplimentary);
 

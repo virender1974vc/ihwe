@@ -1,6 +1,8 @@
 const express = require('express');
 const { authMiddleware } = require('../middleware/authMiddleware');
+const { protectExhibitor } = require('../middleware/auth');
 const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
+const { computeEntitlement, getExhibitorStallArea } = require('../utils/entitlementCalculator');
 
 const router = express.Router();
 
@@ -29,6 +31,27 @@ router.get('/active', async (_req, res) => {
     }
 });
 
+router.get('/my-active', protectExhibitor, async (req, res) => {
+    try {
+        await ensureDefaults();
+        const configs = await ExhibitorPassConfig.find({ isActive: true }).sort({ displayOrder: 1, createdAt: 1 });
+        const stallArea = await getExhibitorStallArea(req.user.id);
+        const data = configs.map((config) => {
+            const complimentaryQuota = computeEntitlement({
+                allocationMode: config.allocationMode,
+                ratioQty: config.ratioQty,
+                ratioArea: config.ratioArea,
+                roundingMode: config.roundingMode,
+                fixedQty: config.complimentaryQuota,
+            }, stallArea);
+            return { ...config.toObject(), complimentaryQuota };
+        });
+        res.json({ success: true, data, stallArea });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 router.get('/admin/all', authMiddleware, async (_req, res) => {
     try {
         await ensureDefaults();
@@ -50,7 +73,12 @@ router.put('/admin/:passType', authMiddleware, async (req, res) => {
             currency: req.body.currency || 'INR',
             maxPerRequest: Number(req.body.maxPerRequest || 10),
             isActive: req.body.isActive !== false,
-            displayOrder: Number(req.body.displayOrder || 0)
+            displayOrder: Number(req.body.displayOrder || 0),
+            allocationMode: req.body.allocationMode === 'perArea' ? 'perArea' : 'fixed',
+            ratioQty: Number(req.body.ratioQty || 0),
+            ratioArea: Number(req.body.ratioArea || 9),
+            roundingMode: ['floor', 'round', 'ceil'].includes(req.body.roundingMode) ? req.body.roundingMode : 'floor',
+            validityDays: Number(req.body.validityDays || 0)
         };
 
         const config = await ExhibitorPassConfig.findOneAndUpdate(

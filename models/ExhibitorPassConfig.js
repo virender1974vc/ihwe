@@ -16,7 +16,12 @@ const exhibitorPassConfigSchema = new mongoose.Schema({
     maxPerRequest: { type: Number, default: 10, min: 1 },
     gstPercentage: { type: Number, default: 18, min: 0, max: 100 },
     isActive: { type: Boolean, default: true },
-    displayOrder: { type: Number, default: 0 }
+    displayOrder: { type: Number, default: 0 },
+    allocationMode: { type: String, enum: ['fixed', 'perArea'], default: 'fixed' },
+    ratioQty: { type: Number, default: 0 },
+    ratioArea: { type: Number, default: 9 },
+    roundingMode: { type: String, enum: ['floor', 'round', 'ceil'], default: 'floor' },
+    validityDays: { type: Number, default: 0 }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorPassConfig', exhibitorPassConfigSchema);
