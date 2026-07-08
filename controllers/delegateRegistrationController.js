@@ -497,6 +497,7 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
     try {
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
         const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
+        const { computeEntitlement, getExhibitorStallArea } = require('../utils/entitlementCalculator');
         const exhibitorId = req.user.id;
         const exhibitor = await ExhibitorRegistration.findById(exhibitorId);
         if (!exhibitor) {
@@ -504,7 +505,14 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
         }
 
         const delegateConfig = await ExhibitorPassConfig.findOne({ passType: 'delegate', isActive: true });
-        const configuredQuota = Number(delegateConfig?.complimentaryQuota || 0);
+        const stallArea = await getExhibitorStallArea(exhibitorId);
+        const configuredQuota = computeEntitlement({
+            allocationMode: delegateConfig?.allocationMode,
+            ratioQty: delegateConfig?.ratioQty,
+            ratioArea: delegateConfig?.ratioArea,
+            roundingMode: delegateConfig?.roundingMode,
+            fixedQty: delegateConfig?.complimentaryQuota,
+        }, stallArea);
         const exhibitorQuota = Number(exhibitor.entitlements?.delegatePassQuota || 0);
         const quota = exhibitorQuota > 0 ? exhibitorQuota : configuredQuota;
         const used = exhibitor.entitlements?.delegatePassUsed || 0;

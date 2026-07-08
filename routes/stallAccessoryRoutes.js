@@ -51,6 +51,9 @@ const requireExhibitor = (req, res, next) => {
     }
 };
 
+// ── Exhibitor: real complimentary balance for the logged-in exhibitor ────────
+router.get('/my-entitlements', requireExhibitor, ctrl.getMyEntitlements);
+
 // ── Accessories catalog (public read) ────────────────────────────────────────
 router.get('/accessories', ctrl.getAllAccessories);
 router.post('/accessories', upload.single('image'), ctrl.createAccessory);
@@ -116,6 +119,8 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
         const reg = await ExhibitorRegistration.findById(exhibitorRegistrationId);
         if (!reg)
             return res.status(404).json({ success: false, message: 'Registration not found' });
+
+        await ctrl.assertComplimentaryWithinEntitlement(exhibitorRegistrationId, items);
 
         // Build enriched items
         let subtotal = 0, totalGst = 0;
@@ -194,7 +199,7 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
         res.json({ success: true, data: order });
     } catch (err) {
         console.error('Accessory verify error:', err);
-        res.status(500).json({ success: false, message: err.message });
+        res.status(err.status || 500).json({ success: false, message: err.message });
     }
 });
 
@@ -251,6 +256,8 @@ router.post('/neft-order', requireExhibitor, upload.single('paymentScreenshot'),
         if (!reg) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
         }
+
+        await ctrl.assertComplimentaryWithinEntitlement(exhibitorRegistrationId, items);
 
         let subtotal = 0;
         let totalGst = 0;
@@ -329,6 +336,7 @@ router.post('/neft-order', requireExhibitor, upload.single('paymentScreenshot'),
         res.status(201).json({ success: true, data: order });
     } catch (err) {
         console.error('Accessory NEFT order error:', err);
+        if (err.status) return res.status(err.status).json({ success: false, message: err.message });
         res.status(500).json({ success: false, message: err.message });
     }
 });

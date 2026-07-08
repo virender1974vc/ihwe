@@ -366,10 +366,11 @@ const getAllPayments = async (req, res) => {
           { clientId: { $in: validCompanyIds } },
         ],
       },
-      "clientId participation.stallNo participation.hallNo companyName",
+      "clientId participation.stallNo participation.hallNo companyName eventId",
     ).lean();
     const stallMap = {};
     const hallMap = {};
+    const eventMap = {};
     exhibitors.forEach(e => {
       const stallNo = e.participation?.stallNo;
       if (stallNo) stallMap[e._id.toString()] = stallNo;
@@ -377,6 +378,9 @@ const getAllPayments = async (req, res) => {
       const hallNo = e.participation?.hallNo;
       if (hallNo) hallMap[e._id.toString()] = hallNo;
       if (hallNo && e.clientId) hallMap[String(e.clientId)] = hallNo;
+      const eventId = e.eventId;
+      if (eventId) eventMap[e._id.toString()] = eventId;
+      if (eventId && e.clientId) eventMap[String(e.clientId)] = eventId;
     });
     const stallIds = [
       ...new Set([
@@ -410,6 +414,7 @@ const getAllPayments = async (req, res) => {
       const hallNo = p.hall_no || p.hallNo || doc?.hall_no || doc?.hallNo || hallMap[companyId] || hallMap[exhibitorId] || company?.hallNo || company?.hall_no || (hallMatch ? hallMatch[1] : "");
       const bankName = p.neft_bank || p.cheque_bank || p.card_bank || p.bankId || p.wallet_name || "";
       const paymentRef = p.utr_no || p.cheque_no || p.card_transaction_no || p.wallet_transaction_no || p.cash_receipt_no || p.ex_no || p.receipt_no || "";
+      const eventId = eventMap[companyId] || eventMap[exhibitorId] || "";
       return {
         ...p,
         invoice_no: getDocumentNo(doc, p),
@@ -421,6 +426,7 @@ const getAllPayments = async (req, res) => {
         bank_name: bankName,
         payment_ref: paymentRef,
         receipt_url: `/api/payments/${p._id}/receipt`,
+        eventId: eventId,
       };
     });
 
