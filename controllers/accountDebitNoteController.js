@@ -61,12 +61,6 @@ const parseAllocations = (allocations) => {
     return [];
   }
 };
-
-// Real (not stored/cached) per-invoice outstanding: finalAmount minus payments minus
-// any credit notes already applied to that invoice — nets BOTH credit-note models
-// (CreditNote and the legacy "DebitNote", which despite its name behaves as a second
-// credit-note mechanism) via the same shared logic the Client Ledger uses, so this
-// screen's "outstanding" always agrees with the Client Ledger's.
 const computeInvoiceOutstandingMap = async (invoices) => {
   const invoiceIds = invoices.map((inv) => String(inv._id));
   if (!invoiceIds.length) return { paidByInvoice: {}, creditedByInvoice: {} };
@@ -85,10 +79,6 @@ const computeInvoiceOutstandingMap = async (invoices) => {
   const creditedByInvoice = getCreditedByInvoiceId(invoices, creditNotes, legacyDebitNotes);
   return { paidByInvoice, creditedByInvoice };
 };
-
-// GET /api/account-debit-notes/company/:companyId/context
-// Powers the Create Debit Note form: exhibitor summary bar + the list of invoices
-// (with real computed outstanding) available to allocate the debit note against.
 const getCompanyDebitNoteContext = async (req, res) => {
   try {
     const { companyId } = req.params;
@@ -253,12 +243,6 @@ const createAccountDebitNote = async (req, res) => {
     res.status(500).json({ success: false, message: "Error creating debit note", error: error.message });
   }
 };
-
-// Computes, for a set of debit notes, how much of each has actually been recovered —
-// by comparing each allocation's invoice outstanding AT CREATION TIME to its outstanding
-// NOW. If the invoice's outstanding has dropped since, that recovery is attributed
-// (capped at the allocated amount) to this debit note. This is a real computation, not
-// a stored/guessable flag — there's no direct Payment-to-DebitNote link in this system.
 const enrichWithSettlementStatus = async (notes) => {
   const allInvoiceIds = [...new Set(notes.flatMap((n) => n.allocations.map((a) => a.invoiceId)))];
   const invoices = await Invoice.find({ _id: { $in: allInvoiceIds } }).lean();
@@ -293,6 +277,21 @@ const getAccountDebitNotes = async (req, res) => {
 
     const companyIds = [...new Set(notes.map((n) => n.companyId).filter(Boolean))];
     const stallMap = {};
+    const eventMap = {};
+    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+    const exhibitors = await ExhibitorRegistration.find({
+      $or: [
+        { _id: { $in: companyIds } },
+        { clientId: { $in: companyIds } }
+      ]
+    }, "clientId eventId").lean();
+    exhibitors.forEach(e => {
+      if (e.eventId) {
+        eventMap[e._id.toString()] = e.eventId;
+        if (e.clientId) eventMap[String(e.clientId)] = e.eventId;
+      }
+    });
+
     await Promise.all(companyIds.map(async (companyId) => {
       stallMap[companyId] = await resolveStallNo(companyId);
     }));
@@ -300,7 +299,8 @@ const getAccountDebitNotes = async (req, res) => {
     const withStall = enriched.map((note) => {
       const stallNo = stallMap[note.companyId] || "";
       const hallMatch = stallNo.match(/^H(\d+)/i);
-      return { ...note, stallNo, hallNo: hallMatch ? hallMatch[1] : "" };
+      const eventId = eventMap[note.companyId] || null;
+      return { ...note, stallNo, hallNo: hallMatch ? hallMatch[1] : "", eventId };
     });
 
     res.json({ success: true, data: withStall });

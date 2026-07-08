@@ -84,8 +84,31 @@ const createCreditNote = async (req, res) => {
 // GET ALL CREDIT NOTES
 const getCreditNotes = async (req, res) => {
   try {
-    const notes = await CreditNote.find().sort({ created_at: -1 });
-    res.json(notes);
+    const notes = await CreditNote.find().sort({ created_at: -1 }).lean();
+    
+    const companyIds = [...new Set(notes.map(n => String(n.companyId)).filter(Boolean))];
+    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+    const exhibitors = await ExhibitorRegistration.find({
+      $or: [
+        { _id: { $in: companyIds } },
+        { clientId: { $in: companyIds } }
+      ]
+    }, "clientId eventId").lean();
+    
+    const eventMap = {};
+    exhibitors.forEach(e => {
+      if (e.eventId) {
+        eventMap[e._id.toString()] = e.eventId;
+        if (e.clientId) eventMap[String(e.clientId)] = e.eventId;
+      }
+    });
+
+    const populatedNotes = notes.map(n => ({
+      ...n,
+      eventId: eventMap[String(n.companyId)] || null
+    }));
+
+    res.json(populatedNotes);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching credit notes",

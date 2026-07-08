@@ -143,8 +143,32 @@ const validateInvoiceItemsAgainstEstimate = async (payload, excludeInvoiceId = n
 // 📍 GET all invoices
 const getAllInvoices = async (req, res) => {
   try {
-    const invoices = await Invoice.find().sort({ added: -1 });
-    res.status(200).json(invoices);
+    const invoices = await Invoice.find().sort({ added: -1 }).lean();
+    
+    // Inject eventId
+    const companyIds = [...new Set(invoices.map(i => String(i.companyId)).filter(Boolean))];
+    const exhibitors = await ExhibitorRegistration.find({
+      $or: [
+        { _id: { $in: companyIds } },
+        { clientId: { $in: companyIds } }
+      ]
+    }, "clientId eventId").lean();
+    const eventMap = {};
+    exhibitors.forEach(e => {
+      if (e.eventId) {
+        eventMap[e._id.toString()] = e.eventId;
+        if (e.clientId) eventMap[String(e.clientId)] = e.eventId;
+      }
+    });
+
+    const populatedInvoices = invoices.map(inv => {
+      return {
+        ...inv,
+        eventId: eventMap[String(inv.companyId)] || null
+      };
+    });
+
+    res.status(200).json(populatedInvoices);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching invoices",

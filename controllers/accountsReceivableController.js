@@ -104,6 +104,7 @@ const resolveClientInfo = (companyId, { companyById, exhibitorById, stallById })
     stallNo: stallNo || "N/A",
     stallSize: stallSize ? `${stallSize} Sq. Mtr.` : "N/A",
     contactPerson,
+    eventId: exhibitor?.eventId || company?.eventId || null,
   };
 };
 
@@ -353,6 +354,7 @@ const getAccountsReceivable = async (req, res) => {
         installmentBalanceAmount: installmentDue?.balanceAmount || 0,
         isOverdue,
         status,
+        eventId: event ? String(event._id) : null,
       };
     });
 
