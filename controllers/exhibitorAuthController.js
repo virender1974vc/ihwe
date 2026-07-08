@@ -1,5 +1,7 @@
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const mongoose = require('mongoose');
+const Stall = require('../models/Stall');
+const StallAccessory = require('../models/StallAccessory');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('cloudinary').v2;
@@ -418,6 +420,50 @@ class ExhibitorAuthController {
                     console.error('filledByFullName lookup error:', err);
                 }
             }
+            let stallDetails = null;
+            if (plainReg.participation?.stallNo && mongoose.Types.ObjectId.isValid(String(plainReg.participation.stallNo))) {
+                try {
+                    const stallDoc = await Stall.findById(plainReg.participation.stallNo)
+                        .select('stallNumber length width area plScheme incrementPercentage discountPercentage status bookedBy eventId')
+                        .lean();
+                    if (stallDoc) {
+                        stallDetails = {
+                            id: stallDoc._id,
+                            stallNumber: stallDoc.stallNumber,
+                            length: stallDoc.length,
+                            width: stallDoc.width,
+                            area: stallDoc.area,
+                            plScheme: stallDoc.plScheme,
+                            status: stallDoc.status,
+                            bookedBy: stallDoc.bookedBy,
+                            eventId: stallDoc.eventId,
+                            dimension: `${stallDoc.length || 0}m X ${stallDoc.width || 0}m`,
+                            openSide: stallDoc.plScheme || plainReg.participation?.stallScheme || ''
+                        };
+
+                        plainReg.participation = {
+                            ...(plainReg.participation || {}),
+                            stallFor: plainReg.participation?.stallFor || stallDoc.stallNumber,
+                            stallSize: plainReg.participation?.stallSize || stallDoc.area,
+                            stallScheme: plainReg.participation?.stallScheme || stallDoc.plScheme,
+                            dimension: plainReg.participation?.dimension || `${stallDoc.length || 0}m X ${stallDoc.width || 0}m`
+                        };
+                    }
+                } catch (err) {
+                    console.error('Stall details lookup error:', err);
+                }
+            }
+
+            let complimentaryServices = [];
+            try {
+                complimentaryServices = await StallAccessory.find({ type: 'complimentary', isActive: true })
+                    .select('name itemType description unit includedQty category sortOrder imageUrl')
+                    .sort({ sortOrder: 1, createdAt: -1 })
+                    .lean();
+            } catch (err) {
+                console.error('Complimentary services lookup error:', err);
+            }
+
             // Fetch Estimate & Invoice
             let estimateDoc = null;
             let invoiceDoc = null;
@@ -460,6 +506,8 @@ class ExhibitorAuthController {
                 success: true,
                 data: {
                     ...plainReg,
+                    stallDetails,
+                    complimentaryServices,
                     estimate: mappedEstimate,
                     invoice: mappedInvoice
                 },
