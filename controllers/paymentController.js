@@ -10,6 +10,7 @@ const { getAccountNameById, getDocumentAccountName } = require("../utils/account
 const emailService = require("../utils/emailService");
 const whatsappService = require("../utils/whatsappService");
 const pdfGenerator = require("../utils/pdfGenerator");
+const MessageTemplate = require("../models/MessageTemplate");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
@@ -236,10 +237,23 @@ const generateAccountPaymentReceipt = async (payment) => {
     // We keep amountPaid and balanceAmount as computed from the payments to reflect the current state
   }
 
-  const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, { paymentIndex: paymentHistory.length - 1 });
+  const template = await MessageTemplate.findOne({ formType: 'exhibitor-registration' });
+  let headerImagePath = null;
+  if (template && template.headerImage) {
+    const rel = template.headerImage.replace(/^\//, '');
+    const candidate = path.join(__dirname, '..', rel);
+    if (fs.existsSync(candidate)) {
+      headerImagePath = candidate;
+    }
+  }
+
+  const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, { 
+    paymentIndex: paymentHistory.length - 1,
+    headerImage: headerImagePath
+  });
   const filePath = (pdfResult && typeof pdfResult === "object") ? pdfResult.filePath : pdfResult;
 
-  return { filePath, receiptNo, docData, contact, registrationLike };
+  return { filePath, receiptNo, docData, contact, registrationLike, headerImagePath };
 };
 
 const resolvePaymentAccount = async (payment) => {
@@ -523,7 +537,7 @@ const sendPaymentReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: "Payment not found" });
     }
     
-    const { filePath, docData, contact, registrationLike } = await generateAccountPaymentReceipt(payment);
+    const { filePath, docData, contact, registrationLike, headerImagePath } = await generateAccountPaymentReceipt(payment);
     const { email, mobile, name, companyName } = contact;
 
     if (!email && !mobile) {
@@ -552,7 +566,7 @@ const sendPaymentReceipt = async (req, res) => {
     let whatsappSent = false;
 
     if (email && (!type || type === 'email')) {
-      emailSent = await emailService.sendPaymentReceipt(registrationLike, filePath);
+      emailSent = await emailService.sendPaymentReceipt(registrationLike, filePath, { headerImage: headerImagePath });
     }
 
     if (mobile && (!type || type === 'whatsapp')) {
