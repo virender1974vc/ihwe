@@ -587,7 +587,7 @@ class PDFGenerator {
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Value', rx, ry);
                 doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(fmt(invVal), rx, ry, { width: halfW - 45, align: 'right' });
 
-                y += 145;
+                y += 135;
 
                 // PAYMENT DETAILS
                 doc.circle(mx + 12, y + 8, 12).fill(NAVY);
