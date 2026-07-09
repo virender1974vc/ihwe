@@ -51,6 +51,17 @@ const parseItems = (items) => {
   }
 };
 
+const parseJsonField = (value) => {
+  if (value && typeof value === "object") return { name: value.name || "", designation: value.designation || "" };
+  if (!value) return { name: "", designation: "" };
+  try {
+    const parsed = JSON.parse(value);
+    return { name: parsed?.name || "", designation: parsed?.designation || "" };
+  } catch {
+    return { name: "", designation: "" };
+  }
+};
+
 const parseAllocations = (allocations) => {
   if (Array.isArray(allocations)) return allocations;
   if (!allocations) return [];
@@ -210,6 +221,9 @@ const createAccountDebitNote = async (req, res) => {
       reason: req.body.reason,
       reference: req.body.reference || "",
       clientName: req.body.clientName || "",
+      proforma_invoice_no: req.body.proforma_invoice_no || "",
+      preparedBy: parseJsonField(req.body.preparedBy),
+      reviewedBy: parseJsonField(req.body.reviewedBy),
       items: parsedItems,
       taxableAmount: toNumber(req.body.taxableAmount),
       gstAmount: toNumber(req.body.gstAmount),
@@ -322,7 +336,18 @@ const getAccountDebitNoteById = async (req, res) => {
 
 const updateAccountDebitNote = async (req, res) => {
   try {
-    const updated = await AccountDebitNote.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // req.body may arrive as plain JSON (axios JSON post) or, when an attachment is
+    // included, as multipart FormData where nested objects/arrays were stringified —
+    // parse the same way createAccountDebitNote does so an edit-and-resave doesn't
+    // silently corrupt items/allocations/preparedBy/reviewedBy.
+    const update = { ...req.body };
+    if (update.items !== undefined) update.items = parseItems(update.items);
+    if (update.allocations !== undefined) update.allocations = parseAllocations(update.allocations);
+    if (update.preparedBy !== undefined) update.preparedBy = parseJsonField(update.preparedBy);
+    if (update.reviewedBy !== undefined) update.reviewedBy = parseJsonField(update.reviewedBy);
+    if (req.file) update.attachmentUrl = `/uploads/account_debit_notes/${req.file.filename}`;
+
+    const updated = await AccountDebitNote.findByIdAndUpdate(req.params.id, update, { new: true });
     if (!updated) return res.status(404).json({ success: false, message: "Debit note not found" });
     const accountName = await getAccountNameById(updated.companyId, "account");
     await logActivity(req, "Updated", "Accounts", `Updated Debit Note ${updated.debit_note_no} for ${accountName}.`);

@@ -23,6 +23,12 @@ const debitNoteItemSchema = new mongoose.Schema(
     gstPct: { type: String, default: "18%" },
     gstAmount: { type: Number, default: 0 },
     total: { type: Number, required: true, default: 0 },
+
+    // Stall dimension fields, same shape/naming as Invoice.items, so the printout
+    // table can render identically to the invoice when sourced from one.
+    area: { type: String, default: "" },
+    size: { type: String, default: "" },
+    discountPct: { type: Number },
   },
   { _id: false },
 );
@@ -56,6 +62,15 @@ const accountDebitNoteSchema = new mongoose.Schema(
     reason: { type: String, required: true },
     reference: { type: String, default: "" },
     clientName: { type: String, default: "" },
+    proforma_invoice_no: { type: String, default: "" },
+    preparedBy: {
+      name: { type: String, default: "" },
+      designation: { type: String, default: "" },
+    },
+    reviewedBy: {
+      name: { type: String, default: "" },
+      designation: { type: String, default: "" },
+    },
 
     items: { type: [debitNoteItemSchema], required: true },
     taxableAmount: { type: Number, default: 0 },

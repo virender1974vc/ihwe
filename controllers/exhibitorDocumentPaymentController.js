@@ -6,9 +6,17 @@ const Estimate = require("../models/Estimate");
 const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const CreditNote = require("../models/CreditNote");
+const AccountDebitNote = require("../models/AccountDebitNote");
 
 const DOC_MODELS = { invoice: Invoice, proforma: Estimate };
-const VIEW_DOC_MODELS = { invoice: Invoice, proforma: Estimate, challan: DeliveryChallan };
+const VIEW_DOC_MODELS = {
+  invoice: Invoice,
+  proforma: Estimate,
+  challan: DeliveryChallan,
+  creditnote: CreditNote,
+  debitnote: AccountDebitNote,
+};
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 const toNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 

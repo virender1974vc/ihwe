@@ -5,6 +5,21 @@ const { getAccountNameById } = require("../utils/accountActivityDetails");
 const calculateCreditNoteAmount = (items = []) =>
   items.reduce((sum, item) => sum + ((parseFloat(item.cn_amount) || 0) * (parseFloat(item.quantity) || 1)), 0);
 
+// Admin submits preparedBy/reviewedBy as a JSON string when the request is
+// multipart/form-data (FormData can't carry nested objects) — parse it back
+// into a real {name, designation} object so it doesn't get saved as a literal
+// string (which is unreadable by anything expecting note.preparedBy.name).
+const parseNamedPerson = (value) => {
+  if (value && typeof value === "object") return { name: value.name || "", designation: value.designation || "" };
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return { name: parsed?.name || "", designation: parsed?.designation || "" };
+  } catch {
+    return undefined;
+  }
+};
+
 // Fiscal Year Function
 const getFiscalYear = () => {
   const date = new Date();
@@ -48,6 +63,8 @@ const createCreditNote = async (req, res) => {
     // Parse nested objects if they come as strings from FormData
     if (typeof req.body.items === 'string') req.body.items = JSON.parse(req.body.items);
     if (typeof req.body.adjusted_invoices === 'string') req.body.adjusted_invoices = JSON.parse(req.body.adjusted_invoices);
+    if (req.body.preparedBy !== undefined) req.body.preparedBy = parseNamedPerson(req.body.preparedBy);
+    if (req.body.reviewedBy !== undefined) req.body.reviewedBy = parseNamedPerson(req.body.reviewedBy);
 
     const creditNo = await generateCreditNoteNo();
 
@@ -141,6 +158,8 @@ const updateCreditNote = async (req, res) => {
     // Parse nested objects if they come as strings from FormData
     if (typeof req.body.items === 'string') req.body.items = JSON.parse(req.body.items);
     if (typeof req.body.adjusted_invoices === 'string') req.body.adjusted_invoices = JSON.parse(req.body.adjusted_invoices);
+    if (req.body.preparedBy !== undefined) req.body.preparedBy = parseNamedPerson(req.body.preparedBy);
+    if (req.body.reviewedBy !== undefined) req.body.reviewedBy = parseNamedPerson(req.body.reviewedBy);
 
     const updateData = {
       ...req.body,

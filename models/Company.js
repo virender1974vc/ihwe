@@ -47,6 +47,7 @@ const CompanySchema = new mongoose.Schema(
     added_by: { type: String, trim: true },
     udyamNumber: { type: String },
     gstNumber: { type: String },
+    panNo: { type: String },
     exhibitorCategory: { type: String },
     updated_by: {
       type: String,
