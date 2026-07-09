@@ -509,7 +509,7 @@ class PDFGenerator {
                     drawSvgIcon(cx, y + 20, s.icon, 0.45, NAVY);
 
                     doc.fillColor(NAVY).fontSize(7).font('Helvetica-Bold').text(s.label, cx - customStatW / 2, y + 42, { width: customStatW, align: 'center' });
-                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(s.value, cx - customStatW / 2, y + 54, { width: customStatW, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text(s.value, cx - customStatW / 2, y + 54, { width: customStatW, align: 'center' });
 
                     if (i < 3) doc.moveTo(mx + (i + 1) * customStatW, y + 15).lineTo(mx + (i + 1) * customStatW, y + 55).lineWidth(0.5).stroke(BORDER_COLOR);
                 });
@@ -538,13 +538,13 @@ class PDFGenerator {
                 doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('RECEIVED FROM', mx + 32, y + 3);
 
                 doc.roundedRect(mx, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
-                doc.fillColor(TEXT_DARK).fontSize(11).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', mx + 15, y + 45, { width: halfW - 30 });
+                doc.fillColor(TEXT_DARK).fontSize(11).font('Helvetica').text(registration.exhibitorName || 'N/A', mx + 15, y + 45, { width: halfW - 30 });
                 const addr = [registration.address, registration.city, registration.state, registration.pincode].filter(Boolean).join(', ');
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text(addr, mx + 15, y + 60, { width: halfW - 30 });
 
                 // Robust GSTIN lookup (check registration, then invoice)
                 const gstinStr = registration.gstNo || registration.gstin || invoice?.gst_no || invoice?.company_gst_no || 'N/A';
-                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(`GSTIN: ${gstinStr}`, mx + 15, y + 85);
+                doc.fillColor(TEXT_DARK).font('Helvetica').text(`GSTIN: ${gstinStr}`, mx + 15, y + 85);
 
                 // Robust Contact Person Name logic (prefer full name if available)
                 const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
@@ -572,7 +572,7 @@ class PDFGenerator {
                 let rx = mx + halfW + 15 + 15;
                 let ry = y + 47;
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice No.', rx, ry);
-                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(paymentAgainst, rx, ry, { width: halfW - 45, align: 'right' });
+                doc.fillColor(TEXT_DARK).font('Helvetica').text(paymentAgainst, rx, ry, { width: halfW - 45, align: 'right' });
                 doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
 
                 ry += 25;
@@ -580,12 +580,12 @@ class PDFGenerator {
                 const invDate = registration.invoiceDate
                     ? new Date(registration.invoiceDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                     : (invoice?.invoice_date ? invoice.invoice_date : (invoice?.added ? new Date(invoice.added).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'));
-                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(invDate, rx, ry, { width: halfW - 45, align: 'right' });
+                doc.fillColor(TEXT_DARK).font('Helvetica').text(invDate, rx, ry, { width: halfW - 45, align: 'right' });
                 doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
 
                 ry += 25;
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Value', rx, ry);
-                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(fmt(invVal), rx, ry, { width: halfW - 45, align: 'right' });
+                doc.fillColor(TEXT_DARK).font('Helvetica').text(fmt(invVal), rx, ry, { width: halfW - 45, align: 'right' });
 
                 y += 135;
 
@@ -612,7 +612,7 @@ class PDFGenerator {
                     doc.circle(mx + 30, py + 4, 2.5).fill('#fff'); // Clean dot
 
                     doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(r.l, mx + 45, py);
-                    doc.font('Helvetica-Bold').fontSize(11).text(r.v, mx, py - 2, { width: mw - 20, align: 'right' });
+                    doc.font('Helvetica').fontSize(11).text(r.v, mx, py - 2, { width: mw - 20, align: 'right' });
                     if (i < 4) doc.moveTo(mx + 45, py + 18).lineTo(mx + mw - 20, py + 18).lineWidth(0.5).stroke(BORDER_COLOR);
                     py += 24;
                 });
