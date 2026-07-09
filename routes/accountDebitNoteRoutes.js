@@ -32,7 +32,7 @@ router.get("/company/:companyId/context", getCompanyDebitNoteContext);
 router.post("/", attachmentUpload.single("attachment"), createAccountDebitNote);
 router.get("/", getAccountDebitNotes);
 router.get("/:id", getAccountDebitNoteById);
-router.put("/:id", updateAccountDebitNote);
+router.put("/:id", attachmentUpload.single("attachment"), updateAccountDebitNote);
 router.delete("/:id", deleteAccountDebitNote);
 
 module.exports = router;

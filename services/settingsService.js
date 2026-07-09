@@ -28,6 +28,7 @@ class SettingsService {
             onlineAdvancePercentage, manualAdvancePercentage, 
             quickLinks, exhibitionLinks,
             companyName, companyAddress, companyGst, companyCin,
+            contactPhone, contactEmail, contactWebsite,
             fullPaymentDiscount, availableTdsRates,
             authorizedSignature, companyStamp
         } = updateData;
@@ -55,6 +56,9 @@ class SettingsService {
         if (companyAddress !== undefined) settings.companyAddress = companyAddress;
         if (companyGst !== undefined) settings.companyGst = companyGst;
         if (companyCin !== undefined) settings.companyCin = companyCin;
+        if (contactPhone !== undefined) settings.contactPhone = contactPhone;
+        if (contactEmail !== undefined) settings.contactEmail = contactEmail;
+        if (contactWebsite !== undefined) settings.contactWebsite = contactWebsite;
         if (fullPaymentDiscount !== undefined) settings.fullPaymentDiscount = fullPaymentDiscount;
         if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
         if (authorizedSignature) settings.authorizedSignature = authorizedSignature;

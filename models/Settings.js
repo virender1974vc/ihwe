@@ -100,6 +100,18 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    contactPhone: {
+        type: String,
+        default: "+91 96549 00525"
+    },
+    contactEmail: {
+        type: String,
+        default: "info@namogangewellness.com"
+    },
+    contactWebsite: {
+        type: String,
+        default: "www.namogangewellness.com"
+    },
     authorizedSignature: {
         type: String,
         default: ""
