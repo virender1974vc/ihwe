@@ -60,10 +60,12 @@ const getMobileSearchVariants = (value) => {
     ].filter(Boolean))];
 };
 
-const getOtpResponseMessage = ({ email, mobile }) => {
-    if (email && mobile) return 'OTP sent to email and WhatsApp';
-    if (email) return 'OTP sent to email only';
-    if (mobile) return 'OTP sent to WhatsApp only';
+const getOtpResponseMessage = ({ results }) => {
+    const emailSuccess = results?.some(r => r.channel === 'email' && r.success);
+    const whatsappSuccess = results?.some(r => r.channel === 'whatsapp' && r.success);
+    if (emailSuccess && whatsappSuccess) return 'OTP sent to email and WhatsApp';
+    if (emailSuccess) return 'OTP sent to email only';
+    if (whatsappSuccess) return 'OTP sent to WhatsApp only';
     return 'OTP generated but no delivery channel was available';
 };
 
@@ -75,11 +77,11 @@ const safeJson = (value) => {
     }
 };
 
-async function sendOtpToAvailableChannels(exhibitor, otp, requestedChannel = 'both') {
-    const email = exhibitor.contact1?.email?.trim();
-    const rawMobile = exhibitor.contact1?.mobile;
-    const rawWhatsapp = exhibitor.contact1?.whatsapp;
-    const mobile = normalizeIndianMobile(rawWhatsapp) || normalizeIndianMobile(rawMobile);
+async function sendOtpToAvailableChannels(exhibitor, otp, requestedChannel = 'both', targetEmail = null, targetMobile = null) {
+    const email = targetEmail || exhibitor.contact1?.email?.trim() || exhibitor.companyEmail?.trim();
+    const rawMobile = targetMobile || exhibitor.contact1?.mobile;
+    const rawWhatsapp = targetMobile || exhibitor.contact1?.whatsapp;
+    const mobile = normalizeIndianMobile(targetMobile) || normalizeIndianMobile(rawWhatsapp) || normalizeIndianMobile(rawMobile);
     const tasks = [];
 
     console.log('[OTP] Exhibitor:', {
@@ -198,7 +200,11 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Email and password are required' });
 
             const exhibitor = await ExhibitorRegistration.findOne({
-                'contact1.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') }
+                $or: [
+                    { companyEmail: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') } },
+                    { 'contact1.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') } },
+                    { 'teamMembers.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') } }
+                ]
             }).sort({ createdAt: -1 })
                 .select('+password');
 
@@ -215,7 +221,7 @@ class ExhibitorAuthController {
             await exhibitor.save();
 
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp);
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'both', email.trim());
 
             res.status(200).json({
                 success: true,
@@ -293,7 +299,11 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Email address is required' });
 
             const exhibitor = await ExhibitorRegistration.findOne({
-                'contact1.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') }
+                $or: [
+                    { companyEmail: { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') } },
+                    { 'contact1.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') } },
+                    { 'teamMembers.email': { $regex: new RegExp(`^${escapeRegex(email.trim())}$`, 'i') } }
+                ]
             }).sort({ createdAt: -1 });
 
             if (!exhibitor)
@@ -304,7 +314,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'email');
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'email', email.trim());
 
             res.status(200).json({
                 success: true,
@@ -330,7 +340,9 @@ class ExhibitorAuthController {
             const exhibitor = await ExhibitorRegistration.findOne({
                 $or: [
                     { 'contact1.mobile': { $in: mobileVariants } },
-                    { 'contact1.whatsapp': { $in: mobileVariants } }
+                    { 'contact1.whatsapp': { $in: mobileVariants } },
+                    { 'teamMembers.mobile': { $in: mobileVariants } },
+                    { 'teamMembers.whatsapp': { $in: mobileVariants } }
                 ]
             })
                 .sort({ createdAt: -1 });
@@ -343,7 +355,7 @@ class ExhibitorAuthController {
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
             await exhibitor.save();
 
-            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'mobile');
+            const notification = await sendOtpToAvailableChannels(exhibitor, otp, 'mobile', null, mobile.trim());
 
             res.status(200).json({
                 success: true,
