@@ -387,12 +387,12 @@ class PDFGenerator {
         return new Promise(async (resolve, reject) => {
             try {
                 // helper for number to words
-                const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
-                const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
+                const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+                const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
                 const inWords = (num) => {
                     if ((num = num.toString()).length > 9) return 'overflow';
                     let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-                    if (!n) return ''; 
+                    if (!n) return '';
                     let str = '';
                     str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
                     str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
@@ -404,7 +404,7 @@ class PDFGenerator {
 
                 const { headerPath, footerPath } = await resolveHeaderFooterPaths(options.headerImage, options.footerImage);
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
-                
+
                 const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
                 const suffix = paymentIndex >= 0 ? `_P${paymentIndex + 1}` : '';
                 const safeReceiptBase = String(registration.registrationId || registration._id || 'receipt').replace(/[\\/:*?"<>|]+/g, '_');
@@ -419,7 +419,7 @@ class PDFGenerator {
                 const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex] ? registration.paymentHistory[paymentIndex] : null;
                 const m = paymentHistoryEntry || registration.manualPaymentDetails || {};
                 const isUSD = p.currency === 'USD';
-                
+
                 // Using Rs. instead of ₹ to avoid Helvetica rendering issues (renders as ¹)
                 const curStr = isUSD ? 'USD ' : 'Rs. ';
                 const fmt = (n) => `${curStr}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -427,7 +427,7 @@ class PDFGenerator {
 
                 const Settings = require('../models/Settings');
                 const settings = await Settings.findOne();
-                
+
                 const Invoice = require('../models/Invoice');
                 const invoice = await Invoice.findOne({
                     $or: [
@@ -442,12 +442,12 @@ class PDFGenerator {
                 let rNo = registration.customReceiptNo || registration.receiptNo;
                 if (!rNo) {
                     const counter = await Counter.findOneAndUpdate({ type: `receipt-ngw-${year}` }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: 'after' });
-                    rNo = `PR/${String(year).slice(-2)}-${String(year+1).slice(-2)}/${String(counter.seq).padStart(3, '0')}`;
+                    rNo = `PR/${String(year).slice(-2)}-${String(year + 1).slice(-2)}/${String(counter.seq).padStart(3, '0')}`;
                     try {
                         if (registration._id && typeof registration.constructor.findByIdAndUpdate === 'function') {
                             await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
                         }
-                    } catch (e) {}
+                    } catch (e) { }
                 }
 
                 this._headerImg(doc, headerPath, true);
@@ -479,15 +479,15 @@ class PDFGenerator {
 
                 const mx = 40;
                 const mw = pageW - 80;
-                
+
                 // TOP STATS BOX
                 doc.roundedRect(mx, y, mw, 70, 8).lineWidth(1).stroke(BORDER_COLOR);
-                
+
                 const statW = mw / 4;
                 const paymentDateObj = new Date(m.paidAt || registration.updatedAt || Date.now());
                 const formattedDate = paymentDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const paymentAgainst = registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || 'N/A';
-                
+
                 let paymentType = 'Advance / Partial';
                 if (registration.balanceAmount <= 0) paymentType = 'Full Payment';
 
@@ -503,26 +503,26 @@ class PDFGenerator {
                 const customStatW = effectiveW / 4;
 
                 stats.forEach((s, i) => {
-                    let cx = mx + i * customStatW + customStatW/2;
-                    
+                    let cx = mx + i * customStatW + customStatW / 2;
+
                     doc.circle(cx, y + 20, 10).lineWidth(1).stroke(NAVY);
                     drawSvgIcon(cx, y + 20, s.icon, 0.45, NAVY);
-                    
-                    doc.fillColor(NAVY).fontSize(7).font('Helvetica-Bold').text(s.label, cx - customStatW/2, y + 42, { width: customStatW, align: 'center' });
-                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(s.value, cx - customStatW/2, y + 54, { width: customStatW, align: 'center' });
-                    
-                    if (i < 3) doc.moveTo(mx + (i+1)*customStatW, y + 15).lineTo(mx + (i+1)*customStatW, y + 55).lineWidth(0.5).stroke(BORDER_COLOR);
+
+                    doc.fillColor(NAVY).fontSize(7).font('Helvetica-Bold').text(s.label, cx - customStatW / 2, y + 42, { width: customStatW, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(s.value, cx - customStatW / 2, y + 54, { width: customStatW, align: 'center' });
+
+                    if (i < 3) doc.moveTo(mx + (i + 1) * customStatW, y + 15).lineTo(mx + (i + 1) * customStatW, y + 55).lineWidth(0.5).stroke(BORDER_COLOR);
                 });
 
                 // RECEIVED BADGE (Perfectly symmetric and aligned)
-                const bx = mx + mw - 5; 
+                const bx = mx + mw - 5;
                 const bw = 55;
                 const ribbonLeft = bx - bw;
-                
-                doc.polygon([bx, y], [ribbonLeft, y], [ribbonLeft, y + 45], [ribbonLeft + bw/2, y + 55], [bx, y + 45]).fill(NAVY);
+
+                doc.polygon([bx, y], [ribbonLeft, y], [ribbonLeft, y + 45], [ribbonLeft + bw / 2, y + 55], [bx, y + 45]).fill(NAVY);
                 doc.fillColor('#fff').fontSize(8).font('Helvetica-Bold').text('RECEIVED', ribbonLeft, y + 32, { width: bw, align: 'center', characterSpacing: 0.5 });
-                
-                const xc = ribbonLeft + bw/2;
+
+                const xc = ribbonLeft + bw / 2;
                 const yc = y + 16;
                 doc.circle(xc, yc, 10).lineWidth(1.5).stroke('#fff');
                 doc.moveTo(xc - 4, yc).lineTo(xc - 1, yc + 3).lineTo(xc + 5, yc - 4).stroke('#fff');
@@ -531,21 +531,21 @@ class PDFGenerator {
 
                 // RECEIVED FROM & INVOICE REF
                 const halfW = (mw - 15) / 2;
-                
+
                 // Left Box: RECEIVED FROM
                 doc.circle(mx + 12, y + 8, 12).fill(NAVY);
                 drawSvgIcon(mx + 12, y + 8, ic_user, 0.5, '#fff');
                 doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('RECEIVED FROM', mx + 32, y + 3);
-                
+
                 doc.roundedRect(mx, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
                 doc.fillColor(TEXT_DARK).fontSize(11).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', mx + 15, y + 45, { width: halfW - 30 });
                 const addr = [registration.address, registration.city, registration.state, registration.pincode].filter(Boolean).join(', ');
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text(addr, mx + 15, y + 60, { width: halfW - 30 });
-                
+
                 // Robust GSTIN lookup (check registration, then invoice)
                 const gstinStr = registration.gstNo || registration.gstin || invoice?.gst_no || invoice?.company_gst_no || 'N/A';
                 doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(`GSTIN: ${gstinStr}`, mx + 15, y + 85);
-                
+
                 // Robust Contact Person Name logic (prefer full name if available)
                 const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
                 let displayName = 'N/A';
@@ -556,29 +556,29 @@ class PDFGenerator {
                 } else if (invoice?.consignee_name) {
                     displayName = invoice.consignee_name;
                 }
-                
+
                 doc.fillColor(NAVY).text(`Contact Person: ${displayName}`, mx + 15, y + 100);
 
                 // Right Box: INVOICE REFERENCE
                 doc.circle(mx + halfW + 15 + 12, y + 8, 12).fill(NAVY);
                 drawSvgIcon(mx + halfW + 15 + 12, y + 8, ic_doc, 0.5, '#fff');
                 doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('INVOICE REFERENCE', mx + halfW + 15 + 32, y + 3);
-                
+
                 doc.roundedRect(mx + halfW + 15, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
-                
+
                 const fb = registration.financeBreakdown || {};
                 const invVal = invoice?.finalAmount || fb.netPayable || p.amount || 0;
-                
+
                 let rx = mx + halfW + 15 + 15;
                 let ry = y + 47;
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice No.', rx, ry);
                 doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(paymentAgainst, rx, ry, { width: halfW - 45, align: 'right' });
                 doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
-                
+
                 ry += 25;
                 doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Date', rx, ry);
-                const invDate = registration.invoiceDate 
-                    ? new Date(registration.invoiceDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                const invDate = registration.invoiceDate
+                    ? new Date(registration.invoiceDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                     : (invoice?.invoice_date ? invoice.invoice_date : (invoice?.added ? new Date(invoice.added).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'));
                 doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(invDate, rx, ry, { width: halfW - 45, align: 'right' });
                 doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
@@ -595,9 +595,9 @@ class PDFGenerator {
                 doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('PAYMENT DETAILS', mx + 32, y + 3);
 
                 doc.roundedRect(mx, y + 30, mw, 140, 8).lineWidth(1).stroke(BORDER_COLOR);
-                doc.rect(mx + 1, y + 31, 12, 138).fill(NAVY); 
-                doc.rect(mx + 13, y + 31, mw - 14, 138).fill('#f8fafc'); 
-                
+                doc.rect(mx + 1, y + 31, 12, 138).fill(NAVY);
+                doc.rect(mx + 13, y + 31, mw - 14, 138).fill('#f8fafc');
+
                 const payRows = [
                     { l: 'AMOUNT RECEIVED', v: fmt(m.amount || 0) },
                     { l: 'PAYMENT MODE', v: String(m.method || m.paymentMode || registration.paymentMode || 'N/A').toUpperCase() },
@@ -605,12 +605,12 @@ class PDFGenerator {
                     { l: 'PAYMENT DATE', v: formattedDate },
                     { l: 'BALANCE OUTSTANDING', v: fmt(registration.balanceAmount || 0) }
                 ];
-                
+
                 let py = y + 47;
                 payRows.forEach((r, i) => {
                     doc.circle(mx + 30, py + 4, 8).fill(NAVY);
                     doc.circle(mx + 30, py + 4, 2.5).fill('#fff'); // Clean dot
-                    
+
                     doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(r.l, mx + 45, py);
                     doc.font('Helvetica-Bold').fontSize(11).text(r.v, mx, py - 2, { width: mw - 20, align: 'right' });
                     if (i < 4) doc.moveTo(mx + 45, py + 18).lineTo(mx + mw - 20, py + 18).lineWidth(0.5).stroke(BORDER_COLOR);
@@ -620,46 +620,61 @@ class PDFGenerator {
                 y += 195;
 
                 // RECEIVED AMOUNT & REMARKS
-                doc.roundedRect(mx, y, halfW, 105, 8).fill(NAVY);
-                doc.fillColor('#fff').fontSize(10).font('Helvetica-Bold').text('RECEIVED AMOUNT', mx, y + 16, { width: halfW, align: 'center' });
-                
-                const amtStr = `${valFmt(m.amount || 0)}/-`;
-                doc.fontSize(28).font('Helvetica-Bold');
-                const amtW = doc.widthOfString(amtStr);
-                const gap = 12; // reduced gap slightly to match smaller circle
-                const circleD = 38; // reduced circle size
-                const totalW = circleD + gap + amtW;
-                const startX = mx + (halfW - totalW) / 2;
-                
-                const cy = y + 50; // exact visual center line for the amount row
-                
-                doc.circle(startX + (circleD/2), cy, circleD/2).fill('#fff');
-                if (isUSD) {
-                    doc.fillColor(NAVY).fontSize(16).font('Helvetica-Bold').text('$', startX, cy - 7, { width: circleD, align: 'center' });
-                } else {
-                    // Perfect vertical alignment for 'Rs.', slightly smaller, nudged left for visual center
-                    doc.fillColor(NAVY).fontSize(13).font('Helvetica-Bold').text('Rs.', startX - 2, cy - 5, { width: circleD, align: 'center' });
-                }
-                
-                // Perfect vertical alignment for the large number
-                doc.fillColor('#fff').fontSize(28).font('Helvetica-Bold').text(amtStr, startX + circleD + gap, cy - 12);
-                
+                // Left Box: Blue Background
+                doc.roundedRect(mx, y, halfW - 10, 95, 8).fill(NAVY);
+
+                // Vertical divider line
+                doc.moveTo(mx + halfW + 2, y + 5).lineTo(mx + halfW + 2, y + 90).lineWidth(1).stroke('#e2e8f0');
+
+                // Compute Layout for Left Box
+                const numStr = `${isUSD ? '$' : 'Rs.'} ${valFmt(m.amount || 0)}/-`;
+                doc.fontSize(22).font('Helvetica-Bold');
+                const numW = doc.widthOfString(numStr);
+                doc.fontSize(9);
+                const titleW = doc.widthOfString('RECEIVED AMOUNT');
+                const textBlockW = Math.max(titleW, numW);
+
+                const gap = 15;
+                const outerR = 20;
+                const innerR = 16;
+                const totalW = (outerR * 2) + gap + textBlockW;
+
+                const startX = mx + (halfW - 10 - totalW) / 2 - 15; // Shifted left for optical balance
+                const cy = y + 40; // Shifted up so 3-line wrapped text breathes
+
+                // Double Ring Circle
+                const circleX = startX + outerR;
+                doc.circle(circleX, cy, outerR).lineWidth(1.2).stroke('#fff');
+                doc.circle(circleX, cy, innerR).fill('#fff');
+
+                // Inner Circle Icon (Rs. or USD)
+                doc.fillColor(NAVY).fontSize(15).font('Helvetica-Bold').text(isUSD ? '$' : 'Rs.', circleX - innerR, cy - 5, { width: innerR * 2, align: 'center' });
+
+                // Text Block
+                const textX = startX + (outerR * 2) + gap;
+
+                // 'RECEIVED AMOUNT'
+                doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold').text('RECEIVED AMOUNT', textX, cy - 24);
+
+                // Amount String
+                doc.fillColor('#fff').fontSize(22).font('Helvetica-Bold').text(numStr, textX, cy - 11);
+
+                // Words
                 const wordAmt = inWords(m.amount || 0);
                 const curWord = isUSD ? 'Dollars' : 'Rupees';
-                // Pushed down to avoid overlapping the larger circle
-                doc.fontSize(10).font('Helvetica-Oblique').text(`(${curWord} ${wordAmt})`, mx + 10, y + 78, { width: halfW - 20, align: 'center' });
+                const availableW = (mx + halfW - 10) - textX - 10;
+                doc.fillColor('#fff').fontSize(10).font('Helvetica-Oblique').text(`(${curWord} ${wordAmt})`, textX, cy + 14, { width: availableW });
 
-                // Remarks
-                doc.circle(mx + halfW + 15 + 12, y + 8, 12).fill(NAVY);
-                doc.moveTo(mx + halfW + 15 + 6, y + 8).lineTo(mx + halfW + 15 + 18, y + 8).lineWidth(1).stroke('#fff');
-                doc.moveTo(mx + halfW + 15 + 6, y + 4).lineTo(mx + halfW + 15 + 18, y + 4).lineWidth(1).stroke('#fff');
-                doc.moveTo(mx + halfW + 15 + 6, y + 12).lineTo(mx + halfW + 15 + 14, y + 12).lineWidth(1).stroke('#fff');
-                
-                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('REMARKS', mx + halfW + 15 + 32, y + 3);
-                
-                doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text('Received towards participation in the', mx + halfW + 15, y + 30);
-                doc.font('Helvetica-Bold').text('9th International Health & Wellness Expo', mx + halfW + 15, y + 45);
-                doc.text('(IHWE Global Edition)', mx + halfW + 15, y + 60, { continued: true }).font('Helvetica').text(' scheduled at Pragati Maidan, New Delhi.');
+                // Right Box: Remarks
+                const remarksX = mx + halfW + 15;
+                doc.circle(remarksX + 10, y + 10, 10).fill(NAVY);
+                drawSvgIcon(remarksX + 10, y + 10, ic_doc, 0.45, '#fff');
+
+                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('REMARKS', remarksX + 26, y + 5);
+
+                doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text('Received towards participation in the', remarksX, y + 30);
+                doc.font('Helvetica-Bold').text('9th International Health & Wellness Expo', remarksX, y + 45);
+                doc.text('(IHWE Global Edition)', remarksX, y + 60, { continued: true }).font('Helvetica').text(' scheduled at Pragati Maidan, New Delhi.');
 
                 y += 135;
 
@@ -670,11 +685,11 @@ class PDFGenerator {
 
                 const companyName = settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.';
                 doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY).text(`For ${companyName}`, mx + halfW + 15, y, { width: halfW, align: 'center' });
-                
+
                 try {
                     const sigY = y + 15;
                     const centerBox = mx + halfW + 15 + (halfW / 2);
-                    
+
                     if (settings?.companyStamp) {
                         const stampP = path.resolve(__dirname, '..', settings.companyStamp.replace(/^\//, ''));
                         if (fs.existsSync(stampP)) {
@@ -687,8 +702,8 @@ class PDFGenerator {
                             doc.image(sigP, centerBox + 10, sigY + 10, { fit: [80, 50], align: 'center' });
                         }
                     }
-                } catch(e) { console.log('Error drawing stamp/sig:', e); }
-                
+                } catch (e) { console.log('Error drawing stamp/sig:', e); }
+
                 // Shifted down to y+90 to clear the 60px height of the stamp
                 doc.moveTo(mx + halfW + 15 + 40, y + 90).lineTo(mx + halfW + 15 + halfW - 40, y + 90).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT_DARK).text('Authorized Signatory', mx + halfW + 15, y + 95, { width: halfW, align: 'center' });
