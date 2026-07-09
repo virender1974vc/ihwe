@@ -386,13 +386,25 @@ class PDFGenerator {
     async generatePaymentSlip(registration, options = {}) {
         return new Promise(async (resolve, reject) => {
             try {
-                // Resolve header/footer images dynamically
-                const { headerPath, footerPath } = await resolveHeaderFooterPaths(
-                    options.headerImage,
-                    options.footerImage
-                );
+                // helper for number to words
+                const a = ['','One ','Two ','Three ','Four ', 'Five ','Six ','Seven ','Eight ','Nine ','Ten ','Eleven ','Twelve ','Thirteen ','Fourteen ','Fifteen ','Sixteen ','Seventeen ','Eighteen ','Nineteen '];
+                const b = ['', '', 'Twenty','Thirty','Forty','Fifty', 'Sixty','Seventy','Eighty','Ninety'];
+                const inWords = (num) => {
+                    if ((num = num.toString()).length > 9) return 'overflow';
+                    let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+                    if (!n) return ''; 
+                    let str = '';
+                    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
+                    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
+                    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
+                    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
+                    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Only' : 'Only';
+                    return str.trim() || 'Zero Only';
+                };
 
+                const { headerPath, footerPath } = await resolveHeaderFooterPaths(options.headerImage, options.footerImage);
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
+                
                 const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
                 const suffix = paymentIndex >= 0 ? `_P${paymentIndex + 1}` : '';
                 const safeReceiptBase = String(registration.registrationId || registration._id || 'receipt').replace(/[\\/:*?"<>|]+/g, '_');
@@ -402,341 +414,288 @@ class PDFGenerator {
                 doc.pipe(stream);
 
                 const pageW = doc.page.width;
-                const pageH = doc.page.height;
                 const p = registration.participation || {};
                 const c1 = registration.contact1 || {};
-                const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex]
-                    ? registration.paymentHistory[paymentIndex]
-                    : null;
+                const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex] ? registration.paymentHistory[paymentIndex] : null;
                 const m = paymentHistoryEntry || registration.manualPaymentDetails || {};
-                const cur = p.currency === 'USD' ? 'USD ' : 'INR ';
-                const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const isUSD = p.currency === 'USD';
                 
-                // --- Generate Receipt Number ---
+                // Using Rs. instead of ₹ to avoid Helvetica rendering issues (renders as ¹)
+                const curStr = isUSD ? 'USD ' : 'Rs. ';
+                const fmt = (n) => `${curStr}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+                const valFmt = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+                const Settings = require('../models/Settings');
+                const settings = await Settings.findOne();
+                
+                const Invoice = require('../models/Invoice');
+                const invoice = await Invoice.findOne({
+                    $or: [
+                        { companyId: registration.clientId || (registration._id ? registration._id.toString() : '') },
+                        { company_name: registration.exhibitorName }
+                    ]
+                }).sort({ added: -1 }).lean();
+
+                // Generate Receipt Number
                 const Counter = require('../models/visitor/CounterModel');
                 const year = new Date().getFullYear();
                 let rNo = registration.customReceiptNo || registration.receiptNo;
                 if (!rNo) {
-                    const counter = await Counter.findOneAndUpdate(
-                        { type: `receipt-ngw-${year}` },
-                        { $inc: { seq: 1 } },
-                        { upsert: true, returnDocument: 'after' }
-                    );
-                    rNo = `NGW/IHWE/${year}/${String(counter.seq).padStart(3, '0')}`;
+                    const counter = await Counter.findOneAndUpdate({ type: `receipt-ngw-${year}` }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: 'after' });
+                    rNo = `PR/${String(year).slice(-2)}-${String(year+1).slice(-2)}/${String(counter.seq).padStart(3, '0')}`;
                     try {
-                        if (registration._id && registration.constructor && typeof registration.constructor.findByIdAndUpdate === 'function') {
+                        if (registration._id && typeof registration.constructor.findByIdAndUpdate === 'function') {
                             await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
                         }
-                    } catch (e) { /* ignore if mock object */ }
+                    } catch (e) {}
                 }
 
-                // Fetch settings once for the whole receipt
-                const Settings = require('../models/Settings');
-                const settings = await Settings.findOne();
-
-                // ── Header image ──
                 this._headerImg(doc, headerPath, true);
-                let y = doc.y + 15;
+                let y = doc.y + 5;
 
-                // ── 3-Column Header Row ──
-                // Column 1: Event Logo
-                let logoPath = path.join(__dirname, '../public/logo.png');
-                const targetLogo = settings ? (settings.emailLogo || settings.logo) : null;
-                if (targetLogo) {
-                    // Try to resolve the settings logo path
-                    const customLogoPath = path.join(__dirname, '..', targetLogo.replace(/^\//, ''));
-                    if (fs.existsSync(customLogoPath)) {
-                        logoPath = customLogoPath;
-                    }
-                }
-                
-                if (fs.existsSync(logoPath)) {
-                    try {
-                        doc.image(logoPath, 40, y, { fit: [190, 90], align: 'left', valign: 'center' });
-                    } catch (e) {
-                        // Ignore if invalid image
-                    }
-                }
-                
-                // Column 2: Date & Venue (Middle)
-                const midX = 230;
-                doc.fillColor('#334155').fontSize(9).font('Helvetica-Bold')
-                    .text('DATE: ', midX, y + 25, { continued: true })
-                    .text('21 - 23 AUGUST 2026');
-                
-                doc.text('VENUE: ', midX, y + 45, { continued: true })
-                    .text('PRAGATI MAIDAN,');
-                doc.font('Helvetica').text('       NEW DELHI, INDIA', midX, y + 57);
+                // Colors
+                const NAVY = '#0b3974';
+                const BORDER_COLOR = '#d1d5db';
+                const TEXT_DARK = '#0f172a';
+                const TEXT_MUTED = '#475569';
 
-                // Column 3: PAYMENT RECEIPT Box (Top Right)
-                const topBoxW = 200;
-                const topBoxX = pageW - 40 - topBoxW;
-                doc.rect(topBoxX, y, topBoxW, 90).lineWidth(0.5).stroke('#e2e8f0');
-                doc.rect(topBoxX, y, topBoxW, 85).fill('#f8fafc');
-                
-                doc.fillColor('#0c2b5c').fontSize(10).font('Helvetica-Bold')
-                    .text('PAYMENT RECEIPT', topBoxX, y + 15, { width: topBoxW, align: 'center', characterSpacing: 0.5 });
-                
-                this._line(doc, topBoxX + 15, y + 35, topBoxX + topBoxW - 15, '#cbd5e1');
+                // Helpers
+                const drawSvgIcon = (cx, cy, pathData, scale = 0.5, color = '#fff') => {
+                    doc.save();
+                    doc.translate(cx - (12 * scale), cy - (12 * scale));
+                    doc.scale(scale);
+                    doc.path(pathData).fill(color);
+                    doc.restore();
+                };
+                const ic_doc = 'M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z';
+                const ic_cal = 'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z';
+                const ic_user = 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z';
+                const ic_rupee = 'M13.66,7c-0.19,1.13-0.89,2-2.14,2.54L15.34,16H12.9l-3.33-5.83H9.4V16H7.8v-5.83H6.06V8.65h1.74V7H6.06V5.48h3.33v1.51h1.15c0.55,0,0.92-0.27,0.92-0.82H6.06V4.65h7.6v1.51H10.4C10.74,6.47,11.2,6.6,11.72,6.6c0.81,0,1.38-0.34,1.52-1.13h2.15v1.52H13.66z';
+                const ic_wallet = 'M21 7.28V5c0-1.1-.9-2-2-2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-2.28c.59-.35 1-.98 1-1.72V9c0-.74-.41-1.37-1-1.72zM20 9v6h-2.5V9H20zM7 9h8v2H7V9zm0 4h5v2H7v-2z';
 
+                // Title
+                doc.font('Helvetica-Bold').fontSize(18).fillColor(NAVY).text('PAYMENT RECEIPT', 0, y, { align: 'center', characterSpacing: 1 });
+                y += 20;
+
+                const mx = 40;
+                const mw = pageW - 80;
+                
+                // TOP STATS BOX
+                doc.roundedRect(mx, y, mw, 70, 8).lineWidth(1).stroke(BORDER_COLOR);
+                
+                const statW = mw / 4;
                 const paymentDateObj = new Date(m.paidAt || registration.updatedAt || Date.now());
-                const formattedDate = paymentDateObj.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-                const infoY = y + 45;
-                doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('Receipt No:', topBoxX + 15, infoY);
-                doc.fillColor('#0f172a').font('Helvetica').text(rNo || 'N/A', topBoxX + 75, infoY, { width: topBoxW - 90, align: 'right' });
+                const formattedDate = paymentDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const paymentAgainst = registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || 'N/A';
                 
-                doc.fillColor('#64748b').font('Helvetica-Bold').text('Reg ID:', topBoxX + 15, infoY + 14);
-                doc.fillColor('#0f172a').font('Helvetica').text(registration.registrationId || 'N/A', topBoxX + 75, infoY + 14, { width: topBoxW - 90, align: 'right' });
+                let paymentType = 'Advance / Partial';
+                if (registration.balanceAmount <= 0) paymentType = 'Full Payment';
 
-                doc.fillColor('#64748b').font('Helvetica-Bold').text('Date:', topBoxX + 15, infoY + 28);
-                doc.fillColor('#0f172a').font('Helvetica').text(formattedDate, topBoxX + 75, infoY + 28, { width: topBoxW - 90, align: 'right' });
-
-                y += 110;
-
-                this._line(doc, 40, y, pageW - 40, '#e5e7eb');
-                y += 8;
-
-                // ── Two-column: IHWE details | Client details ──
-                const colW = (pageW - 100) / 2;
-                const lx = 40, rx = 60 + colW;
-                // Left box - IHWE / FROM
-                doc.rect(lx, y, colW, 105).lineWidth(0.5).stroke('#e5e7eb');
-                doc.rect(lx, y, colW, 22).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
-                    .text('FROM (ORGANISER)', lx + 8, y + 6, { width: colW - 16, characterSpacing: 0.5 });
-                
-                doc.fillColor(BLUE_NAVY).fontSize(10).font('Helvetica-Bold')
-                    .text(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 32, { width: colW - 16 });
-                doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                    .text(settings?.companyAddress || '12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India', { width: colW - 16 })
-                    .moveDown(1)
-                    .text('info@namogangewellness.com  |  www.ihwe.in', { width: colW - 16 });
-
-                // Right box - Client / TO
-                doc.rect(rx, y, colW, 105).lineWidth(0.5).stroke('#e5e7eb');
-                doc.rect(rx, y, colW, 22).fill(GREEN);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
-                    .text('TO (EXHIBITOR)', rx + 8, y + 6, { width: colW - 16, characterSpacing: 0.5 });
-
-                doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
-                    .text(registration.exhibitorName || 'N/A', rx + 8, y + 32, { width: colW - 16 });
-                doc.fillColor(GRAY).fontSize(8).font('Helvetica');
-                
-                if (registration.typeOfBusiness) {
-                    doc.text(registration.typeOfBusiness, { width: colW - 16 });
-                }
-                const addrParts = [registration.address, registration.city, registration.state].filter(Boolean).join(', ');
-                if (addrParts) {
-                    doc.text(addrParts, { width: colW - 16 });
-                }
-                const countryParts = `${registration.country || ''} ${registration.pincode ? '– ' + registration.pincode : ''}`.trim();
-                if (countryParts && countryParts !== '–') {
-                    doc.text(countryParts, { width: colW - 16 });
-                }
-                if (c1.mobile || c1.email) doc.moveDown(0.5);
-                if (c1.mobile) doc.text(c1.mobile, { width: colW - 16 });
-                if (c1.email) doc.text(c1.email, { width: colW - 16 });
-
-                y += 115;
-                const infoW = (pageW - 80) / 6;
-                const isGen = registration.isGenericInvoice;
-                const infos = [
-                    { label: isGen ? 'Invoice No.' : 'Stall No.', value: p.stallFor || 'N/A' },
-                    { label: isGen ? 'Invoice Type' : 'Stall Type', value: p.stallType || 'N/A' },
-                    { label: isGen ? 'Payment Type' : 'Scheme', value: p.stallScheme || 'N/A' },
-                    { label: isGen ? 'Doc Type' : 'Dimension', value: p.dimension || 'N/A' },
-                    { label: isGen ? 'Qty' : 'Stall Size', value: p.stallSize ? (isGen ? String(p.stallSize) : `${p.stallSize} SQM`) : 'N/A' },
-                    { label: 'Event', value: registration.eventId?.name || '9IHWE 2026' },
-                ];
-                
-                doc.fillColor(BLUE_NAVY).fontSize(11).font('Helvetica-Bold')
-                    .text(isGen ? 'INVOICE DETAILS' : 'STALL DETAILS', 40, y, { width: pageW - 80, align: 'center' });
-                y += 15;
-                
-                infos.forEach((info, i) => {
-                    const ix = 40 + i * infoW;
-                    doc.rect(ix, y, infoW, 36).fill('#f8fafc').stroke('#e2e8f0').lineWidth(0.5).stroke();
-                    doc.fillColor('#64748b').fontSize(7).font('Helvetica-Bold').text(info.label.toUpperCase(), ix + 6, y + 6, { width: infoW - 12 });
-                    doc.fillColor(BLUE_NAVY).fontSize(8).font('Helvetica-Bold')
-                        .text(info.value, ix + 6, y + 18, { width: infoW - 12 });
-                });
-                y += 44;
-
-                // ── Items table ──
-                const tW = pageW - 80;
-                const cols = [
-                    { label: 'Description', w: tW * 0.40 },
-                    { label: isGen ? 'Doc Type' : 'Dimensions', w: tW * 0.15 },
-                    { label: isGen ? 'Payment Type' : 'Scheme', w: tW * 0.15 },
-                    { label: isGen ? 'Rate/Unit' : 'Rate/SQM', w: tW * 0.15, align: 'right' },
-                    { label: 'Amount', w: tW * 0.15, align: 'right' },
+                const stats = [
+                    { label: 'RECEIPT NO.', value: rNo, icon: ic_doc },
+                    { label: 'RECEIPT DATE', value: formattedDate, icon: ic_cal },
+                    { label: 'PAYMENT AGAINST', value: paymentAgainst, icon: ic_doc },
+                    { label: 'PAYMENT TYPE', value: paymentType, icon: ic_wallet },
                 ];
 
-                // Table header
-                doc.rect(40, y, tW, 18).fill(DARK);
-                let tx = 40;
-                cols.forEach(col => {
-                    doc.fillColor(WHITE).fontSize(8).font('Helvetica-Bold')
-                        .text(col.label, tx + 4, y + 5, { width: col.w - 8, align: col.align || 'left' });
-                    tx += col.w;
-                });
-                y += 18;
-                y = this._tableRow(doc, [
-                    { text: isGen ? `${p.stallType || 'Invoice'} – ${p.stallFor || 'N/A'}` : `${p.stallType || 'Shell Space'} – Stall ${p.stallFor || 'N/A'}`, w: tW * 0.40 },
-                    { text: p.dimension || 'N/A', w: tW * 0.15 },
-                    { text: p.stallScheme || 'N/A', w: tW * 0.15 },
-                    { text: fmt(p.rate), w: tW * 0.15, align: 'right' },
-                    { text: fmt(p.amount), w: tW * 0.15, align: 'right' },
-                ], y, '#f9fafb');
-                this._line(doc, 40, y, 40 + tW, '#e5e7eb');
-                y += 4;
+                // Leave 65px of dead space on the right side for the RECEIVED badge so no text overlaps
+                const effectiveW = mw - 65;
+                const customStatW = effectiveW / 4;
 
-                // ── Summary box (right-aligned) ──
-                const sumX = 40 + tW * 0.55;
-                const sumW = tW * 0.45;
-                const fb = registration.financeBreakdown || {};
-                const subtotalVal = fb.subtotal || p.amount || 0;
-                const gstVal = fb.gstAmount || Math.round(subtotalVal * 0.18);
-                const tdsVal = fb.tdsAmount || Math.round(subtotalVal * (registration.chosenTdsPercent || 0) / 100);
-                const netVal = fb.netPayable || (subtotalVal + gstVal - tdsVal);
-                const grossVal = fb.grossAmount || subtotalVal;
-
-                const summaryRows = [
-                    { label: 'Gross Amount', value: fmt(grossVal) },
-                ];
-
-                if (fb.stallDiscountAmount > 0) {
-                    summaryRows.push({ label: `Less: Stall Discount (${fb.stallDiscountPercent || 0}%)`, value: `- ${fmt(fb.stallDiscountAmount)}` });
-                }
-                const isFullPlan = registration.paymentPlanType === 'full' || fb.isFullPayment === true;
-                if (isFullPlan && fb.discountAmount > 0) {
-                    summaryRows.push({ label: `Less: Full Payment Discount (${fb.discountPercent || 0}%)`, value: `- ${fmt(fb.discountAmount)}` });
-                }
-
-                summaryRows.push(
-                    { label: 'Taxable Value', value: fmt(subtotalVal), bold: true },
-                    { label: 'Add: GST @ 18%', value: `+ ${fmt(gstVal)}` },
-                );
-
-                if (tdsVal > 0) {
-                    summaryRows.push({ label: `Less: TDS Deduction (${registration.chosenTdsPercent || 0}%)`, value: `- ${fmt(tdsVal)}`, color: '#dc2626' });
-                }
-
-                summaryRows.forEach(row => {
-                    doc.fillColor('#64748b').fontSize(7).font('Helvetica-Bold')
-                        .text(row.label.toUpperCase(), sumX, y, { width: sumW * 0.65, align: 'left' });
+                stats.forEach((s, i) => {
+                    let cx = mx + i * customStatW + customStatW/2;
                     
-                    if (row.bold) {
-                        doc.fillColor(DARK).fontSize(8).font('Helvetica-Bold')
-                            .text(row.value, sumX + sumW * 0.65, y, { width: sumW * 0.35, align: 'right' });
-                    } else {
-                        doc.fillColor(row.color || DARK).fontSize(8).font('Helvetica')
-                            .text(row.value, sumX + sumW * 0.65, y, { width: sumW * 0.35, align: 'right' });
-                    }
-                    y += 14;
-                    this._line(doc, sumX, y - 4, sumX + sumW, '#f1f5f9');
+                    doc.circle(cx, y + 20, 10).lineWidth(1).stroke(NAVY);
+                    drawSvgIcon(cx, y + 20, s.icon, 0.45, NAVY);
+                    
+                    doc.fillColor(NAVY).fontSize(7).font('Helvetica-Bold').text(s.label, cx - customStatW/2, y + 42, { width: customStatW, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(s.value, cx - customStatW/2, y + 54, { width: customStatW, align: 'center' });
+                    
+                    if (i < 3) doc.moveTo(mx + (i+1)*customStatW, y + 15).lineTo(mx + (i+1)*customStatW, y + 55).lineWidth(0.5).stroke(BORDER_COLOR);
                 });
-                y += 2;
 
-                doc.rect(sumX, y, sumW, 20).fill(BLUE_NAVY);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
-                    .text('GRAND TOTAL', sumX + 6, y + 6, { width: sumW * 0.55 })
-                    .text(fmt(netVal), sumX + sumW * 0.55, y + 6, { width: sumW * 0.45 - 6, align: 'right' });
-                y += 30;
+                // RECEIVED BADGE (Perfectly symmetric and aligned)
+                const bx = mx + mw - 5; 
+                const bw = 55;
+                const ribbonLeft = bx - bw;
+                
+                doc.polygon([bx, y], [ribbonLeft, y], [ribbonLeft, y + 45], [ribbonLeft + bw/2, y + 55], [bx, y + 45]).fill(NAVY);
+                doc.fillColor('#fff').fontSize(8).font('Helvetica-Bold').text('RECEIVED', ribbonLeft, y + 32, { width: bw, align: 'center', characterSpacing: 0.5 });
+                
+                const xc = ribbonLeft + bw/2;
+                const yc = y + 16;
+                doc.circle(xc, yc, 10).lineWidth(1.5).stroke('#fff');
+                doc.moveTo(xc - 4, yc).lineTo(xc - 1, yc + 3).lineTo(xc + 5, yc - 4).stroke('#fff');
 
-                // ── PAYMENT DETAILS ──
-                doc.fillColor(BLUE_NAVY).fontSize(11).font('Helvetica-Bold')
-                    .text('PAYMENT DETAILS', 40, y, { width: pageW - 80, align: 'center' });
-                y += 15;
-                
-                const payW = (pageW - 80) / 5;
-                const payMode = m.method || m.paymentMode || registration.paymentMode || 'N/A';
-                const transactionId = m.transactionId || m.razorpayPaymentId || registration.paymentId || 'N/A';
-                
-                const amountPaidVal = registration.amountPaid || 0;
-                const balanceVal = registration.balanceAmount || 0;
-                
-                const payInfos = [
-                    { label: 'Payment Mode', value: payMode.toUpperCase() },
-                    { label: 'Transaction No.', value: transactionId },
-                    { label: 'Payment Date', value: formattedDate },
-                    { label: 'Total Paid', value: fmt(amountPaidVal) },
-                    { label: 'Payment Status', value: balanceVal <= 0 ? 'Full Received' : 'Advance Received' },
-                ];
-                
-                payInfos.forEach((info, i) => {
-                    const ix = 40 + i * payW;
-                    doc.rect(ix, y, payW, 36).fill('#f8fafc').stroke('#e2e8f0').lineWidth(0.5).stroke();
-                    doc.fillColor('#64748b').fontSize(7).font('Helvetica-Bold').text(info.label.toUpperCase(), ix + 6, y + 6, { width: payW - 12 });
-                    doc.fillColor(GREEN).fontSize(8).font('Helvetica-Bold')
-                        .text(info.value, ix + 6, y + 18, { width: payW - 12 });
-                });
-                y += 44;
+                y += 90;
 
-                // ── Exhibitor Details & Important Note (Side by Side) ──
-                const halfW = (pageW - 100) / 2;
-                const botLx = 40, botRx = 60 + halfW;
-                const boxH = 90;
-
-                // Relationship Manager logic
-                let relationshipMgr = (registration.spokenWith && registration.spokenWith.trim())
-                    ? registration.spokenWith.trim()
-                    : (registration.referredBy && registration.referredBy.trim())
-                        ? registration.referredBy.trim()
-                        : 'Direct';
+                // RECEIVED FROM & INVOICE REF
+                const halfW = (mw - 15) / 2;
                 
-                if (relationshipMgr !== 'Direct') {
-                    const User = require('../models/User');
-                    const foundUser = await User.findOne({
-                        $or: [
-                            { username: new RegExp('^' + relationshipMgr + '$', 'i') },
-                            { fullName: new RegExp('^' + relationshipMgr + '$', 'i') }
-                        ]
-                    }).lean();
-                    if (foundUser && foundUser.fullName) {
-                        relationshipMgr = foundUser.fullName;
-                    }
+                // Left Box: RECEIVED FROM
+                doc.circle(mx + 12, y + 8, 12).fill(NAVY);
+                drawSvgIcon(mx + 12, y + 8, ic_user, 0.5, '#fff');
+                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('RECEIVED FROM', mx + 32, y + 3);
+                
+                doc.roundedRect(mx, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
+                doc.fillColor(TEXT_DARK).fontSize(11).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', mx + 15, y + 45, { width: halfW - 30 });
+                const addr = [registration.address, registration.city, registration.state, registration.pincode].filter(Boolean).join(', ');
+                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text(addr, mx + 15, y + 60, { width: halfW - 30 });
+                
+                // Robust GSTIN lookup (check registration, then invoice)
+                const gstinStr = registration.gstNo || registration.gstin || invoice?.gst_no || invoice?.company_gst_no || 'N/A';
+                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(`GSTIN: ${gstinStr}`, mx + 15, y + 85);
+                
+                // Robust Contact Person Name logic (prefer full name if available)
+                const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
+                let displayName = 'N/A';
+                if (registration.filledByFullName && registration.filledByFullName.length > contactPersonStr.length) {
+                    displayName = registration.filledByFullName;
+                } else if (contactPersonStr.length > 0) {
+                    displayName = contactPersonStr;
+                } else if (invoice?.consignee_name) {
+                    displayName = invoice.consignee_name;
                 }
                 
-                const contactPersonStr = `${c1.firstName || ''} ${c1.lastName || ''}`.trim() || 'N/A';
-                const contactMobileStr = c1.mobile || 'N/A';
+                doc.fillColor(NAVY).text(`Contact Person: ${displayName}`, mx + 15, y + 100);
 
-                // Exhibitor Info
-                doc.rect(botLx, y, halfW, boxH).lineWidth(0.5).stroke('#e2e8f0');
-                doc.rect(botLx, y, halfW, 20).fill(GREEN);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
-                    .text('EXHIBITOR DETAILS', botLx + 10, y + 6, { width: halfW - 20, characterSpacing: 0.5 });
+                // Right Box: INVOICE REFERENCE
+                doc.circle(mx + halfW + 15 + 12, y + 8, 12).fill(NAVY);
+                drawSvgIcon(mx + halfW + 15 + 12, y + 8, ic_doc, 0.5, '#fff');
+                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('INVOICE REFERENCE', mx + halfW + 15 + 32, y + 3);
                 
-                let textY = y + 30;
-                doc.fillColor('#64748b').fontSize(8).font('Helvetica-Bold').text('Contact Person:', botLx + 10, textY);
-                doc.fillColor('#0f172a').font('Helvetica-Bold').text(`${contactPersonStr} / ${contactMobileStr}`, botLx + 110, textY, { width: halfW - 120 });
+                doc.roundedRect(mx + halfW + 15, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
                 
-                textY += 18;
-                doc.fillColor('#64748b').font('Helvetica-Bold').text('Relationship Manager:', botLx + 10, textY);
-                doc.fillColor('#0f172a').font('Helvetica').text(relationshipMgr, botLx + 110, textY, { width: halfW - 120 });
+                const fb = registration.financeBreakdown || {};
+                const invVal = invoice?.finalAmount || fb.netPayable || p.amount || 0;
+                
+                let rx = mx + halfW + 15 + 15;
+                let ry = y + 47;
+                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice No.', rx, ry);
+                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(paymentAgainst, rx, ry, { width: halfW - 45, align: 'right' });
+                doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
+                
+                ry += 25;
+                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Date', rx, ry);
+                const invDate = registration.invoiceDate 
+                    ? new Date(registration.invoiceDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+                    : (invoice?.invoice_date ? invoice.invoice_date : (invoice?.added ? new Date(invoice.added).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'));
+                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(invDate, rx, ry, { width: halfW - 45, align: 'right' });
+                doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
 
-                // Important Note
-                doc.rect(botRx, y, halfW, boxH).lineWidth(0.5).stroke('#e2e8f0');
-                doc.rect(botRx, y, halfW, 20).fill(ORANGE);
-                doc.fillColor(WHITE).fontSize(9).font('Helvetica-Bold')
-                    .text('IMPORTANT NOTE', botRx + 10, y + 6, { width: halfW - 20, characterSpacing: 0.5 });
+                ry += 25;
+                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Value', rx, ry);
+                doc.fillColor(TEXT_DARK).font('Helvetica-Bold').text(fmt(invVal), rx, ry, { width: halfW - 45, align: 'right' });
+
+                y += 145;
+
+                // PAYMENT DETAILS
+                doc.circle(mx + 12, y + 8, 12).fill(NAVY);
+                drawSvgIcon(mx + 12, y + 8, ic_wallet, 0.5, '#fff');
+                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('PAYMENT DETAILS', mx + 32, y + 3);
+
+                doc.roundedRect(mx, y + 30, mw, 140, 8).lineWidth(1).stroke(BORDER_COLOR);
+                doc.rect(mx + 1, y + 31, 12, 138).fill(NAVY); 
+                doc.rect(mx + 13, y + 31, mw - 14, 138).fill('#f8fafc'); 
                 
-                doc.fillColor('#475569').fontSize(8).font('Helvetica')
-                    .text('1. This is a system generated payment receipt and does not require any physical signature.', botRx + 10, y + 28, { width: halfW - 20 })
-                    .text('2. Subject to realization of cheque / DD.', botRx + 10, y + 54, { width: halfW - 20 })
-                    .text('3. All disputes are subject to Ghaziabad Jurisdiction only.', botRx + 10, y + 68, { width: halfW - 20 });
+                const payRows = [
+                    { l: 'AMOUNT RECEIVED', v: fmt(m.amount || 0) },
+                    { l: 'PAYMENT MODE', v: String(m.method || m.paymentMode || registration.paymentMode || 'N/A').toUpperCase() },
+                    { l: 'UTR / TRANSACTION NO.', v: m.transactionId || m.razorpayPaymentId || registration.paymentId || 'N/A' },
+                    { l: 'PAYMENT DATE', v: formattedDate },
+                    { l: 'BALANCE OUTSTANDING', v: fmt(registration.balanceAmount || 0) }
+                ];
                 
-                y += boxH + 15;
+                let py = y + 47;
+                payRows.forEach((r, i) => {
+                    doc.circle(mx + 30, py + 4, 8).fill(NAVY);
+                    doc.circle(mx + 30, py + 4, 2.5).fill('#fff'); // Clean dot
+                    
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(r.l, mx + 45, py);
+                    doc.font('Helvetica-Bold').fontSize(11).text(r.v, mx, py - 2, { width: mw - 20, align: 'right' });
+                    if (i < 4) doc.moveTo(mx + 45, py + 18).lineTo(mx + mw - 20, py + 18).lineWidth(0.5).stroke(BORDER_COLOR);
+                    py += 24;
+                });
+
+                y += 195;
+
+                // RECEIVED AMOUNT & REMARKS
+                doc.roundedRect(mx, y, halfW, 105, 8).fill(NAVY);
+                doc.fillColor('#fff').fontSize(10).font('Helvetica-Bold').text('RECEIVED AMOUNT', mx, y + 16, { width: halfW, align: 'center' });
                 
-                // ── Footer text ──
-                doc.fillColor(ORANGE).fontSize(9).font('Helvetica-Oblique')
-                    .text('Thank you for your participation in 9th International Health & Wellness Expo 2026.', 40, y, { width: pageW - 80, align: 'center' });
+                const amtStr = `${valFmt(m.amount || 0)}/-`;
+                doc.fontSize(28).font('Helvetica-Bold');
+                const amtW = doc.widthOfString(amtStr);
+                const gap = 12; // reduced gap slightly to match smaller circle
+                const circleD = 38; // reduced circle size
+                const totalW = circleD + gap + amtW;
+                const startX = mx + (halfW - totalW) / 2;
+                
+                const cy = y + 50; // exact visual center line for the amount row
+                
+                doc.circle(startX + (circleD/2), cy, circleD/2).fill('#fff');
+                if (isUSD) {
+                    doc.fillColor(NAVY).fontSize(16).font('Helvetica-Bold').text('$', startX, cy - 7, { width: circleD, align: 'center' });
+                } else {
+                    // Perfect vertical alignment for 'Rs.', slightly smaller, nudged left for visual center
+                    doc.fillColor(NAVY).fontSize(13).font('Helvetica-Bold').text('Rs.', startX - 2, cy - 5, { width: circleD, align: 'center' });
+                }
+                
+                // Perfect vertical alignment for the large number
+                doc.fillColor('#fff').fontSize(28).font('Helvetica-Bold').text(amtStr, startX + circleD + gap, cy - 12);
+                
+                const wordAmt = inWords(m.amount || 0);
+                const curWord = isUSD ? 'Dollars' : 'Rupees';
+                // Pushed down to avoid overlapping the larger circle
+                doc.fontSize(10).font('Helvetica-Oblique').text(`(${curWord} ${wordAmt})`, mx + 10, y + 78, { width: halfW - 20, align: 'center' });
+
+                // Remarks
+                doc.circle(mx + halfW + 15 + 12, y + 8, 12).fill(NAVY);
+                doc.moveTo(mx + halfW + 15 + 6, y + 8).lineTo(mx + halfW + 15 + 18, y + 8).lineWidth(1).stroke('#fff');
+                doc.moveTo(mx + halfW + 15 + 6, y + 4).lineTo(mx + halfW + 15 + 18, y + 4).lineWidth(1).stroke('#fff');
+                doc.moveTo(mx + halfW + 15 + 6, y + 12).lineTo(mx + halfW + 15 + 14, y + 12).lineWidth(1).stroke('#fff');
+                
+                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('REMARKS', mx + halfW + 15 + 32, y + 3);
+                
+                doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text('Received towards participation in the', mx + halfW + 15, y + 30);
+                doc.font('Helvetica-Bold').text('9th International Health & Wellness Expo', mx + halfW + 15, y + 45);
+                doc.text('(IHWE Global Edition)', mx + halfW + 15, y + 60, { continued: true }).font('Helvetica').text(' scheduled at Pragati Maidan, New Delhi.');
+
+                y += 135;
+
+                // Footer: Thank you & Stamp
+                doc.font('Helvetica-Oblique').fontSize(22).fillColor(NAVY).text('Thank You!', mx, y);
+                doc.font('Helvetica').fontSize(10).fillColor(TEXT_DARK).text('We appreciate your trust.', mx, y + 25);
+                doc.moveTo(mx, y + 45).lineTo(mx + 130, y + 45).lineWidth(1).stroke(BORDER_COLOR);
+
+                const companyName = settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.';
+                doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY).text(`For ${companyName}`, mx + halfW + 15, y, { width: halfW, align: 'center' });
+                
+                try {
+                    const sigY = y + 15;
+                    const centerBox = mx + halfW + 15 + (halfW / 2);
+                    
+                    if (settings?.companyStamp) {
+                        const stampP = path.resolve(__dirname, '..', settings.companyStamp.replace(/^\//, ''));
+                        if (fs.existsSync(stampP)) {
+                            doc.image(stampP, centerBox - 70, sigY + 5, { fit: [60, 60], align: 'center' });
+                        }
+                    }
+                    if (settings?.authorizedSignature) {
+                        const sigP = path.resolve(__dirname, '..', settings.authorizedSignature.replace(/^\//, ''));
+                        if (fs.existsSync(sigP)) {
+                            doc.image(sigP, centerBox + 10, sigY + 10, { fit: [80, 50], align: 'center' });
+                        }
+                    }
+                } catch(e) { console.log('Error drawing stamp/sig:', e); }
+                
+                // Shifted down to y+90 to clear the 60px height of the stamp
+                doc.moveTo(mx + halfW + 15 + 40, y + 90).lineTo(mx + halfW + 15 + halfW - 40, y + 90).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT_DARK).text('Authorized Signatory', mx + halfW + 15, y + 95, { width: halfW, align: 'center' });
 
                 doc.end();
                 stream.on('finish', () => {
-                    const publicUrl = getTempPdfUrl(filePath);
-                    resolve({ filePath, cloudUrl: publicUrl });
+                    resolve({ filePath, cloudUrl: getTempPdfUrl(filePath) });
                 });
                 stream.on('error', reject);
             } catch (err) { reject(err); }
