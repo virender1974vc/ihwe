@@ -410,7 +410,7 @@ class PDFGenerator {
 
                 // Using Rs. instead of ₹ to avoid Helvetica rendering issues (renders as ¹)
                 const curStr = isUSD ? 'USD ' : 'Rs. ';
-                const fmt = (n) => `${curStr}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+                const fmt = (n) => `${curStr}${Math.round(Number(n || 0)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
                 const Settings = require('../models/Settings');
                 const settings = await Settings.findOne();
