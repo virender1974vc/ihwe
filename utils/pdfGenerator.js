@@ -486,6 +486,7 @@ class PDFGenerator {
                 const ic_rupee = 'M13.66,7c-0.19,1.13-0.89,2-2.14,2.54L15.34,16H12.9l-3.33-5.83H9.4V16H7.8v-5.83H6.06V8.65h1.74V7H6.06V5.48h3.33v1.51h1.15c0.55,0,0.92-0.27,0.92-0.82H6.06V4.65h7.6v1.51H10.4C10.74,6.47,11.2,6.6,11.72,6.6c0.81,0,1.38-0.34,1.52-1.13h2.15v1.52H13.66z';
                 const ic_wallet = 'M21 7.28V5c0-1.1-.9-2-2-2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-2.28c.59-.35 1-.98 1-1.72V9c0-.74-.41-1.37-1-1.72zM20 9v6h-2.5V9H20zM7 9h8v2H7V9zm0 4h5v2H7v-2z';
                 const ic_business = 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z';
+                const ic_bell = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z';
 
                 // Simple hand-drawn icons (primitives only, no SVG path parsing) for the new
                 // header/footer contact icons — kept intentionally basic for reliability.
@@ -666,7 +667,7 @@ class PDFGenerator {
                 // FROM (Organiser)
                 doc.rect(mx, boxTop, halfW, 18).fill(ORGANISER);
                 drawSvgIcon(mx + 14, boxTop + 9, ic_business, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx + 26, boxTop + 5, { width: halfW - 30 });
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx, boxTop + 5, { width: halfW, align: 'center' });
                 doc.rect(mx, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
                 let fy = boxTop + 30;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(settings?.companyName || 'N/A', mx + 12, fy, { width: rowW });
@@ -683,7 +684,7 @@ class PDFGenerator {
                 const rX = mx + halfW + 12;
                 doc.rect(rX, boxTop, halfW, 18).fill(EXHIBITOR);
                 drawSvgIcon(rX + 14, boxTop + 9, ic_user, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX + 26, boxTop + 5, { width: halfW - 30 });
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX, boxTop + 5, { width: halfW, align: 'center' });
                 doc.rect(rX, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
                 let ty = boxTop + 30;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rX + 12, ty, { width: rowW });
@@ -846,7 +847,7 @@ class PDFGenerator {
                 const boxH2 = Math.max(74, 18 + 16 + noteContentHeight + 10);
                 doc.rect(mx, boxTop2, halfW, 18).fill(EXHIBITOR);
                 drawSvgIcon(mx + 14, boxTop2 + 9, ic_user, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.exhibitorDetailsLabel || 'EXHIBITOR DETAILS', mx + 26, boxTop2 + 5);
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.exhibitorDetailsLabel || 'EXHIBITOR DETAILS', mx, boxTop2 + 5, { width: halfW, align: 'center' });
                 doc.rect(mx, boxTop2 + 18, halfW, boxH2 - 18).lineWidth(1).stroke(BORDER_COLOR);
 
                 const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
@@ -862,7 +863,8 @@ class PDFGenerator {
 
                 const rX2 = mx + halfW + 12;
                 doc.rect(rX2, boxTop2, halfW, 18).fill(NOTE_COLOR);
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.importantNoteLabel || 'IMPORTANT NOTE', rX2 + 14, boxTop2 + 5, { width: halfW - 20 });
+                drawSvgIcon(rX2 + 14, boxTop2 + 9, ic_bell, 0.4, '#fff');
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.importantNoteLabel || 'IMPORTANT NOTE', rX2, boxTop2 + 5, { width: halfW, align: 'center' });
                 doc.rect(rX2, boxTop2 + 18, halfW, boxH2 - 18).lineWidth(1).stroke(BORDER_COLOR);
                 let noteY = boxTop2 + 26;
                 noteItems.forEach((item, i) => {
