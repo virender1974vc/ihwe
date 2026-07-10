@@ -90,7 +90,7 @@ const sendPaymentSuccessNotifications = async (registration, pdfFilePath, receip
 router.post('/create-order/:registrationId', async (req, res) => {
     try {
         const { registrationId } = req.params;
-        const { amount, installmentNumber, receiptContact } = req.body;
+        const { installmentNumber, receiptContact } = req.body;
         const registration = await ExhibitorRegistration.findById(registrationId);
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -104,25 +104,29 @@ router.post('/create-order/:registrationId', async (req, res) => {
         const balanceAmount = registration.balanceAmount || 0;
         const penaltyAmount = registration.penaltyAmount || 0;
         const totalPayable = registration.totalPayable || (balanceAmount + penaltyAmount);
-        let amountToPay = amount;
-        if (!amountToPay) {
-            amountToPay = totalPayable;
-            if (installmentNumber && registration.installments && registration.installments.length > 0) {
-                const installment = registration.installments.find(
-                    inst => inst.installmentNumber === installmentNumber
-                );
-                if (installment && installment.status !== 'paid') {
-                    amountToPay = installment.dueAmount - (installment.paidAmount || 0);
-                }
+        let amountToPay = totalPayable;
+        let resolvedInstallmentNumber = null;
+        if (installmentNumber && registration.installments && registration.installments.length > 0) {
+            const installment = registration.installments.find(
+                inst => inst.installmentNumber === installmentNumber
+            );
+            if (installment && installment.status !== 'paid') {
+                amountToPay = Math.max(0, installment.dueAmount - (installment.paidAmount || 0));
+                resolvedInstallmentNumber = installmentNumber;
             }
         }
 
+        if (!(amountToPay > 0)) {
+            return res.status(400).json({ success: false, message: 'No outstanding amount to pay for this registration.' });
+        }
+        const gatewayAmount = Math.round(amountToPay * 1.025 * 100) / 100;
+
         // Validate amount
-        const amountInPaise = Math.round(Number(amountToPay) * 100);
+        const amountInPaise = Math.round(gatewayAmount * 100);
         if (amountInPaise < 100) {
             return res.status(400).json({
                 success: false,
-                message: `Amount too low. Minimum is ₹1 (got ₹${amountToPay})`
+                message: `Amount too low. Minimum is ₹1 (got ₹${gatewayAmount})`
             });
         }
         const options = {
@@ -132,19 +136,25 @@ router.post('/create-order/:registrationId', async (req, res) => {
             notes: {
                 registrationId: registration.registrationId,
                 exhibitorName: registration.exhibitorName,
-                installmentNumber: installmentNumber || 'full'
+                installmentNumber: resolvedInstallmentNumber || 'full'
             }
         };
 
         const order = await razorpay.orders.create(options);
         registration.razorpayOrderId = order.id;
+        registration.pendingPayment = {
+            orderId: order.id,
+            netAmount: amountToPay,
+            gatewayAmount,
+            installmentNumber: resolvedInstallmentNumber
+        };
         await registration.save();
 
         res.json({
             success: true,
             order,
             key: process.env.RAZORPAY_KEY_ID,
-            amount: amountToPay,
+            amount: gatewayAmount,
             registration: {
                 _id: registration._id,
                 exhibitorName: registration.exhibitorName,
@@ -171,9 +181,7 @@ router.post('/verify-payment', async (req, res) => {
             razorpay_payment_id,
             razorpay_signature,
             registrationId,
-            amountPaid,
             paymentType,
-            installmentNumber,
             receiptContact
         } = req.body;
 
@@ -193,6 +201,24 @@ router.post('/verify-payment', async (req, res) => {
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
         }
+        if (!registration.pendingPayment || registration.pendingPayment.orderId !== razorpay_order_id || registration.razorpayOrderId !== razorpay_order_id) {
+            return res.status(400).json({ success: false, message: 'This order does not match a pending payment for this registration.' });
+        }
+        let capturedPayment;
+        try {
+            capturedPayment = await razorpay.payments.fetch(razorpay_payment_id);
+        } catch (fetchErr) {
+            console.error('Razorpay payment fetch failed:', fetchErr);
+            return res.status(400).json({ success: false, message: 'Unable to verify payment with Razorpay.' });
+        }
+        if (!capturedPayment || capturedPayment.order_id !== razorpay_order_id || capturedPayment.status !== 'captured') {
+            return res.status(400).json({ success: false, message: 'Payment has not been captured by Razorpay.' });
+        }
+        const expectedPaise = Math.round((registration.pendingPayment.gatewayAmount || 0) * 100);
+        if (capturedPayment.amount !== expectedPaise) {
+            console.error(`Payment amount mismatch for registration ${registrationId}: expected ${expectedPaise} paise, Razorpay captured ${capturedPayment.amount} paise`);
+            return res.status(400).json({ success: false, message: 'Captured amount does not match the expected order amount.' });
+        }
 
         const contactResult = applyReceiptContact(registration, receiptContact);
         if (!contactResult.valid) {
@@ -201,7 +227,8 @@ router.post('/verify-payment', async (req, res) => {
 
         const wasPaymentFailed = registration.status === 'payment-failed';
 
-        const paidAmount = Number(amountPaid) || 0;
+        const paidAmount = Number(registration.pendingPayment.netAmount) || 0;
+        const installmentNumber = registration.pendingPayment.installmentNumber || null;
         const previousPaid = registration.amountPaid || 0;
         const newTotalPaid = previousPaid + paidAmount;
 
@@ -249,13 +276,13 @@ router.post('/verify-payment', async (req, res) => {
         if (registration.installments && registration.installments.length > 0) {
             // Sort installments by number
             const sortedInstallments = [...registration.installments].sort((a, b) => a.installmentNumber - b.installmentNumber);
-            
+
             // Redistribute total paid amount across installments
             let remainingPaid = newTotalPaid;
-            
+
             for (const inst of sortedInstallments) {
                 const dueAmount = inst.dueAmount || 0;
-                
+
                 if (remainingPaid >= dueAmount) {
                     // Fully paid
                     inst.paidAmount = dueAmount;
@@ -273,7 +300,7 @@ router.post('/verify-payment', async (req, res) => {
                     inst.paidAmount = inst.paidAmount || 0;
                     inst.status = inst.paidAmount > 0 ? 'partial' : 'pending';
                 }
-                
+
                 // Check if overdue
                 if (inst.status !== 'paid' && inst.dueDate && new Date(inst.dueDate) < new Date()) {
                     inst.status = 'overdue';
@@ -570,7 +597,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
                     const pdfResult = await pdfGenerator.generatePaymentSlip(reg, { paymentIndex: latestPaymentIdx });
                     const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
                     const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
-                    
+
                     // Save receipt URL to both main field and the specific payment entry
                     reg.receiptPdfUrl = pdfUrl || '';
                     if (latestPaymentIdx >= 0 && reg.paymentHistory[latestPaymentIdx]) {
@@ -670,13 +697,13 @@ router.post('/manual/:registrationId', async (req, res) => {
         if (registration.installments && registration.installments.length > 0) {
             // Sort installments by number
             const sortedInstallments = [...registration.installments].sort((a, b) => a.installmentNumber - b.installmentNumber);
-            
+
             // Redistribute total paid amount across installments
             let remainingPaid = newTotalPaid;
-            
+
             for (const inst of sortedInstallments) {
                 const dueAmount = inst.dueAmount || 0;
-                
+
                 if (remainingPaid >= dueAmount) {
                     // Fully paid
                     inst.paidAmount = dueAmount;
@@ -694,7 +721,7 @@ router.post('/manual/:registrationId', async (req, res) => {
                     inst.paidAmount = inst.paidAmount || 0;
                     inst.status = inst.paidAmount > 0 ? 'partial' : 'pending';
                 }
-                
+
                 // Check if overdue
                 if (inst.status !== 'paid' && inst.dueDate && new Date(inst.dueDate) < new Date()) {
                     inst.status = 'overdue';
@@ -730,7 +757,7 @@ router.post('/manual/:registrationId', async (req, res) => {
             const pdfResult = await pdfGenerator.generatePaymentSlip(registration, { paymentIndex: latestPaymentIdx });
             const pdfFilePath = (pdfResult && typeof pdfResult === 'object') ? pdfResult.filePath : pdfResult;
             const pdfUrl = (pdfResult && typeof pdfResult === 'object') ? (pdfResult.cloudUrl || pdfResult.filePath) : pdfResult;
-            
+
             // Save receipt URL to both main field and the specific payment entry
             registration.receiptPdfUrl = pdfUrl || '';
             if (latestPaymentIdx >= 0 && registration.paymentHistory[latestPaymentIdx]) {

@@ -220,6 +220,64 @@ class ExhibitorRegistrationService {
                 if (stallDoc) data.participation.stallFor = stallDoc.stallNumber;
             } catch (_) { }
         }
+
+        // --- SERVER-SIDE PRICE VALIDATION ---
+        // participation.total / financeBreakdown.netPayable are otherwise taken verbatim
+        // from the request body, so a tampered client could book a real stall for an
+        // arbitrary price (this is what actually gets charged via Razorpay downstream).
+        // Recompute the same way updateRegistration does (Stall area/increment/discount +
+        // StallRate + full-payment discount + 18% GST - TDS) and reject on a real mismatch.
+        // If the recompute itself can't run (rate not configured, lookup error, etc.) we
+        // log and allow the booking through rather than risk blocking a legitimate one on
+        // an unanticipated data shape.
+        if (data.participation?.stallNo && data.participation?.stallType && data.participation?.currency) {
+            try {
+                const StallRate = require('../models/StallRate');
+                const stallForCalc = await Stall.findById(data.participation.stallNo)
+                    .select('area incrementPercentage discountPercentage');
+                const rateDoc = await StallRate.findOne({
+                    eventId: data.eventId,
+                    currency: data.participation.currency,
+                    stallType: data.participation.stallType
+                });
+                if (stallForCalc && rateDoc) {
+                    const baseCost = (stallForCalc.area || 0) * (rateDoc.ratePerSqm || 0);
+                    const plInc = Math.round(baseCost * (stallForCalc.incrementPercentage || 0) / 100);
+                    const gross = baseCost + plInc;
+                    const stallDiscAmt = Math.round(gross * (stallForCalc.discountPercentage || 0) / 100);
+                    const sub1 = gross - stallDiscAmt;
+
+                    const Settings = require('../models/Settings');
+                    const Event = require('../models/Event');
+                    const settings = await Settings.findOne();
+                    const chosenPlanId = data.paymentPlanType || 'full';
+                    let isFullPayment = chosenPlanId === 'full';
+                    if (!isFullPayment) {
+                        const eventForCalc = await Event.findById(data.eventId).lean();
+                        const selectedPlan = eventForCalc?.paymentPlans?.find(p => p.id === chosenPlanId);
+                        if (selectedPlan && Number(selectedPlan.percentage) === 100) isFullPayment = true;
+                    }
+                    const discP = isFullPayment ? (settings?.fullPaymentDiscount || 5) : 0;
+                    const discA = Math.round(sub1 * discP / 100);
+                    const sub = sub1 - discA;
+                    const gstA = Math.round(sub * 0.18);
+                    const tdsP = data.chosenTdsPercent || 0;
+                    const tdsA = Math.round(sub * tdsP / 100);
+                    const expectedNet = (sub + gstA) - tdsA;
+
+                    const submittedNet = data.financeBreakdown?.netPayable
+                        ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
+                    const TOLERANCE = 5; // rupees — absorbs client-side rounding, not real tampering
+                    if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
+                        throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
+                    }
+                }
+            } catch (validationErr) {
+                if (String(validationErr.message).includes('Pricing could not be verified')) throw validationErr;
+                console.error('[PriceValidation] Skipped due to lookup error:', validationErr.message);
+            }
+        }
+
         const invoiceTotal = data.participation?.total || 0;
         const tdsAmount = data.financeBreakdown?.tdsAmount || 0;
         const netPayable = invoiceTotal - tdsAmount;
@@ -547,10 +605,14 @@ class ExhibitorRegistrationService {
         // Only book stall and send emails if payment is NOT failed
         if (data.status !== 'payment-failed') {
             if (data.participation?.stallNo) {
-                await Stall.findByIdAndUpdate(data.participation.stallNo, {
-                    status: 'booked',
-                    bookedBy: saved._id
-                });
+                const bookedStall = await Stall.findOneAndUpdate(
+                    { _id: data.participation.stallNo, status: { $ne: 'booked' } },
+                    { status: 'booked', bookedBy: saved._id },
+                    { new: true }
+                );
+                if (!bookedStall) {
+                    throw new Error('This stall has just been booked by someone else. Please choose a different stall and try again.');
+                }
             }
 
             // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
@@ -626,13 +688,20 @@ class ExhibitorRegistrationService {
                     data._stallDiscountAmount = stallDiscAmt;
                 }
             } catch (_) { }
+            const targetStatus = data.status || current.status;
+            if (targetStatus !== 'payment-failed') {
+                const bookedStall = await Stall.findOneAndUpdate(
+                    { _id: data.participation.stallNo, status: { $ne: 'booked' } },
+                    { status: 'booked', bookedBy: id },
+                    { new: true }
+                );
+                if (!bookedStall) {
+                    throw new Error('The selected stall has already been booked by another registration. Please choose a different stall.');
+                }
+            }
             // Free old stall
             if (current.participation?.stallNo) {
                 await Stall.findByIdAndUpdate(current.participation.stallNo, { status: 'available', bookedBy: null });
-            }
-            const targetStatus = data.status || current.status;
-            if (targetStatus !== 'payment-failed') {
-                await Stall.findByIdAndUpdate(data.participation.stallNo, { status: 'booked', bookedBy: id });
             }
         }
 
@@ -1028,12 +1097,17 @@ class ExhibitorRegistrationService {
         const registration = await ExhibitorRegistration.findById(registrationId);
         if (!registration) return null;
 
-        // 1. Book the stall in database
         if (registration.participation?.stallNo) {
-            await Stall.findByIdAndUpdate(registration.participation.stallNo, {
-                status: 'booked',
-                bookedBy: registration._id
-            });
+            const bookedStall = await Stall.findOneAndUpdate(
+                { _id: registration.participation.stallNo, status: { $ne: 'booked' } },
+                { status: 'booked', bookedBy: registration._id },
+                { new: true }
+            );
+            if (!bookedStall) {
+                registration.stallConflict = true;
+                await registration.save();
+                console.error(`[StallConflict] Registration ${registration.registrationId} (${registration._id}) paid successfully but stall ${registration.participation.stallNo} was already booked by another registration. Needs manual resolution.`);
+            }
         }
 
         // 2. Generate and hash raw password for login credentials

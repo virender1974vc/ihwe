@@ -90,6 +90,13 @@ const createCreditNote = async (req, res) => {
       data: creditNote,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Conflict: Credit Note number already exists",
+        error: error.message,
+      });
+    }
     res.status(500).json({
       success: false,
       message: "Error creating credit note",

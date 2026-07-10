@@ -254,6 +254,9 @@ const createAccountDebitNote = async (req, res) => {
     res.status(201).json({ success: true, message: "Debit Note Created", data: debitNote });
   } catch (error) {
     console.error("Error in createAccountDebitNote:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({ success: false, message: "Conflict: Debit Note number already exists", error: error.message });
+    }
     res.status(500).json({ success: false, message: "Error creating debit note", error: error.message });
   }
 };

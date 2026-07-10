@@ -12,8 +12,11 @@ const {
   sendEmailInvoice,
   previewEmailInvoice,
 } = require("../controllers/invoiceController.js");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 router.get("/", getAllInvoices); // GET all invoices
 router.get("/:id/revision-preview", previewInvoiceRevision);

@@ -517,6 +517,46 @@ const getEstimateImpactPreview = async (req, res) => {
 // Delete
 const deleteEstimate = async (req, res) => {
   try {
+    const estimate = await Estimate.findById(req.params.id).lean();
+    if (!estimate) return res.status(404).json({ message: "Estimate not found" });
+
+    // Mirrors invoiceController.deleteInvoice: don't let a Proforma Invoice be deleted
+    // once anything downstream (Invoice/Delivery Challan/Payment/Credit or Debit Note)
+    // references it — deleting it would silently orphan those documents' link back to
+    // their source Proforma Invoice.
+    const estimateId = String(estimate._id);
+    const invoices = await Invoice.find({
+      $or: [
+        { source_estimate_id: estimateId },
+        { companyId: String(estimate.companyId), estimate_no: estimate.est_no },
+      ],
+    }).select("_id invoice_no").lean();
+    const invoiceIds = invoices.map((invoice) => String(invoice._id));
+    const invoiceNumbers = invoices.map((invoice) => invoice.invoice_no).filter(Boolean);
+
+    const [deliveryChallans, payments, creditNotes, debitNotes] = await Promise.all([
+      DeliveryChallan.find({ source_estimate_id: estimateId }).select("_id").lean(),
+      invoiceIds.length
+        ? Payment.find({ invoice_id: { $in: invoiceIds } }).select("_id").lean()
+        : [],
+      CreditNote.find({ companyId: String(estimate.companyId), est_no: estimate.est_no }).select("_id").lean(),
+      DebitNote.find({
+        companyId: String(estimate.companyId),
+        $or: [
+          { toInvoiceId: { $in: [estimateId, ...invoiceIds] } },
+          { toInvoiceNo: { $in: [estimate.est_no, ...invoiceNumbers] } },
+        ],
+      }).select("_id").lean(),
+    ]);
+
+    const dependencyCount = invoices.length + deliveryChallans.length
+      + payments.length + creditNotes.length + debitNotes.length;
+    if (dependencyCount > 0) {
+      return res.status(409).json({
+        message: "This Proforma Invoice cannot be deleted because Invoices, Delivery Challans, Payments or Credit/Debit Notes are linked to it. Cancel it instead.",
+      });
+    }
+
     const deleted = await Estimate.findByIdAndDelete(req.params.id);
 
     if (!deleted)

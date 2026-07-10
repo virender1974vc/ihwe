@@ -259,6 +259,13 @@ const createInvoice = async (req, res) => {
   } catch (error) {
     console.error("Error creating invoice:", error);
 
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "Conflict: Invoice number already exists",
+        error: error.message,
+      });
+    }
+
     res.status(500).json({
       message: "Error creating invoice",
       error: error.message,
@@ -484,22 +491,6 @@ const deleteInvoice = async (req, res) => {
     if (!existing) return res.status(404).json({ message: "Invoice not found" });
     return res.status(409).json({
       message: "Invoices cannot be deleted because their number and audit history must be preserved. Mark the invoice as cancelled instead.",
-    });
-
-    const deletedInvoice = await Invoice.findByIdAndDelete(req.params.id);
-
-    if (!deletedInvoice)
-      return res.status(404).json({ message: "Invoice not found" });
-    const accountName = await getDocumentAccountName(deletedInvoice, "account");
-    await logActivity(
-      req,
-      "Deleted",
-      "Accounts",
-      `Deleted Invoice for ${accountName}. Amount: ₹${deletedInvoice.finalAmount || 0}`,
-    );
-
-    res.status(200).json({
-      message: "🗑️ Invoice deleted successfully",
     });
   } catch (error) {
     res.status(500).json({

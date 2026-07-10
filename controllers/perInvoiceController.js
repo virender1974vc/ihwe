@@ -38,6 +38,12 @@ const createPerformaInvoice = async (req, res) => {
       data: invoice,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "Conflict: Proforma Invoice number already exists",
+        error: error.message,
+      });
+    }
     res.status(500).json({
       message: "Error creating PROFORMA Invoice",
       error: error.message,
