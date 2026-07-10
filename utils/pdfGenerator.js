@@ -487,9 +487,6 @@ class PDFGenerator {
                 const ic_wallet = 'M21 7.28V5c0-1.1-.9-2-2-2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-2.28c.59-.35 1-.98 1-1.72V9c0-.74-.41-1.37-1-1.72zM20 9v6h-2.5V9H20zM7 9h8v2H7V9zm0 4h5v2H7v-2z';
                 const ic_business = 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z';
                 const ic_bell = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z';
-
-                // Simple hand-drawn icons (primitives only, no SVG path parsing) for the new
-                // header/footer contact icons — kept intentionally basic for reliability.
                 const drawMailIcon = (cx, cy, r, color) => {
                     doc.save();
                     doc.rect(cx - r, cy - r * 0.7, r * 2, r * 1.4).lineWidth(0.8).stroke(color);
@@ -505,7 +502,9 @@ class PDFGenerator {
                 };
                 const drawPhoneIcon = (cx, cy, r, color) => {
                     doc.save();
-                    doc.roundedRect(cx - r * 0.5, cy - r, r, r * 2, r * 0.3).lineWidth(0.8).stroke(color);
+                    doc.roundedRect(cx - r * 0.7, cy - r, r * 1.4, r * 2, r * 0.3).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx - r * 0.2, cy - r * 0.6).lineTo(cx + r * 0.2, cy - r * 0.6).lineWidth(0.5).stroke(color);
+                    doc.circle(cx, cy + r * 0.6, r * 0.15).fillAndStroke(color, color);
                     doc.restore();
                 };
                 const drawPinIcon = (cx, cy, r, color) => {
@@ -876,7 +875,7 @@ class PDFGenerator {
 
                 // ============ 6.5. SIGNATURE & STAMP ============
                 if (receiptSettings.showSignatureStamp) {
-                    contentBottom += 10;
+                    contentBottom += 5;
                     const sigW = 120;
                     const sigX = mx + mw - sigW - 10; // Right-aligned with a little padding
                     const stampX = sigX - 90; // Place stamp to the left of the signature
@@ -892,11 +891,11 @@ class PDFGenerator {
                         const sigPath = path.join(__dirname, '..', receiptSettings.signatureImage);
                         if (fs.existsSync(sigPath)) {
                             // Constrain signature
-                            doc.image(sigPath, sigX, contentBottom + 20, { fit: [120, 50], align: 'center' });
+                            doc.image(sigPath, sigX, contentBottom + 10, { fit: [120, 50], align: 'center' });
                         }
                     }
 
-                    contentBottom += 95; // Increased to give more space below the stamp/signature images
+                    contentBottom += 85; // Adjusted to give space but prevent pushing footer out of bounds
 
                     const blockW = (sigX + sigW) - stampX;
 
@@ -905,7 +904,7 @@ class PDFGenerator {
 
                     const label = receiptSettings.signatureLabel || 'Authorized Signatory';
                     doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(label, stampX, contentBottom, { width: blockW, align: 'center' });
-                    contentBottom += 15;
+                    contentBottom += 5;
                 }
                 const printSafeBottomGap = 10;
                 // We'll push the footer up closer to the content instead of anchoring it all the way to the bottom.
@@ -920,11 +919,20 @@ class PDFGenerator {
                     { draw: drawMailIcon, v: settings?.contactEmail || '-' },
                     { draw: drawGlobeIcon, v: settings?.contactWebsite || '-' },
                 ];
-                const cItemW = mw / contactItems.length;
+                doc.fontSize(7.5).font('Helvetica');
+                let totalW = 0;
+                const itemWidths = contactItems.map(c => {
+                    const w = doc.widthOfString(c.v);
+                    totalW += 15 + w + 40;
+                    return w;
+                });
+                totalW -= 40;
+
+                let cx = mx + (mw - totalW) / 2;
                 contactItems.forEach((c, i) => {
-                    const cx = mx + i * cItemW + cItemW / 2 - 40;
-                    c.draw(cx, contactRowY + 5, 5, ACCENT);
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c.v, cx + 10, contactRowY, { width: cItemW - 20 });
+                    c.draw(cx + 5, contactRowY + 5, 5, ACCENT);
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c.v, cx + 15, contactRowY);
+                    cx += 15 + itemWidths[i] + 40;
                 });
 
                 // Same left/right margin (mx) as every other section, instead of spanning
