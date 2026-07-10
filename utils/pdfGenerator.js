@@ -521,9 +521,20 @@ class PDFGenerator {
                     doc.moveTo(cx + r * 0.4, cy - r * 0.9).lineTo(cx + r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
                     doc.restore();
                 };
-                const drawBuildingIcon = (cx, cy, r, color) => {
+                const drawStarIcon = (cx, cy, r, color) => {
                     doc.save();
-                    doc.rect(cx - r * 0.7, cy - r, r * 1.4, r * 2).lineWidth(0.8).stroke(color);
+                    const points = 5;
+                    const innerRadius = r * 0.4;
+                    const outerRadius = r * 0.9;
+                    let path = '';
+                    for (let i = 0; i < points * 2; i++) {
+                        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                        const angle = (i * Math.PI) / points - Math.PI / 2;
+                        const x = cx + radius * Math.cos(angle);
+                        const y = cy + radius * Math.sin(angle);
+                        path += (i === 0 ? 'M' : 'L') + x + ',' + y;
+                    }
+                    doc.path(path + ' Z').lineWidth(0.8).stroke(color);
                     doc.restore();
                 };
 
@@ -613,16 +624,23 @@ class PDFGenerator {
                 }
 
                 const evMidX = mx + evColW;
-                let evMidY = y + 10;
+                let evMidY = y + 5;
+                const eventName = eventDoc?.name || 'IHWE 2026';
+                drawStarIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT NAME:', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(eventName.toUpperCase(), evMidX + 22, evMidY + 10, { width: evMidW - 25 });
+                evMidY += 28;
+
                 const fmtEvDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                 const dateStr = eventDoc?.startDate ? `${fmtEvDate(eventDoc.startDate)}${eventDoc.endDate ? ' - ' + fmtEvDate(eventDoc.endDate) : ''}` : 'TBA';
                 drawCalendarIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
-                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('DATE:', evMidX + 22, evMidY);
-                doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(dateStr, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
-                evMidY += 34;
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT DATE:', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(dateStr, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
+                evMidY += 28;
+
                 drawPinIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
-                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('VENUE:', evMidX + 22, evMidY);
-                doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text((eventDoc?.location || 'Pragati Maidan, New Delhi, India').toUpperCase(), evMidX + 22, evMidY + 10, { width: evMidW - 25 });
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT VENUE:', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text((eventDoc?.location || 'Pragati Maidan, New Delhi, India').toUpperCase(), evMidX + 22, evMidY + 10, { width: evMidW - 25 });
 
                 const boxX = mx + evColW + evMidW;
                 const boxW = evRightW;
@@ -635,11 +653,11 @@ class PDFGenerator {
                     ['Reg ID', registration.registrationId || registration._id?.toString().slice(-8) || 'N/A'],
                     ['Date', formattedDate],
                 ];
-                let boxY = y + 26;
+                let boxY = y + 30;
                 infoRows.forEach(([l, v]) => {
                     doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text(l, boxX + 10, boxY, { width: 55 });
                     doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (v || 'N/A'), boxX + 65, boxY, { width: boxW - 75 });
-                    boxY += 15;
+                    boxY += 16;
                 });
 
                 y += eventH + sectionGap;
@@ -730,13 +748,14 @@ class PDFGenerator {
                 };
                 drawDivider(receiptSettings.invoiceDetailsLabel || 'INVOICE DETAILS');
 
+                const invDate = new Date(invoice?.invoice_date || invoice?.createdAt || registration.createdAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const gridFields = [
                     ['INVOICE NO.', paymentAgainst],
                     ['INVOICE TYPE', invoiceType],
+                    ['INVOICE DATE', invDate],
                     ['PAYMENT TYPE', paymentTypeLabel],
                     ['DOC TYPE', 'Payment Receipt'],
                     ['QTY', '1'],
-                    ['EVENT', eventDoc?.name || 'IHWE 2026'],
                 ];
                 const gridColW = mw / gridFields.length;
                 doc.fontSize(7.5).font('Helvetica-Bold');
