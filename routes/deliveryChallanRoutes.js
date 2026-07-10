@@ -1,5 +1,8 @@
 const router = require("express").Router();
 const controller = require("../controllers/deliveryChallanController");
+const { authMiddleware } = require("../middleware/authMiddleware");
+
+router.use(authMiddleware);
 
 router.get("/proformas/:companyId", controller.getProformaOptions);
 router.get("/", controller.getChallans);

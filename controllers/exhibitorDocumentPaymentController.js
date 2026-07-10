@@ -8,6 +8,7 @@ const Payment = require("../models/Payment");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const CreditNote = require("../models/CreditNote");
 const AccountDebitNote = require("../models/AccountDebitNote");
+const DebitNote = require("../models/DebitNote");
 
 const DOC_MODELS = { invoice: Invoice, proforma: Estimate };
 const VIEW_DOC_MODELS = {
@@ -16,7 +17,38 @@ const VIEW_DOC_MODELS = {
   challan: DeliveryChallan,
   creditnote: CreditNote,
   debitnote: AccountDebitNote,
+  // The legacy "DebitNote" model actually behaves as a second credit-note mechanism
+  // (see accountOverviewController) — labelled "Credit Note (Legacy)" in the dashboard.
+  legacycreditnote: DebitNote,
 };
+
+// The legacy DebitNote schema uses different field names than the real CreditNote
+// schema. Normalize it into the same shape CreditNotePrintTemplate already knows how
+// to render, instead of building/maintaining a second print template.
+const mapLegacyDebitNoteToCreditNoteShape = (doc) => ({
+  ...doc,
+  create_note_no: doc.debit_note_no,
+  credit_note_date: doc.debit_note_date,
+  reference_invoice_no: doc.toInvoiceNo,
+  credit_note_type: doc.type,
+  reason: doc.reason,
+  remarks: doc.remarks,
+  clientName: doc.clientName,
+  taxableAmount: doc.taxableAmount,
+  gstAmount: (doc.cgstAmount || 0) + (doc.sgstAmount || 0) + (doc.igstAmount || 0),
+  totalAmount: doc.totalAmount,
+  items: (doc.items || []).map((it) => ({
+    item: it.description,
+    hsn: it.hsn,
+    quantity: it.qty,
+    unit: it.unit,
+    rate: it.rate,
+    taxableValue: it.amount,
+    gstPct: it.gstPct,
+    gstAmount: it.gstAmount,
+    total: it.total,
+  })),
+});
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 const toNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
@@ -227,6 +259,10 @@ const getDocument = async (req, res) => {
     const isOwned = authorizedIds.has(String(doc.companyId)) || authorizedIds.has(String(doc.account_ref_id));
     if (!isOwned) {
       return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    if (docType === "legacycreditnote") {
+      doc = mapLegacyDebitNoteToCreditNoteShape(doc);
     }
 
     if (docType === "challan") {

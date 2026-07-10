@@ -11,8 +11,11 @@ const {
   updateDebitNote,
   deleteDebitNote,
 } = require("../controllers/debitNoteController.js");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 const attachmentStorage = multer.diskStorage({
   destination: (req, file, cb) => {

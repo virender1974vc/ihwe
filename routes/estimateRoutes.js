@@ -13,8 +13,11 @@ const {
   sendEmailEstimate,
   previewEmailEstimate,
 } = require("../controllers/estimateController.js");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 router.get("/next-number", getNextEstimateNumber);
 router.get("/grouped/:companyId", getGroupedEstimateData);

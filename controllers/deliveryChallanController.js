@@ -377,6 +377,9 @@ exports.createChallan = async (req, res) => {
     await logActivity(req, "Created", "Accounts", `Created Delivery Challan ${challan.challan_no} for ${challan.company_name || challan.companyId}.`);
     res.status(201).json({ message: "Delivery challan created", data: challan });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "Conflict: Delivery Challan number already exists", error: error.message });
+    }
     res.status(500).json({ message: "Error creating delivery challan", error: error.message });
   }
 };
