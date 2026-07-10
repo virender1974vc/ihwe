@@ -790,10 +790,10 @@ class PDFGenerator {
                 const gridColW = mw / gridFields.length;
                 doc.fontSize(7.5).font('Helvetica-Bold');
                 const gridValueHeight = Math.max(...gridFields.map((f) => doc.heightOfString(String(f[1]), { width: gridColW - 4 })));
-                const gridH = 20 + gridValueHeight;
-                doc.rect(mx, y - 4, mw, 12).fill(ACCENT);
+                const gridH = 24 + gridValueHeight;
+                doc.rect(mx, y - 4, mw, 16).fill(ACCENT);
                 doc.rect(mx, y - 4, mw, gridH).lineWidth(0.5).stroke(BORDER_COLOR);
-                doc.moveTo(mx, y + 8).lineTo(mx + mw, y + 8).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.moveTo(mx, y + 12).lineTo(mx + mw, y + 12).lineWidth(0.5).stroke(BORDER_COLOR);
 
                 gridFields.forEach((f, i) => {
                     const gx = mx + i * gridColW;
@@ -801,7 +801,7 @@ class PDFGenerator {
                         doc.moveTo(gx, y - 4).lineTo(gx, y - 4 + gridH).lineWidth(0.5).stroke(BORDER_COLOR);
                     }
                     doc.fillColor('#fff').fontSize(6.5).font('Helvetica-Bold').text(f[0], gx + 2, y, { width: gridColW - 4, align: 'center' });
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(String(f[1]), gx + 2, y + 12, { width: gridColW - 4, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(String(f[1]), gx + 2, y + 16, { width: gridColW - 4, align: 'center' });
                 });
                 const gridBottomY = y - 4 + gridH;
                 y += gridH + 4;
