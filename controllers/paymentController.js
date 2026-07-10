@@ -67,6 +67,14 @@ const resolvePaymentDocument = async (payment) => {
 const getDocumentNo = (doc, payment) => doc?.invoice_no || doc?.est_no || payment?.invoice_no || payment?.invoice_id || "-";
 const getDocumentDate = (doc) => doc?.invoice_date || doc?.supply_date || doc?.added || "";
 const getDocumentAmount = (doc, payment) => doc?.finalAmount ?? payment?.f_amount ?? 0;
+const getDocumentUnitRate = (doc) => {
+  const rates = (doc?.items || [])
+    .map((item) => parseAmount(item?.rate))
+    .filter((rate) => rate > 0);
+  if (!rates.length) return 0;
+  const firstRate = rates[0];
+  return rates.every((rate) => rate === firstRate) ? firstRate : firstRate;
+};
 
 const getPaymentReference = (payment) => (
   payment.utr_no ||
@@ -180,7 +188,10 @@ const generateAccountPaymentReceipt = async (payment) => {
   const contact = await getReceiptContact(payment);
   const eventDoc = await resolveReceiptEvent(payment, contact, docData);
   const receiptNo = `PAY-RCPT-${String(payment._id).slice(-8).toUpperCase()}`;
+  const documentNo = getDocumentNo(docData, payment);
+  const documentType = docData?.invoice_no ? "Tax Invoice" : (docData ? "Proforma Invoice" : "Payment Receipt");
   const invoiceAmount = parseAmount(getDocumentAmount(docData, payment));
+  const unitRate = getDocumentUnitRate(docData);
   const receivedAmount = parseAmount(payment.amount_text);
   const tdsAmount = parseAmount(payment.tds_text);
   const relatedPayments = payment.invoice_id
@@ -210,7 +221,12 @@ const generateAccountPaymentReceipt = async (payment) => {
   const registrationLike = {
     _id: payment._id,
     customReceiptNo: receiptNo,
-    registrationId: getDocumentNo(docData, payment),
+    registrationId: documentNo,
+    referenceInvoice: documentNo,
+    invoiceNo: documentNo,
+    receiptDocumentType: documentType,
+    receiptInvoiceAmount: invoiceAmount,
+    receiptUnitRate: unitRate,
     exhibitorName: contact.companyName || contact.name || "Client",
     companyEmail: contact.email,
     address: contact.address,
@@ -230,12 +246,12 @@ const generateAccountPaymentReceipt = async (payment) => {
     isGenericInvoice: true,
     participation: {
       currency: "INR",
-      stallFor: getDocumentNo(docData, payment),
-      stallType: docData?.invoice_no ? "Tax Invoice" : "Proforma Invoice",
+      stallFor: documentNo,
+      stallType: documentType,
       stallScheme: payment.pymnt_type || paymentMode,
       dimension: "Payment Receipt",
       stallSize: 1,
-      rate: taxableAmount || invoiceAmount,
+      rate: unitRate || taxableAmount || invoiceAmount,
       amount: taxableAmount || invoiceAmount,
       gstPercent: invoiceAmount > 0 ? 18 : 0,
       total: invoiceAmount,
@@ -246,6 +262,8 @@ const generateAccountPaymentReceipt = async (payment) => {
       gstAmount,
       tdsAmount: cumulativeTds,
       tdsPercent: payment.tds_rate || 0,
+      invoiceAmount,
+      totalAmount: invoiceAmount,
       netPayable,
     },
     chosenTdsPercent: payment.tds_rate || 0,
@@ -262,10 +280,10 @@ const generateAccountPaymentReceipt = async (payment) => {
   };
 
   if (contact.exhibitor) {
-    if (contact.exhibitor.participation) {
+    if (!docData && contact.exhibitor.participation) {
       registrationLike.participation = contact.exhibitor.participation;
     }
-    if (contact.exhibitor.financeBreakdown) {
+    if (!docData && contact.exhibitor.financeBreakdown) {
       registrationLike.financeBreakdown = contact.exhibitor.financeBreakdown;
     }
     // If it's linked to an exhibitor with actual participation, it's not a generic invoice anymore

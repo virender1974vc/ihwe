@@ -708,7 +708,7 @@ class PDFGenerator {
 
                 // ============ 4. INVOICE DETAILS ============
                 const paymentAgainst = registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || 'N/A';
-                const invoiceType = invoice?.invoice_no ? 'Tax Invoice' : (invoice ? 'Proforma Invoice' : 'Payment Receipt');
+                const invoiceType = registration.receiptDocumentType || registration.documentType || p.stallType || (invoice?.invoice_no ? 'Tax Invoice' : (invoice ? 'Proforma Invoice' : 'Payment Receipt'));
                 let paymentTypeLabel = 'Advance / Partial';
                 if (registration.balanceAmount <= 0) paymentTypeLabel = 'Final Payment';
 
@@ -743,13 +743,20 @@ class PDFGenerator {
                 // Item table (single summary row — this app doesn't carry itemized line items
                 // for a payment receipt, only an invoice-level amount, same as before)
                 const fb = registration.financeBreakdown || {};
-                const invVal = invoice?.finalAmount || fb.netPayable || p.amount || 0;
+                const invVal = registration.receiptInvoiceAmount || fb.invoiceAmount || fb.totalAmount || p.total || invoice?.finalAmount || fb.netPayable || p.amount || 0;
+                const gstPercent = p.gstPercent || 18;
+                const taxableValue = fb.subtotal || Math.round(invVal / (1 + gstPercent / 100));
+                const gstAmount = fb.gstAmount || Math.max(0, invVal - taxableValue);
+                const tdsPercent = fb.tdsPercent || registration.chosenTdsPercent || 0;
+                const tdsAmount = fb.tdsAmount || 0;
+                const grandTotal = taxableValue + gstAmount - tdsAmount;
+                const rateUnitValue = registration.receiptUnitRate || p.rate || taxableValue;
                 const tableCols = [
-                    { label: 'Description', w: 0.4 },
-                    { label: 'Doc Type', w: 0.17 },
-                    { label: 'Payment Type', w: 0.17 },
-                    { label: 'Rate/Unit', w: 0.13 },
-                    { label: 'Amount', w: 0.13 },
+                    { label: 'Description', w: 0.38 },
+                    { label: 'Doc Type', w: 0.16 },
+                    { label: 'Payment Type', w: 0.16 },
+                    { label: 'Rate/Unit', w: 0.15 },
+                    { label: 'Amount', w: 0.15 },
                 ];
                 let tx = mx;
                 doc.rect(mx, y, mw, 16).fill(ACCENT);
@@ -766,37 +773,32 @@ class PDFGenerator {
                     `${invoiceType} – ${paymentAgainst}`,
                     'Payment Receipt',
                     paymentTypeLabel,
-                    fmt(invVal),
-                    fmt(invVal),
+                    fmt(rateUnitValue),
+                    fmt(taxableValue),
                 ];
                 tableCols.forEach((c, i) => {
                     const cw = mw * c.w;
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(rowVals[i], tx + 4, y + 6, { width: cw - 8, align: 'left' });
+                    const align = i === 4 ? 'right' : 'left';
+                    const cellRightPadding = i === 4 ? 18 : 8;
+                    doc.fillColor(TEXT_DARK).fontSize(7.2).font('Helvetica').text(rowVals[i], tx + 4, y + 6, { width: cw - cellRightPadding, align, lineBreak: false });
                     tx += cw;
                 });
                 y += rowH;
 
                 // Summary rows
-                const gstPercent = p.gstPercent || 18;
-                const taxableValue = fb.subtotal || Math.round(invVal / (1 + gstPercent / 100));
-                const gstAmount = fb.gstAmount || Math.max(0, invVal - taxableValue);
-                const tdsPercent = fb.tdsPercent || registration.chosenTdsPercent || 0;
-                const tdsAmount = fb.tdsAmount || 0;
-                const grandTotal = taxableValue + gstAmount - tdsAmount;
-
                 const summaryRows = [
-                    ['GROSS AMOUNT', fmt(fb.grossAmount || invVal), false],
+                    ['GROSS AMOUNT', fmt(fb.grossAmount || taxableValue), false],
                     ['TAXABLE VALUE', fmt(taxableValue), false],
                     [`ADD: GST @ ${gstPercent}%`, `+ ${fmt(gstAmount)}`, false],
                     [`LESS: TDS DEDUCTION (${tdsPercent}%)`, `- ${fmt(tdsAmount)}`, false],
                     ['GRAND TOTAL', fmt(grandTotal), true],
                 ];
-                const sumW = mw * 0.42;
+                const sumW = mw * 0.46;
                 const sumX = mx + mw - sumW;
                 summaryRows.forEach(([l, v, strong]) => {
                     if (strong) doc.rect(sumX, y, sumW, 18).fill(ACCENT);
-                    doc.fillColor(strong ? '#fff' : TEXT_DARK).fontSize(8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(l, sumX + 8, y + 4, { width: sumW * 0.55 });
-                    doc.fillColor(strong ? '#fff' : (v.startsWith('-') ? '#dc2626' : TEXT_DARK)).fontSize(8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(v, sumX + sumW * 0.5, y + 4, { width: sumW * 0.47 - 8, align: 'right' });
+                    doc.fillColor(strong ? '#fff' : TEXT_DARK).fontSize(8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(l, sumX + 8, y + 4, { width: sumW * 0.56, lineBreak: false });
+                    doc.fillColor(strong ? '#fff' : (v.startsWith('-') ? '#dc2626' : TEXT_DARK)).fontSize(7.8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(v, sumX + sumW * 0.56, y + 4, { width: sumW * 0.42 - 8, align: 'right', lineBreak: false });
                     doc.moveTo(mx, y + 16).lineTo(mx + mw, y + 16).lineWidth(0.3).stroke(BORDER_COLOR);
                     y += 16;
                 });
