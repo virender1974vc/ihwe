@@ -386,23 +386,10 @@ class PDFGenerator {
     async generatePaymentSlip(registration, options = {}) {
         return new Promise(async (resolve, reject) => {
             try {
-                // helper for number to words
-                const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-                const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-                const inWords = (num) => {
-                    if ((num = num.toString()).length > 9) return 'overflow';
-                    let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
-                    if (!n) return '';
-                    let str = '';
-                    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
-                    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
-                    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
-                    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
-                    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) + 'Only' : 'Only';
-                    return str.trim() || 'Zero Only';
-                };
+                const PaymentReceiptSettings = require('../models/PaymentReceiptSettings');
+                const Event = require('../models/Event');
+                const mongoose = require('mongoose');
 
-                const { headerPath, footerPath } = await resolveHeaderFooterPaths(options.headerImage, options.footerImage);
                 const doc = new PDFDocument({ margin: 0, size: 'A4' });
 
                 const paymentIndex = options.paymentIndex !== undefined ? options.paymentIndex : -1;
@@ -414,6 +401,7 @@ class PDFGenerator {
                 doc.pipe(stream);
 
                 const pageW = doc.page.width;
+                const pageH = doc.page.height;
                 const p = registration.participation || {};
                 const c1 = registration.contact1 || {};
                 const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex] ? registration.paymentHistory[paymentIndex] : null;
@@ -422,11 +410,13 @@ class PDFGenerator {
 
                 // Using Rs. instead of ₹ to avoid Helvetica rendering issues (renders as ¹)
                 const curStr = isUSD ? 'USD ' : 'Rs. ';
-                const fmt = (n) => `${curStr}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-                const valFmt = (n) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                const fmt = (n) => `${curStr}${Math.round(Number(n || 0)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
                 const Settings = require('../models/Settings');
                 const settings = await Settings.findOne();
+
+                let receiptSettings = await PaymentReceiptSettings.findOne();
+                if (!receiptSettings) receiptSettings = new PaymentReceiptSettings({});
 
                 const Invoice = require('../models/Invoice');
                 const invoice = await Invoice.findOne({
@@ -436,13 +426,13 @@ class PDFGenerator {
                     ]
                 }).sort({ added: -1 }).lean();
 
-                // Generate Receipt Number
+                // Generate Receipt Number (unchanged logic — only the fallback prefix is now configurable)
                 const Counter = require('../models/visitor/CounterModel');
                 const year = new Date().getFullYear();
                 let rNo = registration.customReceiptNo || registration.receiptNo;
                 if (!rNo) {
                     const counter = await Counter.findOneAndUpdate({ type: `receipt-ngw-${year}` }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: 'after' });
-                    rNo = `PR/${String(year).slice(-2)}-${String(year + 1).slice(-2)}/${String(counter.seq).padStart(3, '0')}`;
+                    rNo = `${receiptSettings.receiptNumberPrefix || 'PR/'}${String(year).slice(-2)}-${String(year + 1).slice(-2)}/${String(counter.seq).padStart(3, '0')}`;
                     try {
                         if (registration._id && typeof registration.constructor.findByIdAndUpdate === 'function') {
                             await registration.constructor.findByIdAndUpdate(registration._id, { customReceiptNo: rNo });
@@ -450,16 +440,39 @@ class PDFGenerator {
                     } catch (e) { }
                 }
 
-                this._headerImg(doc, headerPath, true);
-                let y = doc.y + 5;
+                // Event info — registration.eventId usually isn't populated at the call sites
+                // that hit this function, so resolve it defensively.
+                let eventDoc = null;
+                if (registration.eventId && typeof registration.eventId === 'object' && registration.eventId.name) {
+                    eventDoc = registration.eventId;
+                } else if (registration.eventId && mongoose.Types.ObjectId.isValid(registration.eventId)) {
+                    try { eventDoc = await Event.findById(registration.eventId).lean(); } catch (e) { }
+                }
 
-                // Colors
-                const NAVY = '#0b3974';
+                // ---- Colors & band sizes (admin-configurable via PaymentReceiptSettings) ----
+                const clamp = (val, min, max, fallback) => {
+                    const n = Number(val);
+                    if (!Number.isFinite(n)) return fallback;
+                    return Math.min(max, Math.max(min, n));
+                };
+                const ORGANISER = receiptSettings.organiserBandColor || '#0b3974';
+                const EXHIBITOR = receiptSettings.exhibitorBandColor || '#1a7a3c';
+                const ACCENT = receiptSettings.accentColor || '#0b3974';
+                const NOTE_COLOR = receiptSettings.noteColor || '#c2410c';
                 const BORDER_COLOR = '#d1d5db';
                 const TEXT_DARK = '#0f172a';
                 const TEXT_MUTED = '#475569';
 
-                // Helpers
+                const headerH = clamp(receiptSettings.headerBandHeight, 70, 140, 95);
+                const eventH = clamp(receiptSettings.eventBandHeight, 60, 120, 85);
+                const infoH = clamp(receiptSettings.infoBandHeight, 80, 160, 115);
+                const footerH = clamp(receiptSettings.footerBandHeight, 60, 110, 85);
+                const mx = clamp(receiptSettings.pageMarginX, 15, 50, 30);
+                const sectionGap = clamp(receiptSettings.sectionGap, 0, 30, 8);
+                const mw = pageW - mx * 2;
+
+                // ---- Icon helpers ----
+                // Reused as-is from the previous layout (already proven to render correctly).
                 const drawSvgIcon = (cx, cy, pathData, scale = 0.5, color = '#fff') => {
                     doc.save();
                     doc.translate(cx - (12 * scale), cy - (12 * scale));
@@ -473,240 +486,415 @@ class PDFGenerator {
                 const ic_rupee = 'M13.66,7c-0.19,1.13-0.89,2-2.14,2.54L15.34,16H12.9l-3.33-5.83H9.4V16H7.8v-5.83H6.06V8.65h1.74V7H6.06V5.48h3.33v1.51h1.15c0.55,0,0.92-0.27,0.92-0.82H6.06V4.65h7.6v1.51H10.4C10.74,6.47,11.2,6.6,11.72,6.6c0.81,0,1.38-0.34,1.52-1.13h2.15v1.52H13.66z';
                 const ic_wallet = 'M21 7.28V5c0-1.1-.9-2-2-2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-2.28c.59-.35 1-.98 1-1.72V9c0-.74-.41-1.37-1-1.72zM20 9v6h-2.5V9H20zM7 9h8v2H7V9zm0 4h5v2H7v-2z';
 
-                // Title
-                doc.font('Helvetica-Bold').fontSize(18).fillColor(NAVY).text('PAYMENT RECEIPT', 0, y, { align: 'center', characterSpacing: 1 });
-                y += 20;
+                // Simple hand-drawn icons (primitives only, no SVG path parsing) for the new
+                // header/footer contact icons — kept intentionally basic for reliability.
+                const drawMailIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.rect(cx - r, cy - r * 0.7, r * 2, r * 1.4).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx - r, cy - r * 0.7).lineTo(cx, cy + r * 0.2).lineTo(cx + r, cy - r * 0.7).lineWidth(0.8).stroke(color);
+                    doc.restore();
+                };
+                const drawGlobeIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.circle(cx, cy, r).lineWidth(0.8).stroke(color);
+                    doc.ellipse(cx, cy, r * 0.45, r).lineWidth(0.6).stroke(color);
+                    doc.moveTo(cx - r, cy).lineTo(cx + r, cy).lineWidth(0.6).stroke(color);
+                    doc.restore();
+                };
+                const drawPhoneIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.roundedRect(cx - r * 0.5, cy - r, r, r * 2, r * 0.3).lineWidth(0.8).stroke(color);
+                    doc.restore();
+                };
+                const drawPinIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.circle(cx, cy - r * 0.2, r * 0.55).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx, cy + r * 0.3).lineTo(cx, cy + r).lineWidth(0.8).stroke(color);
+                    doc.restore();
+                };
+                const drawBuildingIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.rect(cx - r * 0.7, cy - r, r * 1.4, r * 2).lineWidth(0.8).stroke(color);
+                    doc.restore();
+                };
 
-                const mx = 40;
-                const mw = pageW - 80;
+                let y = 15;
 
-                // TOP STATS BOX
-                doc.roundedRect(mx, y, mw, 70, 8).lineWidth(1).stroke(BORDER_COLOR);
-
-                const statW = mw / 4;
-                const paymentDateObj = new Date(m.paidAt || registration.updatedAt || Date.now());
-                const formattedDate = paymentDateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                const paymentAgainst = registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || 'N/A';
-
-                let paymentType = 'Advance / Partial';
-                if (registration.balanceAmount <= 0) paymentType = 'Full Payment';
-
-                const stats = [
-                    { label: 'RECEIPT NO.', value: rNo, icon: ic_doc },
-                    { label: 'RECEIPT DATE', value: formattedDate, icon: ic_cal },
-                    { label: 'PAYMENT AGAINST', value: paymentAgainst, icon: ic_doc },
-                    { label: 'PAYMENT TYPE', value: paymentType, icon: ic_wallet },
-                ];
-
-                // Leave 65px of dead space on the right side for the RECEIVED badge so no text overlaps
-                const effectiveW = mw - 65;
-                const customStatW = effectiveW / 4;
-
-                stats.forEach((s, i) => {
-                    let cx = mx + i * customStatW + customStatW / 2;
-
-                    doc.circle(cx, y + 20, 10).lineWidth(1).stroke(NAVY);
-                    drawSvgIcon(cx, y + 20, s.icon, 0.45, NAVY);
-
-                    doc.fillColor(NAVY).fontSize(7).font('Helvetica-Bold').text(s.label, cx - customStatW / 2, y + 42, { width: customStatW, align: 'center' });
-                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text(s.value, cx - customStatW / 2, y + 54, { width: customStatW, align: 'center' });
-
-                    if (i < 3) doc.moveTo(mx + (i + 1) * customStatW, y + 15).lineTo(mx + (i + 1) * customStatW, y + 55).lineWidth(0.5).stroke(BORDER_COLOR);
-                });
-
-                // RECEIVED BADGE (Perfectly symmetric and aligned)
-                const bx = mx + mw - 5;
-                const bw = 55;
-                const ribbonLeft = bx - bw;
-
-                doc.polygon([bx, y], [ribbonLeft, y], [ribbonLeft, y + 45], [ribbonLeft + bw / 2, y + 55], [bx, y + 45]).fill(NAVY);
-                doc.fillColor('#fff').fontSize(8).font('Helvetica-Bold').text('RECEIVED', ribbonLeft, y + 32, { width: bw, align: 'center', characterSpacing: 0.5 });
-
-                const xc = ribbonLeft + bw / 2;
-                const yc = y + 16;
-                doc.circle(xc, yc, 10).lineWidth(1.5).stroke('#fff');
-                doc.moveTo(xc - 4, yc).lineTo(xc - 1, yc + 3).lineTo(xc + 5, yc - 4).stroke('#fff');
-
-                y += 90;
-
-                // RECEIVED FROM & INVOICE REF
-                const halfW = (mw - 15) / 2;
-
-                // Left Box: RECEIVED FROM
-                doc.circle(mx + 12, y + 8, 12).fill(NAVY);
-                drawSvgIcon(mx + 12, y + 8, ic_user, 0.5, '#fff');
-                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('RECEIVED FROM', mx + 32, y + 3);
-
-                doc.roundedRect(mx, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
-                doc.fillColor(TEXT_DARK).fontSize(11).font('Helvetica').text(registration.exhibitorName || 'N/A', mx + 15, y + 45, { width: halfW - 30 });
-                const addr = [registration.address, registration.city, registration.state, registration.pincode].filter(Boolean).join(', ');
-                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text(addr, mx + 15, y + 60, { width: halfW - 30 });
-
-                // Robust GSTIN lookup (check registration, then invoice)
-                const gstinStr = registration.gstNo || registration.gstin || invoice?.gst_no || invoice?.company_gst_no || 'N/A';
-                doc.fillColor(TEXT_DARK).font('Helvetica').text(`GSTIN: ${gstinStr}`, mx + 15, y + 85);
-
-                // Robust Contact Person Name logic (prefer full name if available)
-                const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
-                let displayName = 'N/A';
-                if (registration.filledByFullName && registration.filledByFullName.length > contactPersonStr.length) {
-                    displayName = registration.filledByFullName;
-                } else if (contactPersonStr.length > 0) {
-                    displayName = contactPersonStr;
-                } else if (invoice?.consignee_name) {
-                    displayName = invoice.consignee_name;
+                // ============ 1. HEADER BAND ============
+                // If a Header Image (Payment Management) is uploaded, it IS the entire top
+                // banner — wordmark, contact info, GSTIN/CIN, Head Office, all of it — drawn
+                // full-width, same convention as the header-image banners used elsewhere in
+                // this app (see _headerImg). With nothing uploaded, fall back to the
+                // structured, field-driven header below so the receipt still works out of
+                // the box.
+                let headerBannerDrawn = false;
+                let headerConsumedH = headerH;
+                // Wide, short banners (the intended shape for this slot) scale to full width
+                // with a modest height. A square/tall image dropped in here by mistake would
+                // otherwise stretch to a huge height at full page width — cap it so a wrong
+                // upload degrades gracefully instead of blowing out the whole layout. And
+                // unlike the fallback (structured) header, the image's OWN height is used —
+                // never padded up to headerBandHeight — so a short banner doesn't leave a
+                // dead gap underneath it before the next section.
+                const MAX_HEADER_BANNER_H = 180;
+                if (receiptSettings.headerLogoImage) {
+                    try {
+                        const bannerPath = path.resolve(__dirname, '..', String(receiptSettings.headerLogoImage).replace(/^\//, ''));
+                        if (fs.existsSync(bannerPath)) {
+                            const img = doc.openImage(bannerPath);
+                            const widthScale = mw / img.width;
+                            const naturalH = img.height * widthScale;
+                            if (naturalH <= MAX_HEADER_BANNER_H) {
+                                doc.image(img, mx, y, { width: mw });
+                                headerConsumedH = naturalH;
+                            } else {
+                                doc.image(img, mx, y, { fit: [mw, MAX_HEADER_BANNER_H] });
+                                headerConsumedH = MAX_HEADER_BANNER_H;
+                            }
+                            headerBannerDrawn = true;
+                        }
+                    } catch (e) { }
                 }
 
-                doc.fillColor(NAVY).text(`Contact Person: ${displayName}`, mx + 15, y + 100);
+                if (!headerBannerDrawn) {
+                    doc.rect(0, y, 6, headerH).fill(ACCENT);
+                    const headerColW = (mw - 6) / 3;
+                    const col1X = mx + 14;
+                    const col2X = mx + headerColW + 18;
+                    const col3X = mx + headerColW * 2 + 24;
 
-                // Right Box: INVOICE REFERENCE
-                doc.circle(mx + halfW + 15 + 12, y + 8, 12).fill(NAVY);
-                drawSvgIcon(mx + halfW + 15 + 12, y + 8, ic_doc, 0.5, '#fff');
-                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('INVOICE REFERENCE', mx + halfW + 15 + 32, y + 3);
+                    let logoDrawn = false;
+                    if (settings?.logo) {
+                        try {
+                            const logoPath = path.resolve(__dirname, '..', String(settings.logo).replace(/^\//, ''));
+                            if (fs.existsSync(logoPath)) {
+                                doc.image(logoPath, col1X, y + 12, { fit: [headerColW - 20, headerH - 24] });
+                                logoDrawn = true;
+                            }
+                        } catch (e) { }
+                    }
+                    if (!logoDrawn) {
+                        doc.fillColor(ACCENT).fontSize(15).font('Helvetica-Bold').text(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', col1X, y + headerH / 2 - 14, { width: headerColW - 20 });
+                    }
 
-                doc.roundedRect(mx + halfW + 15, y + 30, halfW, 90, 8).lineWidth(1).stroke(BORDER_COLOR);
+                    let midY = y + 12;
+                    drawMailIcon(col2X + 6, midY + 6, 6, ACCENT);
+                    doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(settings?.contactEmail || '-', col2X + 18, midY + 2, { width: headerColW - 30 });
+                    midY += 18;
+                    drawGlobeIcon(col2X + 6, midY + 6, 6, ACCENT);
+                    doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(settings?.contactWebsite || '-', col2X + 18, midY + 2, { width: headerColW - 30 });
+                    midY += 22;
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(`GSTIN - ${settings?.companyGst || 'N/A'}`, col2X, midY, { width: headerColW - 10 });
+                    midY += 12;
+                    doc.font('Helvetica').text(`CIN No. ${settings?.companyCin || 'N/A'}`, col2X, midY, { width: headerColW - 10 });
 
-                const fb = registration.financeBreakdown || {};
-                const invVal = invoice?.finalAmount || fb.netPayable || p.amount || 0;
+                    doc.fillColor(TEXT_MUTED).fontSize(8).font('Helvetica-Bold').text(receiptSettings.headOfficeLabel || 'Head Office:', col3X, y + 12);
+                    doc.fillColor(TEXT_DARK).fontSize(8.5).font('Helvetica-Bold').text(settings?.companyName || '-', col3X, y + 25, { width: mw - (col3X - mx) - 6 });
+                    doc.font('Helvetica').fontSize(7.5).text(settings?.companyAddress || '-', col3X, y + 39, { width: mw - (col3X - mx) - 6 });
 
-                let rx = mx + halfW + 15 + 15;
-                let ry = y + 47;
-                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice No.', rx, ry);
-                doc.fillColor(TEXT_DARK).font('Helvetica').text(paymentAgainst, rx, ry, { width: halfW - 45, align: 'right' });
-                doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.moveTo(mx + headerColW, y + 8).lineTo(mx + headerColW, y + headerH - 8).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.moveTo(mx + headerColW * 2 + 6, y + 8).lineTo(mx + headerColW * 2 + 6, y + headerH - 8).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.moveTo(mx, y + headerH).lineTo(mx + mw, y + headerH).lineWidth(1).stroke(BORDER_COLOR);
+                }
 
-                ry += 25;
-                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Date', rx, ry);
-                const invDate = registration.invoiceDate
-                    ? new Date(registration.invoiceDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                    : (invoice?.invoice_date ? invoice.invoice_date : (invoice?.added ? new Date(invoice.added).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'));
-                doc.fillColor(TEXT_DARK).font('Helvetica').text(invDate, rx, ry, { width: halfW - 45, align: 'right' });
-                doc.moveTo(rx, ry + 16).lineTo(rx + halfW - 30, ry + 16).lineWidth(0.5).stroke(BORDER_COLOR);
+                y += headerConsumedH + sectionGap;
 
-                ry += 25;
-                doc.fillColor(TEXT_MUTED).fontSize(9).font('Helvetica').text('Invoice Value', rx, ry);
-                doc.fillColor(TEXT_DARK).font('Helvetica').text(fmt(invVal), rx, ry, { width: halfW - 45, align: 'right' });
+                // ============ 2. EVENT BAND ============
+                const evColW = mw * 0.32;
+                const evMidW = mw * 0.34;
+                const evRightW = mw - evColW - evMidW;
 
-                y += 135;
+                let eventLogoDrawn = false;
+                if (receiptSettings.eventLogoImage) {
+                    try {
+                        const evLogoPath = path.resolve(__dirname, '..', String(receiptSettings.eventLogoImage).replace(/^\//, ''));
+                        if (fs.existsSync(evLogoPath)) {
+                            doc.image(evLogoPath, mx, y, { fit: [evColW - 10, eventH] });
+                            eventLogoDrawn = true;
+                        }
+                    } catch (e) { }
+                }
+                if (!eventLogoDrawn) {
+                    doc.fillColor(ACCENT).fontSize(12).font('Helvetica-Bold').text(eventDoc?.name || 'IHWE 2026', mx, y + eventH / 2 - 14, { width: evColW - 10 });
+                }
 
-                // PAYMENT DETAILS
-                doc.circle(mx + 12, y + 8, 12).fill(NAVY);
-                drawSvgIcon(mx + 12, y + 8, ic_wallet, 0.5, '#fff');
-                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('PAYMENT DETAILS', mx + 32, y + 3);
+                const evMidX = mx + evColW;
+                let evMidY = y + 10;
+                const fmtEvDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                const dateStr = eventDoc?.startDate ? `${fmtEvDate(eventDoc.startDate)}${eventDoc.endDate ? ' - ' + fmtEvDate(eventDoc.endDate) : ''}` : 'TBA';
+                drawPinIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('DATE:', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(dateStr, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
+                evMidY += 34;
+                drawPinIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('VENUE:', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text((eventDoc?.location || 'Pragati Maidan, New Delhi, India').toUpperCase(), evMidX + 22, evMidY + 10, { width: evMidW - 25 });
 
-                doc.roundedRect(mx, y + 30, mw, 140, 8).lineWidth(1).stroke(BORDER_COLOR);
-                doc.rect(mx + 1, y + 31, 12, 138).fill(NAVY);
-                doc.rect(mx + 13, y + 31, mw - 14, 138).fill('#f8fafc');
-
-                const payRows = [
-                    { l: 'AMOUNT RECEIVED', v: fmt(m.amount || 0) },
-                    { l: 'PAYMENT MODE', v: String(m.method || m.paymentMode || registration.paymentMode || 'N/A').toUpperCase() },
-                    { l: 'UTR / TRANSACTION NO.', v: m.transactionId || m.razorpayPaymentId || registration.paymentId || 'N/A' },
-                    { l: 'PAYMENT DATE', v: formattedDate },
-                    { l: 'BALANCE OUTSTANDING', v: fmt(registration.balanceAmount || 0) }
+                const boxX = mx + evColW + evMidW;
+                const boxW = evRightW;
+                doc.roundedRect(boxX, y, boxW, eventH, 6).lineWidth(1).stroke(BORDER_COLOR);
+                doc.fillColor(ACCENT).fontSize(10).font('Helvetica-Bold').text(receiptSettings.receiptTitleLabel || 'PAYMENT RECEIPT', boxX, y + 8, { width: boxW, align: 'center' });
+                const formattedDate = new Date(m.paidAt || registration.updatedAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                const infoRows = [
+                    ['Receipt No.', rNo],
+                    ['Reg ID', registration.registrationId || registration._id?.toString().slice(-8) || 'N/A'],
+                    ['Date', formattedDate],
                 ];
-
-                let py = y + 47;
-                payRows.forEach((r, i) => {
-                    doc.circle(mx + 30, py + 4, 8).fill(NAVY);
-                    doc.circle(mx + 30, py + 4, 2.5).fill('#fff'); // Clean dot
-
-                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(r.l, mx + 45, py);
-                    doc.font('Helvetica').fontSize(11).text(r.v, mx, py - 2, { width: mw - 20, align: 'right' });
-                    if (i < 4) doc.moveTo(mx + 45, py + 18).lineTo(mx + mw - 20, py + 18).lineWidth(0.5).stroke(BORDER_COLOR);
-                    py += 24;
+                let boxY = y + 26;
+                infoRows.forEach(([l, v]) => {
+                    doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text(l, boxX + 10, boxY, { width: 55 });
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (v || 'N/A'), boxX + 65, boxY, { width: boxW - 75 });
+                    boxY += 15;
                 });
 
-                y += 195;
+                y += eventH + sectionGap;
 
-                // RECEIVED AMOUNT & REMARKS
-                // Left Box: Blue Background
-                doc.roundedRect(mx, y, halfW - 10, 95, 8).fill(NAVY);
+                // ============ 3. FROM / TO BAND ============
+                const halfW = (mw - 12) / 2;
+                const boxTop = y + sectionGap * 2;
+                const rowW = halfW - 24;
 
-                // Vertical divider line
-                doc.moveTo(mx + halfW + 2, y + 5).lineTo(mx + halfW + 2, y + 90).lineWidth(1).stroke('#e2e8f0');
+                const fromAddr = settings?.companyAddress || 'N/A';
+                const exAddr = [registration.address, registration.city, registration.state, registration.pincode].filter(Boolean).join(', ') || 'N/A';
 
-                // Compute Layout for Left Box
-                const numStr = `${isUSD ? '$' : 'Rs.'} ${valFmt(m.amount || 0)}/-`;
-                doc.fontSize(22).font('Helvetica-Bold');
-                const numW = doc.widthOfString(numStr);
-                doc.fontSize(9);
-                const titleW = doc.widthOfString('RECEIVED AMOUNT');
-                const textBlockW = Math.max(titleW, numW);
+                // Box height is driven by actual measured content (address wrapping, and TO
+                // having two contact lines vs FROM's one) — not just infoBandHeight — so a
+                // long address or a phone+email pair stacked on separate lines never spills
+                // past the box border into the section below.
+                doc.fontSize(7.5).font('Helvetica');
+                const fromAddrH = doc.heightOfString(fromAddr, { width: rowW });
+                const toAddrH = doc.heightOfString(exAddr, { width: rowW });
+                const fromInnerH = 30 + 12 + fromAddrH + 10 + 8 + 12 + 10;
+                const toInnerH = 30 + 12 + toAddrH + 10 + 8 + 13 + 12 + 10;
+                const boxH = Math.max(infoH - 16, fromInnerH, toInnerH);
 
-                const gap = 15;
-                const outerR = 20;
-                const innerR = 16;
-                const totalW = (outerR * 2) + gap + textBlockW;
+                // FROM (Organiser)
+                doc.roundedRect(mx, boxTop, halfW, 18, 4).fill(ORGANISER);
+                drawBuildingIcon(mx + 14, boxTop + 9, 6, '#fff');
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx + 26, boxTop + 5, { width: halfW - 30 });
+                doc.roundedRect(mx, boxTop + 18, halfW, boxH - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                let fy = boxTop + 30;
+                doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(settings?.companyName || 'N/A', mx + 12, fy, { width: rowW });
+                fy += 12;
+                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(fromAddr, mx + 12, fy, { width: rowW });
+                fy += fromAddrH + 10;
+                doc.moveTo(mx + 12, fy).lineTo(mx + halfW - 12, fy).dash(2, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.undash();
+                fy += 8;
+                drawMailIcon(mx + 16, fy + 6, 5, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(settings?.contactEmail || '-', mx + 26, fy + 2, { width: rowW - 14 });
 
-                const startX = mx + (halfW - 10 - totalW) / 2 - 15; // Shifted left for optical balance
-                const cy = y + 40; // Shifted up so 3-line wrapped text breathes
+                // TO (Exhibitor)
+                const rX = mx + halfW + 12;
+                doc.roundedRect(rX, boxTop, halfW, 18, 4).fill(EXHIBITOR);
+                drawSvgIcon(rX + 14, boxTop + 9, ic_user, 0.4, '#fff');
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX + 26, boxTop + 5, { width: halfW - 30 });
+                doc.roundedRect(rX, boxTop + 18, halfW, boxH - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                let ty = boxTop + 30;
+                doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rX + 12, ty, { width: rowW });
+                ty += 12;
+                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(exAddr, rX + 12, ty, { width: rowW });
+                ty += toAddrH + 10;
+                doc.moveTo(rX + 12, ty).lineTo(rX + halfW - 12, ty).dash(2, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.undash();
+                ty += 8;
+                drawPhoneIcon(rX + 16, ty + 6, 5, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c1.mobile || c1.whatsapp || '-', rX + 26, ty + 2, { width: rowW - 14 });
+                ty += 13;
+                drawMailIcon(rX + 16, ty + 6, 5, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c1.email || '-', rX + 26, ty + 2, { width: rowW - 14 });
 
-                // Double Ring Circle
-                const circleX = startX + outerR;
-                doc.circle(circleX, cy, outerR).lineWidth(1.2).stroke('#fff');
-                doc.circle(circleX, cy, innerR).fill('#fff');
+                y = boxTop + boxH + sectionGap;
 
-                // Inner Circle Icon (Rs. or USD)
-                doc.fillColor(NAVY).fontSize(15).font('Helvetica-Bold').text(isUSD ? '$' : 'Rs.', circleX - innerR, cy - 5, { width: innerR * 2, align: 'center' });
+                // ============ 4. INVOICE DETAILS ============
+                const paymentAgainst = registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || 'N/A';
+                const invoiceType = registration.receiptDocumentType || registration.documentType || p.stallType || (invoice?.invoice_no ? 'Tax Invoice' : (invoice ? 'Proforma Invoice' : 'Payment Receipt'));
+                let paymentTypeLabel = 'Advance / Partial';
+                if (registration.balanceAmount <= 0) paymentTypeLabel = 'Final Payment';
 
-                // Text Block
-                const textX = startX + (outerR * 2) + gap;
+                const drawDivider = (label) => {
+                    doc.moveTo(mx, y + 6).lineTo(mx + mw / 2 - 70, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.fillColor(ACCENT).fontSize(9).font('Helvetica-Bold').text(label, mx + mw / 2 - 65, y, { width: 140, align: 'center' });
+                    doc.moveTo(mx + mw / 2 + 70, y + 6).lineTo(mx + mw, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
+                    y += 18;
+                };
+                drawDivider(receiptSettings.invoiceDetailsLabel || 'INVOICE DETAILS');
 
-                // 'RECEIVED AMOUNT'
-                doc.fillColor('#fff').fontSize(9).font('Helvetica-Bold').text('RECEIVED AMOUNT', textX, cy - 24);
+                const gridFields = [
+                    ['INVOICE NO.', paymentAgainst],
+                    ['INVOICE TYPE', invoiceType],
+                    ['PAYMENT TYPE', paymentTypeLabel],
+                    ['DOC TYPE', 'Payment Receipt'],
+                    ['QTY', '1'],
+                    ['EVENT', eventDoc?.name || 'IHWE 2026'],
+                ];
+                const gridColW = mw / gridFields.length;
+                // Long values (e.g. a lengthy event name) can wrap to several lines — measure
+                // the tallest cell first so the row below (the item table) never overlaps it.
+                doc.fontSize(7.5).font('Helvetica-Bold');
+                const gridValueHeight = Math.max(...gridFields.map((f) => doc.heightOfString(String(f[1]), { width: gridColW - 4 })));
+                gridFields.forEach((f, i) => {
+                    const gx = mx + i * gridColW;
+                    doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(f[0], gx, y, { width: gridColW - 4, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(String(f[1]), gx, y + 10, { width: gridColW - 4, align: 'center' });
+                });
+                y += 10 + gridValueHeight + 8;
 
-                // Amount String
-                doc.fillColor('#fff').fontSize(22).font('Helvetica-Bold').text(numStr, textX, cy - 11);
+                // Item table (single summary row — this app doesn't carry itemized line items
+                // for a payment receipt, only an invoice-level amount, same as before)
+                const fb = registration.financeBreakdown || {};
+                const invVal = registration.receiptInvoiceAmount || fb.invoiceAmount || fb.totalAmount || p.total || invoice?.finalAmount || fb.netPayable || p.amount || 0;
+                const gstPercent = p.gstPercent || 18;
+                const taxableValue = fb.subtotal || Math.round(invVal / (1 + gstPercent / 100));
+                const gstAmount = fb.gstAmount || Math.max(0, invVal - taxableValue);
+                const tdsPercent = fb.tdsPercent || registration.chosenTdsPercent || 0;
+                const tdsAmount = fb.tdsAmount || 0;
+                const grandTotal = taxableValue + gstAmount - tdsAmount;
+                const rateUnitValue = registration.receiptUnitRate || p.rate || taxableValue;
+                const tableCols = [
+                    { label: 'Description', w: 0.38 },
+                    { label: 'Doc Type', w: 0.16 },
+                    { label: 'Payment Type', w: 0.16 },
+                    { label: 'Rate/Unit', w: 0.15 },
+                    { label: 'Amount', w: 0.15 },
+                ];
+                let tx = mx;
+                doc.rect(mx, y, mw, 16).fill(ACCENT);
+                tableCols.forEach((c) => {
+                    const cw = mw * c.w;
+                    doc.fillColor('#fff').fontSize(7).font('Helvetica-Bold').text(c.label.toUpperCase(), tx + 4, y + 4, { width: cw - 8 });
+                    tx += cw;
+                });
+                y += 16;
+                tx = mx;
+                const rowH = 22;
+                doc.rect(mx, y, mw, rowH).lineWidth(0.5).stroke(BORDER_COLOR);
+                const rowVals = [
+                    `${invoiceType} – ${paymentAgainst}`,
+                    'Payment Receipt',
+                    paymentTypeLabel,
+                    fmt(rateUnitValue),
+                    fmt(taxableValue),
+                ];
+                tableCols.forEach((c, i) => {
+                    const cw = mw * c.w;
+                    const align = i === 4 ? 'right' : 'left';
+                    const cellRightPadding = i === 4 ? 18 : 8;
+                    doc.fillColor(TEXT_DARK).fontSize(7.2).font('Helvetica').text(rowVals[i], tx + 4, y + 6, { width: cw - cellRightPadding, align, lineBreak: false });
+                    tx += cw;
+                });
+                y += rowH;
 
-                // Words
-                const wordAmt = inWords(m.amount || 0);
-                const curWord = isUSD ? 'Dollars' : 'Rupees';
-                const availableW = (mx + halfW - 10) - textX - 10;
-                doc.fillColor('#fff').fontSize(10).font('Helvetica-Oblique').text(`(${curWord} ${wordAmt})`, textX, cy + 14, { width: availableW });
+                // Summary rows
+                const summaryRows = [
+                    ['GROSS AMOUNT', fmt(fb.grossAmount || taxableValue), false],
+                    ['TAXABLE VALUE', fmt(taxableValue), false],
+                    [`ADD: GST @ ${gstPercent}%`, `+ ${fmt(gstAmount)}`, false],
+                    [`LESS: TDS DEDUCTION (${tdsPercent}%)`, `- ${fmt(tdsAmount)}`, false],
+                    ['GRAND TOTAL', fmt(grandTotal), true],
+                ];
+                const sumW = mw * 0.46;
+                const sumX = mx + mw - sumW;
+                summaryRows.forEach(([l, v, strong]) => {
+                    if (strong) doc.rect(sumX, y, sumW, 18).fill(ACCENT);
+                    doc.fillColor(strong ? '#fff' : TEXT_DARK).fontSize(8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(l, sumX + 8, y + 4, { width: sumW * 0.56, lineBreak: false });
+                    doc.fillColor(strong ? '#fff' : (v.startsWith('-') ? '#dc2626' : TEXT_DARK)).fontSize(7.8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(v, sumX + sumW * 0.56, y + 4, { width: sumW * 0.42 - 8, align: 'right', lineBreak: false });
+                    doc.moveTo(mx, y + 16).lineTo(mx + mw, y + 16).lineWidth(0.3).stroke(BORDER_COLOR);
+                    y += 16;
+                });
+                y += sectionGap;
 
-                // Right Box: Remarks
-                const remarksX = mx + halfW + 15;
-                doc.circle(remarksX + 10, y + 10, 10).fill(NAVY);
-                drawSvgIcon(remarksX + 10, y + 10, ic_doc, 0.45, '#fff');
+                // ============ 5. PAYMENT DETAILS ============
+                drawDivider(receiptSettings.paymentDetailsLabel || 'PAYMENT DETAILS');
 
-                doc.fillColor(NAVY).fontSize(10).font('Helvetica-Bold').text('REMARKS', remarksX + 26, y + 5);
+                const paymentMode = String(m.method || m.paymentMode || registration.paymentMode || 'N/A').toUpperCase();
+                const reference = m.transactionId || m.razorpayPaymentId || registration.paymentId || 'N/A';
+                const totalPaid = m.amount || registration.amountPaid || 0;
+                const paymentStatus = registration.balanceAmount > 0 ? 'Partial Received' : 'Full Received';
 
-                doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text('Received towards participation in the', remarksX, y + 30);
-                doc.font('Helvetica-Bold').text('9th International Health & Wellness Expo', remarksX, y + 45);
-                doc.text('(IHWE Global Edition)', remarksX, y + 60, { continued: true }).font('Helvetica').text(' scheduled at Pragati Maidan, New Delhi.');
+                const payStats = [
+                    { l: 'PAYMENT MODE', v: paymentMode, icon: ic_wallet },
+                    { l: 'TRANSACTION NO.', v: reference, icon: ic_doc },
+                    { l: 'PAYMENT DATE', v: formattedDate, icon: ic_cal },
+                    { l: 'TOTAL PAID', v: fmt(totalPaid), icon: ic_rupee },
+                    { l: 'PAYMENT STATUS', v: paymentStatus, icon: ic_doc },
+                ];
+                doc.roundedRect(mx, y, mw, 55, 6).lineWidth(1).stroke(BORDER_COLOR);
+                const statW = mw / payStats.length;
+                payStats.forEach((s, i) => {
+                    const cx = mx + i * statW + statW / 2;
+                    doc.circle(cx, y + 16, 10).lineWidth(1).stroke(ACCENT);
+                    drawSvgIcon(cx, y + 16, s.icon, 0.42, ACCENT);
+                    doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(s.l, cx - statW / 2 + 4, y + 32, { width: statW - 8, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(s.v, cx - statW / 2 + 4, y + 42, { width: statW - 8, align: 'center' });
+                    if (i < payStats.length - 1) doc.moveTo(mx + (i + 1) * statW, y + 8).lineTo(mx + (i + 1) * statW, y + 48).lineWidth(0.5).stroke(BORDER_COLOR);
+                });
+                y += 55 + sectionGap;
 
-                y += 135;
+                // ============ 6. EXHIBITOR DETAILS / IMPORTANT NOTE ============
+                const boxTop2 = y + sectionGap * 2;
+                const noteItems = (receiptSettings.importantNoteItems || []).slice(0, 4);
+                doc.fontSize(7).font('Helvetica');
+                // Measure each bullet's wrapped height up front so items never overlap when
+                // one of them wraps to more than one line, and size the box to fit them all.
+                const noteItemHeights = noteItems.map((item, i) => doc.heightOfString(`${i + 1}. ${item}`, { width: halfW - 20 }));
+                const noteContentHeight = noteItemHeights.reduce((sum, h) => sum + h + 4, 0);
+                const boxH2 = Math.max(74, 18 + 16 + noteContentHeight + 10);
+                doc.roundedRect(mx, boxTop2, halfW, 18, 4).fill(EXHIBITOR);
+                drawSvgIcon(mx + 14, boxTop2 + 9, ic_user, 0.4, '#fff');
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.exhibitorDetailsLabel || 'EXHIBITOR DETAILS', mx + 26, boxTop2 + 5);
+                doc.roundedRect(mx, boxTop2 + 18, halfW, boxH2 - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
 
-                // Footer: Thank you & Stamp
-                doc.font('Helvetica-Oblique').fontSize(22).fillColor(NAVY).text('Thank You!', mx, y);
-                doc.font('Helvetica').fontSize(10).fillColor(TEXT_DARK).text('We appreciate your trust.', mx, y + 25);
-                doc.moveTo(mx, y + 45).lineTo(mx + 130, y + 45).lineWidth(1).stroke(BORDER_COLOR);
+                const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
+                const displayName = contactPersonStr || registration.filledByFullName || invoice?.consignee_name || 'N/A';
+                const contactMobile = c1.mobile || c1.whatsapp || '';
 
-                const companyName = settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.';
-                doc.font('Helvetica-Bold').fontSize(10).fillColor(NAVY).text(`For ${companyName}`, mx + halfW + 15, y, { width: halfW, align: 'center' });
+                let exY = boxTop2 + 30;
+                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Bold').text('Contact Person', mx + 12, exY, { width: 90 });
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + displayName + (contactMobile ? ` / ${contactMobile}` : ''), mx + 100, exY, { width: halfW - 112 });
+                exY += 16;
+                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Bold').text('Relationship Manager', mx + 12, exY, { width: 90 });
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (registration.filledByFullName || registration.spokenWith || 'Direct'), mx + 100, exY, { width: halfW - 112 });
 
-                try {
-                    const sigY = y + 15;
-                    const centerBox = mx + halfW + 15 + (halfW / 2);
+                const rX2 = mx + halfW + 12;
+                doc.roundedRect(rX2, boxTop2, halfW, 18, 4).fill(NOTE_COLOR);
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.importantNoteLabel || 'IMPORTANT NOTE', rX2 + 14, boxTop2 + 5, { width: halfW - 20 });
+                doc.roundedRect(rX2, boxTop2 + 18, halfW, boxH2 - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                let noteY = boxTop2 + 26;
+                noteItems.forEach((item, i) => {
+                    doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(`${i + 1}. ${item}`, rX2 + 10, noteY, { width: halfW - 20 });
+                    noteY += noteItemHeights[i] + 4;
+                });
 
-                    if (settings?.companyStamp) {
-                        const stampP = path.resolve(__dirname, '..', settings.companyStamp.replace(/^\//, ''));
-                        if (fs.existsSync(stampP)) {
-                            doc.image(stampP, centerBox - 70, sigY + 5, { fit: [60, 60], align: 'center' });
-                        }
-                    }
-                    if (settings?.authorizedSignature) {
-                        const sigP = path.resolve(__dirname, '..', settings.authorizedSignature.replace(/^\//, ''));
-                        if (fs.existsSync(sigP)) {
-                            doc.image(sigP, centerBox + 10, sigY + 10, { fit: [80, 50], align: 'center' });
-                        }
-                    }
-                } catch (e) { console.log('Error drawing stamp/sig:', e); }
+                const contentBottom = boxTop2 + boxH2 + sectionGap;
 
-                // Shifted down to y+90 to clear the 60px height of the stamp
-                doc.moveTo(mx + halfW + 15 + 40, y + 90).lineTo(mx + halfW + 15 + halfW - 40, y + 90).lineWidth(0.5).stroke(BORDER_COLOR);
-                doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT_DARK).text('Authorized Signatory', mx + halfW + 15, y + 95, { width: halfW, align: 'center' });
+                // ============ 7. FOOTER ============
+                // Anchored to the page bottom, but never overlaps content above it even if
+                // the configured band heights push content unusually far down the page.
+                const printSafeBottomGap = 18;
+                const footerTop = Math.max(contentBottom, pageH - footerH - printSafeBottomGap);
+                doc.fillColor(NOTE_COLOR).font('Helvetica-Oblique').fontSize(10).text(receiptSettings.footerThankYouText || 'Thank you for your participation.', mx, footerTop, { width: mw, align: 'center' });
+                doc.moveTo(mx + mw / 2 - 100, footerTop + 16).lineTo(mx + mw / 2 + 100, footerTop + 16).lineWidth(0.5).stroke(BORDER_COLOR);
+
+                const contactRowY = footerTop + 24;
+                const contactItems = [
+                    { draw: drawPhoneIcon, v: settings?.contactPhone || '-' },
+                    { draw: drawMailIcon, v: settings?.contactEmail || '-' },
+                    { draw: drawGlobeIcon, v: settings?.contactWebsite || '-' },
+                ];
+                const cItemW = mw / contactItems.length;
+                contactItems.forEach((c, i) => {
+                    const cx = mx + i * cItemW + cItemW / 2 - 40;
+                    c.draw(cx, contactRowY + 5, 5, ACCENT);
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c.v, cx + 10, contactRowY, { width: cItemW - 20 });
+                });
+
+                // Same left/right margin (mx) as every other section, instead of spanning
+                // edge-to-edge.
+                const barY = pageH - 22 - printSafeBottomGap;
+                doc.rect(mx, barY, mw, 22).fill(ACCENT);
+                doc.fillColor('#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx + 10, barY + 7, { width: mw - 80 });
+                doc.text('Page 1 of 1', mx + mw - 70, barY + 7, { width: 60, align: 'right' });
 
                 doc.end();
                 stream.on('finish', () => {
