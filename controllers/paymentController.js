@@ -5,6 +5,7 @@ const PerformaInvoice = require("../models/PerformaInvoice");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Company = require("../models/Company");
 const Stall = require("../models/Stall");
+const Event = require("../models/Event");
 const { logActivity } = require("../utils/logger");
 const { getAccountNameById, getDocumentAccountName } = require("../utils/accountActivityDetails");
 const emailService = require("../utils/emailService");
@@ -137,9 +138,47 @@ const getReceiptContact = async (payment) => {
   return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo, exhibitor };
 };
 
+const DEFAULT_RECEIPT_EVENT = {
+  name: "9th-IHWE",
+  startDate: new Date("2026-08-21"),
+  endDate: new Date("2026-08-23"),
+  location: "Pragati Maidan, New Delhi, India",
+};
+
+const normalizeReceiptEvent = (eventDoc) => ({
+  ...DEFAULT_RECEIPT_EVENT,
+  ...(eventDoc || {}),
+});
+
+const resolveReceiptEvent = async (payment, contact, docData) => {
+  const mongoose = require("mongoose");
+  const candidates = [
+    contact?.exhibitor?.eventId,
+    docData?.eventId,
+    payment?.eventId,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "object" && candidate.name) {
+      return normalizeReceiptEvent(candidate);
+    }
+    if (mongoose.Types.ObjectId.isValid(candidate)) {
+      const eventDoc = await Event.findById(candidate).lean();
+      if (eventDoc) return normalizeReceiptEvent(eventDoc);
+    }
+  }
+
+  const eventDoc =
+    await Event.findOne({ status: "active", startDate: { $exists: true, $ne: null } }).sort({ order: 1, startDate: 1 }).lean() ||
+    await Event.findOne({ name: /IHWE|International Health/i }).sort({ startDate: 1, order: 1 }).lean();
+
+  return normalizeReceiptEvent(eventDoc);
+};
+
 const generateAccountPaymentReceipt = async (payment) => {
   const docData = await resolvePaymentDocument(payment);
   const contact = await getReceiptContact(payment);
+  const eventDoc = await resolveReceiptEvent(payment, contact, docData);
   const receiptNo = `PAY-RCPT-${String(payment._id).slice(-8).toUpperCase()}`;
   const invoiceAmount = parseAmount(getDocumentAmount(docData, payment));
   const receivedAmount = parseAmount(payment.amount_text);
@@ -187,7 +226,7 @@ const generateAccountPaymentReceipt = async (payment) => {
       mobile: contact.mobile,
       whatsapp: contact.mobile,
     },
-    eventId: { name: "IHWE 2026" },
+    eventId: eventDoc,
     isGenericInvoice: true,
     participation: {
       currency: "INR",
@@ -247,7 +286,7 @@ const generateAccountPaymentReceipt = async (payment) => {
     }
   }
 
-  const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, { 
+  const pdfResult = await pdfGenerator.generatePaymentSlip(registrationLike, {
     paymentIndex: paymentHistory.length - 1,
     headerImage: headerImagePath
   });
@@ -532,11 +571,11 @@ const sendPaymentReceipt = async (req, res) => {
     const { id } = req.params;
     const { type } = req.query; // 'email' or 'whatsapp'
     const payment = await Payment.findById(id).lean();
-    
+
     if (!payment) {
       return res.status(404).json({ success: false, message: "Payment not found" });
     }
-    
+
     const { filePath, docData, contact, registrationLike, headerImagePath } = await generateAccountPaymentReceipt(payment);
     const { email, mobile, name, companyName } = contact;
 
@@ -576,7 +615,7 @@ const sendPaymentReceipt = async (req, res) => {
 
     const sentOk = type === 'email' ? emailSent
       : type === 'whatsapp' ? whatsappSent
-      : (emailSent || whatsappSent);
+        : (emailSent || whatsappSent);
 
     if (!sentOk) {
       return res.status(502).json({

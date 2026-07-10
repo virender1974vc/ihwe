@@ -278,6 +278,7 @@ app.use("/api/hotel-stay-partner", hotelStayPartnerRoutes);
 app.use("/api/fabrication-partner", fabricationPartnerRoutes);
 app.use("/api/travel-partner", travelPartnerRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/payment-receipt-settings", require("./routes/paymentReceiptSettingsRoutes"));
 app.use("/api/ai-verification-settings", require("./routes/aiVerificationSettingsRoutes"));
 app.use("/api/download-pdf", downloadPdfRoutes);
 app.use("/api/marquee", marqueeRoutes);
