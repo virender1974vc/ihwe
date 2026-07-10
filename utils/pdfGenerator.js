@@ -869,7 +869,8 @@ class PDFGenerator {
                 // ============ 7. FOOTER ============
                 // Anchored to the page bottom, but never overlaps content above it even if
                 // the configured band heights push content unusually far down the page.
-                const footerTop = Math.max(contentBottom, pageH - footerH);
+                const printSafeBottomGap = 18;
+                const footerTop = Math.max(contentBottom, pageH - footerH - printSafeBottomGap);
                 doc.fillColor(NOTE_COLOR).font('Helvetica-Oblique').fontSize(10).text(receiptSettings.footerThankYouText || 'Thank you for your participation.', mx, footerTop, { width: mw, align: 'center' });
                 doc.moveTo(mx + mw / 2 - 100, footerTop + 16).lineTo(mx + mw / 2 + 100, footerTop + 16).lineWidth(0.5).stroke(BORDER_COLOR);
 
@@ -888,7 +889,7 @@ class PDFGenerator {
 
                 // Same left/right margin (mx) as every other section, instead of spanning
                 // edge-to-edge.
-                const barY = pageH - 22;
+                const barY = pageH - 22 - printSafeBottomGap;
                 doc.rect(mx, barY, mw, 22).fill(ACCENT);
                 doc.fillColor('#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx + 10, barY + 7, { width: mw - 80 });
                 doc.text('Page 1 of 1', mx + mw - 70, barY + 7, { width: 60, align: 'right' });
