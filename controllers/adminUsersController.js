@@ -11,6 +11,9 @@ const normalizeAdminPayload = (req) => {
         if (req.files['profileImage'] && req.files['profileImage'][0]) {
             data.profileImage = req.files['profileImage'][0].path || req.files['profileImage'][0].secure_url || req.files['profileImage'][0].url || '';
         }
+        if (req.files['signatureImage'] && req.files['signatureImage'][0]) {
+            data.signatureImage = req.files['signatureImage'][0].path || req.files['signatureImage'][0].secure_url || req.files['signatureImage'][0].url || '';
+        }
     } else if (req.file) {
         data.hodImage = req.file.path || req.file.secure_url || req.file.url || '';
     }
@@ -20,6 +23,9 @@ const normalizeAdminPayload = (req) => {
     }
     if (data.profileImage && typeof data.profileImage !== 'string') {
         delete data.profileImage;
+    }
+    if (data.signatureImage && typeof data.signatureImage !== 'string') {
+        delete data.signatureImage;
     }
 
     return data;

@@ -28,6 +28,7 @@ class SettingsController {
                 quickLinks, exhibitionLinks,
                 companyName, companyAddress, companyGst, companyCin, 
                 contactPhone, contactEmail, contactWebsite,
+                contactPerson, contactDesignation,
                 fullPaymentDiscount, availableTdsRates, msmeLogoTitle,
                 msmeLogos, showBrochurePopUp, brochurePopUpDelay, showGovtPmsScheme
             } = req.body;
@@ -52,6 +53,8 @@ class SettingsController {
                 contactPhone,
                 contactEmail,
                 contactWebsite,
+                contactPerson,
+                contactDesignation,
                 onlineAdvancePercentage: onlineAdvancePercentage ? Number(onlineAdvancePercentage) : undefined,
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
                 fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined,

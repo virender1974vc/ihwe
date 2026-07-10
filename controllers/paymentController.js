@@ -109,6 +109,7 @@ const getReceiptContact = async (payment) => {
   let email = "";
   let mobile = "";
   let name = "Contact";
+  let designation = "";
   let companyName = payment.company_name || "";
   let address = "";
   let city = "";
@@ -116,12 +117,14 @@ const getReceiptContact = async (payment) => {
   let country = "";
   let pincode = "";
   let gstNo = "";
+  let rmName = "";
 
   if (exhibitor) {
     const contact1 = exhibitor.contact1 || {};
     email = contact1.email || "";
     mobile = contact1.whatsapp || contact1.mobile || "";
     name = contact1.name || `${contact1.firstName || ""} ${contact1.lastName || ""}`.trim() || exhibitor.companyName || "Contact";
+    designation = contact1.designation || "";
     companyName = exhibitor.exhibitorName || exhibitor.companyName || exhibitor.companyFirmName || companyName;
     address = exhibitor.address || "";
     city = exhibitor.city || "";
@@ -129,21 +132,26 @@ const getReceiptContact = async (payment) => {
     country = exhibitor.country || "";
     pincode = exhibitor.pincode || "";
     gstNo = exhibitor.gstNo || "";
+    rmName = exhibitor.filledByFullName || exhibitor.spokenWith || "";
   } else if (company) {
-    const contact = company.contacts && company.contacts.length > 0 ? company.contacts[0] : {};
+    const contact = company.contacts && company.contacts.length > 0
+      ? (company.contacts.find((c) => c.isPrimary) || company.contacts[0])
+      : {};
     email = contact.email || company.email || "";
     mobile = contact.mobile || company.landline || "";
-    name = contact.name || contact.firstName || company.companyName || "Contact";
+    name = contact.name || `${contact.firstName || ""} ${contact.surname || ""}`.trim() || company.companyName || "Contact";
+    designation = contact.designation || "";
     companyName = company.companyName || companyName;
     address = company.address || company.companyAddress || "";
     city = company.city || "";
     state = company.state || "";
     country = company.country || "";
     pincode = company.pincode || company.pinCode || "";
-    gstNo = company.gstNo || company.gstin || "";
+    gstNo = company.gstNumber || "";
+    rmName = company.added_by || "";
   }
 
-  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo, exhibitor };
+  return { email, mobile, name, designation, companyName, address, city, state, country, pincode, gstNo, rmName, exhibitor };
 };
 
 const DEFAULT_RECEIPT_EVENT = {
@@ -235,9 +243,11 @@ const generateAccountPaymentReceipt = async (payment) => {
     country: contact.country || "India",
     pincode: contact.pincode,
     gstNo: contact.gstNo,
+    filledByFullName: contact.rmName || "",
     contact1: {
       firstName: firstName || contact.name || "Contact",
       lastName: lastNameParts.join(" "),
+      designation: contact.designation || "",
       email: contact.email,
       mobile: contact.mobile,
       whatsapp: contact.mobile,

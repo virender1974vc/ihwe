@@ -132,9 +132,6 @@ class PDFGenerator {
         });
         return y + 18;
     }
-
-    // Measures how tall a row needs to be given each cell's wrapped text, so rows
-    // with long narration/description text never overlap the row drawn after them.
     _measureRowHeight(doc, cols, minHeight = 18) {
         let maxHeight = minHeight;
         cols.forEach(({ text, w, bold }) => {
@@ -144,10 +141,6 @@ class PDFGenerator {
         });
         return maxHeight;
     }
-
-    // Like _tableRow, but sizes the row to fit wrapped multi-line cell content instead
-    // of assuming a fixed single-line height (which caused overlapping/garbled rows
-    // whenever a cell's text — e.g. a long item description — wrapped to 2+ lines).
     _wrappedTableRow(doc, cols, y, bg) {
         const pageW = doc.page.width;
         const rowHeight = this._measureRowHeight(doc, cols);
@@ -692,8 +685,8 @@ class PDFGenerator {
                 doc.fontSize(7.5).font('Helvetica');
                 const fromAddrH = doc.heightOfString(fromAddr, { width: rowW });
                 const toAddrH = doc.heightOfString(exAddr, { width: rowW });
-                const fromInnerH = 30 + 12 + fromAddrH + 10 + 8 + 12 + 10;
-                const toInnerH = 30 + 12 + toAddrH + 10 + 8 + 13 + 12 + 10;
+                const fromInnerH = 24 + 12 + fromAddrH + 10 + 8 + 13 + 13 + 13 + 13 + 10;
+                const toInnerH = 24 + 12 + toAddrH + 10 + 8 + 13 + 13 + 13 + 13 + 10;
                 const boxH = Math.max(infoH - 16, fromInnerH, toInnerH);
 
                 // FROM (Organiser)
@@ -701,7 +694,7 @@ class PDFGenerator {
                 drawSvgIcon(mx + 14, boxTop + 9, ic_business, 0.4, '#fff');
                 doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx, boxTop + 5, { width: halfW, align: 'center' });
                 doc.rect(mx, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
-                let fy = boxTop + 30;
+                let fy = boxTop + 24;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(settings?.companyName || 'N/A', mx + 12, fy, { width: rowW });
                 fy += 12;
                 doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(fromAddr, mx + 12, fy, { width: rowW });
@@ -709,8 +702,25 @@ class PDFGenerator {
                 doc.moveTo(mx + 12, fy).lineTo(mx + halfW - 12, fy).dash(2, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.undash();
                 fy += 8;
+
+                const orgContactStr = settings?.contactPerson || 'Authorized Signatory';
+                const orgDesignation = settings?.contactDesignation ? ` (${settings.contactDesignation})` : '';
+                const orgDisplayName = orgContactStr + orgDesignation;
+
+                drawSvgIcon(mx + 14, fy + 4, ic_user, 0.4, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(orgDisplayName, mx + 26, fy + 2, { width: rowW - 14 });
+                fy += 13;
+
+                drawPhoneIcon(mx + 16, fy + 6, 5, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(settings?.contactPhone || '-', mx + 26, fy + 2, { width: rowW - 14 });
+                fy += 13;
+
                 drawMailIcon(mx + 16, fy + 6, 5, TEXT_DARK);
                 doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(settings?.contactEmail || '-', mx + 26, fy + 2, { width: rowW - 14 });
+                fy += 13;
+
+                drawSvgIcon(mx + 14, fy + 4, ic_doc, 0.4, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(`GSTIN: ${settings?.companyGst || 'N/A'}`, mx + 26, fy + 2, { width: rowW - 14 });
 
                 // TO (Exhibitor)
                 const rX = mx + halfW + 12;
@@ -718,7 +728,7 @@ class PDFGenerator {
                 drawSvgIcon(rX + 14, boxTop + 9, ic_user, 0.4, '#fff');
                 doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX, boxTop + 5, { width: halfW, align: 'center' });
                 doc.rect(rX, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
-                let ty = boxTop + 30;
+                let ty = boxTop + 24;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rX + 12, ty, { width: rowW });
                 ty += 12;
                 doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(exAddr, rX + 12, ty, { width: rowW });
@@ -726,11 +736,28 @@ class PDFGenerator {
                 doc.moveTo(rX + 12, ty).lineTo(rX + halfW - 12, ty).dash(2, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.undash();
                 ty += 8;
+
+                const namePart = c1.name || `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim();
+                const exhContactStr = namePart ? namePart : '';
+                const exhDesignation = c1?.designation ? ` (${c1.designation})` : '';
+                const exhDisplayName = exhContactStr ? exhContactStr + exhDesignation : '';
+
+                if (exhDisplayName) {
+                    drawSvgIcon(rX + 14, ty + 4, ic_user, 0.4, TEXT_DARK);
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(exhDisplayName, rX + 26, ty + 2, { width: rowW - 14 });
+                    ty += 13;
+                }
+
                 drawPhoneIcon(rX + 16, ty + 6, 5, TEXT_DARK);
                 doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c1.mobile || c1.whatsapp || '-', rX + 26, ty + 2, { width: rowW - 14 });
                 ty += 13;
+
                 drawMailIcon(rX + 16, ty + 6, 5, TEXT_DARK);
                 doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c1.email || '-', rX + 26, ty + 2, { width: rowW - 14 });
+                ty += 13;
+
+                drawSvgIcon(rX + 14, ty + 4, ic_doc, 0.4, TEXT_DARK);
+                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(`GSTIN: ${registration.gstNo || 'N/A'}`, rX + 26, ty + 2, { width: rowW - 14 });
 
                 y = boxTop + boxH + sectionGap;
 
@@ -741,9 +768,12 @@ class PDFGenerator {
                 if (registration.balanceAmount <= 0) paymentTypeLabel = 'Final Payment';
 
                 const drawDivider = (label) => {
-                    doc.moveTo(mx, y + 6).lineTo(mx + mw / 2 - 70, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
-                    doc.fillColor(ACCENT).fontSize(9).font('Helvetica-Bold').text(label, mx + mw / 2 - 65, y, { width: 140, align: 'center' });
-                    doc.moveTo(mx + mw / 2 + 70, y + 6).lineTo(mx + mw, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.fontSize(9).font('Helvetica-Bold');
+                    const textW = doc.widthOfString(label) + 10;
+                    const halfW = textW / 2;
+                    doc.moveTo(mx, y + 6).lineTo(mx + mw / 2 - halfW, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.fillColor(ACCENT).fontSize(9).font('Helvetica-Bold').text(label, mx + mw / 2 - halfW, y, { width: textW, align: 'center' });
+                    doc.moveTo(mx + mw / 2 + halfW, y + 6).lineTo(mx + mw, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
                     y += 18;
                 };
                 drawDivider(receiptSettings.invoiceDetailsLabel || 'INVOICE DETAILS');
@@ -761,6 +791,7 @@ class PDFGenerator {
                 doc.fontSize(7.5).font('Helvetica-Bold');
                 const gridValueHeight = Math.max(...gridFields.map((f) => doc.heightOfString(String(f[1]), { width: gridColW - 4 })));
                 const gridH = 20 + gridValueHeight;
+                doc.rect(mx, y - 4, mw, 12).fill(ACCENT);
                 doc.rect(mx, y - 4, mw, gridH).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.moveTo(mx, y + 8).lineTo(mx + mw, y + 8).lineWidth(0.5).stroke(BORDER_COLOR);
 
@@ -769,10 +800,16 @@ class PDFGenerator {
                     if (i > 0) {
                         doc.moveTo(gx, y - 4).lineTo(gx, y - 4 + gridH).lineWidth(0.5).stroke(BORDER_COLOR);
                     }
-                    doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(f[0], gx + 2, y, { width: gridColW - 4, align: 'center' });
+                    doc.fillColor('#fff').fontSize(6.5).font('Helvetica-Bold').text(f[0], gx + 2, y, { width: gridColW - 4, align: 'center' });
                     doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(String(f[1]), gx + 2, y + 12, { width: gridColW - 4, align: 'center' });
                 });
+                const gridBottomY = y - 4 + gridH;
                 y += gridH + 4;
+
+                // Connector lines through the gap so the grid box and the item table
+                // below read as one joined section rather than two separate boxes.
+                doc.moveTo(mx, gridBottomY).lineTo(mx, y).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.moveTo(mx + mw, gridBottomY).lineTo(mx + mw, y).lineWidth(0.5).stroke(BORDER_COLOR);
 
                 // Item table (single summary row — this app doesn't carry itemized line items
                 // for a payment receipt, only an invoice-level amount, same as before)
@@ -793,7 +830,7 @@ class PDFGenerator {
                     { label: 'Amount', w: 0.15 },
                 ];
                 let tx = mx;
-                doc.rect(mx, y, mw, 16).fill(ACCENT);
+                doc.rect(mx, y, mw, 16).fillAndStroke(ACCENT, BORDER_COLOR);
                 tableCols.forEach((c) => {
                     const cw = mw * c.w;
                     doc.fillColor('#fff').fontSize(7).font('Helvetica-Bold').text(c.label.toUpperCase(), tx + 4, y + 4, { width: cw - 8 });
@@ -829,13 +866,19 @@ class PDFGenerator {
                 ];
                 const sumW = mw * 0.46;
                 const sumX = mx + mw - sumW;
-                summaryRows.forEach(([l, v, strong]) => {
+                const summaryStartY = y;
+                summaryRows.forEach(([l, v, strong], idx) => {
                     if (strong) doc.rect(sumX, y, sumW, 16).fill(ACCENT);
-                    doc.fillColor(strong ? '#fff' : TEXT_DARK).fontSize(8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(l, sumX + 8, y + 4, { width: sumW * 0.56, lineBreak: false });
-                    doc.fillColor(strong ? '#fff' : (v.startsWith('-') ? '#dc2626' : TEXT_DARK)).fontSize(7.8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(v, sumX + sumW * 0.56, y + 4, { width: sumW * 0.42 - 8, align: 'right', lineBreak: false });
-                    doc.moveTo(mx, y + 16).lineTo(mx + mw, y + 16).lineWidth(0.3).stroke(BORDER_COLOR);
+                    doc.fillColor(strong ? '#fff' : TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(l, sumX + 8, y + 5, { width: sumW * 0.56, lineBreak: false });
+                    doc.fillColor(strong ? '#fff' : (v.startsWith('-') ? '#dc2626' : TEXT_DARK)).fontSize(7.5).font('Helvetica-Bold').text(v, sumX + sumW * 0.56, y + 4, { width: sumW * 0.42 - 8, align: 'right', lineBreak: false });
+                    if (idx < summaryRows.length - 1) {
+                        doc.moveTo(mx, y + 16).lineTo(mx + mw, y + 16).lineWidth(0.3).stroke(BORDER_COLOR);
+                    }
                     y += 16;
                 });
+                // Enclose the summary block with side/bottom borders so it reads as one
+                // continuous section with the item row above (whose rect provides the top edge).
+                doc.rect(mx, summaryStartY, mw, y - summaryStartY).lineWidth(0.5).stroke(BORDER_COLOR);
                 y += sectionGap;
 
                 // ============ 5. PAYMENT DETAILS ============
@@ -871,107 +914,127 @@ class PDFGenerator {
                 });
                 y += 45 + sectionGap;
 
-                // ============ 6. EXHIBITOR DETAILS / IMPORTANT NOTE ============
-                const boxTop2 = y + sectionGap * 2;
-                const noteItems = (receiptSettings.importantNoteItems || []).slice(0, 4);
-                doc.fontSize(7).font('Helvetica');
-                const noteItemHeights = noteItems.map((item, i) => doc.heightOfString(`${i + 1}. ${item}`, { width: halfW - 20 }));
-                const noteContentHeight = noteItemHeights.reduce((sum, h) => sum + h + 4, 0);
-                const boxH2 = Math.max(74, 18 + 16 + noteContentHeight + 10);
-                doc.rect(mx, boxTop2, halfW, 18).fill(EXHIBITOR);
-                drawSvgIcon(mx + 14, boxTop2 + 9, ic_user, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.exhibitorDetailsLabel || 'EXHIBITOR DETAILS', mx, boxTop2 + 5, { width: halfW, align: 'center' });
-                doc.rect(mx, boxTop2 + 18, halfW, boxH2 - 18).lineWidth(1).stroke(BORDER_COLOR);
+                let contentBottom = y;
 
-                const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
-                const displayName = contactPersonStr || registration.filledByFullName || invoice?.consignee_name || 'N/A';
-                const contactMobile = c1.mobile || c1.whatsapp || '';
-
-                let exY = boxTop2 + 30;
-                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Bold').text('Contact Person', mx + 12, exY, { width: 90 });
-                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + displayName + (contactMobile ? ` / ${contactMobile}` : ''), mx + 100, exY, { width: halfW - 112 });
-                exY += 16;
-                doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Bold').text('Relationship Manager', mx + 12, exY, { width: 90 });
-                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (registration.filledByFullName || registration.spokenWith || 'Direct'), mx + 100, exY, { width: halfW - 112 });
-
-                const rX2 = mx + halfW + 12;
-                doc.rect(rX2, boxTop2, halfW, 18).fill(NOTE_COLOR);
-                drawSvgIcon(rX2 + 14, boxTop2 + 9, ic_bell, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.importantNoteLabel || 'IMPORTANT NOTE', rX2, boxTop2 + 5, { width: halfW, align: 'center' });
-                doc.rect(rX2, boxTop2 + 18, halfW, boxH2 - 18).lineWidth(1).stroke(BORDER_COLOR);
-                let noteY = boxTop2 + 26;
-                noteItems.forEach((item, i) => {
-                    doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(`${i + 1}. ${item}`, rX2 + 10, noteY, { width: halfW - 20 });
-                    noteY += noteItemHeights[i] + 4;
-                });
-
-                let contentBottom = boxTop2 + boxH2 + sectionGap;
-
-                // ============ 6.5. SIGNATURE & STAMP ============
+                // ============ 6.5. PREPARED BY / REVIEWED BY / AUTHORIZED SIGNATORY ============
                 if (receiptSettings.showSignatureStamp) {
-                    contentBottom += 5;
-                    const sigW = 120;
-                    const sigX = mx + mw - sigW - 10; // Right-aligned with a little padding
-                    const stampX = sigX - 90; // Place stamp to the left of the signature
+                    const User = require('../models/User');
+                    const axios = require('axios');
+                    const fetchImageBuffer = async (url) => {
+                        if (!url) return null;
+                        try {
+                            const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
+                            return Buffer.from(resp.data);
+                        } catch (e) { return null; }
+                    };
 
-                    if (receiptSettings.stampImage) {
-                        const stampPath = path.join(__dirname, '..', receiptSettings.stampImage);
-                        if (fs.existsSync(stampPath)) {
-                            // Draw stamp side-by-side with no fade
-                            doc.image(stampPath, stampX, contentBottom, { fit: [80, 80], align: 'center' });
-                        }
+                    const rmName = registration.filledByFullName || registration.spokenWith || '';
+                    let rmUser = null;
+                    if (rmName) {
+                        try { rmUser = await User.findOne({ fullName: rmName }).lean(); } catch (e) { }
                     }
-                    if (receiptSettings.signatureImage) {
-                        const sigPath = path.join(__dirname, '..', receiptSettings.signatureImage);
-                        if (fs.existsSync(sigPath)) {
-                            // Constrain signature
-                            doc.image(sigPath, sigX, contentBottom + 10, { fit: [120, 50], align: 'center' });
-                        }
+                    let hodUser = null;
+                    if (rmUser?.hodName) {
+                        try { hodUser = await User.findOne({ fullName: rmUser.hodName }).lean(); } catch (e) { }
                     }
+                    const preparedByName = rmName || 'N/A';
+                    const preparedByDesignation = rmUser?.designation || 'Relationship Manager';
+                    const reviewedByName = rmUser?.hodName || 'N/A';
+                    const reviewedByDesignation = rmUser?.hodDesignation || 'HOD';
+                    const preparedBySigBuffer = await fetchImageBuffer(rmUser?.signatureImage);
+                    const reviewedBySigBuffer = await fetchImageBuffer(hodUser?.signatureImage);
 
-                    contentBottom += 85; // Adjusted to give space but prevent pushing footer out of bounds
+                    const authColW = mw / 3;
+                    const authHeaderH = 20;
+                    const authBodyH = 100;
+                    const authTop = contentBottom;
+                    const sigLineY = authTop + authHeaderH + authBodyH - 22;
 
-                    const blockW = (sigX + sigW) - stampX;
+                    const authCols = [
+                        { label: 'PREPARED BY', rows: [['Name', preparedByName], ['Designation', preparedByDesignation], ['Date', formattedDate]], sigBuffer: preparedBySigBuffer },
+                        { label: 'REVIEWED BY', rows: [['Name', reviewedByName], ['Designation', reviewedByDesignation], ['Date', formattedDate]], sigBuffer: reviewedBySigBuffer },
+                        { label: `FOR ${(settings?.companyName || 'COMPANY').toUpperCase()}`, rows: [] },
+                    ];
 
-                    // Draw a straight line spanning both the stamp and signature
-                    doc.moveTo(stampX, contentBottom - 3).lineTo(sigX + sigW, contentBottom - 3).lineWidth(0.5).stroke(BORDER_COLOR);
+                    doc.rect(mx, authTop, mw, authHeaderH).fill('#f8fafc');
+                    doc.rect(mx, authTop, mw, authHeaderH + authBodyH).lineWidth(1).stroke(BORDER_COLOR);
+                    doc.moveTo(mx, authTop + authHeaderH).lineTo(mx + mw, authTop + authHeaderH).lineWidth(0.5).stroke(BORDER_COLOR);
 
-                    const label = receiptSettings.signatureLabel || 'Authorized Signatory';
-                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(label, stampX, contentBottom, { width: blockW, align: 'center' });
-                    contentBottom += 5;
+                    authCols.forEach((col, i) => {
+                        const cx0 = mx + i * authColW;
+                        if (i > 0) {
+                            doc.moveTo(cx0, authTop).lineTo(cx0, authTop + authHeaderH + authBodyH).lineWidth(0.5).stroke(BORDER_COLOR);
+                        }
+
+                        doc.fillColor(ACCENT).fontSize(8).font('Helvetica-Bold').text(col.label, cx0, authTop + 6, { width: authColW, align: 'center' });
+
+                        if (col.rows.length) {
+                            let ry = authTop + authHeaderH + 12;
+                            col.rows.forEach(([lbl, val]) => {
+                                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(lbl, cx0 + 12, ry, { width: 60 });
+                                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + val, cx0 + 72, ry, { width: authColW - 84 });
+                                ry += 15;
+                            });
+                            if (col.sigBuffer) {
+                                try {
+                                    doc.image(col.sigBuffer, cx0 + authColW / 2 - 40, sigLineY - 30, { fit: [80, 28], align: 'center' });
+                                } catch (e) { }
+                            }
+                        } else {
+                            if (receiptSettings.stampImage) {
+                                const stampPath = path.join(__dirname, '..', receiptSettings.stampImage);
+                                if (fs.existsSync(stampPath)) {
+                                    doc.image(stampPath, cx0 + 12, authTop + authHeaderH + 8, { fit: [56, 56] });
+                                }
+                            }
+                            if (receiptSettings.signatureImage) {
+                                const sigPath = path.join(__dirname, '..', receiptSettings.signatureImage);
+                                if (fs.existsSync(sigPath)) {
+                                    doc.image(sigPath, cx0 + 74, authTop + authHeaderH + 16, { fit: [authColW - 86, 44] });
+                                }
+                            }
+                        }
+
+                        doc.moveTo(cx0 + 14, sigLineY).lineTo(cx0 + authColW - 14, sigLineY).lineWidth(0.5).stroke(BORDER_COLOR);
+                        const sigLabel = col.rows.length ? '(Signature)' : (receiptSettings.signatureLabel || 'Authorized Signatory');
+                        doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Oblique').text(sigLabel, cx0, sigLineY + 4, { width: authColW, align: 'center' });
+                    });
+
+                    contentBottom = authTop + authHeaderH + authBodyH + sectionGap;
                 }
                 const printSafeBottomGap = 10;
-                // We'll push the footer up closer to the content instead of anchoring it all the way to the bottom.
-                const footerTop = Math.max(contentBottom + 10, pageH - footerH - 40);
+                // Same left/right margin (mx) as every other section, instead of spanning
+                // edge-to-edge.
+                const barY = pageH - 22 - printSafeBottomGap;
+                // Anchor the thank-you/contact block just above the bottom bar (with a small
+                // internal gap between the two lines) instead of floating high above it.
+                const footerBlockH = 30;
+                const footerTop = Math.max(contentBottom + 10, barY - footerBlockH);
 
                 doc.fillColor(NOTE_COLOR).font('Helvetica-Oblique').fontSize(10).text(receiptSettings.footerThankYouText || 'Thank you for your participation.', mx, footerTop, { width: mw, align: 'center' });
-                doc.moveTo(mx + mw / 2 - 100, footerTop + 16).lineTo(mx + mw / 2 + 100, footerTop + 16).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.moveTo(mx + mw / 2 - 100, footerTop + 13).lineTo(mx + mw / 2 + 100, footerTop + 13).lineWidth(0.5).stroke(BORDER_COLOR);
 
-                const contactRowY = footerTop + 24;
+                const contactRowY = footerTop + 17;
                 const contactItems = [
                     { draw: drawPhoneIcon, v: settings?.contactPhone || '-' },
                     { draw: drawMailIcon, v: settings?.contactEmail || '-' },
                     { draw: drawGlobeIcon, v: settings?.contactWebsite || '-' },
                 ];
-                doc.fontSize(7.5).font('Helvetica');
+                doc.fontSize(9).font('Helvetica');
                 let totalW = 0;
                 const itemWidths = contactItems.map(c => {
                     const w = doc.widthOfString(c.v);
-                    totalW += 15 + w + 40;
+                    totalW += 17 + w + 40;
                     return w;
                 });
                 totalW -= 40;
 
                 let cx = mx + (mw - totalW) / 2;
                 contactItems.forEach((c, i) => {
-                    c.draw(cx + 5, contactRowY + 5, 5, ACCENT);
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(c.v, cx + 15, contactRowY);
-                    cx += 15 + itemWidths[i] + 40;
+                    c.draw(cx + 6, contactRowY + 6, 6, ACCENT);
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text(c.v, cx + 17, contactRowY);
+                    cx += 17 + itemWidths[i] + 40;
                 });
-
-                // Same left/right margin (mx) as every other section, instead of spanning
-                // edge-to-edge.
-                const barY = pageH - 22 - printSafeBottomGap;
                 doc.rect(mx, barY, mw, 22).fill(ACCENT);
                 doc.fillColor('#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx, barY + 7, { width: mw, align: 'center' });
                 doc.text('Page 1 of 1', mx + mw - 70, barY + 7, { width: 60, align: 'right' });

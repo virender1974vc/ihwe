@@ -52,13 +52,6 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );
-
-// Unlike other document-number fields, receipt_no defaults to "" and legacy payments
-// (recorded before the Receipts feature existed) still have it blank, so a plain
-// `unique: true` would fail to index / reject those records. A partial unique index
-// enforces uniqueness only once a real receipt number is set, closing the race where
-// two payments recorded around the same time could silently get the identical
-// auto-generated receipt_no.
 paymentSchema.index(
   { receipt_no: 1 },
   { unique: true, partialFilterExpression: { receipt_no: { $gt: "" } } }

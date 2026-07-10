@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema({
     hodEmail: { type: String, default: '' },
     hodDesignation: { type: String, default: '' },
     hodImage: { type: String, default: '' },
+    signatureImage: { type: String, default: '' },
     reportingToName: { type: String, default: '' },
     reportingToMobile: { type: String, default: '' },
     reportingToEmail: { type: String, default: '' },

@@ -29,6 +29,7 @@ class SettingsService {
             quickLinks, exhibitionLinks,
             companyName, companyAddress, companyGst, companyCin,
             contactPhone, contactEmail, contactWebsite,
+            contactPerson, contactDesignation,
             fullPaymentDiscount, availableTdsRates,
             authorizedSignature, companyStamp
         } = updateData;
@@ -59,6 +60,8 @@ class SettingsService {
         if (contactPhone !== undefined) settings.contactPhone = contactPhone;
         if (contactEmail !== undefined) settings.contactEmail = contactEmail;
         if (contactWebsite !== undefined) settings.contactWebsite = contactWebsite;
+        if (contactPerson !== undefined) settings.contactPerson = contactPerson;
+        if (contactDesignation !== undefined) settings.contactDesignation = contactDesignation;
         if (fullPaymentDiscount !== undefined) settings.fullPaymentDiscount = fullPaymentDiscount;
         if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
         if (authorizedSignature) settings.authorizedSignature = authorizedSignature;

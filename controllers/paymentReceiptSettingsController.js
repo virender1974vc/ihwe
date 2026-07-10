@@ -9,6 +9,7 @@ const buildSampleRegistration = () => ({
   city: "Bijnor",
   state: "Uttar Pradesh",
   pincode: "246731",
+  gstNo: "09AAECN1234F1Z5",
   balanceAmount: 0,
   amountPaid: 227174,
   paymentMode: "online",
