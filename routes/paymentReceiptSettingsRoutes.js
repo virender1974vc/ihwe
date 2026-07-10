@@ -24,7 +24,11 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        const prefix = file.fieldname === 'headerLogoImage' ? 'header-logo' : 'event-logo';
+        let prefix = 'file';
+        if (file.fieldname === 'headerLogoImage') prefix = 'header-logo';
+        if (file.fieldname === 'eventLogoImage') prefix = 'event-logo';
+        if (file.fieldname === 'stampImage') prefix = 'stamp-image';
+        if (file.fieldname === 'signatureImage') prefix = 'signature-image';
         cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
@@ -34,7 +38,9 @@ router.get('/', (req, res) => paymentReceiptSettingsController.getSettings(req, 
 router.get('/preview', verifyToken, (req, res) => paymentReceiptSettingsController.previewReceipt(req, res));
 router.put('/', verifyToken, upload.fields([
     { name: 'eventLogoImage', maxCount: 1 },
-    { name: 'headerLogoImage', maxCount: 1 }
+    { name: 'headerLogoImage', maxCount: 1 },
+    { name: 'stampImage', maxCount: 1 },
+    { name: 'signatureImage', maxCount: 1 }
 ]), (req, res) => paymentReceiptSettingsController.updateSettings(req, res));
 
 module.exports = router;

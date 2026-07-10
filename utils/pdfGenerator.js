@@ -862,13 +862,45 @@ class PDFGenerator {
                     noteY += noteItemHeights[i] + 4;
                 });
 
-                const contentBottom = boxTop2 + boxH2 + sectionGap;
+                let contentBottom = boxTop2 + boxH2 + sectionGap;
 
-                // ============ 7. FOOTER ============
-                // Anchored to the page bottom, but never overlaps content above it even if
-                // the configured band heights push content unusually far down the page.
-                const printSafeBottomGap = 18;
-                const footerTop = Math.max(contentBottom, pageH - footerH - printSafeBottomGap);
+                // ============ 6.5. SIGNATURE & STAMP ============
+                if (receiptSettings.showSignatureStamp) {
+                    contentBottom += 10;
+                    const sigW = 120;
+                    const sigX = mx + mw - sigW - 10; // Right-aligned with a little padding
+                    const stampX = sigX - 90; // Place stamp to the left of the signature
+
+                    if (receiptSettings.stampImage) {
+                        const stampPath = path.join(__dirname, '..', receiptSettings.stampImage);
+                        if (fs.existsSync(stampPath)) {
+                            // Draw stamp side-by-side with no fade
+                            doc.image(stampPath, stampX, contentBottom, { fit: [80, 80], align: 'center' });
+                        }
+                    }
+                    if (receiptSettings.signatureImage) {
+                        const sigPath = path.join(__dirname, '..', receiptSettings.signatureImage);
+                        if (fs.existsSync(sigPath)) {
+                            // Constrain signature
+                            doc.image(sigPath, sigX, contentBottom + 20, { fit: [120, 50], align: 'center' });
+                        }
+                    }
+
+                    contentBottom += 95; // Increased to give more space below the stamp/signature images
+
+                    const blockW = (sigX + sigW) - stampX;
+
+                    // Draw a straight line spanning both the stamp and signature
+                    doc.moveTo(stampX, contentBottom - 3).lineTo(sigX + sigW, contentBottom - 3).lineWidth(0.5).stroke(BORDER_COLOR);
+
+                    const label = receiptSettings.signatureLabel || 'Authorized Signatory';
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(label, stampX, contentBottom, { width: blockW, align: 'center' });
+                    contentBottom += 15;
+                }
+                const printSafeBottomGap = 10;
+                // We'll push the footer up closer to the content instead of anchoring it all the way to the bottom.
+                const footerTop = Math.max(contentBottom + 10, pageH - footerH - 40);
+
                 doc.fillColor(NOTE_COLOR).font('Helvetica-Oblique').fontSize(10).text(receiptSettings.footerThankYouText || 'Thank you for your participation.', mx, footerTop, { width: mw, align: 'center' });
                 doc.moveTo(mx + mw / 2 - 100, footerTop + 16).lineTo(mx + mw / 2 + 100, footerTop + 16).lineWidth(0.5).stroke(BORDER_COLOR);
 

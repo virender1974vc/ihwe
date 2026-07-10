@@ -2,9 +2,11 @@ const mongoose = require("mongoose");
 const paymentReceiptSettingsSchema = new mongoose.Schema(
   {
     eventLogoImage: { type: String, default: "" },
-    // Optional override for the top-left header logo. Falls back to Settings.logo (the
-    // site-wide logo) in pdfGenerator.js when this isn't set.
     headerLogoImage: { type: String, default: "" },
+    showSignatureStamp: { type: Boolean, default: false },
+    stampImage: { type: String, default: "" },
+    signatureImage: { type: String, default: "" },
+    signatureLabel: { type: String, default: "Authorized Signatory" },
 
     // Colors (hex)
     organiserBandColor: { type: String, default: "#0b3974" },
