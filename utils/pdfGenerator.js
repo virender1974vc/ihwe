@@ -649,13 +649,28 @@ class PDFGenerator {
                 const boxTop = y + sectionGap * 2;
                 const rowW = halfW - 24;
 
-                const fromAddr = settings?.companyAddress || 'N/A';
-                const exAddr = [registration.address, registration.city, registration.state, registration.pincode].filter(Boolean).join(', ') || 'N/A';
-
-                // Box height is driven by actual measured content (address wrapping, and TO
-                // having two contact lines vs FROM's one) — not just infoBandHeight — so a
-                // long address or a phone+email pair stacked on separate lines never spills
-                // past the box border into the section below.
+                let fromAddr = settings?.companyAddress || 'N/A';
+                if (settings?.addresses && settings.addresses.length > 0) {
+                    const addr = settings.addresses[0];
+                    let parts = [];
+                    if (addr.street) parts.push(addr.street);
+                    let cityPin = '';
+                    if (addr.city && addr.zipCode) cityPin = `${addr.city} - ${addr.zipCode}`;
+                    else if (addr.city) cityPin = addr.city;
+                    else if (addr.zipCode) cityPin = addr.zipCode;
+                    if (cityPin) parts.push(cityPin);
+                    if (addr.state) parts.push(addr.state);
+                    if (addr.country) parts.push(addr.country);
+                    if (parts.length > 0) fromAddr = parts.join(', ');
+                }
+                let exAddrParts = [];
+                if (registration.address) exAddrParts.push(registration.address);
+                if (registration.city && registration.pincode) exAddrParts.push(`${registration.city} - ${registration.pincode}`);
+                else if (registration.city) exAddrParts.push(registration.city);
+                else if (registration.pincode) exAddrParts.push(registration.pincode);
+                if (registration.state) exAddrParts.push(registration.state);
+                exAddrParts.push(registration.country || 'India');
+                const exAddr = exAddrParts.join(', ') || 'N/A';
                 doc.fontSize(7.5).font('Helvetica');
                 const fromAddrH = doc.heightOfString(fromAddr, { width: rowW });
                 const toAddrH = doc.heightOfString(exAddr, { width: rowW });
