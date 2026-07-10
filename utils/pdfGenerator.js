@@ -485,6 +485,7 @@ class PDFGenerator {
                 const ic_user = 'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z';
                 const ic_rupee = 'M13.66,7c-0.19,1.13-0.89,2-2.14,2.54L15.34,16H12.9l-3.33-5.83H9.4V16H7.8v-5.83H6.06V8.65h1.74V7H6.06V5.48h3.33v1.51h1.15c0.55,0,0.92-0.27,0.92-0.82H6.06V4.65h7.6v1.51H10.4C10.74,6.47,11.2,6.6,11.72,6.6c0.81,0,1.38-0.34,1.52-1.13h2.15v1.52H13.66z';
                 const ic_wallet = 'M21 7.28V5c0-1.1-.9-2-2-2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-2.28c.59-.35 1-.98 1-1.72V9c0-.74-.41-1.37-1-1.72zM20 9v6h-2.5V9H20zM7 9h8v2H7V9zm0 4h5v2H7v-2z';
+                const ic_business = 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z';
 
                 // Simple hand-drawn icons (primitives only, no SVG path parsing) for the new
                 // header/footer contact icons — kept intentionally basic for reliability.
@@ -512,6 +513,14 @@ class PDFGenerator {
                     doc.moveTo(cx, cy + r * 0.3).lineTo(cx, cy + r).lineWidth(0.8).stroke(color);
                     doc.restore();
                 };
+                const drawCalendarIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.roundedRect(cx - r * 0.8, cy - r * 0.6, r * 1.6, r * 1.6, r * 0.2).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx - r * 0.8, cy - r * 0.1).lineTo(cx + r * 0.8, cy - r * 0.1).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx - r * 0.4, cy - r * 0.9).lineTo(cx - r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx + r * 0.4, cy - r * 0.9).lineTo(cx + r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
+                    doc.restore();
+                };
                 const drawBuildingIcon = (cx, cy, r, color) => {
                     doc.save();
                     doc.rect(cx - r * 0.7, cy - r, r * 1.4, r * 2).lineWidth(0.8).stroke(color);
@@ -519,23 +528,8 @@ class PDFGenerator {
                 };
 
                 let y = 15;
-
-                // ============ 1. HEADER BAND ============
-                // If a Header Image (Payment Management) is uploaded, it IS the entire top
-                // banner — wordmark, contact info, GSTIN/CIN, Head Office, all of it — drawn
-                // full-width, same convention as the header-image banners used elsewhere in
-                // this app (see _headerImg). With nothing uploaded, fall back to the
-                // structured, field-driven header below so the receipt still works out of
-                // the box.
                 let headerBannerDrawn = false;
                 let headerConsumedH = headerH;
-                // Wide, short banners (the intended shape for this slot) scale to full width
-                // with a modest height. A square/tall image dropped in here by mistake would
-                // otherwise stretch to a huge height at full page width — cap it so a wrong
-                // upload degrades gracefully instead of blowing out the whole layout. And
-                // unlike the fallback (structured) header, the image's OWN height is used —
-                // never padded up to headerBandHeight — so a short banner doesn't leave a
-                // dead gap underneath it before the next section.
                 const MAX_HEADER_BANNER_H = 180;
                 if (receiptSettings.headerLogoImage) {
                     try {
@@ -622,7 +616,7 @@ class PDFGenerator {
                 let evMidY = y + 10;
                 const fmtEvDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                 const dateStr = eventDoc?.startDate ? `${fmtEvDate(eventDoc.startDate)}${eventDoc.endDate ? ' - ' + fmtEvDate(eventDoc.endDate) : ''}` : 'TBA';
-                drawPinIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
+                drawCalendarIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
                 doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('DATE:', evMidX + 22, evMidY);
                 doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(dateStr, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
                 evMidY += 34;
@@ -634,6 +628,7 @@ class PDFGenerator {
                 const boxW = evRightW;
                 doc.roundedRect(boxX, y, boxW, eventH, 6).lineWidth(1).stroke(BORDER_COLOR);
                 doc.fillColor(ACCENT).fontSize(10).font('Helvetica-Bold').text(receiptSettings.receiptTitleLabel || 'PAYMENT RECEIPT', boxX, y + 8, { width: boxW, align: 'center' });
+                doc.moveTo(boxX, y + 22).lineTo(boxX + boxW, y + 22).lineWidth(1).stroke(BORDER_COLOR);
                 const formattedDate = new Date(m.paidAt || registration.updatedAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const infoRows = [
                     ['Receipt No.', rNo],
@@ -669,10 +664,10 @@ class PDFGenerator {
                 const boxH = Math.max(infoH - 16, fromInnerH, toInnerH);
 
                 // FROM (Organiser)
-                doc.roundedRect(mx, boxTop, halfW, 18, 4).fill(ORGANISER);
-                drawBuildingIcon(mx + 14, boxTop + 9, 6, '#fff');
+                doc.rect(mx, boxTop, halfW, 18).fill(ORGANISER);
+                drawSvgIcon(mx + 14, boxTop + 9, ic_business, 0.4, '#fff');
                 doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx + 26, boxTop + 5, { width: halfW - 30 });
-                doc.roundedRect(mx, boxTop + 18, halfW, boxH - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                doc.rect(mx, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
                 let fy = boxTop + 30;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(settings?.companyName || 'N/A', mx + 12, fy, { width: rowW });
                 fy += 12;
@@ -686,10 +681,10 @@ class PDFGenerator {
 
                 // TO (Exhibitor)
                 const rX = mx + halfW + 12;
-                doc.roundedRect(rX, boxTop, halfW, 18, 4).fill(EXHIBITOR);
+                doc.rect(rX, boxTop, halfW, 18).fill(EXHIBITOR);
                 drawSvgIcon(rX + 14, boxTop + 9, ic_user, 0.4, '#fff');
                 doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX + 26, boxTop + 5, { width: halfW - 30 });
-                doc.roundedRect(rX, boxTop + 18, halfW, boxH - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                doc.rect(rX, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
                 let ty = boxTop + 30;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rX + 12, ty, { width: rowW });
                 ty += 12;
@@ -729,16 +724,21 @@ class PDFGenerator {
                     ['EVENT', eventDoc?.name || 'IHWE 2026'],
                 ];
                 const gridColW = mw / gridFields.length;
-                // Long values (e.g. a lengthy event name) can wrap to several lines — measure
-                // the tallest cell first so the row below (the item table) never overlaps it.
                 doc.fontSize(7.5).font('Helvetica-Bold');
                 const gridValueHeight = Math.max(...gridFields.map((f) => doc.heightOfString(String(f[1]), { width: gridColW - 4 })));
+                const gridH = 20 + gridValueHeight;
+                doc.rect(mx, y - 4, mw, gridH).lineWidth(0.5).stroke(BORDER_COLOR);
+                doc.moveTo(mx, y + 8).lineTo(mx + mw, y + 8).lineWidth(0.5).stroke(BORDER_COLOR);
+
                 gridFields.forEach((f, i) => {
                     const gx = mx + i * gridColW;
-                    doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(f[0], gx, y, { width: gridColW - 4, align: 'center' });
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(String(f[1]), gx, y + 10, { width: gridColW - 4, align: 'center' });
+                    if (i > 0) {
+                        doc.moveTo(gx, y - 4).lineTo(gx, y - 4 + gridH).lineWidth(0.5).stroke(BORDER_COLOR);
+                    }
+                    doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(f[0], gx + 2, y, { width: gridColW - 4, align: 'center' });
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(String(f[1]), gx + 2, y + 12, { width: gridColW - 4, align: 'center' });
                 });
-                y += 10 + gridValueHeight + 8;
+                y += gridH + 4;
 
                 // Item table (single summary row — this app doesn't carry itemized line items
                 // for a payment receipt, only an invoice-level amount, same as before)
@@ -796,7 +796,7 @@ class PDFGenerator {
                 const sumW = mw * 0.46;
                 const sumX = mx + mw - sumW;
                 summaryRows.forEach(([l, v, strong]) => {
-                    if (strong) doc.rect(sumX, y, sumW, 18).fill(ACCENT);
+                    if (strong) doc.rect(sumX, y, sumW, 16).fill(ACCENT);
                     doc.fillColor(strong ? '#fff' : TEXT_DARK).fontSize(8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(l, sumX + 8, y + 4, { width: sumW * 0.56, lineBreak: false });
                     doc.fillColor(strong ? '#fff' : (v.startsWith('-') ? '#dc2626' : TEXT_DARK)).fontSize(7.8).font(strong ? 'Helvetica-Bold' : 'Helvetica').text(v, sumX + sumW * 0.56, y + 4, { width: sumW * 0.42 - 8, align: 'right', lineBreak: false });
                     doc.moveTo(mx, y + 16).lineTo(mx + mw, y + 16).lineWidth(0.3).stroke(BORDER_COLOR);
@@ -816,34 +816,38 @@ class PDFGenerator {
                     { l: 'PAYMENT MODE', v: paymentMode, icon: ic_wallet },
                     { l: 'TRANSACTION NO.', v: reference, icon: ic_doc },
                     { l: 'PAYMENT DATE', v: formattedDate, icon: ic_cal },
-                    { l: 'TOTAL PAID', v: fmt(totalPaid), icon: ic_rupee },
+                    { l: 'TOTAL PAID', v: fmt(totalPaid), icon: ic_wallet },
                     { l: 'PAYMENT STATUS', v: paymentStatus, icon: ic_doc },
                 ];
-                doc.roundedRect(mx, y, mw, 55, 6).lineWidth(1).stroke(BORDER_COLOR);
+                doc.rect(mx, y, mw, 45).lineWidth(1).stroke(BORDER_COLOR);
                 const statW = mw / payStats.length;
                 payStats.forEach((s, i) => {
-                    const cx = mx + i * statW + statW / 2;
-                    doc.circle(cx, y + 16, 10).lineWidth(1).stroke(ACCENT);
-                    drawSvgIcon(cx, y + 16, s.icon, 0.42, ACCENT);
-                    doc.fillColor(TEXT_MUTED).fontSize(6.5).font('Helvetica-Bold').text(s.l, cx - statW / 2 + 4, y + 32, { width: statW - 8, align: 'center' });
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(s.v, cx - statW / 2 + 4, y + 42, { width: statW - 8, align: 'center' });
-                    if (i < payStats.length - 1) doc.moveTo(mx + (i + 1) * statW, y + 8).lineTo(mx + (i + 1) * statW, y + 48).lineWidth(0.5).stroke(BORDER_COLOR);
+                    const itemX = mx + i * statW;
+                    const iconX = itemX + 16;
+                    const iconY = y + 22.5;
+                    doc.circle(iconX, iconY, 10).lineWidth(1).stroke(ACCENT);
+                    drawSvgIcon(iconX, iconY, s.icon, 0.42, ACCENT);
+
+                    const textX = iconX + 16;
+                    const textW = statW - 36;
+                    doc.fillColor(TEXT_MUTED).fontSize(6).font('Helvetica-Bold').text(s.l, textX, y + 16, { width: textW, align: 'left' });
+                    doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(s.v, textX, y + 25, { width: textW, align: 'left' });
+
+                    if (i < payStats.length - 1) doc.moveTo(itemX + statW, y + 8).lineTo(itemX + statW, y + 37).lineWidth(0.5).stroke(BORDER_COLOR);
                 });
-                y += 55 + sectionGap;
+                y += 45 + sectionGap;
 
                 // ============ 6. EXHIBITOR DETAILS / IMPORTANT NOTE ============
                 const boxTop2 = y + sectionGap * 2;
                 const noteItems = (receiptSettings.importantNoteItems || []).slice(0, 4);
                 doc.fontSize(7).font('Helvetica');
-                // Measure each bullet's wrapped height up front so items never overlap when
-                // one of them wraps to more than one line, and size the box to fit them all.
                 const noteItemHeights = noteItems.map((item, i) => doc.heightOfString(`${i + 1}. ${item}`, { width: halfW - 20 }));
                 const noteContentHeight = noteItemHeights.reduce((sum, h) => sum + h + 4, 0);
                 const boxH2 = Math.max(74, 18 + 16 + noteContentHeight + 10);
-                doc.roundedRect(mx, boxTop2, halfW, 18, 4).fill(EXHIBITOR);
+                doc.rect(mx, boxTop2, halfW, 18).fill(EXHIBITOR);
                 drawSvgIcon(mx + 14, boxTop2 + 9, ic_user, 0.4, '#fff');
                 doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.exhibitorDetailsLabel || 'EXHIBITOR DETAILS', mx + 26, boxTop2 + 5);
-                doc.roundedRect(mx, boxTop2 + 18, halfW, boxH2 - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                doc.rect(mx, boxTop2 + 18, halfW, boxH2 - 18).lineWidth(1).stroke(BORDER_COLOR);
 
                 const contactPersonStr = c1 ? `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim() : '';
                 const displayName = contactPersonStr || registration.filledByFullName || invoice?.consignee_name || 'N/A';
@@ -857,22 +861,54 @@ class PDFGenerator {
                 doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (registration.filledByFullName || registration.spokenWith || 'Direct'), mx + 100, exY, { width: halfW - 112 });
 
                 const rX2 = mx + halfW + 12;
-                doc.roundedRect(rX2, boxTop2, halfW, 18, 4).fill(NOTE_COLOR);
+                doc.rect(rX2, boxTop2, halfW, 18).fill(NOTE_COLOR);
                 doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.importantNoteLabel || 'IMPORTANT NOTE', rX2 + 14, boxTop2 + 5, { width: halfW - 20 });
-                doc.roundedRect(rX2, boxTop2 + 18, halfW, boxH2 - 18, 4).lineWidth(1).stroke(BORDER_COLOR);
+                doc.rect(rX2, boxTop2 + 18, halfW, boxH2 - 18).lineWidth(1).stroke(BORDER_COLOR);
                 let noteY = boxTop2 + 26;
                 noteItems.forEach((item, i) => {
                     doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(`${i + 1}. ${item}`, rX2 + 10, noteY, { width: halfW - 20 });
                     noteY += noteItemHeights[i] + 4;
                 });
 
-                const contentBottom = boxTop2 + boxH2 + sectionGap;
+                let contentBottom = boxTop2 + boxH2 + sectionGap;
 
-                // ============ 7. FOOTER ============
-                // Anchored to the page bottom, but never overlaps content above it even if
-                // the configured band heights push content unusually far down the page.
-                const printSafeBottomGap = 18;
-                const footerTop = Math.max(contentBottom, pageH - footerH - printSafeBottomGap);
+                // ============ 6.5. SIGNATURE & STAMP ============
+                if (receiptSettings.showSignatureStamp) {
+                    contentBottom += 10;
+                    const sigW = 120;
+                    const sigX = mx + mw - sigW - 10; // Right-aligned with a little padding
+                    const stampX = sigX - 90; // Place stamp to the left of the signature
+
+                    if (receiptSettings.stampImage) {
+                        const stampPath = path.join(__dirname, '..', receiptSettings.stampImage);
+                        if (fs.existsSync(stampPath)) {
+                            // Draw stamp side-by-side with no fade
+                            doc.image(stampPath, stampX, contentBottom, { fit: [80, 80], align: 'center' });
+                        }
+                    }
+                    if (receiptSettings.signatureImage) {
+                        const sigPath = path.join(__dirname, '..', receiptSettings.signatureImage);
+                        if (fs.existsSync(sigPath)) {
+                            // Constrain signature
+                            doc.image(sigPath, sigX, contentBottom + 20, { fit: [120, 50], align: 'center' });
+                        }
+                    }
+
+                    contentBottom += 95; // Increased to give more space below the stamp/signature images
+
+                    const blockW = (sigX + sigW) - stampX;
+
+                    // Draw a straight line spanning both the stamp and signature
+                    doc.moveTo(stampX, contentBottom - 3).lineTo(sigX + sigW, contentBottom - 3).lineWidth(0.5).stroke(BORDER_COLOR);
+
+                    const label = receiptSettings.signatureLabel || 'Authorized Signatory';
+                    doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica-Bold').text(label, stampX, contentBottom, { width: blockW, align: 'center' });
+                    contentBottom += 15;
+                }
+                const printSafeBottomGap = 10;
+                // We'll push the footer up closer to the content instead of anchoring it all the way to the bottom.
+                const footerTop = Math.max(contentBottom + 10, pageH - footerH - 40);
+
                 doc.fillColor(NOTE_COLOR).font('Helvetica-Oblique').fontSize(10).text(receiptSettings.footerThankYouText || 'Thank you for your participation.', mx, footerTop, { width: mw, align: 'center' });
                 doc.moveTo(mx + mw / 2 - 100, footerTop + 16).lineTo(mx + mw / 2 + 100, footerTop + 16).lineWidth(0.5).stroke(BORDER_COLOR);
 
@@ -893,7 +929,7 @@ class PDFGenerator {
                 // edge-to-edge.
                 const barY = pageH - 22 - printSafeBottomGap;
                 doc.rect(mx, barY, mw, 22).fill(ACCENT);
-                doc.fillColor('#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx + 10, barY + 7, { width: mw - 80 });
+                doc.fillColor('#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx, barY + 7, { width: mw, align: 'center' });
                 doc.text('Page 1 of 1', mx + mw - 70, barY + 7, { width: 60, align: 'right' });
 
                 doc.end();

@@ -89,6 +89,8 @@ const updateSettings = async (req, res) => {
       footerBandHeight,
       pageMarginX,
       sectionGap,
+      showSignatureStamp,
+      signatureLabel,
     } = req.body;
 
     if (organiserBandColor) settings.organiserBandColor = organiserBandColor;
@@ -106,6 +108,8 @@ const updateSettings = async (req, res) => {
     if (footerThankYouText !== undefined) settings.footerThankYouText = footerThankYouText;
     if (footerDisclaimerText !== undefined) settings.footerDisclaimerText = footerDisclaimerText;
     if (receiptNumberPrefix !== undefined) settings.receiptNumberPrefix = receiptNumberPrefix;
+    if (showSignatureStamp !== undefined) settings.showSignatureStamp = showSignatureStamp === 'true' || showSignatureStamp === true;
+    if (signatureLabel !== undefined) settings.signatureLabel = signatureLabel;
 
     if (importantNoteItems) {
       try {
@@ -125,9 +129,26 @@ const updateSettings = async (req, res) => {
 
     if (req.files?.eventLogoImage?.[0]) {
       settings.eventLogoImage = `/uploads/payment-receipt-settings/${req.files.eventLogoImage[0].filename}`;
+    } else if (req.body.removeEventLogo === 'true') {
+      settings.eventLogoImage = "";
     }
+    
     if (req.files?.headerLogoImage?.[0]) {
       settings.headerLogoImage = `/uploads/payment-receipt-settings/${req.files.headerLogoImage[0].filename}`;
+    } else if (req.body.removeHeaderLogo === 'true') {
+      settings.headerLogoImage = "";
+    }
+    
+    if (req.files?.stampImage?.[0]) {
+      settings.stampImage = `/uploads/payment-receipt-settings/${req.files.stampImage[0].filename}`;
+    } else if (req.body.removeStamp === 'true') {
+      settings.stampImage = "";
+    }
+    
+    if (req.files?.signatureImage?.[0]) {
+      settings.signatureImage = `/uploads/payment-receipt-settings/${req.files.signatureImage[0].filename}`;
+    } else if (req.body.removeSignature === 'true') {
+      settings.signatureImage = "";
     }
 
     await settings.save();
