@@ -513,6 +513,14 @@ class PDFGenerator {
                     doc.moveTo(cx, cy + r * 0.3).lineTo(cx, cy + r).lineWidth(0.8).stroke(color);
                     doc.restore();
                 };
+                const drawCalendarIcon = (cx, cy, r, color) => {
+                    doc.save();
+                    doc.roundedRect(cx - r * 0.8, cy - r * 0.6, r * 1.6, r * 1.6, r * 0.2).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx - r * 0.8, cy - r * 0.1).lineTo(cx + r * 0.8, cy - r * 0.1).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx - r * 0.4, cy - r * 0.9).lineTo(cx - r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
+                    doc.moveTo(cx + r * 0.4, cy - r * 0.9).lineTo(cx + r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
+                    doc.restore();
+                };
                 const drawBuildingIcon = (cx, cy, r, color) => {
                     doc.save();
                     doc.rect(cx - r * 0.7, cy - r, r * 1.4, r * 2).lineWidth(0.8).stroke(color);
@@ -608,7 +616,7 @@ class PDFGenerator {
                 let evMidY = y + 10;
                 const fmtEvDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                 const dateStr = eventDoc?.startDate ? `${fmtEvDate(eventDoc.startDate)}${eventDoc.endDate ? ' - ' + fmtEvDate(eventDoc.endDate) : ''}` : 'TBA';
-                drawPinIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
+                drawCalendarIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
                 doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('DATE:', evMidX + 22, evMidY);
                 doc.fillColor(TEXT_DARK).fontSize(8).font('Helvetica').text(dateStr, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
                 evMidY += 34;
