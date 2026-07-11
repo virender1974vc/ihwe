@@ -19,6 +19,25 @@ const ExhibitionRoleSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    created_by: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    deleted_by: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    deleted_at: {
+      type: Date,
+      default: null,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     added: {
       type: Date,
       default: Date.now,
