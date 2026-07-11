@@ -10,6 +10,7 @@ const Company = require("../models/Company");
 const CreditNote = require("../models/CreditNote");
 const AccountDebitNote = require("../models/AccountDebitNote");
 const DebitNote = require("../models/DebitNote");
+const { attachSignatorySignatures } = require("../utils/signatorySignatures");
 
 const DOC_MODELS = { invoice: Invoice, proforma: Estimate };
 const VIEW_DOC_MODELS = {
@@ -275,6 +276,10 @@ const getDocument = async (req, res) => {
 
     if (docType === "legacycreditnote") {
       doc = mapLegacyDebitNoteToCreditNoteShape(doc);
+    }
+
+    if (docType === "creditnote" || docType === "debitnote" || docType === "legacycreditnote") {
+      doc = await attachSignatorySignatures(doc);
     }
 
     if (docType === "challan") {

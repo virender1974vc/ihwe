@@ -1,6 +1,7 @@
 const CreditNote = require("../models/CreditNote");
 const { logActivity } = require("../utils/logger");
 const { getAccountNameById } = require("../utils/accountActivityDetails");
+const { attachSignatorySignatures, attachSignatorySignaturesToMany } = require("../utils/signatorySignatures");
 
 const calculateCreditNoteAmount = (items = []) =>
   items.reduce((sum, item) => sum + ((parseFloat(item.cn_amount) || 0) * (parseFloat(item.quantity) || 1)), 0);
@@ -132,7 +133,8 @@ const getCreditNotes = async (req, res) => {
       eventId: eventMap[String(n.companyId)] || null
     }));
 
-    res.json(populatedNotes);
+    const withSignatures = await attachSignatorySignaturesToMany(populatedNotes);
+    res.json(withSignatures);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching credit notes",
@@ -150,7 +152,8 @@ const getCreditNoteById = async (req, res) => {
       return res.status(404).json({ message: "Credit note not found" });
     }
 
-    res.json(note);
+    const withSignatures = await attachSignatorySignatures(note.toObject());
+    res.json(withSignatures);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching credit note",

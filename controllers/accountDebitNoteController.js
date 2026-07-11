@@ -9,6 +9,7 @@ const { resolveCompanyAndExhibitor, buildAccountOverview } = require("./accountO
 const { getAccountNameById } = require("../utils/accountActivityDetails");
 const { logActivity } = require("../utils/logger");
 const { getCreditedByInvoiceId } = require("../services/ledgerTotals");
+const { attachSignatorySignatures, attachSignatorySignaturesToMany } = require("../utils/signatorySignatures");
 
 const isValidObjectId = (val) => val && mongoose.Types.ObjectId.isValid(val);
 
@@ -320,7 +321,8 @@ const getAccountDebitNotes = async (req, res) => {
       return { ...note, stallNo, hallNo: hallMatch ? hallMatch[1] : "", eventId };
     });
 
-    res.json({ success: true, data: withStall });
+    const withSignatures = await attachSignatorySignaturesToMany(withStall);
+    res.json({ success: true, data: withSignatures });
   } catch (error) {
     res.status(500).json({ success: false, message: "Error fetching debit notes", error: error.message });
   }
@@ -331,7 +333,8 @@ const getAccountDebitNoteById = async (req, res) => {
     const note = await AccountDebitNote.findById(req.params.id).lean();
     if (!note) return res.status(404).json({ success: false, message: "Debit note not found" });
     const [enriched] = await enrichWithSettlementStatus([note]);
-    res.json({ success: true, data: enriched });
+    const withSignatures = await attachSignatorySignatures(enriched);
+    res.json({ success: true, data: withSignatures });
   } catch (error) {
     res.status(500).json({ success: false, message: "Error fetching debit note", error: error.message });
   }
