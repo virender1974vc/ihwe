@@ -780,9 +780,9 @@ class PDFGenerator {
 
                 const invDate = new Date(invoice?.invoice_date || invoice?.createdAt || registration.createdAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const gridFields = [
-                    ['INVOICE NO.', paymentAgainst],
+                    [`${invoiceType.toUpperCase()} NO.`, paymentAgainst],
                     ['INVOICE TYPE', invoiceType],
-                    ['INVOICE DATE', invDate],
+                    [`${invoiceType.toUpperCase()} DATE`, invDate],
                     ['PAYMENT TYPE', paymentTypeLabel],
                     ['DOC TYPE', 'Payment Receipt'],
                     ['QTY', '1'],
