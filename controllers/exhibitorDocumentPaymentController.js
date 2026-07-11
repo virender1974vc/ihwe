@@ -6,6 +6,7 @@ const Estimate = require("../models/Estimate");
 const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const Company = require("../models/Company");
 const CreditNote = require("../models/CreditNote");
 const AccountDebitNote = require("../models/AccountDebitNote");
 const DebitNote = require("../models/DebitNote");
@@ -122,6 +123,17 @@ const getAuthorizedCompanyIds = async (user) => {
     if (reg.clientId) ids.add(String(reg.clientId));
   });
   return ids;
+};
+
+const lookupCompanyOrExhibitor = async (id) => {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+  const company = await Company.findById(id).lean();
+  if (company) return { ...company, _source: "company" };
+
+  const exhibitor = await ExhibitorRegistration.findById(id).lean();
+  if (exhibitor) return { ...exhibitor, _source: "exhibitorRegistration" };
+
+  return null;
 };
 
 const getOutstanding = async (doc, docId) => {
@@ -316,7 +328,9 @@ const getDocument = async (req, res) => {
       });
     }
 
-    res.json({ success: true, document: doc });
+    const company = await lookupCompanyOrExhibitor(doc.companyId || doc.account_ref_id);
+
+    res.json({ success: true, document: doc, company });
   } catch (error) {
     console.error("Exhibitor get-document error:", error);
     res.status(500).json({ success: false, message: error?.message || "Failed to load document" });

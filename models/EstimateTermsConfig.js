@@ -47,6 +47,37 @@ const estimateTermsConfigSchema = new mongoose.Schema(
       default: "System",
       trim: true,
     },
+    createdBy: {
+      type: String,
+      default: "System",
+      trim: true,
+    },
+    auditLogs: {
+      type: [
+        {
+          action: {
+            type: String,
+            enum: ["CREATED", "UPDATED"],
+            required: true,
+          },
+          by: {
+            type: String,
+            default: "System",
+            trim: true,
+          },
+          at: {
+            type: Date,
+            default: Date.now,
+          },
+          details: {
+            type: String,
+            default: "",
+            trim: true,
+          },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true },
 );
