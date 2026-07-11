@@ -774,7 +774,9 @@ class PDFGenerator {
                     doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(label, mx, y + 4, { width: mw, align: 'center' });
                     y += 16 + 1;
                 };
-                drawDivider(receiptSettings.invoiceDetailsLabel || 'INVOICE DETAILS');
+                const invoiceDetailsLabel = (receiptSettings.invoiceDetailsLabel || 'PAYMENT AGAINST INVOICE')
+                    .replace(/\bINVOICE\b/i, invoiceType.toUpperCase());
+                drawDivider(invoiceDetailsLabel);
 
                 const invDate = new Date(invoice?.invoice_date || invoice?.createdAt || registration.createdAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const gridFields = [
