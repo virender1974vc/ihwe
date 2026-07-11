@@ -805,14 +805,8 @@ class PDFGenerator {
                 });
                 const gridBottomY = y - 4 + gridH;
                 y += gridH + 4;
-
-                // Connector lines through the gap so the grid box and the item table
-                // below read as one joined section rather than two separate boxes.
                 doc.moveTo(mx, gridBottomY).lineTo(mx, y).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.moveTo(mx + mw, gridBottomY).lineTo(mx + mw, y).lineWidth(0.5).stroke(BORDER_COLOR);
-
-                // Item table (single summary row — this app doesn't carry itemized line items
-                // for a payment receipt, only an invoice-level amount, same as before)
                 const fb = registration.financeBreakdown || {};
                 const invVal = registration.receiptInvoiceAmount || fb.invoiceAmount || fb.totalAmount || p.total || invoice?.finalAmount || fb.netPayable || p.amount || 0;
                 const gstPercent = p.gstPercent || 18;
