@@ -640,15 +640,18 @@ class PDFGenerator {
                 const boxX = mx + evColW + evMidW;
                 const boxW = evRightW;
                 doc.roundedRect(boxX, y, boxW, eventH, 6).lineWidth(1).stroke(BORDER_COLOR);
-                doc.fillColor(ACCENT).fontSize(10).font('Helvetica-Bold').text(receiptSettings.receiptTitleLabel || 'PAYMENT RECEIPT', boxX, y + 8, { width: boxW, align: 'center' });
-                doc.moveTo(boxX, y + 22).lineTo(boxX + boxW, y + 22).lineWidth(1).stroke(BORDER_COLOR);
+                if (receiptSettings.receiptTitleBandColor && receiptSettings.receiptTitleBandColor.toLowerCase() !== '#ffffff') {
+                    doc.rect(boxX + 1, y + 1, boxW - 2, 15).fill(receiptSettings.receiptTitleBandColor);
+                }
+                doc.fillColor(ACCENT).fontSize(10).font('Helvetica-Bold').text(receiptSettings.receiptTitleLabel || 'PAYMENT RECEIPT', boxX, y + 3, { width: boxW, align: 'center' });
+                doc.moveTo(boxX, y + 16).lineTo(boxX + boxW, y + 16).lineWidth(1).stroke(BORDER_COLOR);
                 const formattedDate = new Date(m.paidAt || registration.updatedAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const infoRows = [
                     ['Receipt No.', rNo],
                     ['Registration Id', registration.registrationId || registration._id?.toString().slice(-8) || 'N/A'],
                     ['Receipt Date', formattedDate],
                 ];
-                let boxY = y + 30;
+                let boxY = y + 22;
                 infoRows.forEach(([l, v]) => {
                     doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text(l, boxX + 10, boxY, { width: 85, lineBreak: false });
                     doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (v || 'N/A'), boxX + 95, boxY, { width: boxW - 105 });
@@ -687,16 +690,16 @@ class PDFGenerator {
                 doc.fontSize(7.5).font('Helvetica');
                 const fromAddrH = doc.heightOfString(fromAddr, { width: rowW });
                 const toAddrH = doc.heightOfString(exAddr, { width: rowW });
-                const fromInnerH = 24 + 12 + fromAddrH + 6 + 5 + 13 + 13 + 13 + 13 + 10;
-                const toInnerH = 24 + 12 + toAddrH + 6 + 5 + 13 + 13 + 13 + 13 + 10;
+                const fromInnerH = 22 + 12 + fromAddrH + 6 + 5 + 13 + 13 + 13 + 13 + 10;
+                const toInnerH = 22 + 12 + toAddrH + 6 + 5 + 13 + 13 + 13 + 13 + 10;
                 const boxH = Math.max(infoH - 16, fromInnerH, toInnerH);
 
                 // FROM (Organiser)
-                doc.rect(mx, boxTop, halfW, 18).fill(ORGANISER);
-                drawSvgIcon(mx + 14, boxTop + 9, ic_business, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx, boxTop + 5, { width: halfW, align: 'center' });
-                doc.rect(mx, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
-                let fy = boxTop + 24;
+                doc.rect(mx, boxTop, halfW, 16).fill(ORGANISER);
+                drawSvgIcon(mx + 14, boxTop + 8, ic_business, 0.4, '#fff');
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.fromLabel || 'FROM (ORGANISER)', mx, boxTop + 4, { width: halfW, align: 'center' });
+                doc.rect(mx, boxTop + 16, halfW, boxH - 16).lineWidth(1).stroke(BORDER_COLOR);
+                let fy = boxTop + 22;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(settings?.companyName || 'N/A', mx + 12, fy, { width: rowW });
                 fy += 12;
                 doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(fromAddr, mx + 12, fy, { width: rowW });
@@ -726,11 +729,11 @@ class PDFGenerator {
 
                 // TO (Exhibitor)
                 const rX = mx + halfW + 12;
-                doc.rect(rX, boxTop, halfW, 18).fill(EXHIBITOR);
-                drawSvgIcon(rX + 14, boxTop + 9, ic_user, 0.4, '#fff');
-                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX, boxTop + 5, { width: halfW, align: 'center' });
-                doc.rect(rX, boxTop + 18, halfW, boxH - 18).lineWidth(1).stroke(BORDER_COLOR);
-                let ty = boxTop + 24;
+                doc.rect(rX, boxTop, halfW, 16).fill(EXHIBITOR);
+                drawSvgIcon(rX + 14, boxTop + 8, ic_user, 0.4, '#fff');
+                doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.toLabel || 'TO (EXHIBITOR)', rX, boxTop + 4, { width: halfW, align: 'center' });
+                doc.rect(rX, boxTop + 16, halfW, boxH - 16).lineWidth(1).stroke(BORDER_COLOR);
+                let ty = boxTop + 22;
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rX + 12, ty, { width: rowW });
                 ty += 12;
                 doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(exAddr, rX + 12, ty, { width: rowW });
@@ -770,8 +773,8 @@ class PDFGenerator {
                 if (registration.balanceAmount <= 0) paymentTypeLabel = 'Final Payment';
 
                 const drawDivider = (label) => {
-                    doc.rect(mx, y, mw, 16).fill('#94a3b8');
-                    doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(label, mx, y + 4, { width: mw, align: 'center' });
+                    doc.rect(mx, y, mw, 16).fill(receiptSettings.sectionBandColor || '#94a3b8');
+                    doc.fillColor(receiptSettings.sectionBandTextColor || '#fff').fontSize(8.5).font('Helvetica-Bold').text(label, mx, y + 4, { width: mw, align: 'center' });
                     y += 16 + 1;
                 };
                 const invoiceDetailsLabel = (receiptSettings.invoiceDetailsLabel || 'PAYMENT AGAINST INVOICE')
@@ -939,10 +942,19 @@ class PDFGenerator {
                     const reviewedBySigBuffer = await fetchImageBuffer(hodUser?.signatureImage);
 
                     const authColW = mw / 3;
-                    const authHeaderH = 20;
-                    const authBodyH = 100;
+                    const authHeaderH = 16;
+                    // Order (top to bottom): signature image -> divider line -> Name/
+                    // Designation/Date -> "(Signature)" caption at the very bottom.
+                    const sigTop = authHeaderH + 5;
+                    // Just tall enough to clear the signature image (anchored near the top,
+                    // not centered) before the divider line — shrinking this shrinks the whole
+                    // section instead of leaving dead space below the signature.
+                    const lineY = sigTop + 34;
+                    const rowsTop = lineY + 8;
+                    const rowsH = 9;
+                    const captionY = rowsTop + rowsH + 3;
+                    const authBodyH = captionY - authHeaderH + 10;
                     const authTop = contentBottom;
-                    const sigLineY = authTop + authHeaderH + authBodyH - 16;
 
                     const authCols = [
                         { label: 'PREPARED BY', rows: [['Name', preparedByName], ['Designation', preparedByDesignation], ['Date', formattedDate]], sigBuffer: preparedBySigBuffer },
@@ -950,7 +962,7 @@ class PDFGenerator {
                         { label: `FOR ${(settings?.companyName || 'COMPANY').toUpperCase()}`, rows: [] },
                     ];
 
-                    doc.rect(mx, authTop, mw, authHeaderH).fill('#f8fafc');
+                    doc.rect(mx, authTop, mw, authHeaderH).fill(receiptSettings.authBandColor || '#94a3b8');
                     doc.rect(mx, authTop, mw, authHeaderH + authBodyH).lineWidth(1).stroke(BORDER_COLOR);
                     doc.moveTo(mx, authTop + authHeaderH).lineTo(mx + mw, authTop + authHeaderH).lineWidth(0.5).stroke(BORDER_COLOR);
 
@@ -960,38 +972,51 @@ class PDFGenerator {
                             doc.moveTo(cx0, authTop).lineTo(cx0, authTop + authHeaderH + authBodyH).lineWidth(0.5).stroke(BORDER_COLOR);
                         }
 
-                        doc.fillColor(ACCENT).fontSize(8).font('Helvetica-Bold').text(col.label, cx0, authTop + 6, { width: authColW, align: 'center' });
+                        doc.fillColor(receiptSettings.authBandTextColor || ACCENT).fontSize(8).font('Helvetica-Bold').text(col.label, cx0, authTop + 4, { width: authColW, align: 'center' });
 
                         if (col.rows.length) {
-                            let ry = authTop + authHeaderH + 12;
-                            col.rows.forEach(([lbl, val]) => {
-                                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica-Bold').text(lbl, cx0 + 12, ry, { width: 60 });
-                                doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + val, cx0 + 72, ry, { width: authColW - 84 });
-                                ry += 15;
-                            });
+                            // 1. Signature first — anchored close to the header instead of
+                            // centered in the whole sigTop..lineY zone, so there's minimal gap
+                            // between the band and the signature.
                             if (col.sigBuffer) {
                                 try {
-                                    doc.image(col.sigBuffer, cx0 + authColW / 2 - 40, sigLineY - 24, { fit: [80, 22], align: 'center' });
+                                    const sigH = 28;
+                                    doc.image(col.sigBuffer, cx0 + authColW / 2 - 40, authTop + sigTop + 2, { fit: [80, sigH], align: 'center' });
                                 } catch (e) { }
                             }
+
+                            // 2. Divider line
+                            doc.moveTo(cx0 + 14, authTop + lineY).lineTo(cx0 + authColW - 14, authTop + lineY).lineWidth(0.5).stroke(BORDER_COLOR);
+
+                            // 3. Name / Designation / Date combined on one line
+                            const combined = col.rows.map(([, val]) => val).join(' / ');
+                            doc.fillColor(TEXT_DARK).fontSize(6).font('Helvetica').text(combined, cx0 + 6, authTop + rowsTop, { width: authColW - 12, align: 'center', lineBreak: false });
+
+                            // 4. "(Signature)" caption at the bottom
+                            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Oblique').text('(Signature)', cx0, authTop + captionY, { width: authColW, align: 'center' });
                         } else {
+                            // This column has no middle text row like Prepared/Reviewed By, so
+                            // its own divider line sits just above the caption instead of at the
+                            // shared lineY — freeing up extra room above it for a bigger stamp
+                            // and signature.
+                            const colLineY = captionY - 3;
+                            const zoneCenter = sigTop + (colLineY - sigTop) / 2;
                             if (receiptSettings.stampImage) {
                                 const stampPath = path.join(__dirname, '..', receiptSettings.stampImage);
                                 if (fs.existsSync(stampPath)) {
-                                    doc.image(stampPath, cx0 + 12, authTop + authHeaderH + 8, { fit: [56, 56] });
+                                    doc.image(stampPath, cx0 + 14, authTop + zoneCenter - 24, { fit: [48, 48] });
                                 }
                             }
                             if (receiptSettings.signatureImage) {
                                 const sigPath = path.join(__dirname, '..', receiptSettings.signatureImage);
                                 if (fs.existsSync(sigPath)) {
-                                    doc.image(sigPath, cx0 + 74, authTop + authHeaderH + 16, { fit: [authColW - 86, 44] });
+                                    doc.image(sigPath, cx0 + 68, authTop + zoneCenter - 19, { fit: [authColW - 82, 38] });
                                 }
                             }
+                            doc.moveTo(cx0 + 14, authTop + colLineY).lineTo(cx0 + authColW - 14, authTop + colLineY).lineWidth(0.5).stroke(BORDER_COLOR);
+                            const sigLabel = receiptSettings.signatureLabel || 'Authorized Signatory';
+                            doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Oblique').text(sigLabel, cx0, authTop + captionY, { width: authColW, align: 'center' });
                         }
-
-                        doc.moveTo(cx0 + 14, sigLineY).lineTo(cx0 + authColW - 14, sigLineY).lineWidth(0.5).stroke(BORDER_COLOR);
-                        const sigLabel = col.rows.length ? '(Signature)' : (receiptSettings.signatureLabel || 'Authorized Signatory');
-                        doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica-Oblique').text(sigLabel, cx0, sigLineY + 4, { width: authColW, align: 'center' });
                     });
 
                     contentBottom = authTop + authHeaderH + authBodyH + sectionGap;
@@ -999,7 +1024,7 @@ class PDFGenerator {
                 const printSafeBottomGap = 10;
                 // Same left/right margin (mx) as every other section, instead of spanning
                 // edge-to-edge.
-                const barY = pageH - 22 - printSafeBottomGap;
+                const barY = pageH - 16 - printSafeBottomGap;
                 // Anchor the thank-you/contact block just above the bottom bar (with a small
                 // internal gap between the two lines) instead of floating high above it.
                 const footerBlockH = 30;
@@ -1029,9 +1054,9 @@ class PDFGenerator {
                     doc.fillColor(TEXT_DARK).fontSize(9).font('Helvetica').text(c.v, cx + 17, contactRowY);
                     cx += 17 + itemWidths[i] + 40;
                 });
-                doc.rect(mx, barY, mw, 22).fill(ACCENT);
-                doc.fillColor('#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx, barY + 7, { width: mw, align: 'center' });
-                doc.text('Page 1 of 1', mx + mw - 70, barY + 7, { width: 60, align: 'right' });
+                doc.rect(mx, barY, mw, 16).fill(receiptSettings.footerBarColor || ACCENT);
+                doc.fillColor(receiptSettings.footerBarTextColor || '#fff').fontSize(7).font('Helvetica').text(receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.', mx, barY + 4, { width: mw, align: 'center' });
+                doc.text('Page 1 of 1', mx + mw - 70, barY + 4, { width: 60, align: 'right' });
 
                 doc.end();
                 stream.on('finish', () => {

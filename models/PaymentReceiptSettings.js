@@ -13,6 +13,22 @@ const paymentReceiptSettingsSchema = new mongoose.Schema(
     exhibitorBandColor: { type: String, default: "#1a7a3c" },
     accentColor: { type: String, default: "#0b3974" },
     noteColor: { type: String, default: "#c2410c" },
+    // Background for the gray section-divider bands (PAYMENT AGAINST .../ RECEIVED
+    // PAYMENT DETAILS).
+    sectionBandColor: { type: String, default: "#94a3b8" },
+    // Text color for those same divider bands.
+    sectionBandTextColor: { type: String, default: "#ffffff" },
+    // Background for the PREPARED BY/REVIEWED BY/FOR COMPANY header strip.
+    authBandColor: { type: String, default: "#94a3b8" },
+    // Text color for that same header strip's labels.
+    authBandTextColor: { type: String, default: "#0b3974" },
+    // Background + text color for the bottom disclaimer bar ("This is a computer
+    // generated document..." / "Page 1 of 1").
+    footerBarColor: { type: String, default: "#0b3974" },
+    footerBarTextColor: { type: String, default: "#ffffff" },
+    // Background for the "PAYMENT RECEIPT" title strip (top-right box in the event
+    // band). Defaults to white so it's invisible until an admin opts to color it in.
+    receiptTitleBandColor: { type: String, default: "#ffffff" },
 
     // Labels
     headOfficeLabel: { type: String, default: "Head Office:" },

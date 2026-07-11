@@ -72,6 +72,13 @@ const updateSettings = async (req, res) => {
       exhibitorBandColor,
       accentColor,
       noteColor,
+      sectionBandColor,
+      sectionBandTextColor,
+      authBandColor,
+      authBandTextColor,
+      footerBarColor,
+      footerBarTextColor,
+      receiptTitleBandColor,
       headOfficeLabel,
       receiptTitleLabel,
       fromLabel,
@@ -95,6 +102,13 @@ const updateSettings = async (req, res) => {
     if (exhibitorBandColor) settings.exhibitorBandColor = exhibitorBandColor;
     if (accentColor) settings.accentColor = accentColor;
     if (noteColor) settings.noteColor = noteColor;
+    if (sectionBandColor) settings.sectionBandColor = sectionBandColor;
+    if (sectionBandTextColor) settings.sectionBandTextColor = sectionBandTextColor;
+    if (authBandTextColor) settings.authBandTextColor = authBandTextColor;
+    if (authBandColor) settings.authBandColor = authBandColor;
+    if (footerBarColor) settings.footerBarColor = footerBarColor;
+    if (footerBarTextColor) settings.footerBarTextColor = footerBarTextColor;
+    if (receiptTitleBandColor) settings.receiptTitleBandColor = receiptTitleBandColor;
     if (headOfficeLabel !== undefined) settings.headOfficeLabel = headOfficeLabel;
     if (receiptTitleLabel !== undefined) settings.receiptTitleLabel = receiptTitleLabel;
     if (fromLabel !== undefined) settings.fromLabel = fromLabel;
