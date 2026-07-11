@@ -651,11 +651,11 @@ class PDFGenerator {
                     ['Registration Id', registration.registrationId || registration._id?.toString().slice(-8) || 'N/A'],
                     ['Receipt Date', formattedDate],
                 ];
-                let boxY = y + 22;
+                let boxY = y + 26;
                 infoRows.forEach(([l, v]) => {
                     doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text(l, boxX + 10, boxY, { width: 85, lineBreak: false });
                     doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (v || 'N/A'), boxX + 95, boxY, { width: boxW - 105 });
-                    boxY += 16;
+                    boxY += 18;
                 });
 
                 y += eventH + sectionGap;
