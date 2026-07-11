@@ -401,8 +401,7 @@ class PDFGenerator {
                 const m = paymentHistoryEntry || registration.manualPaymentDetails || {};
                 const isUSD = p.currency === 'USD';
 
-                // Using Rs. instead of ₹ to avoid Helvetica rendering issues (renders as ¹)
-                const curStr = isUSD ? 'USD ' : 'Rs. ';
+                const curStr = isUSD ? 'USD ' : '';
                 const fmt = (n) => `${curStr}${Math.round(Number(n || 0)).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
                 const Settings = require('../models/Settings');
@@ -619,21 +618,24 @@ class PDFGenerator {
                 const evMidX = mx + evColW;
                 let evMidY = y + 5;
                 const eventName = eventDoc?.name || 'IHWE 2026';
+                doc.fontSize(7).font('Helvetica');
+                const eventNameH = doc.heightOfString(eventName, { width: evMidW - 25 });
                 drawStarIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
-                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT NAME:', evMidX + 22, evMidY);
-                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(eventName.toUpperCase(), evMidX + 22, evMidY + 10, { width: evMidW - 25 });
-                evMidY += 28;
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT NAME', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(eventName, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
+                evMidY += 10 + eventNameH + 6;
 
                 const fmtEvDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
                 const dateStr = eventDoc?.startDate ? `${fmtEvDate(eventDoc.startDate)}${eventDoc.endDate ? ' - ' + fmtEvDate(eventDoc.endDate) : ''}` : 'TBA';
                 drawCalendarIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
-                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT DATE:', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT DATE', evMidX + 22, evMidY);
                 doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(dateStr, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
-                evMidY += 28;
+                evMidY += 24;
 
+                const venueText = (eventDoc?.location || 'Pragati Maidan, New Delhi, India').replace(/,?\s*(New Delhi)/i, ',\n$1');
                 drawPinIcon(evMidX + 8, evMidY + 8, 8, ACCENT);
-                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT VENUE:', evMidX + 22, evMidY);
-                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text((eventDoc?.location || 'Pragati Maidan, New Delhi, India').toUpperCase(), evMidX + 22, evMidY + 10, { width: evMidW - 25 });
+                doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text('EVENT VENUE', evMidX + 22, evMidY);
+                doc.fillColor(TEXT_DARK).fontSize(7).font('Helvetica').text(venueText, evMidX + 22, evMidY + 10, { width: evMidW - 25 });
 
                 const boxX = mx + evColW + evMidW;
                 const boxW = evRightW;
@@ -643,13 +645,13 @@ class PDFGenerator {
                 const formattedDate = new Date(m.paidAt || registration.updatedAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                 const infoRows = [
                     ['Receipt No.', rNo],
-                    ['Reg ID', registration.registrationId || registration._id?.toString().slice(-8) || 'N/A'],
-                    ['Date', formattedDate],
+                    ['Registration Id', registration.registrationId || registration._id?.toString().slice(-8) || 'N/A'],
+                    ['Receipt Date', formattedDate],
                 ];
                 let boxY = y + 30;
                 infoRows.forEach(([l, v]) => {
-                    doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text(l, boxX + 10, boxY, { width: 55 });
-                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (v || 'N/A'), boxX + 65, boxY, { width: boxW - 75 });
+                    doc.fillColor(TEXT_MUTED).fontSize(7).font('Helvetica-Bold').text(l, boxX + 10, boxY, { width: 85, lineBreak: false });
+                    doc.fillColor(TEXT_DARK).fontSize(7.5).font('Helvetica').text(':  ' + (v || 'N/A'), boxX + 95, boxY, { width: boxW - 105 });
                     boxY += 16;
                 });
 
@@ -685,8 +687,8 @@ class PDFGenerator {
                 doc.fontSize(7.5).font('Helvetica');
                 const fromAddrH = doc.heightOfString(fromAddr, { width: rowW });
                 const toAddrH = doc.heightOfString(exAddr, { width: rowW });
-                const fromInnerH = 24 + 12 + fromAddrH + 10 + 8 + 13 + 13 + 13 + 13 + 10;
-                const toInnerH = 24 + 12 + toAddrH + 10 + 8 + 13 + 13 + 13 + 13 + 10;
+                const fromInnerH = 24 + 12 + fromAddrH + 6 + 5 + 13 + 13 + 13 + 13 + 10;
+                const toInnerH = 24 + 12 + toAddrH + 6 + 5 + 13 + 13 + 13 + 13 + 10;
                 const boxH = Math.max(infoH - 16, fromInnerH, toInnerH);
 
                 // FROM (Organiser)
@@ -698,10 +700,10 @@ class PDFGenerator {
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(settings?.companyName || 'N/A', mx + 12, fy, { width: rowW });
                 fy += 12;
                 doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(fromAddr, mx + 12, fy, { width: rowW });
-                fy += fromAddrH + 10;
+                fy += fromAddrH + 6;
                 doc.moveTo(mx + 12, fy).lineTo(mx + halfW - 12, fy).dash(2, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.undash();
-                fy += 8;
+                fy += 5;
 
                 const orgContactStr = settings?.contactPerson || 'Authorized Signatory';
                 const orgDesignation = settings?.contactDesignation ? ` (${settings.contactDesignation})` : '';
@@ -732,10 +734,10 @@ class PDFGenerator {
                 doc.fillColor(TEXT_DARK).fontSize(9.5).font('Helvetica-Bold').text(registration.exhibitorName || 'N/A', rX + 12, ty, { width: rowW });
                 ty += 12;
                 doc.fillColor(TEXT_MUTED).fontSize(7.5).font('Helvetica').text(exAddr, rX + 12, ty, { width: rowW });
-                ty += toAddrH + 10;
+                ty += toAddrH + 6;
                 doc.moveTo(rX + 12, ty).lineTo(rX + halfW - 12, ty).dash(2, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR);
                 doc.undash();
-                ty += 8;
+                ty += 5;
 
                 const namePart = c1.name || `${c1.title ? c1.title + ' ' : ''}${c1.firstName || ''} ${c1.lastName || ''}`.trim();
                 const exhContactStr = namePart ? namePart : '';
@@ -768,13 +770,9 @@ class PDFGenerator {
                 if (registration.balanceAmount <= 0) paymentTypeLabel = 'Final Payment';
 
                 const drawDivider = (label) => {
-                    doc.fontSize(9).font('Helvetica-Bold');
-                    const textW = doc.widthOfString(label) + 10;
-                    const halfW = textW / 2;
-                    doc.moveTo(mx, y + 6).lineTo(mx + mw / 2 - halfW, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
-                    doc.fillColor(ACCENT).fontSize(9).font('Helvetica-Bold').text(label, mx + mw / 2 - halfW, y, { width: textW, align: 'center' });
-                    doc.moveTo(mx + mw / 2 + halfW, y + 6).lineTo(mx + mw, y + 6).lineWidth(0.5).stroke(BORDER_COLOR);
-                    y += 18;
+                    doc.rect(mx, y, mw, 16).fill('#94a3b8');
+                    doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(label, mx, y + 4, { width: mw, align: 'center' });
+                    y += 16 + 1;
                 };
                 drawDivider(receiptSettings.invoiceDetailsLabel || 'INVOICE DETAILS');
 
@@ -948,7 +946,7 @@ class PDFGenerator {
                     const authHeaderH = 20;
                     const authBodyH = 100;
                     const authTop = contentBottom;
-                    const sigLineY = authTop + authHeaderH + authBodyH - 22;
+                    const sigLineY = authTop + authHeaderH + authBodyH - 16;
 
                     const authCols = [
                         { label: 'PREPARED BY', rows: [['Name', preparedByName], ['Designation', preparedByDesignation], ['Date', formattedDate]], sigBuffer: preparedBySigBuffer },
@@ -977,7 +975,7 @@ class PDFGenerator {
                             });
                             if (col.sigBuffer) {
                                 try {
-                                    doc.image(col.sigBuffer, cx0 + authColW / 2 - 40, sigLineY - 30, { fit: [80, 28], align: 'center' });
+                                    doc.image(col.sigBuffer, cx0 + authColW / 2 - 40, sigLineY - 24, { fit: [80, 22], align: 'center' });
                                 } catch (e) { }
                             }
                         } else {

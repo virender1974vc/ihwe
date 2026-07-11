@@ -78,12 +78,9 @@ const updateSettings = async (req, res) => {
       toLabel,
       invoiceDetailsLabel,
       paymentDetailsLabel,
-      exhibitorDetailsLabel,
-      importantNoteLabel,
       footerThankYouText,
       footerDisclaimerText,
       receiptNumberPrefix,
-      importantNoteItems,
       headerBandHeight,
       eventBandHeight,
       infoBandHeight,
@@ -104,22 +101,11 @@ const updateSettings = async (req, res) => {
     if (toLabel !== undefined) settings.toLabel = toLabel;
     if (invoiceDetailsLabel !== undefined) settings.invoiceDetailsLabel = invoiceDetailsLabel;
     if (paymentDetailsLabel !== undefined) settings.paymentDetailsLabel = paymentDetailsLabel;
-    if (exhibitorDetailsLabel !== undefined) settings.exhibitorDetailsLabel = exhibitorDetailsLabel;
-    if (importantNoteLabel !== undefined) settings.importantNoteLabel = importantNoteLabel;
     if (footerThankYouText !== undefined) settings.footerThankYouText = footerThankYouText;
     if (footerDisclaimerText !== undefined) settings.footerDisclaimerText = footerDisclaimerText;
     if (receiptNumberPrefix !== undefined) settings.receiptNumberPrefix = receiptNumberPrefix;
     if (showSignatureStamp !== undefined) settings.showSignatureStamp = showSignatureStamp === 'true' || showSignatureStamp === true;
     if (signatureLabel !== undefined) settings.signatureLabel = signatureLabel;
-
-    if (importantNoteItems) {
-      try {
-        const parsed = typeof importantNoteItems === "string" ? JSON.parse(importantNoteItems) : importantNoteItems;
-        if (Array.isArray(parsed)) settings.importantNoteItems = parsed.filter((item) => String(item || "").trim());
-      } catch (e) {
-        console.error("Failed to parse importantNoteItems:", e.message);
-      }
-    }
 
     if (headerBandHeight) settings.headerBandHeight = Number(headerBandHeight);
     if (eventBandHeight) settings.eventBandHeight = Number(eventBandHeight);

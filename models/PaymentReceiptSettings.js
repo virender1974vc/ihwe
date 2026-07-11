@@ -21,8 +21,6 @@ const paymentReceiptSettingsSchema = new mongoose.Schema(
     toLabel: { type: String, default: "TO (EXHIBITOR)" },
     invoiceDetailsLabel: { type: String, default: "INVOICE DETAILS" },
     paymentDetailsLabel: { type: String, default: "PAYMENT DETAILS" },
-    exhibitorDetailsLabel: { type: String, default: "EXHIBITOR DETAILS" },
-    importantNoteLabel: { type: String, default: "IMPORTANT NOTE" },
     footerThankYouText: {
       type: String,
       default: "Thank you for your participation in 9th International Health & Wellness Expo 2026.",
@@ -33,21 +31,13 @@ const paymentReceiptSettingsSchema = new mongoose.Schema(
     },
     receiptNumberPrefix: { type: String, default: "PAY-RCPT-" },
 
-    importantNoteItems: {
-      type: [String],
-      default: [
-        "This is a system generated payment receipt and does not require any physical signature.",
-        "Subject to realization of cheque / DD.",
-        "All disputes are subject to Ghaziabad Jurisdiction only.",
-      ],
-    },
     headerBandHeight: { type: Number, default: 95 },
     eventBandHeight: { type: Number, default: 85 },
     infoBandHeight: { type: Number, default: 115 },
     footerBandHeight: { type: Number, default: 85 },
     pageMarginX: { type: Number, default: 30 },
     // Vertical whitespace between each major section (header, event, from/to, invoice
-    // details, payment details, exhibitor/note).
+    // details, payment details, signature block).
     sectionGap: { type: Number, default: 8 },
   },
   { timestamps: true },
