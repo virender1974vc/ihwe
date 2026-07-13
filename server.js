@@ -86,6 +86,7 @@ const crmStateRoutes = require("./routes/crmStateRoutes");
 const crmUserRoutes = require("./routes/crmUserRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const statusOptionRoutes = require("./routes/add_by_admin/statusOptionRoutes");
+const exhibitionRoleRoutes = require("./routes/add_by_admin/exhibitionRoleRoutes");
 const nextActionRoutes = require("./routes/add_by_admin/nextActionRoutes");
 const whatsappMessageRoutes = require("./routes/add_by_admin/CRMwhatsappMessageRoutes");
 const loginRoutes = require("./routes/loginRoutes");
@@ -141,6 +142,7 @@ const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
 const clientDocumentRoutes = require("./routes/clientDocumentRoutes");
 const referralRoutes = require("./routes/referralRoutes");
 const previousExhibitionRoutes = require("./routes/previousExhibitionRoutes");
+const estimateTermsConfigRoutes = require("./routes/estimateTermsConfigRoutes");
 
 const databaseReady = mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -302,6 +304,7 @@ app.use("/api/hotel-stay-partner", hotelStayPartnerRoutes);
 app.use("/api/fabrication-partner", fabricationPartnerRoutes);
 app.use("/api/travel-partner", travelPartnerRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/payment-receipt-settings", require("./routes/paymentReceiptSettingsRoutes"));
 app.use("/api/ai-verification-settings", require("./routes/aiVerificationSettingsRoutes"));
 app.use("/api/download-pdf", downloadPdfRoutes);
 app.use("/api/marquee", marqueeRoutes);
@@ -410,8 +413,10 @@ app.use("/api/users", crmUserRoutes);
 app.use("/api/companies", companyRoutes);
 app.use("/api/client-contacts", require('./routes/clientContactRoutes'));
 app.use("/api/status-option", statusOptionRoutes);
+app.use("/api/exhibition-roles", exhibitionRoleRoutes);
 app.use("/api/next-action", nextActionRoutes);
 app.use("/api/crm-messages", whatsappMessageRoutes);
+app.use("/api/estimate-terms-config", estimateTermsConfigRoutes);
 app.use("/api", loginRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/estimates", estimateRoutes);

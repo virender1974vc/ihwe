@@ -112,6 +112,14 @@ const settingsSchema = new mongoose.Schema({
         type: String,
         default: "www.namogangewellness.com"
     },
+    contactPerson: {
+        type: String,
+        default: "Vijay Sharma"
+    },
+    contactDesignation: {
+        type: String,
+        default: "Managing Director"
+    },
     authorizedSignature: {
         type: String,
         default: ""

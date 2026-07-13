@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Invoice = require("../models/Invoice");
+const Estimate = require("../models/Estimate");
 const Payment = require("../models/Payment");
 const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
@@ -28,26 +29,28 @@ const invoiceReference = (invoice) => {
   if (firstItem?.description) return firstItem.description;
   return invoice.type_of_invoice || "Invoice raised";
 };
-
-// Builds the full client ledger: chronological transactions with a running balance,
-// aging buckets, outstanding breakdown and document summary — all derived from real
-// Invoice/Payment/CreditNote/DebitNote records for this one client.
 const buildClientLedger = async (companyId, company, exhibitor) => {
   const lookupIds = Array.from(
     new Set([companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)),
   );
 
-  const [invoices, legacyCreditNotes, debitNotes, accountDebitNotes] = await Promise.all([
+  const [invoices, proformaInvoices, legacyCreditNotes, debitNotes, accountDebitNotes] = await Promise.all([
     Invoice.find({ companyId: { $in: lookupIds } }).lean(),
+    Estimate.find({ companyId: { $in: lookupIds } }).lean(),
     CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
     DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
     AccountDebitNote.find({ companyId: { $in: lookupIds }, status: "active" }).lean(),
   ]);
 
   const activeInvoices = invoices.filter((inv) => !isCancelledDoc(inv));
+  const activeProformaInvoices = activeInvoices.length > 0
+    ? []
+    : proformaInvoices.filter((estimate) => !isCancelledDoc(estimate));
   const invoiceIds = activeInvoices.map((inv) => inv._id.toString());
-  const payments = invoiceIds.length
-    ? await Payment.find({ invoice_id: { $in: invoiceIds } }).sort({ payment_date: 1, added: 1 }).lean()
+  const proformaIds = activeProformaInvoices.map((est) => est._id.toString());
+  const payableDocIds = [...invoiceIds, ...proformaIds];
+  const payments = payableDocIds.length
+    ? await Payment.find({ invoice_id: { $in: payableDocIds } }).sort({ payment_date: 1, added: 1 }).lean()
     : [];
 
   const paidByInvoiceId = {};
@@ -55,12 +58,6 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
     const key = String(p.invoice_id);
     paidByInvoiceId[key] = (paidByInvoiceId[key] || 0) + parseAmount(p.amount_text);
   });
-
-  // Credit notes that are tied to a specific invoice must reduce THAT invoice's
-  // remaining balance too, not just the global running total — otherwise per-invoice
-  // aging/overdue figures double-count what a credit note already adjusted.
-  // Uses the shared helper so this matches the same est_no/invoice_no/reference_invoice_no
-  // logic as accountOverviewController and accountsReceivableController.
   const creditedByInvoiceId = getCreditedByInvoiceId(activeInvoices, legacyCreditNotes, debitNotes);
 
   const overview = await buildAccountOverview(companyId, company, exhibitor);
@@ -88,9 +85,29 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
       _invoiceSettled: settled,
     });
   });
+  activeProformaInvoices.forEach((est) => {
+    const amount = parseAmount(est.finalAmount);
+    const paid = paidByInvoiceId[est._id.toString()] || 0;
+    const status = paid >= amount && amount > 0 ? "Paid" : paid > 0 ? "Partially Paid" : "Open";
+    entries.push({
+      id: est._id,
+      date: est.added,
+      type: "Proforma Invoice",
+      documentNo: est.est_no,
+      reference: invoiceReference(est),
+      debit: amount,
+      credit: 0,
+      status,
+      dueDate: null,
+      _invoiceAmount: amount,
+      _invoiceSettled: paid,
+    });
+  });
 
   payments.forEach((pmt) => {
-    const inv = activeInvoices.find((i) => i._id.toString() === String(pmt.invoice_id));
+    const inv = activeInvoices.find((i) => i._id.toString() === String(pmt.invoice_id))
+      || activeProformaInvoices.find((e) => e._id.toString() === String(pmt.invoice_id));
+    const invNo = inv?.invoice_no || inv?.est_no;
     const modeRef = pmt.utr_no || pmt.cheque_no || pmt.cash_receipt_no || pmt.card_transaction_no || pmt.wallet_transaction_no;
     const reference = [
       pmt.pymnt_type || "Payment Received",
@@ -102,7 +119,7 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
       date: pmt.payment_date || pmt.added,
       type: "Payment",
       documentNo: pmt.receipt_no || pmt.ex_no || "Payment",
-      reference: reference || `Payment against ${inv?.invoice_no || "invoice"}`,
+      reference: reference || `Payment against ${invNo || "invoice"}`,
       debit: 0,
       credit: parseAmount(pmt.amount_text),
       status: "Received",
@@ -139,9 +156,6 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
         status: "Adjusted",
       });
     });
-
-  // Real debit notes (additional charges/late fee/expense recovery/etc.) — these increase
-  // what the exhibitor owes, unlike the legacy CreditNote/DebitNote models above.
   accountDebitNotes.forEach((dn) => {
     entries.push({
       id: dn._id,
@@ -175,9 +189,7 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
 
   const openingBalance = 0;
   const closingBalance = runningBalance;
-
-  // ---- Aggregates ----
-  const invoiceEntries = entries.filter((e) => e.type === "Invoice");
+  const invoiceEntries = entries.filter((e) => e.type === "Invoice" || e.type === "Proforma Invoice");
   const paymentEntries = entries.filter((e) => e.type === "Payment");
   const creditNoteEntries = entries.filter((e) => e.type === "Credit Note");
 
@@ -220,11 +232,6 @@ const buildClientLedger = async (companyId, company, exhibitor) => {
 
     if (!nextDueDate || due < nextDueDate) nextDueDate = due;
   });
-
-  // Defensive clamp: per-invoice remaining amounts can still overstate the true
-  // global outstanding when a credit note references an invoice outside this
-  // client's own invoice set (a data anomaly). Scale down proportionally so the
-  // UI never shows overdue/aging figures larger than the actual outstanding total.
   const rawOutstandingSum = outstandingInvoices.reduce((sum, inv) => sum + inv.remaining, 0);
   if (rawOutstandingSum > outstandingAmount && rawOutstandingSum > 0) {
     const scale = outstandingAmount / rawOutstandingSum;

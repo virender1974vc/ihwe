@@ -37,6 +37,7 @@ class AdminUsersService {
         const hodImage = cleanOptionalImage(data.hodImage);
         const profileImage = cleanOptionalImage(data.profileImage);
         const reportingToImage = cleanOptionalImage(data.reportingToImage);
+        const signatureImage = cleanOptionalImage(data.signatureImage);
 
         const reqRole = requester.role;
         const assignRole = role;
@@ -80,6 +81,7 @@ class AdminUsersService {
             reportingToDesignation: cleanString(reportingToDesignation),
             reportingToImage,
             profileImage,
+            signatureImage,
             role: role || 'employee',
             status: status === 'Inactive' ? 'Inactive' : 'Active',
             createdBy: requester.id
@@ -106,6 +108,7 @@ class AdminUsersService {
         const hodImage = data.hodImage !== undefined ? cleanOptionalImage(data.hodImage) : undefined;
         const profileImage = data.profileImage !== undefined ? cleanOptionalImage(data.profileImage) : undefined;
         const reportingToImage = data.reportingToImage !== undefined ? cleanOptionalImage(data.reportingToImage) : undefined;
+        const signatureImage = data.signatureImage !== undefined ? cleanOptionalImage(data.signatureImage) : undefined;
 
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
@@ -166,6 +169,7 @@ class AdminUsersService {
         if (reportingToDesignation !== undefined) userToUpdate.reportingToDesignation = cleanString(reportingToDesignation);
         if (reportingToImage !== undefined) userToUpdate.reportingToImage = reportingToImage;
         if (profileImage !== undefined) userToUpdate.profileImage = profileImage;
+        if (signatureImage !== undefined) userToUpdate.signatureImage = signatureImage;
 
         await userToUpdate.save();
         const userData = userToUpdate.toObject();

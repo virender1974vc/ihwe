@@ -9,8 +9,11 @@ const {
   updateCreditNote,
   deleteCreditNote,
 } = require("../controllers/creditNoteController.js");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {

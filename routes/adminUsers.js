@@ -13,16 +13,22 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Configure Cloudinary storage for HOD image upload
-const hodStorage = new CloudinaryStorage({
+// Configure Cloudinary storage for admin user image uploads (HOD photo, profile photo,
+// signature) — folder is picked per-field so one multer instance can handle all three.
+const FOLDER_BY_FIELD = {
+    hodImage: 'hod-passport-photos',
+    profileImage: 'admin-profile-photos',
+    signatureImage: 'user-signatures',
+};
+const adminImageStorage = new CloudinaryStorage({
     cloudinary,
-    params: {
-        folder: 'hod-passport-photos',
+    params: (req, file) => ({
+        folder: FOLDER_BY_FIELD[file.fieldname] || 'admin-uploads',
         allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    },
+    }),
 });
 
-const upload = multer({ storage: hodStorage });
+const upload = multer({ storage: adminImageStorage });
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -127,11 +133,11 @@ router.get('/by-username/:username', async (req, res) => {
 
 // @route   POST /api/admin/create
 // @desc    Create a new admin user
-router.post('/create', verifyToken, upload.fields([{ name: 'hodImage', maxCount: 1 }, { name: 'profileImage', maxCount: 1 }]), (req, res) => adminUsersController.createAdmin(req, res));
+router.post('/create', verifyToken, upload.fields([{ name: 'hodImage', maxCount: 1 }, { name: 'profileImage', maxCount: 1 }, { name: 'signatureImage', maxCount: 1 }]), (req, res) => adminUsersController.createAdmin(req, res));
 
 // @route   PUT /api/admin/update/:id
 // @desc    Update an admin user
-router.put('/update/:id', verifyToken, upload.fields([{ name: 'hodImage', maxCount: 1 }, { name: 'profileImage', maxCount: 1 }]), (req, res) => adminUsersController.updateAdmin(req, res));
+router.put('/update/:id', verifyToken, upload.fields([{ name: 'hodImage', maxCount: 1 }, { name: 'profileImage', maxCount: 1 }, { name: 'signatureImage', maxCount: 1 }]), (req, res) => adminUsersController.updateAdmin(req, res));
 
 // @route   DELETE /api/admin/delete/:id
 // @desc    Delete an admin user

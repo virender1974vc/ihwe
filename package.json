@@ -6,6 +6,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "seed:accessory-template": "node scripts/seedAccessoryOrderTemplate.js",
+    "seed:exhibition-roles": "node seedExhibitionRoles.js",
+    "seed:estimate-terms-config": "node seedEstimateTermsConfig.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

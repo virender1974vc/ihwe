@@ -61,7 +61,11 @@ const getFiscalYear = () => {
 // ✅ Static method: Auto-generate next PI number
 PerformaInvoiceSchema.statics.generateNextPINumber = async function () {
   const fiscalYear = getFiscalYear();
-  const prefix = `NGW/${fiscalYear}/PI/`;
+  // Distinct from Estimate's "NGW/{FY}/PI/" prefix — both are live, independently
+  // numbered "Proforma Invoice" systems, and sharing the same prefix let an
+  // Estimate and a PerformaInvoice show the identical printed number for two
+  // different clients.
+  const prefix = `NGW/${fiscalYear}/PFI/`;
 
   const lastInvoice = await this.findOne({
     pi_no: { $regex: `^${prefix}` },

@@ -52,8 +52,10 @@ const paymentSchema = new mongoose.Schema(
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );
-
-// Static method: Auto-generate next Receipt number in RCP/YY-YY/NNNN format
+paymentSchema.index(
+  { receipt_no: 1 },
+  { unique: true, partialFilterExpression: { receipt_no: { $gt: "" } } }
+);
 paymentSchema.statics.generateNextReceiptNo = async function (forDate) {
   const fiscalYear = getFiscalYear(forDate);
   const prefix = `RCP/${fiscalYear}/`;

@@ -38,6 +38,32 @@ const normalizeIndianMobile = (value) => {
     if (/^0[6-9]\d{9}$/.test(digits)) return digits.slice(1);
     return '';
 };
+const resolveOwnedRegistrationId = async (req) => {
+    const email = req.user?.email;
+    const mobile = req.user?.mobile;
+    let strippedMobile = mobile;
+    if (mobile && mobile.startsWith('0')) {
+        strippedMobile = mobile.substring(1);
+    }
+
+    const ownedRegs = await ExhibitorRegistration.find({
+        $or: [
+            { 'contact1.email': email },
+            { 'contact1.mobile': mobile },
+            { 'contact1.mobile': strippedMobile },
+            { 'contact1.mobile': '0' + strippedMobile }
+        ]
+    }).select('_id').lean();
+
+    const ownedIds = new Set(ownedRegs.map(r => r._id.toString()));
+    if (req.user?.id) ownedIds.add(String(req.user.id));
+
+    const requestedId = req.query.id;
+    if (requestedId && mongoose.Types.ObjectId.isValid(requestedId) && ownedIds.has(String(requestedId))) {
+        return requestedId;
+    }
+    return req.user.id;
+};
 
 const getMobileSearchVariants = (value) => {
     const raw = String(value || '').trim();
@@ -272,7 +298,7 @@ class ExhibitorAuthController {
                     status: 'Success'
                 });
                 await newLog.save();
-                
+
                 const io = req.app.get('io');
                 if (io) {
                     io.emit('new_exhibitor_activity_log', newLog);
@@ -514,7 +540,13 @@ class ExhibitorAuthController {
                     const Estimate = require('../models/Estimate');
                     const Invoice = require('../models/Invoice');
 
-                    const companyIds = registrations.map(r => r._id.toString());
+                    // Estimate/Invoice.companyId is actually the CRM Company._id (saved as
+                    // registration.clientId at booking time), not the ExhibitorRegistration
+                    // _id — include both so an auto-generated Estimate/Invoice is actually
+                    // found here (matches the lookup pattern in accountOverviewController).
+                    const companyIds = Array.from(new Set(
+                        registrations.flatMap(r => [r._id.toString(), r.clientId].filter(Boolean))
+                    ));
 
                     // Fetch latest estimate for any of this user's registrations
                     estimateDoc = await Estimate.findOne({ companyId: { $in: companyIds } })
@@ -736,9 +768,7 @@ class ExhibitorAuthController {
                 });
             }
 
-            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
-                ? req.query.id
-                : req.user.id;
+            const targetId = await resolveOwnedRegistrationId(req);
 
             console.log('Target ID for Update:', targetId);
 
@@ -885,9 +915,7 @@ class ExhibitorAuthController {
                 });
             }
 
-            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id)
-                ? req.query.id
-                : req.user.id;
+            const targetId = await resolveOwnedRegistrationId(req);
 
             const updateData = {
                 isSeller: true,
@@ -928,7 +956,7 @@ class ExhibitorAuthController {
             if (req.user.role !== 'exhibitor')
                 return res.status(403).json({ success: false, message: 'Access denied.' });
 
-            const targetId = req.query.id && mongoose.Types.ObjectId.isValid(req.query.id) ? req.query.id : req.user.id;
+            const targetId = await resolveOwnedRegistrationId(req);
             const exhibitor = await ExhibitorRegistration.findById(targetId).populate('eventId', 'startDate endDate');
             if (!exhibitor)
                 return res.status(404).json({ success: false, message: 'Exhibitor not found' });
@@ -1009,7 +1037,7 @@ class ExhibitorAuthController {
     async createPassOrder(req, res) {
         try {
             const exhibitorId = req.user.id;
-            const { passType, quantity, vehicles } = req.body;
+            const { passType, quantity, vehicles, personnel } = req.body;
 
             if (!passType || !quantity) {
                 return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
@@ -1081,7 +1109,7 @@ class ExhibitorAuthController {
             };
 
             const order = await razorpay.orders.create(options);
-            
+
             res.status(200).json({
                 success: true,
                 isFree: false,

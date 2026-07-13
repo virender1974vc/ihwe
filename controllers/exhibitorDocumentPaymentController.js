@@ -6,8 +6,11 @@ const Estimate = require("../models/Estimate");
 const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const Company = require("../models/Company");
 const CreditNote = require("../models/CreditNote");
 const AccountDebitNote = require("../models/AccountDebitNote");
+const DebitNote = require("../models/DebitNote");
+const { attachSignatorySignatures } = require("../utils/signatorySignatures");
 
 const DOC_MODELS = { invoice: Invoice, proforma: Estimate };
 const VIEW_DOC_MODELS = {
@@ -16,7 +19,38 @@ const VIEW_DOC_MODELS = {
   challan: DeliveryChallan,
   creditnote: CreditNote,
   debitnote: AccountDebitNote,
+  // The legacy "DebitNote" model actually behaves as a second credit-note mechanism
+  // (see accountOverviewController) — labelled "Credit Note (Legacy)" in the dashboard.
+  legacycreditnote: DebitNote,
 };
+
+// The legacy DebitNote schema uses different field names than the real CreditNote
+// schema. Normalize it into the same shape CreditNotePrintTemplate already knows how
+// to render, instead of building/maintaining a second print template.
+const mapLegacyDebitNoteToCreditNoteShape = (doc) => ({
+  ...doc,
+  create_note_no: doc.debit_note_no,
+  credit_note_date: doc.debit_note_date,
+  reference_invoice_no: doc.toInvoiceNo,
+  credit_note_type: doc.type,
+  reason: doc.reason,
+  remarks: doc.remarks,
+  clientName: doc.clientName,
+  taxableAmount: doc.taxableAmount,
+  gstAmount: (doc.cgstAmount || 0) + (doc.sgstAmount || 0) + (doc.igstAmount || 0),
+  totalAmount: doc.totalAmount,
+  items: (doc.items || []).map((it) => ({
+    item: it.description,
+    hsn: it.hsn,
+    quantity: it.qty,
+    unit: it.unit,
+    rate: it.rate,
+    taxableValue: it.amount,
+    gstPct: it.gstPct,
+    gstAmount: it.gstAmount,
+    total: it.total,
+  })),
+});
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 const toNumber = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 
@@ -90,6 +124,17 @@ const getAuthorizedCompanyIds = async (user) => {
     if (reg.clientId) ids.add(String(reg.clientId));
   });
   return ids;
+};
+
+const lookupCompanyOrExhibitor = async (id) => {
+  if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+  const company = await Company.findById(id).lean();
+  if (company) return { ...company, _source: "company" };
+
+  const exhibitor = await ExhibitorRegistration.findById(id).lean();
+  if (exhibitor) return { ...exhibitor, _source: "exhibitorRegistration" };
+
+  return null;
 };
 
 const getOutstanding = async (doc, docId) => {
@@ -229,6 +274,14 @@ const getDocument = async (req, res) => {
       return res.status(403).json({ success: false, message: "Access denied" });
     }
 
+    if (docType === "legacycreditnote") {
+      doc = mapLegacyDebitNoteToCreditNoteShape(doc);
+    }
+
+    if (docType === "creditnote" || docType === "debitnote" || docType === "legacycreditnote") {
+      doc = await attachSignatorySignatures(doc);
+    }
+
     if (docType === "challan") {
       doc = await enrichChallanFromEstimate(doc);
     }
@@ -280,7 +333,9 @@ const getDocument = async (req, res) => {
       });
     }
 
-    res.json({ success: true, document: doc });
+    const company = await lookupCompanyOrExhibitor(doc.companyId || doc.account_ref_id);
+
+    res.json({ success: true, document: doc, company });
   } catch (error) {
     console.error("Exhibitor get-document error:", error);
     res.status(500).json({ success: false, message: error?.message || "Failed to load document" });

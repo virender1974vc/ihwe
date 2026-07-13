@@ -11,8 +11,11 @@ const {
   sendPaymentReceipt,
   downloadPaymentReceipt,
 } = require("../controllers/paymentController.js");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 const proofStorage = multer.diskStorage({
   destination: (req, file, cb) => {

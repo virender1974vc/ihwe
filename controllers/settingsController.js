@@ -22,16 +22,17 @@ class SettingsController {
      */
     async updateSettings(req, res) {
         try {
-            const { 
-                emails, phones, addresses, mapIframe, marqueeText, topbarDate, 
-                supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, 
+            const {
+                emails, phones, addresses, mapIframe, marqueeText, topbarDate,
+                supportDeskText, onlineAdvancePercentage, manualAdvancePercentage,
                 quickLinks, exhibitionLinks,
-                companyName, companyAddress, companyGst, companyCin, 
+                companyName, companyAddress, companyGst, companyCin,
                 contactPhone, contactEmail, contactWebsite,
+                contactPerson, contactDesignation,
                 fullPaymentDiscount, availableTdsRates, msmeLogoTitle,
                 msmeLogos, showBrochurePopUp, brochurePopUpDelay, showGovtPmsScheme
             } = req.body;
-            
+
             const updateData = {
                 emails: emails ? JSON.parse(emails) : undefined,
                 phones: phones ? JSON.parse(phones) : undefined,
@@ -52,6 +53,8 @@ class SettingsController {
                 contactPhone,
                 contactEmail,
                 contactWebsite,
+                contactPerson,
+                contactDesignation,
                 onlineAdvancePercentage: onlineAdvancePercentage ? Number(onlineAdvancePercentage) : undefined,
                 manualAdvancePercentage: manualAdvancePercentage ? Number(manualAdvancePercentage) : undefined,
                 fullPaymentDiscount: fullPaymentDiscount ? Number(fullPaymentDiscount) : undefined,
@@ -98,13 +101,13 @@ class SettingsController {
             }
 
             const data = await settingsService.updateSettings(updateData);
-            
+
             // If a file was uploaded, return the path in response
             const response = { success: true, data, message: 'Settings updated successfully' };
             if (updateData.uploadedMsmeLogoPath) {
                 response.uploadedMsmeLogoPath = updateData.uploadedMsmeLogoPath;
             }
-            
+
             res.json(response);
         } catch (error) {
             console.error('Update settings error:', error);

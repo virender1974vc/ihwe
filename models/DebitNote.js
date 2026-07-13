@@ -62,7 +62,10 @@ const getFiscalYear = () => {
 
 debitNoteSchema.statics.generateNextDebitNoteNo = async function () {
   const fiscalYear = getFiscalYear();
-  const prefix = `NGW/CN/${fiscalYear}/`;
+  // Was "NGW/CN/..." (Credit Note shorthand) even though this prints as a Debit Note —
+  // confusing on the document itself. Distinct from CreditNote's "NGW/CRD/" and
+  // AccountDebitNote's "NGW/DN/" prefixes.
+  const prefix = `NGW/DNL/${fiscalYear}/`;
 
   const lastNote = await this.findOne({
     debit_note_no: { $regex: `^${prefix}` },

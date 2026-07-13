@@ -6,8 +6,11 @@ const {
   updatePerformaInvoice,
   deletePerformaInvoice,
 } = require("../controllers/perInvoiceController.js");
+const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
+
+router.use(authMiddleware);
 
 router.post("/", createPerformaInvoice);
 router.get("/", getAllPerformaInvoices);

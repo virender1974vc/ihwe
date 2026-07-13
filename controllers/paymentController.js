@@ -5,6 +5,7 @@ const PerformaInvoice = require("../models/PerformaInvoice");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Company = require("../models/Company");
 const Stall = require("../models/Stall");
+const Event = require("../models/Event");
 const { logActivity } = require("../utils/logger");
 const { getAccountNameById, getDocumentAccountName } = require("../utils/accountActivityDetails");
 const emailService = require("../utils/emailService");
@@ -66,6 +67,14 @@ const resolvePaymentDocument = async (payment) => {
 const getDocumentNo = (doc, payment) => doc?.invoice_no || doc?.est_no || payment?.invoice_no || payment?.invoice_id || "-";
 const getDocumentDate = (doc) => doc?.invoice_date || doc?.supply_date || doc?.added || "";
 const getDocumentAmount = (doc, payment) => doc?.finalAmount ?? payment?.f_amount ?? 0;
+const getDocumentUnitRate = (doc) => {
+  const rates = (doc?.items || [])
+    .map((item) => parseAmount(item?.rate))
+    .filter((rate) => rate > 0);
+  if (!rates.length) return 0;
+  const firstRate = rates[0];
+  return rates.every((rate) => rate === firstRate) ? firstRate : firstRate;
+};
 
 const getPaymentReference = (payment) => (
   payment.utr_no ||
@@ -100,6 +109,7 @@ const getReceiptContact = async (payment) => {
   let email = "";
   let mobile = "";
   let name = "Contact";
+  let designation = "";
   let companyName = payment.company_name || "";
   let address = "";
   let city = "";
@@ -107,12 +117,14 @@ const getReceiptContact = async (payment) => {
   let country = "";
   let pincode = "";
   let gstNo = "";
+  let rmName = "";
 
   if (exhibitor) {
     const contact1 = exhibitor.contact1 || {};
     email = contact1.email || "";
     mobile = contact1.whatsapp || contact1.mobile || "";
     name = contact1.name || `${contact1.firstName || ""} ${contact1.lastName || ""}`.trim() || exhibitor.companyName || "Contact";
+    designation = contact1.designation || "";
     companyName = exhibitor.exhibitorName || exhibitor.companyName || exhibitor.companyFirmName || companyName;
     address = exhibitor.address || "";
     city = exhibitor.city || "";
@@ -120,28 +132,74 @@ const getReceiptContact = async (payment) => {
     country = exhibitor.country || "";
     pincode = exhibitor.pincode || "";
     gstNo = exhibitor.gstNo || "";
+    rmName = exhibitor.filledByFullName || exhibitor.spokenWith || "";
   } else if (company) {
-    const contact = company.contacts && company.contacts.length > 0 ? company.contacts[0] : {};
+    const contact = company.contacts && company.contacts.length > 0
+      ? (company.contacts.find((c) => c.isPrimary) || company.contacts[0])
+      : {};
     email = contact.email || company.email || "";
     mobile = contact.mobile || company.landline || "";
-    name = contact.name || contact.firstName || company.companyName || "Contact";
+    name = contact.name || `${contact.firstName || ""} ${contact.surname || ""}`.trim() || company.companyName || "Contact";
+    designation = contact.designation || "";
     companyName = company.companyName || companyName;
     address = company.address || company.companyAddress || "";
     city = company.city || "";
     state = company.state || "";
     country = company.country || "";
     pincode = company.pincode || company.pinCode || "";
-    gstNo = company.gstNo || company.gstin || "";
+    gstNo = company.gstNumber || "";
+    rmName = company.added_by || "";
   }
 
-  return { email, mobile, name, companyName, address, city, state, country, pincode, gstNo, exhibitor };
+  return { email, mobile, name, designation, companyName, address, city, state, country, pincode, gstNo, rmName, exhibitor };
+};
+
+const DEFAULT_RECEIPT_EVENT = {
+  name: "9th-IHWE",
+  startDate: new Date("2026-08-21"),
+  endDate: new Date("2026-08-23"),
+  location: "Pragati Maidan, New Delhi, India",
+};
+
+const normalizeReceiptEvent = (eventDoc) => ({
+  ...DEFAULT_RECEIPT_EVENT,
+  ...(eventDoc || {}),
+});
+
+const resolveReceiptEvent = async (payment, contact, docData) => {
+  const mongoose = require("mongoose");
+  const candidates = [
+    contact?.exhibitor?.eventId,
+    docData?.eventId,
+    payment?.eventId,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "object" && candidate.name) {
+      return normalizeReceiptEvent(candidate);
+    }
+    if (mongoose.Types.ObjectId.isValid(candidate)) {
+      const eventDoc = await Event.findById(candidate).lean();
+      if (eventDoc) return normalizeReceiptEvent(eventDoc);
+    }
+  }
+
+  const eventDoc =
+    await Event.findOne({ status: "active", startDate: { $exists: true, $ne: null } }).sort({ order: 1, startDate: 1 }).lean() ||
+    await Event.findOne({ name: /IHWE|International Health/i }).sort({ startDate: 1, order: 1 }).lean();
+
+  return normalizeReceiptEvent(eventDoc);
 };
 
 const generateAccountPaymentReceipt = async (payment) => {
   const docData = await resolvePaymentDocument(payment);
   const contact = await getReceiptContact(payment);
+  const eventDoc = await resolveReceiptEvent(payment, contact, docData);
   const receiptNo = `PAY-RCPT-${String(payment._id).slice(-8).toUpperCase()}`;
+  const documentNo = getDocumentNo(docData, payment);
+  const documentType = docData?.invoice_no ? "Tax Invoice" : (docData ? "Proforma Invoice" : "Payment Receipt");
   const invoiceAmount = parseAmount(getDocumentAmount(docData, payment));
+  const unitRate = getDocumentUnitRate(docData);
   const receivedAmount = parseAmount(payment.amount_text);
   const tdsAmount = parseAmount(payment.tds_text);
   const relatedPayments = payment.invoice_id
@@ -171,7 +229,12 @@ const generateAccountPaymentReceipt = async (payment) => {
   const registrationLike = {
     _id: payment._id,
     customReceiptNo: receiptNo,
-    registrationId: getDocumentNo(docData, payment),
+    registrationId: documentNo,
+    referenceInvoice: documentNo,
+    invoiceNo: documentNo,
+    receiptDocumentType: documentType,
+    receiptInvoiceAmount: invoiceAmount,
+    receiptUnitRate: unitRate,
     exhibitorName: contact.companyName || contact.name || "Client",
     companyEmail: contact.email,
     address: contact.address,
@@ -180,23 +243,25 @@ const generateAccountPaymentReceipt = async (payment) => {
     country: contact.country || "India",
     pincode: contact.pincode,
     gstNo: contact.gstNo,
+    filledByFullName: contact.rmName || "",
     contact1: {
       firstName: firstName || contact.name || "Contact",
       lastName: lastNameParts.join(" "),
+      designation: contact.designation || "",
       email: contact.email,
       mobile: contact.mobile,
       whatsapp: contact.mobile,
     },
-    eventId: { name: "IHWE 2026" },
+    eventId: eventDoc,
     isGenericInvoice: true,
     participation: {
       currency: "INR",
-      stallFor: getDocumentNo(docData, payment),
-      stallType: docData?.invoice_no ? "Tax Invoice" : "Proforma Invoice",
+      stallFor: documentNo,
+      stallType: documentType,
       stallScheme: payment.pymnt_type || paymentMode,
       dimension: "Payment Receipt",
       stallSize: 1,
-      rate: taxableAmount || invoiceAmount,
+      rate: unitRate || taxableAmount || invoiceAmount,
       amount: taxableAmount || invoiceAmount,
       gstPercent: invoiceAmount > 0 ? 18 : 0,
       total: invoiceAmount,
@@ -207,6 +272,8 @@ const generateAccountPaymentReceipt = async (payment) => {
       gstAmount,
       tdsAmount: cumulativeTds,
       tdsPercent: payment.tds_rate || 0,
+      invoiceAmount,
+      totalAmount: invoiceAmount,
       netPayable,
     },
     chosenTdsPercent: payment.tds_rate || 0,
@@ -223,10 +290,10 @@ const generateAccountPaymentReceipt = async (payment) => {
   };
 
   if (contact.exhibitor) {
-    if (contact.exhibitor.participation) {
+    if (!docData && contact.exhibitor.participation) {
       registrationLike.participation = contact.exhibitor.participation;
     }
-    if (contact.exhibitor.financeBreakdown) {
+    if (!docData && contact.exhibitor.financeBreakdown) {
       registrationLike.financeBreakdown = contact.exhibitor.financeBreakdown;
     }
     // If it's linked to an exhibitor with actual participation, it's not a generic invoice anymore

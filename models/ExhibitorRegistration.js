@@ -114,6 +114,16 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     paymentId: String,
     razorpayOrderId: String,
     razorpaySignature: String,
+    pendingPayment: {
+        orderId: String,
+        netAmount: { type: Number, default: 0 },
+        gatewayAmount: { type: Number, default: 0 },
+        installmentNumber: { type: Number, default: null }
+    },
+    // Set when payment for this registration was captured but the stall it was for
+    // had already been taken by another registration in the meantime (race condition).
+    // Needs manual resolution (reassign a stall or refund) — see activateRegistration.
+    stallConflict: { type: Boolean, default: false },
     receiptUrl: String,
     registrationPdfUrl: String,
     receiptPdfUrl: String,

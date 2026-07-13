@@ -22,13 +22,14 @@ class SettingsService {
         let settings = await Settings.findOne();
         if (!settings) settings = new Settings({});
 
-        const { 
-            logo, exhibitorBrochurePdf, emails, phones, addresses, mapIframe, 
-            marqueeText, topbarDate, supportDeskText, 
-            onlineAdvancePercentage, manualAdvancePercentage, 
+        const {
+            logo, exhibitorBrochurePdf, emails, phones, addresses, mapIframe,
+            marqueeText, topbarDate, supportDeskText,
+            onlineAdvancePercentage, manualAdvancePercentage,
             quickLinks, exhibitionLinks,
             companyName, companyAddress, companyGst, companyCin,
             contactPhone, contactEmail, contactWebsite,
+            contactPerson, contactDesignation,
             fullPaymentDiscount, availableTdsRates,
             authorizedSignature, companyStamp
         } = updateData;
@@ -50,7 +51,7 @@ class SettingsService {
         if (supportDeskText !== undefined) settings.supportDeskText = supportDeskText;
         if (onlineAdvancePercentage !== undefined) settings.onlineAdvancePercentage = onlineAdvancePercentage;
         if (manualAdvancePercentage !== undefined) settings.manualAdvancePercentage = manualAdvancePercentage;
-        
+
         // Financials
         if (companyName !== undefined) settings.companyName = companyName;
         if (companyAddress !== undefined) settings.companyAddress = companyAddress;
@@ -59,6 +60,8 @@ class SettingsService {
         if (contactPhone !== undefined) settings.contactPhone = contactPhone;
         if (contactEmail !== undefined) settings.contactEmail = contactEmail;
         if (contactWebsite !== undefined) settings.contactWebsite = contactWebsite;
+        if (contactPerson !== undefined) settings.contactPerson = contactPerson;
+        if (contactDesignation !== undefined) settings.contactDesignation = contactDesignation;
         if (fullPaymentDiscount !== undefined) settings.fullPaymentDiscount = fullPaymentDiscount;
         if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
         if (authorizedSignature) settings.authorizedSignature = authorizedSignature;

@@ -30,8 +30,21 @@ const getCreditedByInvoiceId = (activeInvoices, creditNotes, legacyDebitNotesAsC
   creditNotes
     .filter((cn) => !isCancelledDoc(cn) && (cn.est_no || cn.reference_invoice_no))
     .forEach((cn) => {
-      const matchInvNo = cn.reference_invoice_no || cn.est_no;
-      const matchedInvoice = activeInvoices.find((inv) => inv.estimate_no === matchInvNo || inv.invoice_no === matchInvNo);
+      // Prefer an exact match against a specific invoice (reference_invoice_no) over
+      // matching by estimate_no alone — when one Estimate has been split into several
+      // partial Invoices, matching by estimate_no can't tell them apart, so previously
+      // this just grabbed whichever invoice happened to be first in the list.
+      let matchedInvoice = null;
+      if (cn.reference_invoice_no) {
+        matchedInvoice = activeInvoices.find((inv) => inv.invoice_no === cn.reference_invoice_no);
+      }
+      if (!matchedInvoice && cn.est_no) {
+        const candidates = activeInvoices.filter((inv) => inv.estimate_no === cn.est_no);
+        // Only safe to auto-match by estimate when exactly one invoice was raised
+        // against it — with several partial invoices we can't tell which one this
+        // credit note was meant for without a specific reference_invoice_no.
+        if (candidates.length === 1) matchedInvoice = candidates[0];
+      }
       if (!matchedInvoice) return;
       const key = String(matchedInvoice._id);
       creditedByInvoiceId[key] = (creditedByInvoiceId[key] || 0) + legacyCreditNoteAmount(cn);
