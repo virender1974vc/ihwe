@@ -5,7 +5,12 @@ const {
   createCorporateVisitor,
   updateCorporateVisitor,
   deleteCorporateVisitor,
+  uploadCorporateVisitors,
 } = require("../../controllers/visitor/corporateVisitorController.js");
+const multer = require("multer");
+const path = require("path");
+
+const upload = multer({ dest: path.join(__dirname, "../../uploads/") });
 
 const CorporateVisitor = require("../../models/visitor/CorporateVisitorModel");
 
@@ -26,6 +31,7 @@ router.get("/scan/:registrationId", async (req, res) => {
 
 router.get("/", getAllCorporateVisitors);
 router.get("/:id", getCorporateVisitorById);
+router.post("/upload", upload.single("file"), uploadCorporateVisitors);
 router.post("/", createCorporateVisitor);
 router.put("/:id", updateCorporateVisitor);
 router.delete("/:id", deleteCorporateVisitor);
