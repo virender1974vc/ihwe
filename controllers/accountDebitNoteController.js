@@ -131,6 +131,9 @@ const getCompanyDebitNoteContext = async (req, res) => {
           gstPct: it.gstPct || "18%",
           gstAmount: it.gstAmount || 0,
           total: it.total || 0,
+          area: it.area || "",
+          size: it.size || "",
+          discountPct: it.discountPct,
         })),
       };
     });
