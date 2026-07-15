@@ -187,6 +187,7 @@ app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(cookieParser());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/pass-template-images", express.static(path.join(__dirname, "utils", "images")));
 app.use('/temp', express.static('temp', {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -453,6 +454,8 @@ app.use("/api/exhibitor-leads", require('./routes/exhibitorLeadCaptureRoutes'));
 app.use("/api/exhibitor-feedback", require('./routes/exhibitorFeedbackRoutes'));
 app.use("/api/exhibitor-pass-requests", require('./routes/exhibitorPassRequestRoutes'));
 app.use("/api/exhibitor-pass-config", require('./routes/exhibitorPassConfigRoutes'));
+app.use("/api/pass-templates", require('./routes/passTemplateRoutes'));
+app.use("/api/generated-passes", require('./routes/generatedPassRoutes'));
 app.use("/api/calls", require('./routes/callRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);
