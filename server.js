@@ -183,10 +183,14 @@ app.use(cors());
 //   })
 // );
 
-app.use(bodyParser.json({ limit: "100mb" }));
-app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", (req, res, next) => {
+  // Cache images in browser for 24 hours — drastically reduces server requests
+  res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=3600');
+  next();
+}, express.static(path.join(__dirname, "uploads")));
 app.use('/temp', express.static('temp', {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
