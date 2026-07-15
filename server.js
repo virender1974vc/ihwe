@@ -191,6 +191,7 @@ app.use("/uploads", (req, res, next) => {
   res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=3600');
   next();
 }, express.static(path.join(__dirname, "uploads")));
+app.use("/pass-template-images", express.static(path.join(__dirname, "utils", "images")));
 app.use('/temp', express.static('temp', {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -457,6 +458,8 @@ app.use("/api/exhibitor-leads", require('./routes/exhibitorLeadCaptureRoutes'));
 app.use("/api/exhibitor-feedback", require('./routes/exhibitorFeedbackRoutes'));
 app.use("/api/exhibitor-pass-requests", require('./routes/exhibitorPassRequestRoutes'));
 app.use("/api/exhibitor-pass-config", require('./routes/exhibitorPassConfigRoutes'));
+app.use("/api/pass-templates", require('./routes/passTemplateRoutes'));
+app.use("/api/generated-passes", require('./routes/generatedPassRoutes'));
 app.use("/api/calls", require('./routes/callRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);
