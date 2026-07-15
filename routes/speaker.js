@@ -23,7 +23,27 @@ const speakerStorage = new CloudinaryStorage({
     },
 });
 
-const upload = multer({ storage: speakerStorage });
+const upload = multer({
+    storage: speakerStorage,
+    limits: {
+        fileSize: 10 * 1024 * 1024,
+    },
+    fileFilter: (req, file, cb) => {
+        const allowedMimeTypes = [
+            'image/jpeg',
+            'image/png',
+            'application/pdf',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ];
+
+        if (allowedMimeTypes.includes(file.mimetype)) {
+            return cb(null, true);
+        }
+
+        cb(new Error('Only JPG, PNG, PDF, PPT and PPTX files are allowed.'));
+    },
+});
 
 const uploadFields = upload.fields([
     { name: 'speakerPhoto', maxCount: 1 },
@@ -31,9 +51,24 @@ const uploadFields = upload.fields([
     { name: 'presentation', maxCount: 1 },
 ]);
 
+const handleUpload = (req, res, next) => {
+    uploadFields(req, res, (error) => {
+        if (!error) return next();
+
+        const message = error.code === 'LIMIT_FILE_SIZE'
+            ? 'Uploaded files must be 10MB or smaller.'
+            : error.message || 'Failed to upload speaker files.';
+
+        return res.status(400).json({
+            success: false,
+            message,
+        });
+    });
+};
+
 const router = express.Router();
 
-router.post('/', uploadFields, createSpeaker);
+router.post('/', handleUpload, createSpeaker);
 router.get('/', getAllSpeakers);
 router.get('/:id', getSpeakerById);
 router.put('/:id/status', updateSpeakerStatus);
