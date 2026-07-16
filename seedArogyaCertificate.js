@@ -39,7 +39,9 @@ const seedData = {
     certificateHeading: "",
     founderSignature: "",
     chairmanSignature: "",
-    globalAwardLogo: ""
+    globalAwardLogo: "",
+    initiativeLogos: Array.from({ length: 24 }, () => ""),
+    concurrentLogos: Array.from({ length: 7 }, () => "")
 };
 
 const seedDatabase = async () => {

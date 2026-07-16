@@ -31,7 +31,9 @@ const arogyaCertificateConfigSchema = new mongoose.Schema({
     certificateHeading: { type: String, default: "" },
     founderSignature: { type: String, default: "" },
     chairmanSignature: { type: String, default: "" },
-    globalAwardLogo: { type: String, default: "" }
+    globalAwardLogo: { type: String, default: "" },
+    initiativeLogos: { type: [String], default: [] },
+    concurrentLogos: { type: [String], default: [] }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ArogyaCertificateConfig', arogyaCertificateConfigSchema);
