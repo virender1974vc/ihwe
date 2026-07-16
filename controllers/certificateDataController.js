@@ -27,9 +27,10 @@ exports.updateCertificateData = async (req, res) => {
         const config = await getOrCreateConfig();
         
         // Update text fields
-        const { certi_name, sign1_name, sign1_designation, sign2_name, sign2_designation } = req.body;
-        if (certi_name) config.certi_name = certi_name;
-        if (sign1_name) config.sign1_name = sign1_name;
+        const { certi_name, certi_description, sign1_name, sign1_designation, sign2_name, sign2_designation } = req.body;
+        if (certi_name !== undefined) config.certi_name = certi_name;
+        if (certi_description !== undefined) config.certi_description = certi_description;
+        if (sign1_name !== undefined) config.sign1_name = sign1_name;
         if (sign1_designation) config.sign1_designation = sign1_designation;
         if (sign2_name) config.sign2_name = sign2_name;
         if (sign2_designation) config.sign2_designation = sign2_designation;
