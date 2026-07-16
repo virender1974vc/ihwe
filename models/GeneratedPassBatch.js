@@ -10,7 +10,7 @@ const GeneratedPassBatchSchema = new mongoose.Schema({
     passType: {
         type: String,
         required: true,
-        enum: ['media', 'speaker', 'organizer', 'exhibitor', 'service', 'vehicle', 'visitor'],
+        enum: ['media', 'speaker', 'organizer', 'exhibitor', 'service', 'vehicle', 'visitor', 'food'],
         index: true,
     },
     categoryLabel: { type: String, required: true, trim: true },
@@ -18,7 +18,7 @@ const GeneratedPassBatchSchema = new mongoose.Schema({
     templateName: { type: String, trim: true, default: '' },
     names: { type: [GeneratedPassNameSchema], default: [] },
     printSettings: {
-        passesPerPage: { type: Number, enum: [1, 2, 4, 6, 8], default: 8 },
+        passesPerPage: { type: Number, enum: [1, 2, 4, 6, 8, 20], default: 8 },
     },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
