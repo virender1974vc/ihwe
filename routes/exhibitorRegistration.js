@@ -5,6 +5,21 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 const jwt = require('jsonwebtoken');
+
+// ─── Server-Side In-Memory Cache ─────────────────────────────────────────────
+// Caches the full GET response for 2 minutes to avoid repeated DB+enrichment
+// queries. Auto-invalidates on any write so data stays consistent.
+const _cache = {
+  data: null,
+  at: 0,
+  TTL: 2 * 60 * 1000, // 2 minutes
+  isValid() { return this.data && (Date.now() - this.at) < this.TTL; },
+  set(d) { this.data = d; this.at = Date.now(); },
+  clear() { this.data = null; this.at = 0; }
+};
+// Expose clear so controller can call it after writes
+module.exports._clearRegistrationCache = () => _cache.clear();
+
 const requireAdminAuth = (req, res, next) => {
     const auth = req.headers.authorization;
     if (!auth || !auth.startsWith('Bearer '))
@@ -19,6 +34,7 @@ const requireAdminAuth = (req, res, next) => {
         return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 };
+
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -38,11 +54,35 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-router.get('/', (req, res) => exhibitorRegistrationController.getAllRegistrations(req, res));
+// GET all registrations — served from cache after first hit
+router.get('/', async (req, res) => {
+  if (_cache.isValid()) {
+    // Instant response from memory — no DB hit
+    return res.status(200).json(_cache.data);
+  }
+  // Miss: call controller, intercept response, populate cache
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) _cache.set(body);
+    return originalJson(body);
+  };
+  return exhibitorRegistrationController.getAllRegistrations(req, res);
+});
+
+// Write operations — always invalidate cache so next GET is fresh
+router.post('/', (req, res) => {
+  _cache.clear();
+  exhibitorRegistrationController.addRegistration(req, res);
+});
+router.put('/:id', (req, res) => {
+  _cache.clear();
+  exhibitorRegistrationController.updateRegistration(req, res);
+});
+router.delete('/:id', (req, res) => {
+  _cache.clear();
+  exhibitorRegistrationController.deleteRegistration(req, res);
+});
 router.get('/:id', (req, res) => exhibitorRegistrationController.getRegistrationById(req, res));
-router.post('/', (req, res) => exhibitorRegistrationController.addRegistration(req, res));
-router.put('/:id', (req, res) => exhibitorRegistrationController.updateRegistration(req, res));
-router.delete('/:id', (req, res) => exhibitorRegistrationController.deleteRegistration(req, res));
 
 // Per-field KYC document upload (admin only) — uploads to Cloudinary, saves to THIS registration only
 // Local Storage for Special Documents and KYC to avoid Cloudinary issues

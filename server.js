@@ -183,10 +183,15 @@ app.use(cors());
 //   })
 // );
 
-app.use(bodyParser.json({ limit: "100mb" }));
-app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", (req, res, next) => {
+  // Cache images in browser for 24 hours — drastically reduces server requests
+  res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=3600');
+  next();
+}, express.static(path.join(__dirname, "uploads")));
+app.use("/pass-template-images", express.static(path.join(__dirname, "utils", "images")));
 app.use('/temp', express.static('temp', {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -365,6 +370,7 @@ app.use('/api/paper-presentation', require('./routes/paperPresentationRoutes'));
 app.use('/api/poster-presentation', require('./routes/posterPresentationRoutes'));
 app.use('/api/abstract-presentation', require('./routes/abstractPresentationRoutes'));
 app.use('/api/certificate-data', require('./routes/certificateDataRoutes'));
+app.use('/api/arogya-certificate-config', require('./routes/arogyaCertificateConfigRoutes'));
 app.use("/api/media-registration", mediaRegistrationRoutes);
 app.use("/api/partner-registration", require("./routes/partnerRegistration"));
 app.use("/api/exhibitor-hero-slider", exhibitorHeroSliderRoutes);
@@ -454,6 +460,8 @@ app.use("/api/exhibitor-leads", require('./routes/exhibitorLeadCaptureRoutes'));
 app.use("/api/exhibitor-feedback", require('./routes/exhibitorFeedbackRoutes'));
 app.use("/api/exhibitor-pass-requests", require('./routes/exhibitorPassRequestRoutes'));
 app.use("/api/exhibitor-pass-config", require('./routes/exhibitorPassConfigRoutes'));
+app.use("/api/pass-templates", require('./routes/passTemplateRoutes'));
+app.use("/api/generated-passes", require('./routes/generatedPassRoutes'));
 app.use("/api/calls", require('./routes/callRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
 app.use("/api/agenda", agendaRoutes);

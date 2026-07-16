@@ -1,0 +1,39 @@
+const mongoose = require('mongoose');
+
+const arogyaCertificateConfigSchema = new mongoose.Schema({
+    supportedByText: { type: String, default: "SUPPORTED BY:" },
+    presentsText: { type: String, default: "Presents" },
+    bodyTextPart1: { type: String, default: "This is to certify that" },
+    recipientName: { type: String, default: "DABUR INDIA LIMITED" },
+    bodyTextPart2: { type: String, default: "has actively participated in the 18th" },
+    highlightText1: { type: String, default: "Arogya Sangosthi" },
+    bodyTextPart3: { type: String, default: "Seminar & 9th Edition of" },
+    highlightText2: { type: String, default: "International Health & Wellness" },
+    highlightText3: { type: String, default: "Expo 2026" },
+    bodyTextPart4: { type: String, default: ", organised by Namo Gange Trust, held from 21st August to 23rd August 2026" },
+    bodyTextPart5: { type: String, default: "at Pragati Maidan, New Delhi, Bharat." },
+    bodyTextPart6: { type: String, default: "Your valuable contributions and active engagement during the seminar have greatly" },
+    bodyTextPart7: { type: String, default: "enriched the discussions on healthcare and wellness." },
+    bodyTextPart8: { type: String, default: "We, at Namo Gange Trust, appreciate your dedication and wish you continued success" },
+    bodyTextPart9: { type: String, default: "in your future endeavours." },
+    founderName: { type: String, default: "H.H. Shri Acharya Jagdish Ji" },
+    founderRole: { type: String, default: "Founder" },
+    chairmanName: { type: String, default: "Shri Vijay Sharma" },
+    chairmanRole: { type: String, default: "Chairman" },
+    initiativesTitle: { type: String, default: "Namo Gange Trust Initiatives" },
+    concurrentTitle: { type: String, default: "CONCURRENT EVENTS" },
+    footerAddress: { type: String, default: "Head Office: 12/52, Site-II, Loni Road Industrial Area, Mohan Nagar, Ghaziabad 201007, UP, Bharat" },
+    footerContact: { type: String, default: "info@namogange.org | web: www.namogange.org" },
+
+    supportedByLogo: { type: String, default: "" },
+    mainLogo: { type: String, default: "" },
+    titleLogo: { type: String, default: "" },
+    certificateHeading: { type: String, default: "" },
+    founderSignature: { type: String, default: "" },
+    chairmanSignature: { type: String, default: "" },
+    globalAwardLogo: { type: String, default: "" },
+    initiativeLogos: { type: [String], default: [] },
+    concurrentLogos: { type: [String], default: [] }
+}, { timestamps: true });
+
+module.exports = mongoose.model('ArogyaCertificateConfig', arogyaCertificateConfigSchema);

@@ -625,6 +625,17 @@ class EmailService {
 
         const adminHtml = this.adminLeadShell(formType, data);
 
+        await this.sendEmail({
+            to: targetAdmin,
+            subject: `New ${formType.replace(/-/g, ' ')} lead - ${originalSubject}`,
+            html: adminHtml,
+            profile,
+            logData: {
+                name: data.name || data.fullName,
+                phone: data.phone || data.mobile || data.mobileNumber,
+                message: `Admin Lead Alert (${formType})`
+            }
+        });
 
         const adminWhatsApp = (process.env.ADMIN_WHATSAPP_NUMBER || '').trim();
         if (adminWhatsApp) {
@@ -1195,13 +1206,17 @@ class EmailService {
             to: nomination.email,
             formType: 'speaker-nomination',
             data: {
+                fullName: nomination.fullName,
                 full_name: nomination.fullName,
                 topic: nomination.topic,
                 expertise: nomination.expertise,
                 designation: nomination.designation,
                 organization: nomination.organization,
+                company: nomination.organization,
                 city: nomination.city,
-                phone: nomination.phone
+                phone: nomination.phone,
+                mobile: nomination.phone,
+                email: nomination.email
             },
             profile: 'SPEAKER'
         });
