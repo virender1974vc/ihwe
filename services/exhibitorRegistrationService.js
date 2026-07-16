@@ -30,19 +30,19 @@ class ExhibitorRegistrationService {
             const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             query.$or = [
                 { natureOfBusiness: { $regex: new RegExp(esc, 'i') } },
-                { industrySector:   { $regex: new RegExp(esc, 'i') } },
-                { typeOfBusiness:   { $regex: new RegExp(esc, 'i') } },
+                { industrySector: { $regex: new RegExp(esc, 'i') } },
+                { typeOfBusiness: { $regex: new RegExp(esc, 'i') } },
             ];
         }
         if (search) {
             const esc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const searchOr = [
-                { exhibitorName:      { $regex: new RegExp(esc, 'i') } },
-                { companyName:        { $regex: new RegExp(esc, 'i') } },
-                { 'contact1.email':   { $regex: new RegExp(esc, 'i') } },
-                { 'contact1.mobile':  { $regex: new RegExp(esc, 'i') } },
-                { 'contact2.email':   { $regex: new RegExp(esc, 'i') } },
-                { 'contact2.mobile':  { $regex: new RegExp(esc, 'i') } },
+                { exhibitorName: { $regex: new RegExp(esc, 'i') } },
+                { companyName: { $regex: new RegExp(esc, 'i') } },
+                { 'contact1.email': { $regex: new RegExp(esc, 'i') } },
+                { 'contact1.mobile': { $regex: new RegExp(esc, 'i') } },
+                { 'contact2.email': { $regex: new RegExp(esc, 'i') } },
+                { 'contact2.mobile': { $regex: new RegExp(esc, 'i') } },
             ];
             if (query.$or) {
                 query.$and = [{ $or: query.$or }, { $or: searchOr }];
@@ -319,7 +319,7 @@ class ExhibitorRegistrationService {
                         const selectedPlan = eventForCalc?.paymentPlans?.find(p => p.id === chosenPlanId);
                         if (selectedPlan && Number(selectedPlan.percentage) === 100) isFullPayment = true;
                     }
-                    const discP = isFullPayment ? (settings?.fullPaymentDiscount || 5) : 0;
+                    const discP = isFullPayment ? (settings?.fullPaymentDiscount ?? 5) : 0;
                     const discA = Math.round(sub1 * discP / 100);
                     const sub = sub1 - discA;
                     const gstA = Math.round(sub * 0.18);
@@ -329,7 +329,7 @@ class ExhibitorRegistrationService {
 
                     const submittedNet = data.financeBreakdown?.netPayable
                         ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
-                    const TOLERANCE = 5; // rupees — absorbs client-side rounding, not real tampering
+                    const TOLERANCE = 5;
                     if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
                         throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
                     }
@@ -800,7 +800,7 @@ class ExhibitorRegistrationService {
                 if (selectedPlan && (Number(selectedPlan.percentage) === 100)) isFullPayment = true;
             }
 
-            const discP = isFullPayment ? (settings?.fullPaymentDiscount || 5) : 0;
+            const discP = isFullPayment ? (settings?.fullPaymentDiscount ?? 5) : 0;
             const discA = Math.round(sub1 * (discP / 100));
             const sub = sub1 - discA;
             const gstA = Math.round(sub * 0.18);
