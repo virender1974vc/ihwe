@@ -1,4 +1,4 @@
-const CertificateData = require('../models/certificateData');
+const CertificateData = require('../models/CertificateData');
 const path = require('path');
 const fs = require('fs');
 
@@ -27,13 +27,31 @@ exports.updateCertificateData = async (req, res) => {
         const config = await getOrCreateConfig();
         
         // Update text fields
-        const { certi_name, certi_description, sign1_name, sign1_designation, sign2_name, sign2_designation } = req.body;
+        const { 
+            certi_name, certi_desc1, certi_desc1_part2, certi_desc2, certi_desc3, certi_address, 
+            sign1_name, sign1_designation, sign2_name, sign2_designation,
+            header_left_heading, header_center_text, header_right_heading,
+            header_left_enable, header_center_enable, header_right_enable
+        } = req.body;
+        
         if (certi_name !== undefined) config.certi_name = certi_name;
-        if (certi_description !== undefined) config.certi_description = certi_description;
+        if (certi_desc1 !== undefined) config.certi_desc1 = certi_desc1;
+        if (certi_desc1_part2 !== undefined) config.certi_desc1_part2 = certi_desc1_part2;
+        if (certi_desc2 !== undefined) config.certi_desc2 = certi_desc2;
+        if (certi_desc3 !== undefined) config.certi_desc3 = certi_desc3;
+        if (certi_address !== undefined) config.certi_address = certi_address;
         if (sign1_name !== undefined) config.sign1_name = sign1_name;
-        if (sign1_designation) config.sign1_designation = sign1_designation;
-        if (sign2_name) config.sign2_name = sign2_name;
-        if (sign2_designation) config.sign2_designation = sign2_designation;
+        if (sign1_designation !== undefined) config.sign1_designation = sign1_designation;
+        if (sign2_name !== undefined) config.sign2_name = sign2_name;
+        if (sign2_designation !== undefined) config.sign2_designation = sign2_designation;
+        
+        if (header_left_heading !== undefined) config.header_left_heading = header_left_heading;
+        if (header_center_text !== undefined) config.header_center_text = header_center_text;
+        if (header_right_heading !== undefined) config.header_right_heading = header_right_heading;
+        
+        if (header_left_enable !== undefined) config.header_left_enable = header_left_enable === 'true';
+        if (header_center_enable !== undefined) config.header_center_enable = header_center_enable === 'true';
+        if (header_right_enable !== undefined) config.header_right_enable = header_right_enable === 'true';
 
         // Process existing bulk files passed in body
         let existingNamo = req.body.existing_namo_logos ? JSON.parse(req.body.existing_namo_logos) : [];
@@ -58,6 +76,18 @@ exports.updateCertificateData = async (req, res) => {
             }
             if (req.files.sign2_image && req.files.sign2_image[0]) {
                 config.sign2_image = `/uploads/certificate/${req.files.sign2_image[0].filename}`;
+            }
+            if (req.files.header_left_logo && req.files.header_left_logo[0]) {
+                config.header_left_logo = `/uploads/certificate/${req.files.header_left_logo[0].filename}`;
+            }
+            if (req.files.header_center_logo && req.files.header_center_logo[0]) {
+                config.header_center_logo = `/uploads/certificate/${req.files.header_center_logo[0].filename}`;
+            }
+            if (req.files.header_right_logo && req.files.header_right_logo[0]) {
+                config.header_right_logo = `/uploads/certificate/${req.files.header_right_logo[0].filename}`;
+            }
+            if (req.files.certificate_title_image && req.files.certificate_title_image[0]) {
+                config.certificate_title_image = `/uploads/certificate/${req.files.certificate_title_image[0].filename}`;
             }
             if (req.files.namo_gange_trust_logos) {
                 const newNamoUrls = req.files.namo_gange_trust_logos.map(f => `/uploads/certificate/${f.filename}`);

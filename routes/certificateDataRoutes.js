@@ -43,7 +43,11 @@ const cpUpload = upload.fields([
     { name: 'sign1_image', maxCount: 1 },
     { name: 'sign2_image', maxCount: 1 },
     { name: 'namo_gange_trust_logos', maxCount: 24 },
-    { name: 'concurrent_events', maxCount: 7 }
+    { name: 'concurrent_events', maxCount: 7 },
+    { name: 'header_left_logo', maxCount: 1 },
+    { name: 'header_center_logo', maxCount: 1 },
+    { name: 'header_right_logo', maxCount: 1 },
+    { name: 'certificate_title_image', maxCount: 1 }
 ]);
 
 router.get('/', certificateDataController.getCertificateData);
