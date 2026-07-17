@@ -26,6 +26,8 @@ const arogyaCertificateConfigSchema = new mongoose.Schema({
     footerContact: { type: String, default: "info@namogange.org | web: www.namogange.org" },
 
     supportedByLogo: { type: String, default: "" },
+    supportedByRightLogo: { type: String, default: "" },
+    supportedByBottomRightLogo: { type: String, default: "" },
     mainLogo: { type: String, default: "" },
     titleLogo: { type: String, default: "" },
     certificateHeading: { type: String, default: "" },

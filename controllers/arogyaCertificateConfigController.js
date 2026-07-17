@@ -2,6 +2,8 @@ const ArogyaCertificateConfig = require('../models/arogyaCertificateConfig');
 
 const IMAGE_FIELDS = [
   'supportedByLogo',
+  'supportedByRightLogo',
+  'supportedByBottomRightLogo',
   'mainLogo',
   'titleLogo',
   'certificateHeading',
