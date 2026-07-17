@@ -31,7 +31,8 @@ exports.updateCertificateData = async (req, res) => {
             certi_name, certi_desc1, certi_desc1_part2, certi_desc2, certi_desc3, certi_address, 
             sign1_name, sign1_designation, sign2_name, sign2_designation,
             header_left_heading, header_center_text, header_right_heading,
-            header_left_enable, header_center_enable, header_right_enable
+            header_left_enable, header_center_enable, header_right_enable,
+            header_right_bottom_heading, header_right_bottom_enable
         } = req.body;
         
         if (certi_name !== undefined) config.certi_name = certi_name;
@@ -48,10 +49,12 @@ exports.updateCertificateData = async (req, res) => {
         if (header_left_heading !== undefined) config.header_left_heading = header_left_heading;
         if (header_center_text !== undefined) config.header_center_text = header_center_text;
         if (header_right_heading !== undefined) config.header_right_heading = header_right_heading;
+        if (header_right_bottom_heading !== undefined) config.header_right_bottom_heading = header_right_bottom_heading;
         
         if (header_left_enable !== undefined) config.header_left_enable = header_left_enable === 'true';
         if (header_center_enable !== undefined) config.header_center_enable = header_center_enable === 'true';
         if (header_right_enable !== undefined) config.header_right_enable = header_right_enable === 'true';
+        if (header_right_bottom_enable !== undefined) config.header_right_bottom_enable = header_right_bottom_enable === 'true';
 
         // Process existing bulk files passed in body
         let existingNamo = req.body.existing_namo_logos ? JSON.parse(req.body.existing_namo_logos) : [];
@@ -85,6 +88,9 @@ exports.updateCertificateData = async (req, res) => {
             }
             if (req.files.header_right_logo && req.files.header_right_logo[0]) {
                 config.header_right_logo = `/uploads/certificate/${req.files.header_right_logo[0].filename}`;
+            }
+            if (req.files.header_right_bottom_logo && req.files.header_right_bottom_logo[0]) {
+                config.header_right_bottom_logo = `/uploads/certificate/${req.files.header_right_bottom_logo[0].filename}`;
             }
             if (req.files.certificate_title_image && req.files.certificate_title_image[0]) {
                 config.certificate_title_image = `/uploads/certificate/${req.files.certificate_title_image[0].filename}`;

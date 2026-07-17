@@ -47,6 +47,7 @@ const cpUpload = upload.fields([
     { name: 'header_left_logo', maxCount: 1 },
     { name: 'header_center_logo', maxCount: 1 },
     { name: 'header_right_logo', maxCount: 1 },
+    { name: 'header_right_bottom_logo', maxCount: 1 },
     { name: 'certificate_title_image', maxCount: 1 }
 ]);
 

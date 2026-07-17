@@ -27,6 +27,9 @@ const certificateDataSchema = new mongoose.Schema({
   header_right_heading: { type: String, default: 'SUPPORTED BY:' },
   header_right_logo: { type: String, default: '' },
   header_right_enable: { type: Boolean, default: false },
+  header_right_bottom_heading: { type: String, default: 'AFFILIATED BY:' },
+  header_right_bottom_logo: { type: String, default: '' },
+  header_right_bottom_enable: { type: Boolean, default: false },
   certificate_title_image: { type: String, default: '' }
 }, { timestamps: true });
 
