@@ -370,6 +370,7 @@ app.use('/api/paper-presentation', require('./routes/paperPresentationRoutes'));
 app.use('/api/poster-presentation', require('./routes/posterPresentationRoutes'));
 app.use('/api/abstract-presentation', require('./routes/abstractPresentationRoutes'));
 app.use('/api/certificate-data', require('./routes/certificateDataRoutes'));
+app.use('/api/certificate-recipients', require('./routes/certificateRecipientRoutes'));
 app.use('/api/arogya-certificate-config', require('./routes/arogyaCertificateConfigRoutes'));
 app.use("/api/media-registration", mediaRegistrationRoutes);
 app.use("/api/partner-registration", require("./routes/partnerRegistration"));

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const certificateDataSchema = new mongoose.Schema({
+  type: { type: String, enum: ['default', 'exhibitor', 'knowledge_partner', 'supporting_association', 'healthcare_partner', 'special_guest', 'chief_guest'], default: 'default' },
   expo_logo: { type: String, default: '' },
   certi_name: { type: String, default: 'CERTIFICATE Of Participation & Appreciation' },
   certi_desc1: { type: String, default: 'We extend our heartfelt gratitude to ' },
@@ -27,6 +28,9 @@ const certificateDataSchema = new mongoose.Schema({
   header_right_heading: { type: String, default: 'SUPPORTED BY:' },
   header_right_logo: { type: String, default: '' },
   header_right_enable: { type: Boolean, default: false },
+  header_right_bottom_heading: { type: String, default: 'AFFILIATED BY:' },
+  header_right_bottom_logo: { type: String, default: '' },
+  header_right_bottom_enable: { type: Boolean, default: false },
   certificate_title_image: { type: String, default: '' }
 }, { timestamps: true });
 
