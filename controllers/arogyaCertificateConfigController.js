@@ -13,6 +13,13 @@ const IMAGE_FIELDS = [
 ];
 
 const EMPTY_IMAGE_VALUE = '__CERT_IMAGE_EMPTY__';
+const CERTIFICATE_TYPES = new Set([
+  'speaker',
+  'delegate',
+  'paperPresentation',
+  'posterPresentation',
+  'juryMember',
+]);
 
 const TEXT_FIELDS = [
   'supportedByText',
@@ -45,10 +52,24 @@ const TEXT_FIELDS = [
 
 const uploadPath = (file) => `/uploads/certificate/${file.filename}`;
 
-const getOrCreateConfig = async () => {
-  let config = await ArogyaCertificateConfig.findOne();
+const normalizeCertificateType = (type) => (
+  CERTIFICATE_TYPES.has(type) ? type : 'speaker'
+);
+
+const getOrCreateConfig = async (requestedType = 'speaker') => {
+  const certificateType = normalizeCertificateType(requestedType);
+  let config = await ArogyaCertificateConfig.findOne({ certificateType });
+
+  if (!config && certificateType === 'speaker') {
+    config = await ArogyaCertificateConfig.findOne({ certificateType: { $exists: false } });
+    if (config) {
+      config.certificateType = 'speaker';
+      await config.save();
+    }
+  }
+
   if (!config) {
-    config = new ArogyaCertificateConfig();
+    config = new ArogyaCertificateConfig({ certificateType });
     await config.save();
   }
   return config;
@@ -56,7 +77,7 @@ const getOrCreateConfig = async () => {
 
 exports.getConfig = async (req, res) => {
   try {
-    const config = await getOrCreateConfig();
+    const config = await getOrCreateConfig(req.query.type);
     res.json({ success: true, data: config });
   } catch (error) {
     console.error('Arogya certificate config fetch error:', error);
@@ -66,7 +87,8 @@ exports.getConfig = async (req, res) => {
 
 exports.updateConfig = async (req, res) => {
   try {
-    const config = await getOrCreateConfig();
+    const config = await getOrCreateConfig(req.body.certificateType);
+    config.certificateType = normalizeCertificateType(req.body.certificateType);
 
     TEXT_FIELDS.forEach((field) => {
       if (req.body[field] !== undefined) config[field] = req.body[field];

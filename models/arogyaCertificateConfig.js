@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const arogyaCertificateConfigSchema = new mongoose.Schema({
+    certificateType: { type: String, default: "speaker", index: true },
     supportedByText: { type: String, default: "SUPPORTED BY:" },
     supportedByLeftText: { type: String, default: "SUPPORTED BY:" },
     supportedByRightText: { type: String, default: "SUPPORTED BY:" },
