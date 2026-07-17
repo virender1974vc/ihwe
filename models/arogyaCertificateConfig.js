@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 
 const arogyaCertificateConfigSchema = new mongoose.Schema({
     supportedByText: { type: String, default: "SUPPORTED BY:" },
+    supportedByLeftText: { type: String, default: "SUPPORTED BY:" },
+    supportedByRightText: { type: String, default: "SUPPORTED BY:" },
+    supportedByBottomRightText: { type: String, default: "SUPPORTED BY:" },
     presentsText: { type: String, default: "Presents" },
     bodyTextPart1: { type: String, default: "This is to certify that" },
     recipientName: { type: String, default: "DABUR INDIA LIMITED" },

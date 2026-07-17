@@ -12,8 +12,13 @@ const IMAGE_FIELDS = [
   'globalAwardLogo',
 ];
 
+const EMPTY_IMAGE_VALUE = '__CERT_IMAGE_EMPTY__';
+
 const TEXT_FIELDS = [
   'supportedByText',
+  'supportedByLeftText',
+  'supportedByRightText',
+  'supportedByBottomRightText',
   'presentsText',
   'bodyTextPart1',
   'recipientName',
@@ -73,6 +78,14 @@ exports.updateConfig = async (req, res) => {
     if (req.body.concurrentLogos !== undefined) {
       config.concurrentLogos = JSON.parse(req.body.concurrentLogos || '[]');
     }
+
+    JSON.parse(req.body.clearedImageFields || '[]').forEach((field) => {
+      if (IMAGE_FIELDS.includes(field)) config[field] = EMPTY_IMAGE_VALUE;
+    });
+
+    JSON.parse(req.body.resetImageFields || '[]').forEach((field) => {
+      if (IMAGE_FIELDS.includes(field)) config[field] = '';
+    });
 
     (req.files || []).forEach((file) => {
       const field = file.fieldname;
