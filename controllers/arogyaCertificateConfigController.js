@@ -19,6 +19,7 @@ const CERTIFICATE_TYPES = new Set([
   'paperPresentation',
   'posterPresentation',
   'juryMember',
+  'guest',
 ]);
 
 const TEXT_FIELDS = [
@@ -50,6 +51,23 @@ const TEXT_FIELDS = [
   'footerContact',
 ];
 
+const TYPE_TEXT_DEFAULTS = {
+  juryMember: {
+    bodyTextPart1: 'We extend our gratitude to',
+    bodyTextPart2: 'for serving as a Jury Member for the Paper Presentation at the 18th',
+    highlightText1: 'Arogya Sangoshthi',
+    bodyTextPart3: 'Seminar & 9th Edition of',
+    highlightText2: 'International Health & Wellness',
+    highlightText3: 'Expo 2026',
+    bodyTextPart4: ', organised by Namo Gange Trust, held from 21st August to 23rd August 2026',
+    bodyTextPart5: 'at Pragati Maidan, New Delhi, Bharat.',
+    bodyTextPart6: 'Your expertise, fair evaluation, and insights contributed to the success',
+    bodyTextPart7: 'of the sessions.',
+    bodyTextPart8: 'We sincerely appreciate your dedication, professionalism, and commitment to promoting',
+    bodyTextPart9: 'excellence in healthcare, research, and innovation.',
+  },
+};
+
 const uploadPath = (file) => `/uploads/certificate/${file.filename}`;
 
 const normalizeCertificateType = (type) => (
@@ -69,7 +87,7 @@ const getOrCreateConfig = async (requestedType = 'speaker') => {
   }
 
   if (!config) {
-    config = new ArogyaCertificateConfig({ certificateType });
+    config = new ArogyaCertificateConfig({ certificateType, ...(TYPE_TEXT_DEFAULTS[certificateType] || {}) });
     await config.save();
   }
   return config;
