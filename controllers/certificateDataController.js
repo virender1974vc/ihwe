@@ -2,11 +2,36 @@ const CertificateData = require('../models/CertificateData');
 const path = require('path');
 const fs = require('fs');
 
-// Helper to get or create the single config record
-const getOrCreateConfig = async () => {
-    let config = await CertificateData.findOne();
+// Helper to get or create the config record for a specific type
+const getOrCreateConfig = async (type = 'default') => {
+    let config = await CertificateData.findOne({ type });
+    
+    // If not found, check if there's an old config without a type (legacy data)
+    if (!config && type === 'default') {
+        const legacyConfig = await CertificateData.findOne({ type: { $exists: false } });
+        if (legacyConfig) {
+            legacyConfig.type = 'default';
+            await legacyConfig.save();
+            return legacyConfig;
+        }
+    }
+
     if (!config) {
-        config = new CertificateData();
+        if (type !== 'default') {
+            const defaultConfig = await CertificateData.findOne({ type: 'default' });
+            if (defaultConfig) {
+                const newConfigData = defaultConfig.toObject();
+                delete newConfigData._id;
+                delete newConfigData.createdAt;
+                delete newConfigData.updatedAt;
+                newConfigData.type = type;
+                config = new CertificateData(newConfigData);
+            } else {
+                config = new CertificateData({ type });
+            }
+        } else {
+            config = new CertificateData({ type: 'default' });
+        }
         await config.save();
     }
     return config;
@@ -14,7 +39,8 @@ const getOrCreateConfig = async () => {
 
 exports.getCertificateData = async (req, res) => {
     try {
-        const config = await getOrCreateConfig();
+        const type = req.query.type || 'default';
+        const config = await getOrCreateConfig(type);
         res.status(200).json({ success: true, data: config });
     } catch (error) {
         console.error('Error fetching certificate data:', error);
@@ -24,7 +50,8 @@ exports.getCertificateData = async (req, res) => {
 
 exports.updateCertificateData = async (req, res) => {
     try {
-        const config = await getOrCreateConfig();
+        const type = req.body.type || 'default';
+        const config = await getOrCreateConfig(type);
         
         // Update text fields
         const { 
