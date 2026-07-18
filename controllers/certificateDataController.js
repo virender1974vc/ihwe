@@ -1,4 +1,4 @@
-const CertificateData = require('../models/CertificateData');
+const CertificateData = require('../models/certificateData');
 const path = require('path');
 const fs = require('fs');
 
