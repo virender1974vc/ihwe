@@ -4,6 +4,7 @@ const msmePmsSchemeController = require('../controllers/msmePmsSchemeController'
 const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
+const { protectExhibitor } = require('../middleware/auth');
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -24,7 +25,11 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit per file
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+        cb(allowed.includes(file.mimetype) ? null : new Error('Only PDF, JPG and PNG files are allowed'), allowed.includes(file.mimetype));
+    }
 });
 
 router.post('/apply', upload.array('documents', 5), msmePmsSchemeController.submitApplication);
@@ -39,6 +44,12 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
         res.status(500).json({ success: false, message: 'Image upload failed' });
     }
 });
+// Authenticated exhibitor dashboard workflow. Keep these before /:id.
+router.get('/application/me', protectExhibitor, msmePmsSchemeController.getMyApplication);
+router.put('/application/step/:step', protectExhibitor, msmePmsSchemeController.saveApplicationStep);
+router.post('/application/documents/:documentType', protectExhibitor, upload.single('file'), msmePmsSchemeController.uploadApplicationDocument);
+router.delete('/application/documents/:documentType', protectExhibitor, msmePmsSchemeController.deleteApplicationDocument);
+router.post('/application/submit', protectExhibitor, msmePmsSchemeController.submitMyApplication);
 router.get('/all', msmePmsSchemeController.getAllApplications);
 router.get('/page-content', msmePmsSchemeController.getPageContent);
 router.post('/page-content', msmePmsSchemeController.updatePageContent);

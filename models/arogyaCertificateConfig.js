@@ -1,0 +1,45 @@
+const mongoose = require('mongoose');
+
+const arogyaCertificateConfigSchema = new mongoose.Schema({
+    certificateType: { type: String, default: "speaker", index: true },
+    supportedByText: { type: String, default: "SUPPORTED BY:" },
+    supportedByLeftText: { type: String, default: "SUPPORTED BY:" },
+    supportedByRightText: { type: String, default: "SUPPORTED BY:" },
+    supportedByBottomRightText: { type: String, default: "SUPPORTED BY:" },
+    presentsText: { type: String, default: "Presents" },
+    bodyTextPart1: { type: String, default: "We extend our heartfelt gratitude to" },
+    recipientName: { type: String, default: "DABUR INDIA LIMITED" },
+    bodyTextPart2: { type: String, default: "for being a Valuable Speaker at the 18th" },
+    highlightText1: { type: String, default: "Arogya Sangoshthi" },
+    bodyTextPart3: { type: String, default: "Seminar & 9th Edition of" },
+    highlightText2: { type: String, default: "International Health & Wellness" },
+    highlightText3: { type: String, default: "Expo 2026" },
+    bodyTextPart4: { type: String, default: ", organised by Namo Gange Trust, held from 21st August to 23rd August 2026" },
+    bodyTextPart5: { type: String, default: "at Pragati Maidan, New Delhi, Bharat." },
+    bodyTextPart6: { type: String, default: "Your insightful session, valuable expertise, and inspiring contribution greatly enriched" },
+    bodyTextPart7: { type: String, default: "the conference and benefited all participants." },
+    bodyTextPart8: { type: String, default: "We sincerely appreciate your time, dedication, and commitment to advancing health and wellness," },
+    bodyTextPart9: { type: String, default: "and look forward to your continued support in future initiatives." },
+    founderName: { type: String, default: "H.H. Shri Acharya Jagdish Ji" },
+    founderRole: { type: String, default: "Founder" },
+    chairmanName: { type: String, default: "Shri Vijay Sharma" },
+    chairmanRole: { type: String, default: "Chairman" },
+    initiativesTitle: { type: String, default: "Namo Gange Trust Initiatives" },
+    concurrentTitle: { type: String, default: "CONCURRENT EVENTS" },
+    footerAddress: { type: String, default: "Head Office: 12/52, Site-II, Loni Road Industrial Area, Mohan Nagar, Ghaziabad 201007, UP, Bharat" },
+    footerContact: { type: String, default: "info@namogange.org | web: www.namogange.org" },
+
+    supportedByLogo: { type: String, default: "" },
+    supportedByRightLogo: { type: String, default: "" },
+    supportedByBottomRightLogo: { type: String, default: "" },
+    mainLogo: { type: String, default: "" },
+    titleLogo: { type: String, default: "" },
+    certificateHeading: { type: String, default: "" },
+    founderSignature: { type: String, default: "" },
+    chairmanSignature: { type: String, default: "" },
+    globalAwardLogo: { type: String, default: "" },
+    initiativeLogos: { type: [String], default: [] },
+    concurrentLogos: { type: [String], default: [] }
+}, { timestamps: true });
+
+module.exports = mongoose.model('ArogyaCertificateConfig', arogyaCertificateConfigSchema);

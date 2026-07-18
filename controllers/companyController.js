@@ -648,10 +648,7 @@ const getSalesLeaderboard = async (req, res) => {
     const User = require('../models/User');
     const admins = await User.find({ status: 'Active' }).select('username fullName profileImage');
 
-    // 2. Fetch all CRM companies to map them to admins
-    const allCompanies = await Company.find({}).select('_id forwardTo added_by');
-
-    // 3. Build query for ExhibitorRegistration
+    // 2. Build query for ExhibitorRegistration
     const ExhibitorRegistration = require('../models/ExhibitorRegistration');
     const query = { status: { $in: ['confirmed', 'paid', 'advance-paid'] } };
 
@@ -682,13 +679,19 @@ const getSalesLeaderboard = async (req, res) => {
       query.createdAt = { $gte: startOfPrevMonth, $lte: endOfPrevMonth };
     }
 
+    // 3. Fetch converted registrations first
     const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation amountPaid');
+    
+    // 4. Extract unique clientIds and fetch ONLY those companies to map them to admins
+    const uniqueClientIds = [...new Set(allConverted.map(reg => reg.clientId).filter(Boolean))];
+    const relevantCompanies = await Company.find({ _id: { $in: uniqueClientIds } }).select('_id forwardTo added_by');
 
     const leaderboard = admins.map(admin => {
       const u = admin.username.toLowerCase();
       const f = admin.fullName ? admin.fullName.toLowerCase() : u;
+      
       // Find companies belonging to this admin
-      const adminCompanyIds = allCompanies
+      const adminCompanyIds = relevantCompanies
         .filter(c =>
           (c.forwardTo && (c.forwardTo.toLowerCase() === u || c.forwardTo.toLowerCase() === f)) ||
           (c.added_by && (c.added_by.toLowerCase() === u || c.added_by.toLowerCase() === f))

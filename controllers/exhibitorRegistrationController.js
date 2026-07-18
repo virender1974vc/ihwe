@@ -12,12 +12,28 @@ const toPublicUploadPath = (filePath = '') => {
 class ExhibitorRegistrationController {
     async getAllRegistrations(req, res) {
         try {
-            const enriched = await exhibitorRegistrationService.getAllRegistrations();
-            res.status(200).json({ success: true, data: enriched });
+            const { page = 1, limit = 20, search = '', status = '', referredBy = '', industry = '' } = req.query;
+            const result = await exhibitorRegistrationService.getAllRegistrations({
+                page: Number(page),
+                limit: Number(limit),
+                search,
+                status,
+                referredBy,
+                industry,
+            });
+            res.status(200).json({
+                success: true,
+                data: result.data,
+                total: result.total,
+                page: result.page,
+                limit: result.limit,
+                totalPages: result.totalPages,
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
 
     async getRegistrationById(req, res) {
         try {

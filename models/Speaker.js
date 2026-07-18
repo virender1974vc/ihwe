@@ -6,7 +6,9 @@ const speakerSchema = new mongoose.Schema({
     organization: { type: String, required: true, trim: true },
     industryCategory: { type: String, required: true, trim: true },
     mobile: { type: String, required: true, trim: true },
+    mobileNormalized: { type: String, trim: true, sparse: true, unique: true },
     email: { type: String, required: true, trim: true, lowercase: true },
+    emailNormalized: { type: String, trim: true, lowercase: true, sparse: true, unique: true },
     city: { type: String, required: true, trim: true },
     linkedin: { type: String, default: "" },
     briefProfile: { type: String, required: true },
@@ -26,5 +28,14 @@ const speakerSchema = new mongoose.Schema({
     presentationUrl: { type: String, default: "" },
     status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' }
 }, { timestamps: true });
+
+speakerSchema.pre('validate', function() {
+    if (this.email) {
+        this.emailNormalized = String(this.email).trim().toLowerCase();
+    }
+    if (this.mobile) {
+        this.mobileNormalized = String(this.mobile).replace(/\D/g, '');
+    }
+});
 
 module.exports = mongoose.model('Speaker', speakerSchema);

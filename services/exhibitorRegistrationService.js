@@ -6,14 +6,76 @@ const path = require('path');
 const qrcode = require('qrcode');
 
 class ExhibitorRegistrationService {
-    async getAllRegistrations() {
-        const regs = await ExhibitorRegistration.find()
-            .populate('eventId', 'name paymentPlans')
-            .sort({ createdAt: -1 });
+    async getAllRegistrations(options = {}) {
+        const {
+            page = 1,
+            limit = 20,
+            search = '',
+            status = '',
+            referredBy = '',
+            industry = '',
+        } = options;
 
+        // Build MongoDB query — filter at DB level, not in JS
+        const query = {};
 
-        return this._enrichRegistrations(regs);
+        if (status) {
+            query.status = status;
+        }
+        if (referredBy) {
+            const esc = referredBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            query.referredBy = { $regex: new RegExp(`^${esc}$`, 'i') };
+        }
+        if (industry) {
+            const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            query.$or = [
+                { natureOfBusiness: { $regex: new RegExp(esc, 'i') } },
+                { industrySector: { $regex: new RegExp(esc, 'i') } },
+                { typeOfBusiness: { $regex: new RegExp(esc, 'i') } },
+            ];
+        }
+        if (search) {
+            const esc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const searchOr = [
+                { exhibitorName: { $regex: new RegExp(esc, 'i') } },
+                { companyName: { $regex: new RegExp(esc, 'i') } },
+                { 'contact1.email': { $regex: new RegExp(esc, 'i') } },
+                { 'contact1.mobile': { $regex: new RegExp(esc, 'i') } },
+                { 'contact2.email': { $regex: new RegExp(esc, 'i') } },
+                { 'contact2.mobile': { $regex: new RegExp(esc, 'i') } },
+            ];
+            if (query.$or) {
+                query.$and = [{ $or: query.$or }, { $or: searchOr }];
+                delete query.$or;
+            } else {
+                query.$or = searchOr;
+            }
+        }
+
+        const skip = (Number(page) - 1) * Number(limit);
+
+        // Count + fetch in parallel — only fetches current page records
+        const [total, regs] = await Promise.all([
+            ExhibitorRegistration.countDocuments(query),
+            ExhibitorRegistration.find(query)
+                .populate('eventId', 'name paymentPlans')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit)),
+        ]);
+
+        // Enrich only the ~10-20 records on this page (not all records)
+        const enriched = await this._enrichRegistrations(regs);
+
+        return {
+            data: enriched,
+            total,
+            page: Number(page),
+            limit: Number(limit),
+            totalPages: Math.ceil(total / Number(limit)),
+        };
     }
+
 
     async getRegistrationById(id) {
         const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate paymentPlans');
@@ -257,7 +319,7 @@ class ExhibitorRegistrationService {
                         const selectedPlan = eventForCalc?.paymentPlans?.find(p => p.id === chosenPlanId);
                         if (selectedPlan && Number(selectedPlan.percentage) === 100) isFullPayment = true;
                     }
-                    const discP = isFullPayment ? (settings?.fullPaymentDiscount || 5) : 0;
+                    const discP = isFullPayment ? (settings?.fullPaymentDiscount ?? 5) : 0;
                     const discA = Math.round(sub1 * discP / 100);
                     const sub = sub1 - discA;
                     const gstA = Math.round(sub * 0.18);
@@ -267,7 +329,7 @@ class ExhibitorRegistrationService {
 
                     const submittedNet = data.financeBreakdown?.netPayable
                         ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
-                    const TOLERANCE = 5; // rupees — absorbs client-side rounding, not real tampering
+                    const TOLERANCE = 5;
                     if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
                         throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
                     }
@@ -738,7 +800,7 @@ class ExhibitorRegistrationService {
                 if (selectedPlan && (Number(selectedPlan.percentage) === 100)) isFullPayment = true;
             }
 
-            const discP = isFullPayment ? (settings?.fullPaymentDiscount || 5) : 0;
+            const discP = isFullPayment ? (settings?.fullPaymentDiscount ?? 5) : 0;
             const discA = Math.round(sub1 * (discP / 100));
             const sub = sub1 - discA;
             const gstA = Math.round(sub * 0.18);
