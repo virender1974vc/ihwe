@@ -1,5 +1,6 @@
 const CertificateRecipient = require('../models/CertificateRecipient');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const PartnerGroup = require('../models/PartnerGroup');
 
 exports.getRecipients = async (req, res) => {
     try {
@@ -31,6 +32,26 @@ exports.getRecipients = async (req, res) => {
             }));
             
             allRecipients = [...allRecipients, ...exhibitorRecipients];
+        } else if (['knowledge_partner', 'supporting_association', 'healthcare_partner'].includes(type)) {
+            let subheadingMatch = '';
+            if (type === 'knowledge_partner') subheadingMatch = 'knowledge';
+            else if (type === 'supporting_association') subheadingMatch = 'supporting';
+            else if (type === 'healthcare_partner') subheadingMatch = 'healthcare';
+            
+            const groups = await PartnerGroup.find({ subheading: { $regex: subheadingMatch, $options: 'i' } });
+            let partnerRecipients = [];
+            groups.forEach(group => {
+                group.partners.forEach(partner => {
+                    partnerRecipients.push({
+                        _id: partner._id,
+                        name: partner.name || partner.imageAlt || 'Unknown Partner',
+                        company: partner.name || partner.imageAlt || 'Unknown Partner',
+                        type: type,
+                        isManual: false
+                    });
+                });
+            });
+            allRecipients = [...allRecipients, ...partnerRecipients];
         }
 
         res.status(200).json({ success: true, data: allRecipients });
