@@ -1,5 +1,8 @@
 const MsmePmsScheme = require('../models/MsmePmsScheme');
 const MsmePmsPage = require('../models/MsmePmsPage');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const Company = require('../models/Company');
+const mongoose = require('mongoose');
 
 const REQUIRED_DOCUMENTS = ['udyam', 'gst', 'pan', 'aadhaar', 'cheque', 'statement'];
 const DOCUMENT_TYPES = new Set([...REQUIRED_DOCUMENTS, 'passbook', 'hotelInvoice', 'hotelPayment', 'travelExpense', 'travelInvoice', 'courier', 'marketing']);
@@ -18,6 +21,109 @@ const requiredDocumentsFor = application => {
 const missingFields = (data, fields) => fields.filter(field => data?.[field] === undefined || data?.[field] === null || String(data[field]).trim() === '');
 const makeApplicationId = id => `PMS-IHWE-${new Date().getFullYear()}-${String(id).slice(-6).toUpperCase()}`;
 
+async function findExhibitorByIdentifier(identifier) {
+    if (!mongoose.isValidObjectId(identifier)) return null;
+    let exhibitor = await ExhibitorRegistration.findById(identifier).select('_id');
+    if (!exhibitor) {
+        const company = await Company.findById(identifier).select('exhibitorRegistrationId');
+        if (company?.exhibitorRegistrationId) {
+            exhibitor = { _id: company.exhibitorRegistrationId };
+        } else {
+            exhibitor = await ExhibitorRegistration.findOne({ clientId: identifier }).select('_id');
+        }
+    }
+    return exhibitor;
+}
+
+async function findApplicationByIdentifier(identifier) {
+    let application = mongoose.isValidObjectId(identifier)
+        ? await MsmePmsScheme.findById(identifier)
+        : await MsmePmsScheme.findOne({ applicationId: identifier });
+    if (application) return application;
+
+    const exhibitor = await findExhibitorByIdentifier(identifier);
+
+    if (!exhibitor?._id) return null;
+    return MsmePmsScheme.findOne({ exhibitorId: exhibitor._id, applicationType: 'exhibitor_claim' });
+}
+
+async function makeAdminApplicationPayload(application) {
+    const payload = application.toObject ? application.toObject() : application;
+    if (!payload?.exhibitorId) return payload;
+    const exhibitor = await ExhibitorRegistration.findById(payload.exhibitorId)
+        .populate('eventId')
+        .lean();
+    if (!exhibitor) return payload;
+
+    const contact = exhibitor.contact1 || {};
+    const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+    const lastPayment = [...(exhibitor.paymentHistory || [])].sort((a, b) => new Date(b.paidAt || 0) - new Date(a.paidAt || 0))[0];
+    const invoiceValue = Number(exhibitor.financeBreakdown?.netPayable || exhibitor.totalPayable || exhibitor.participation?.total || 0);
+    const existingClaim = payload.claim || exhibitor.claim || {};
+    const stallCharges = Number(existingClaim.stallCharges ?? invoiceValue ?? 0);
+    const hotelStay = Number(existingClaim.hotelStay || 0);
+    const travel = Number(existingClaim.travel || 0);
+    const courier = Number(existingClaim.courier || 0);
+    const marketing = Number(existingClaim.marketing || 0);
+    const totalClaimed = existingClaim.totalClaimed != null
+        ? Number(existingClaim.totalClaimed)
+        : stallCharges + hotelStay + travel + courier + marketing;
+    return {
+        ...payload,
+        exhibitorName: exhibitor.exhibitorName,
+        contact1: contact,
+        participation: exhibitor.participation,
+        gstNo: exhibitor.gstNo,
+        panNo: exhibitor.panNo,
+        address: exhibitor.address,
+        country: exhibitor.country,
+        state: exhibitor.state,
+        city: exhibitor.city,
+        pincode: exhibitor.pincode,
+        kycStatus: exhibitor.kycStatus,
+        verificationStatus: exhibitor.verificationStatus,
+        amountPaid: exhibitor.amountPaid,
+        invoiceValue,
+        paymentDate: lastPayment?.paidAt,
+        payment: {
+            invoiceValue,
+            amountPaid: exhibitor.amountPaid,
+            paymentStatus: payload.applicantDetails?.paymentStatus,
+            paymentDate: lastPayment?.paidAt,
+        },
+        claim: {
+            ...existingClaim,
+            stallCharges,
+            hotelStay,
+            travel,
+            courier,
+            marketing,
+            totalClaimed,
+            eligibleAmount: existingClaim.eligibleAmount != null
+                ? Number(existingClaim.eligibleAmount)
+                : Math.min(totalClaimed, 150000),
+        },
+        event: {
+            name: payload.applicantDetails?.eventName || exhibitor.eventId?.name || exhibitor.eventId?.title,
+            stallNumber: payload.applicantDetails?.stallNo || exhibitor.participation?.stallNo,
+            hallNumber: payload.applicantDetails?.hallNo || 'Hall 8, 9 & 10',
+            stallSize: payload.applicantDetails?.stallSize || exhibitor.participation?.stallSize,
+            participationType: payload.applicantDetails?.participationType,
+            bookingStatus: payload.applicantDetails?.bookingStatus,
+            paymentStatus: payload.applicantDetails?.paymentStatus,
+        },
+        pmsCoordinator: {
+            name: contactName,
+            designation: contact.designation,
+            phone: contact.mobile,
+            whatsapp: contact.whatsapp || contact.mobile,
+            email: contact.email,
+            photo: contact.photoUrl,
+            initials: contactName.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase(),
+        },
+    };
+}
+
 async function getOrCreateClaim(exhibitorId) {
     let application = await MsmePmsScheme.findOne({ exhibitorId, applicationType: 'exhibitor_claim' });
     if (!application) {
@@ -35,7 +141,139 @@ async function getOrCreateClaim(exhibitorId) {
     return application;
 }
 
+async function hydrateAdminDraft(application) {
+    const currentDetails = application.applicantDetails || {};
+    if (Object.keys(currentDetails).length || !application.exhibitorId) return application;
+    const source = await ExhibitorRegistration.findById(application.exhibitorId).populate('eventId').lean();
+    if (!source) return application;
+    const contactName = [source.contact1?.firstName, source.contact1?.lastName].filter(Boolean).join(' ');
+    const invoiceValue = Number(source.financeBreakdown?.netPayable || source.totalPayable || source.participation?.total || 0);
+    application.applicantDetails = {
+        companyName: source.exhibitorName || '',
+        udyamRegNo: source.msme?.udyamRegNo || '', gstNumber: source.gstNo || '', panNumber: source.panNo || '',
+        organizationType: source.typeOfBusiness || '', yearOfEstablishment: '', msmeCategory: source.msme?.msmeCategory || '',
+        contactName, designation: source.contact1?.designation || '', mobileNumber: source.contact1?.mobile || '', alternateNumber: source.contact1?.alternateNo || '',
+        addressLine1: source.address || '', addressLine2: '', country: source.country || 'India', state: source.state || '', city: source.city || '', pincode: source.pincode || '',
+        eventName: source.eventId?.name || source.eventId?.title || '', stallNo: source.participation?.stallFor || source.participation?.stallNo || '',
+        hallNo: 'Hall 8, 9 & 10', stallSize: source.participation?.stallSize || '', participationType: source.participation?.stallType || source.participation?.stallCategory || '',
+        bookingStatus: source.participation?.stallFor || source.participation?.stallNo ? 'Confirmed' : source.status,
+        paymentStatus: invoiceValue > 0 && Number(source.amountPaid || 0) >= invoiceValue ? 'Fully Paid' : Number(source.amountPaid || 0) > 0 ? 'Partially Paid' : 'Pending',
+        emailId: source.contact1?.email || source.companyEmail || '',
+    };
+    application.bankDetails = {
+        accountHolderName: source.bankDetails?.accountHolder || source.exhibitorName || '', bankName: source.bankDetails?.bankName || '',
+        branchName: source.bankDetails?.branch || '', accountNumber: source.bankDetails?.accountNumber || '', confirmAccountNumber: source.bankDetails?.accountNumber || '',
+        ifscCode: source.bankDetails?.ifscCode || '', micrCode: '',
+        accountType: source.bankDetails?.accountType === 'Savings' ? 'Savings Account' : source.bankDetails?.accountType === 'Current' ? 'Current Account' : source.bankDetails?.accountType || '',
+    };
+    application.selectedExpenses = ['Stall Charges'];
+    application.companyName = source.exhibitorName || 'Draft'; application.contactPerson = contactName || 'Draft';
+    application.mobileNumber = source.contact1?.mobile || 'Draft'; application.emailId = source.contact1?.email || source.companyEmail || 'draft@invalid.local';
+    application.udyamNumber = source.msme?.udyamRegNo || 'Draft'; application.category = source.msme?.msmeCategory || 'Draft';
+    await application.save();
+    return application;
+}
+
 class MsmePmsSchemeController {
+    async getOrCreateApplicationForAdmin(req, res) {
+        try {
+            let application = await findApplicationByIdentifier(req.params.id);
+            if (!application) {
+                const exhibitor = await findExhibitorByIdentifier(req.params.id);
+                if (!exhibitor?._id) {
+                    return res.status(404).json({ success: false, message: 'Linked exhibitor not found' });
+                }
+                application = await getOrCreateClaim(exhibitor._id);
+                const source = await ExhibitorRegistration.findById(exhibitor._id).populate('eventId').lean();
+                if (source && !Object.keys(application.applicantDetails || {}).length) {
+                    const contactName = [source.contact1?.firstName, source.contact1?.lastName].filter(Boolean).join(' ');
+                    const invoiceValue = Number(source.financeBreakdown?.netPayable || source.totalPayable || source.participation?.total || 0);
+                    const paymentStatus = invoiceValue > 0
+                        ? (Number(source.amountPaid || 0) >= invoiceValue ? 'Fully Paid' : Number(source.amountPaid || 0) > 0 ? 'Partially Paid' : 'Pending')
+                        : 'Pending';
+                    application.applicantDetails = {
+                        companyName: source.exhibitorName || '',
+                        udyamRegNo: source.msme?.udyamRegNo || '',
+                        gstNumber: source.gstNo || '',
+                        panNumber: source.panNo || '',
+                        organizationType: source.typeOfBusiness || '',
+                        yearOfEstablishment: '',
+                        msmeCategory: source.msme?.msmeCategory || '',
+                        contactName,
+                        designation: source.contact1?.designation || '',
+                        mobileNumber: source.contact1?.mobile || '',
+                        alternateNumber: source.contact1?.alternateNo || '',
+                        addressLine1: source.address || '',
+                        addressLine2: '',
+                        country: source.country || 'India',
+                        state: source.state || '',
+                        city: source.city || '',
+                        pincode: source.pincode || '',
+                        eventName: source.eventId?.name || source.eventId?.title || '',
+                        stallNo: source.participation?.stallNo || source.participation?.stallFor || '',
+                        hallNo: 'Hall 8, 9 & 10',
+                        stallSize: source.participation?.stallSize || '',
+                        participationType: source.participation?.stallType || source.participation?.stallCategory || '',
+                        bookingStatus: source.participation?.stallNo || source.participation?.stallFor ? 'Confirmed' : source.status,
+                        paymentStatus,
+                        emailId: source.contact1?.email || source.companyEmail || '',
+                    };
+                    application.bankDetails = {
+                        accountHolderName: source.bankDetails?.accountHolder || source.exhibitorName || '',
+                        bankName: source.bankDetails?.bankName || '',
+                        branchName: source.bankDetails?.branch || '',
+                        accountNumber: source.bankDetails?.accountNumber || '',
+                        confirmAccountNumber: source.bankDetails?.accountNumber || '',
+                        ifscCode: source.bankDetails?.ifscCode || '',
+                        micrCode: '',
+                        accountType: source.bankDetails?.accountType === 'Savings' ? 'Savings Account' : source.bankDetails?.accountType === 'Current' ? 'Current Account' : source.bankDetails?.accountType || '',
+                    };
+                    application.selectedExpenses = ['Stall Charges'];
+                    application.companyName = source.exhibitorName || 'Draft';
+                    application.contactPerson = contactName || 'Draft';
+                    application.mobileNumber = source.contact1?.mobile || 'Draft';
+                    application.emailId = source.contact1?.email || source.companyEmail || 'draft@invalid.local';
+                    application.udyamNumber = source.msme?.udyamRegNo || 'Draft';
+                    application.category = source.msme?.msmeCategory || 'Draft';
+                    await application.save();
+                }
+            }
+            application = await hydrateAdminDraft(application);
+            return res.json({ success: true, data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Could not open PMS application editor', error: error.message });
+        }
+    }
+
+    async withApplicationOwner(req, res, handler) {
+        try {
+            const application = await findApplicationByIdentifier(req.params.id);
+            if (!application?.exhibitorId) {
+                return res.status(404).json({ success: false, message: 'Exhibitor PMS application not found' });
+            }
+            req.user = { ...(req.user || {}), id: String(application.exhibitorId) };
+            return handler.call(this, req, res);
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Could not resolve application', error: error.message });
+        }
+    }
+
+    async saveApplicationStepById(req, res) {
+        return this.withApplicationOwner(req, res, this.saveApplicationStep);
+    }
+
+    async uploadApplicationDocumentById(req, res) {
+        return this.withApplicationOwner(req, res, this.uploadApplicationDocument);
+    }
+
+    async deleteApplicationDocumentById(req, res) {
+        return this.withApplicationOwner(req, res, this.deleteApplicationDocument);
+    }
+
+    async submitApplicationById(req, res) {
+        return this.withApplicationOwner(req, res, this.submitMyApplication);
+    }
+
     async getMyApplication(req, res) {
         try {
             const application = await getOrCreateClaim(req.user.id);
@@ -48,29 +286,30 @@ class MsmePmsSchemeController {
     async saveApplicationStep(req, res) {
         try {
             const step = Number(req.params.step);
+            const saveAsDraft = req.body.saveAsDraft === true;
             if (![1, 2, 3, 4].includes(step)) return res.status(400).json({ success: false, message: 'Invalid application step' });
             const application = await getOrCreateClaim(req.user.id);
-            if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
+            if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
             if (step > application.currentStep + 1) return res.status(409).json({ success: false, message: 'Complete previous steps first' });
 
             if (step === 1) {
                 const details = req.body.applicantDetails || req.body;
                 const missing = missingFields(details, REQUIRED_APPLICANT_FIELDS);
-                if (missing.length) return res.status(422).json({ success: false, message: 'Required applicant fields are missing', fields: missing });
+                if (!saveAsDraft && missing.length) return res.status(422).json({ success: false, message: 'Required applicant fields are missing', fields: missing });
                 application.applicantDetails = details;
                 application.selectedExpenses = Array.isArray(req.body.selectedExpenses) ? req.body.selectedExpenses : application.selectedExpenses;
-                application.companyName = details.companyName;
-                application.contactPerson = details.contactName;
-                application.mobileNumber = details.mobileNumber;
-                application.emailId = details.emailId || application.emailId;
-                application.udyamNumber = details.udyamRegNo;
-                application.gstNumber = details.gstNumber;
-                application.category = details.msmeCategory;
+                if (details.companyName) application.companyName = details.companyName;
+                if (details.contactName) application.contactPerson = details.contactName;
+                if (details.mobileNumber) application.mobileNumber = details.mobileNumber;
+                if (details.emailId) application.emailId = details.emailId;
+                if (details.udyamRegNo) application.udyamNumber = details.udyamRegNo;
+                if (details.gstNumber) application.gstNumber = details.gstNumber;
+                if (details.msmeCategory) application.category = details.msmeCategory;
             } else if (step === 2) {
                 const details = req.body.bankDetails || req.body;
                 const missing = missingFields(details, REQUIRED_BANK_FIELDS);
-                if (missing.length) return res.status(422).json({ success: false, message: 'Required bank fields are missing', fields: missing });
-                if (details.confirmAccountNumber && details.confirmAccountNumber !== details.accountNumber) return res.status(422).json({ success: false, message: 'Account numbers do not match', fields: ['confirmAccountNumber'] });
+                if (!saveAsDraft && missing.length) return res.status(422).json({ success: false, message: 'Required bank fields are missing', fields: missing });
+                if (!saveAsDraft && details.confirmAccountNumber && details.confirmAccountNumber !== details.accountNumber) return res.status(422).json({ success: false, message: 'Account numbers do not match', fields: ['confirmAccountNumber'] });
                 application.bankDetails = details;
             } else if (step === 3) {
                 const uploaded = new Set(application.documents.map(doc => doc.documentType));
@@ -79,10 +318,12 @@ class MsmePmsSchemeController {
             } else {
                 application.declarationAgreed = req.body.declarationAgreed === true;
             }
-            application.completedSteps = [...new Set([...application.completedSteps, step])].sort();
-            application.currentStep = Math.max(application.currentStep, Math.min(step + 1, 5));
+            if (!saveAsDraft) {
+                application.completedSteps = [...new Set([...application.completedSteps, step])].sort();
+                application.currentStep = Math.max(application.currentStep, Math.min(step + 1, 5));
+            }
             await application.save();
-            res.json({ success: true, message: 'Step saved', data: application });
+            res.json({ success: true, message: saveAsDraft ? 'Draft saved' : 'Step saved', data: application });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Could not save application step', error: error.message });
         }
@@ -94,7 +335,7 @@ class MsmePmsSchemeController {
             if (!DOCUMENT_TYPES.has(documentType)) return res.status(400).json({ success: false, message: 'Invalid document type' });
             if (!req.file) return res.status(400).json({ success: false, message: 'File is required' });
             const application = await getOrCreateClaim(req.user.id);
-            if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
+            if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
             application.documents = application.documents.filter(doc => doc.documentType !== documentType);
             application.documents.push({ documentType, filename: req.file.originalname, path: req.file.path, mimetype: req.file.mimetype, size: req.file.size });
             await application.save();
@@ -107,7 +348,7 @@ class MsmePmsSchemeController {
     async deleteApplicationDocument(req, res) {
         try {
             const application = await getOrCreateClaim(req.user.id);
-            if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
+            if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
             application.documents = application.documents.filter(doc => doc.documentType !== req.params.documentType);
             await application.save();
             res.json({ success: true, message: 'Document removed', data: application });
@@ -188,11 +429,11 @@ class MsmePmsSchemeController {
 
     async getApplicationById(req, res) {
         try {
-            const application = await MsmePmsScheme.findById(req.params.id);
+            const application = await findApplicationByIdentifier(req.params.id);
             if (!application) {
                 return res.status(404).json({ success: false, message: 'Application not found' });
             }
-            res.status(200).json({ success: true, data: application });
+            res.status(200).json({ success: true, data: await makeAdminApplicationPayload(application) });
         } catch (error) {
             console.error('Error fetching MSME PMS application by ID:', error);
             res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
