@@ -48,6 +48,7 @@ class MsmePmsSchemeController {
     async saveApplicationStep(req, res) {
         try {
             const step = Number(req.params.step);
+            const saveAsDraft = req.body.saveAsDraft === true;
             if (![1, 2, 3, 4].includes(step)) return res.status(400).json({ success: false, message: 'Invalid application step' });
             const application = await getOrCreateClaim(req.user.id);
             if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
@@ -56,21 +57,21 @@ class MsmePmsSchemeController {
             if (step === 1) {
                 const details = req.body.applicantDetails || req.body;
                 const missing = missingFields(details, REQUIRED_APPLICANT_FIELDS);
-                if (missing.length) return res.status(422).json({ success: false, message: 'Required applicant fields are missing', fields: missing });
+                if (!saveAsDraft && missing.length) return res.status(422).json({ success: false, message: 'Required applicant fields are missing', fields: missing });
                 application.applicantDetails = details;
                 application.selectedExpenses = Array.isArray(req.body.selectedExpenses) ? req.body.selectedExpenses : application.selectedExpenses;
-                application.companyName = details.companyName;
-                application.contactPerson = details.contactName;
-                application.mobileNumber = details.mobileNumber;
-                application.emailId = details.emailId || application.emailId;
-                application.udyamNumber = details.udyamRegNo;
-                application.gstNumber = details.gstNumber;
-                application.category = details.msmeCategory;
+                if (details.companyName) application.companyName = details.companyName;
+                if (details.contactName) application.contactPerson = details.contactName;
+                if (details.mobileNumber) application.mobileNumber = details.mobileNumber;
+                if (details.emailId) application.emailId = details.emailId;
+                if (details.udyamRegNo) application.udyamNumber = details.udyamRegNo;
+                if (details.gstNumber) application.gstNumber = details.gstNumber;
+                if (details.msmeCategory) application.category = details.msmeCategory;
             } else if (step === 2) {
                 const details = req.body.bankDetails || req.body;
                 const missing = missingFields(details, REQUIRED_BANK_FIELDS);
-                if (missing.length) return res.status(422).json({ success: false, message: 'Required bank fields are missing', fields: missing });
-                if (details.confirmAccountNumber && details.confirmAccountNumber !== details.accountNumber) return res.status(422).json({ success: false, message: 'Account numbers do not match', fields: ['confirmAccountNumber'] });
+                if (!saveAsDraft && missing.length) return res.status(422).json({ success: false, message: 'Required bank fields are missing', fields: missing });
+                if (!saveAsDraft && details.confirmAccountNumber && details.confirmAccountNumber !== details.accountNumber) return res.status(422).json({ success: false, message: 'Account numbers do not match', fields: ['confirmAccountNumber'] });
                 application.bankDetails = details;
             } else if (step === 3) {
                 const uploaded = new Set(application.documents.map(doc => doc.documentType));
@@ -79,10 +80,12 @@ class MsmePmsSchemeController {
             } else {
                 application.declarationAgreed = req.body.declarationAgreed === true;
             }
-            application.completedSteps = [...new Set([...application.completedSteps, step])].sort();
-            application.currentStep = Math.max(application.currentStep, Math.min(step + 1, 5));
+            if (!saveAsDraft) {
+                application.completedSteps = [...new Set([...application.completedSteps, step])].sort();
+                application.currentStep = Math.max(application.currentStep, Math.min(step + 1, 5));
+            }
             await application.save();
-            res.json({ success: true, message: 'Step saved', data: application });
+            res.json({ success: true, message: saveAsDraft ? 'Draft saved' : 'Step saved', data: application });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Could not save application step', error: error.message });
         }
