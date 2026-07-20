@@ -4,7 +4,7 @@ const certificateRecipientSchema = new mongoose.Schema({
   name: { type: String, required: true },
   type: { 
     type: String, 
-    enum: ['exhibitor', 'knowledge_partner', 'supporting_association', 'healthcare_partner', 'special_guest', 'chief_guest'],
+    enum: ['exhibitor', 'speaker', 'delegate', 'knowledge_partner', 'supporting_association', 'healthcare_partner', 'special_guest', 'chief_guest', 'guest', 'juryMember', 'paperPresentation', 'posterPresentation'],
     required: true
   },
   company: { type: String, default: '' },
