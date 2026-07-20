@@ -1,5 +1,8 @@
 const MsmePmsScheme = require('../models/MsmePmsScheme');
 const MsmePmsPage = require('../models/MsmePmsPage');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const Company = require('../models/Company');
+const mongoose = require('mongoose');
 
 const REQUIRED_DOCUMENTS = ['udyam', 'gst', 'pan', 'aadhaar', 'cheque', 'statement'];
 const DOCUMENT_TYPES = new Set([...REQUIRED_DOCUMENTS, 'passbook', 'hotelInvoice', 'hotelPayment', 'travelExpense', 'travelInvoice', 'courier', 'marketing']);
@@ -17,6 +20,105 @@ const requiredDocumentsFor = application => {
 
 const missingFields = (data, fields) => fields.filter(field => data?.[field] === undefined || data?.[field] === null || String(data[field]).trim() === '');
 const makeApplicationId = id => `PMS-IHWE-${new Date().getFullYear()}-${String(id).slice(-6).toUpperCase()}`;
+
+async function findApplicationByIdentifier(identifier) {
+    let application = mongoose.isValidObjectId(identifier)
+        ? await MsmePmsScheme.findById(identifier)
+        : await MsmePmsScheme.findOne({ applicationId: identifier });
+    if (application) return application;
+
+    if (!mongoose.isValidObjectId(identifier)) return null;
+
+    let exhibitor = await ExhibitorRegistration.findById(identifier).select('_id');
+    if (!exhibitor) {
+        const company = await Company.findById(identifier).select('exhibitorRegistrationId');
+        if (company?.exhibitorRegistrationId) {
+            exhibitor = { _id: company.exhibitorRegistrationId };
+        } else {
+            exhibitor = await ExhibitorRegistration.findOne({ clientId: identifier }).select('_id');
+        }
+    }
+
+    if (!exhibitor?._id) return null;
+    return MsmePmsScheme.findOne({ exhibitorId: exhibitor._id, applicationType: 'exhibitor_claim' });
+}
+
+async function makeAdminApplicationPayload(application) {
+    const payload = application.toObject ? application.toObject() : application;
+    if (!payload?.exhibitorId) return payload;
+    const exhibitor = await ExhibitorRegistration.findById(payload.exhibitorId)
+        .populate('eventId')
+        .lean();
+    if (!exhibitor) return payload;
+
+    const contact = exhibitor.contact1 || {};
+    const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ');
+    const lastPayment = [...(exhibitor.paymentHistory || [])].sort((a, b) => new Date(b.paidAt || 0) - new Date(a.paidAt || 0))[0];
+    const invoiceValue = Number(exhibitor.financeBreakdown?.netPayable || exhibitor.totalPayable || exhibitor.participation?.total || 0);
+    const existingClaim = payload.claim || exhibitor.claim || {};
+    const stallCharges = Number(existingClaim.stallCharges ?? invoiceValue ?? 0);
+    const hotelStay = Number(existingClaim.hotelStay || 0);
+    const travel = Number(existingClaim.travel || 0);
+    const courier = Number(existingClaim.courier || 0);
+    const marketing = Number(existingClaim.marketing || 0);
+    const totalClaimed = existingClaim.totalClaimed != null
+        ? Number(existingClaim.totalClaimed)
+        : stallCharges + hotelStay + travel + courier + marketing;
+    return {
+        ...payload,
+        exhibitorName: exhibitor.exhibitorName,
+        contact1: contact,
+        participation: exhibitor.participation,
+        gstNo: exhibitor.gstNo,
+        panNo: exhibitor.panNo,
+        address: exhibitor.address,
+        country: exhibitor.country,
+        state: exhibitor.state,
+        city: exhibitor.city,
+        pincode: exhibitor.pincode,
+        kycStatus: exhibitor.kycStatus,
+        verificationStatus: exhibitor.verificationStatus,
+        amountPaid: exhibitor.amountPaid,
+        invoiceValue,
+        paymentDate: lastPayment?.paidAt,
+        payment: {
+            invoiceValue,
+            amountPaid: exhibitor.amountPaid,
+            paymentStatus: payload.applicantDetails?.paymentStatus,
+            paymentDate: lastPayment?.paidAt,
+        },
+        claim: {
+            ...existingClaim,
+            stallCharges,
+            hotelStay,
+            travel,
+            courier,
+            marketing,
+            totalClaimed,
+            eligibleAmount: existingClaim.eligibleAmount != null
+                ? Number(existingClaim.eligibleAmount)
+                : Math.min(totalClaimed, 150000),
+        },
+        event: {
+            name: payload.applicantDetails?.eventName || exhibitor.eventId?.name || exhibitor.eventId?.title,
+            stallNumber: payload.applicantDetails?.stallNo || exhibitor.participation?.stallNo,
+            hallNumber: payload.applicantDetails?.hallNo || 'Hall 8, 9 & 10',
+            stallSize: payload.applicantDetails?.stallSize || exhibitor.participation?.stallSize,
+            participationType: payload.applicantDetails?.participationType,
+            bookingStatus: payload.applicantDetails?.bookingStatus,
+            paymentStatus: payload.applicantDetails?.paymentStatus,
+        },
+        pmsCoordinator: {
+            name: contactName,
+            designation: contact.designation,
+            phone: contact.mobile,
+            whatsapp: contact.whatsapp || contact.mobile,
+            email: contact.email,
+            photo: contact.photoUrl,
+            initials: contactName.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase(),
+        },
+    };
+}
 
 async function getOrCreateClaim(exhibitorId) {
     let application = await MsmePmsScheme.findOne({ exhibitorId, applicationType: 'exhibitor_claim' });
@@ -36,6 +138,35 @@ async function getOrCreateClaim(exhibitorId) {
 }
 
 class MsmePmsSchemeController {
+    async withApplicationOwner(req, res, handler) {
+        try {
+            const application = await findApplicationByIdentifier(req.params.id);
+            if (!application?.exhibitorId) {
+                return res.status(404).json({ success: false, message: 'Exhibitor PMS application not found' });
+            }
+            req.user = { ...(req.user || {}), id: String(application.exhibitorId) };
+            return handler.call(this, req, res);
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Could not resolve application', error: error.message });
+        }
+    }
+
+    async saveApplicationStepById(req, res) {
+        return this.withApplicationOwner(req, res, this.saveApplicationStep);
+    }
+
+    async uploadApplicationDocumentById(req, res) {
+        return this.withApplicationOwner(req, res, this.uploadApplicationDocument);
+    }
+
+    async deleteApplicationDocumentById(req, res) {
+        return this.withApplicationOwner(req, res, this.deleteApplicationDocument);
+    }
+
+    async submitApplicationById(req, res) {
+        return this.withApplicationOwner(req, res, this.submitMyApplication);
+    }
+
     async getMyApplication(req, res) {
         try {
             const application = await getOrCreateClaim(req.user.id);
@@ -191,11 +322,11 @@ class MsmePmsSchemeController {
 
     async getApplicationById(req, res) {
         try {
-            const application = await MsmePmsScheme.findById(req.params.id);
+            const application = await findApplicationByIdentifier(req.params.id);
             if (!application) {
                 return res.status(404).json({ success: false, message: 'Application not found' });
             }
-            res.status(200).json({ success: true, data: application });
+            res.status(200).json({ success: true, data: await makeAdminApplicationPayload(application) });
         } catch (error) {
             console.error('Error fetching MSME PMS application by ID:', error);
             res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
