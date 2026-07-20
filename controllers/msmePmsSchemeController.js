@@ -51,7 +51,7 @@ class MsmePmsSchemeController {
             const saveAsDraft = req.body.saveAsDraft === true;
             if (![1, 2, 3, 4].includes(step)) return res.status(400).json({ success: false, message: 'Invalid application step' });
             const application = await getOrCreateClaim(req.user.id);
-            if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
+            if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
             if (step > application.currentStep + 1) return res.status(409).json({ success: false, message: 'Complete previous steps first' });
 
             if (step === 1) {
@@ -97,7 +97,7 @@ class MsmePmsSchemeController {
             if (!DOCUMENT_TYPES.has(documentType)) return res.status(400).json({ success: false, message: 'Invalid document type' });
             if (!req.file) return res.status(400).json({ success: false, message: 'File is required' });
             const application = await getOrCreateClaim(req.user.id);
-            if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
+            if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
             application.documents = application.documents.filter(doc => doc.documentType !== documentType);
             application.documents.push({ documentType, filename: req.file.originalname, path: req.file.path, mimetype: req.file.mimetype, size: req.file.size });
             await application.save();
@@ -110,7 +110,7 @@ class MsmePmsSchemeController {
     async deleteApplicationDocument(req, res) {
         try {
             const application = await getOrCreateClaim(req.user.id);
-            if (application.submittedAt) return res.status(409).json({ success: false, message: 'Submitted applications cannot be edited' });
+            if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
             application.documents = application.documents.filter(doc => doc.documentType !== req.params.documentType);
             await application.save();
             res.json({ success: true, message: 'Document removed', data: application });
