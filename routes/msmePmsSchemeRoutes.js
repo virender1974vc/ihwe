@@ -53,6 +53,7 @@ router.post('/application/submit', protectExhibitor, msmePmsSchemeController.sub
 router.get('/all', msmePmsSchemeController.getAllApplications);
 router.get('/page-content', msmePmsSchemeController.getPageContent);
 router.post('/page-content', msmePmsSchemeController.updatePageContent);
+router.get('/:id/edit', msmePmsSchemeController.getOrCreateApplicationForAdmin);
 router.put('/:id/step/:step', msmePmsSchemeController.saveApplicationStepById.bind(msmePmsSchemeController));
 router.post('/:id/documents/:documentType', upload.single('file'), msmePmsSchemeController.uploadApplicationDocumentById.bind(msmePmsSchemeController));
 router.delete('/:id/documents/:documentType', msmePmsSchemeController.deleteApplicationDocumentById.bind(msmePmsSchemeController));

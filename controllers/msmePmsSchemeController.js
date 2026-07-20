@@ -21,14 +21,8 @@ const requiredDocumentsFor = application => {
 const missingFields = (data, fields) => fields.filter(field => data?.[field] === undefined || data?.[field] === null || String(data[field]).trim() === '');
 const makeApplicationId = id => `PMS-IHWE-${new Date().getFullYear()}-${String(id).slice(-6).toUpperCase()}`;
 
-async function findApplicationByIdentifier(identifier) {
-    let application = mongoose.isValidObjectId(identifier)
-        ? await MsmePmsScheme.findById(identifier)
-        : await MsmePmsScheme.findOne({ applicationId: identifier });
-    if (application) return application;
-
+async function findExhibitorByIdentifier(identifier) {
     if (!mongoose.isValidObjectId(identifier)) return null;
-
     let exhibitor = await ExhibitorRegistration.findById(identifier).select('_id');
     if (!exhibitor) {
         const company = await Company.findById(identifier).select('exhibitorRegistrationId');
@@ -38,6 +32,16 @@ async function findApplicationByIdentifier(identifier) {
             exhibitor = await ExhibitorRegistration.findOne({ clientId: identifier }).select('_id');
         }
     }
+    return exhibitor;
+}
+
+async function findApplicationByIdentifier(identifier) {
+    let application = mongoose.isValidObjectId(identifier)
+        ? await MsmePmsScheme.findById(identifier)
+        : await MsmePmsScheme.findOne({ applicationId: identifier });
+    if (application) return application;
+
+    const exhibitor = await findExhibitorByIdentifier(identifier);
 
     if (!exhibitor?._id) return null;
     return MsmePmsScheme.findOne({ exhibitorId: exhibitor._id, applicationType: 'exhibitor_claim' });
@@ -137,7 +141,110 @@ async function getOrCreateClaim(exhibitorId) {
     return application;
 }
 
+async function hydrateAdminDraft(application) {
+    const currentDetails = application.applicantDetails || {};
+    if (Object.keys(currentDetails).length || !application.exhibitorId) return application;
+    const source = await ExhibitorRegistration.findById(application.exhibitorId).populate('eventId').lean();
+    if (!source) return application;
+    const contactName = [source.contact1?.firstName, source.contact1?.lastName].filter(Boolean).join(' ');
+    const invoiceValue = Number(source.financeBreakdown?.netPayable || source.totalPayable || source.participation?.total || 0);
+    application.applicantDetails = {
+        companyName: source.exhibitorName || '',
+        udyamRegNo: source.msme?.udyamRegNo || '', gstNumber: source.gstNo || '', panNumber: source.panNo || '',
+        organizationType: source.typeOfBusiness || '', yearOfEstablishment: '', msmeCategory: source.msme?.msmeCategory || '',
+        contactName, designation: source.contact1?.designation || '', mobileNumber: source.contact1?.mobile || '', alternateNumber: source.contact1?.alternateNo || '',
+        addressLine1: source.address || '', addressLine2: '', country: source.country || 'India', state: source.state || '', city: source.city || '', pincode: source.pincode || '',
+        eventName: source.eventId?.name || source.eventId?.title || '', stallNo: source.participation?.stallFor || source.participation?.stallNo || '',
+        hallNo: 'Hall 8, 9 & 10', stallSize: source.participation?.stallSize || '', participationType: source.participation?.stallType || source.participation?.stallCategory || '',
+        bookingStatus: source.participation?.stallFor || source.participation?.stallNo ? 'Confirmed' : source.status,
+        paymentStatus: invoiceValue > 0 && Number(source.amountPaid || 0) >= invoiceValue ? 'Fully Paid' : Number(source.amountPaid || 0) > 0 ? 'Partially Paid' : 'Pending',
+        emailId: source.contact1?.email || source.companyEmail || '',
+    };
+    application.bankDetails = {
+        accountHolderName: source.bankDetails?.accountHolder || source.exhibitorName || '', bankName: source.bankDetails?.bankName || '',
+        branchName: source.bankDetails?.branch || '', accountNumber: source.bankDetails?.accountNumber || '', confirmAccountNumber: source.bankDetails?.accountNumber || '',
+        ifscCode: source.bankDetails?.ifscCode || '', micrCode: '',
+        accountType: source.bankDetails?.accountType === 'Savings' ? 'Savings Account' : source.bankDetails?.accountType === 'Current' ? 'Current Account' : source.bankDetails?.accountType || '',
+    };
+    application.selectedExpenses = ['Stall Charges'];
+    application.companyName = source.exhibitorName || 'Draft'; application.contactPerson = contactName || 'Draft';
+    application.mobileNumber = source.contact1?.mobile || 'Draft'; application.emailId = source.contact1?.email || source.companyEmail || 'draft@invalid.local';
+    application.udyamNumber = source.msme?.udyamRegNo || 'Draft'; application.category = source.msme?.msmeCategory || 'Draft';
+    await application.save();
+    return application;
+}
+
 class MsmePmsSchemeController {
+    async getOrCreateApplicationForAdmin(req, res) {
+        try {
+            let application = await findApplicationByIdentifier(req.params.id);
+            if (!application) {
+                const exhibitor = await findExhibitorByIdentifier(req.params.id);
+                if (!exhibitor?._id) {
+                    return res.status(404).json({ success: false, message: 'Linked exhibitor not found' });
+                }
+                application = await getOrCreateClaim(exhibitor._id);
+                const source = await ExhibitorRegistration.findById(exhibitor._id).populate('eventId').lean();
+                if (source && !Object.keys(application.applicantDetails || {}).length) {
+                    const contactName = [source.contact1?.firstName, source.contact1?.lastName].filter(Boolean).join(' ');
+                    const invoiceValue = Number(source.financeBreakdown?.netPayable || source.totalPayable || source.participation?.total || 0);
+                    const paymentStatus = invoiceValue > 0
+                        ? (Number(source.amountPaid || 0) >= invoiceValue ? 'Fully Paid' : Number(source.amountPaid || 0) > 0 ? 'Partially Paid' : 'Pending')
+                        : 'Pending';
+                    application.applicantDetails = {
+                        companyName: source.exhibitorName || '',
+                        udyamRegNo: source.msme?.udyamRegNo || '',
+                        gstNumber: source.gstNo || '',
+                        panNumber: source.panNo || '',
+                        organizationType: source.typeOfBusiness || '',
+                        yearOfEstablishment: '',
+                        msmeCategory: source.msme?.msmeCategory || '',
+                        contactName,
+                        designation: source.contact1?.designation || '',
+                        mobileNumber: source.contact1?.mobile || '',
+                        alternateNumber: source.contact1?.alternateNo || '',
+                        addressLine1: source.address || '',
+                        addressLine2: '',
+                        country: source.country || 'India',
+                        state: source.state || '',
+                        city: source.city || '',
+                        pincode: source.pincode || '',
+                        eventName: source.eventId?.name || source.eventId?.title || '',
+                        stallNo: source.participation?.stallNo || source.participation?.stallFor || '',
+                        hallNo: 'Hall 8, 9 & 10',
+                        stallSize: source.participation?.stallSize || '',
+                        participationType: source.participation?.stallType || source.participation?.stallCategory || '',
+                        bookingStatus: source.participation?.stallNo || source.participation?.stallFor ? 'Confirmed' : source.status,
+                        paymentStatus,
+                        emailId: source.contact1?.email || source.companyEmail || '',
+                    };
+                    application.bankDetails = {
+                        accountHolderName: source.bankDetails?.accountHolder || source.exhibitorName || '',
+                        bankName: source.bankDetails?.bankName || '',
+                        branchName: source.bankDetails?.branch || '',
+                        accountNumber: source.bankDetails?.accountNumber || '',
+                        confirmAccountNumber: source.bankDetails?.accountNumber || '',
+                        ifscCode: source.bankDetails?.ifscCode || '',
+                        micrCode: '',
+                        accountType: source.bankDetails?.accountType === 'Savings' ? 'Savings Account' : source.bankDetails?.accountType === 'Current' ? 'Current Account' : source.bankDetails?.accountType || '',
+                    };
+                    application.selectedExpenses = ['Stall Charges'];
+                    application.companyName = source.exhibitorName || 'Draft';
+                    application.contactPerson = contactName || 'Draft';
+                    application.mobileNumber = source.contact1?.mobile || 'Draft';
+                    application.emailId = source.contact1?.email || source.companyEmail || 'draft@invalid.local';
+                    application.udyamNumber = source.msme?.udyamRegNo || 'Draft';
+                    application.category = source.msme?.msmeCategory || 'Draft';
+                    await application.save();
+                }
+            }
+            application = await hydrateAdminDraft(application);
+            return res.json({ success: true, data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            return res.status(500).json({ success: false, message: 'Could not open PMS application editor', error: error.message });
+        }
+    }
+
     async withApplicationOwner(req, res, handler) {
         try {
             const application = await findApplicationByIdentifier(req.params.id);
