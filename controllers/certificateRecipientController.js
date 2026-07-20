@@ -1,6 +1,8 @@
 const CertificateRecipient = require('../models/CertificateRecipient');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const PartnerGroup = require('../models/PartnerGroup');
+const Speaker = require('../models/Speaker');
+const DelegateRegistration = require('../models/DelegateRegistration');
 
 exports.getRecipients = async (req, res) => {
     try {
@@ -32,6 +34,42 @@ exports.getRecipients = async (req, res) => {
             }));
             
             allRecipients = [...allRecipients, ...exhibitorRecipients];
+        } else if (type === 'speaker') {
+            const speakers = await Speaker.find({ status: 'Approved' })
+                .select('fullName organization designation status createdAt')
+                .sort({ createdAt: -1 });
+
+            const speakerRecipients = speakers.map(s => ({
+                _id: s._id,
+                name: s.fullName,
+                company: s.organization,
+                designation: s.designation,
+                type: 'speaker',
+                isManual: false
+            }));
+
+            allRecipients = [...allRecipients, ...speakerRecipients];
+        } else if (type === 'delegate') {
+            const delegates = await DelegateRegistration.find({
+                $or: [
+                    { paymentStatus: 'paid' },
+                    { isComplimentary: true }
+                ]
+            })
+                .select('fullName organization designation regNo paymentStatus isComplimentary createdAt')
+                .sort({ createdAt: -1 });
+
+            const delegateRecipients = delegates.map(d => ({
+                _id: d._id,
+                name: d.fullName,
+                company: d.organization,
+                designation: d.designation,
+                regNo: d.regNo,
+                type: 'delegate',
+                isManual: false
+            }));
+
+            allRecipients = [...allRecipients, ...delegateRecipients];
         } else if (['knowledge_partner', 'supporting_association', 'healthcare_partner'].includes(type)) {
             let subheadingMatch = '';
             if (type === 'knowledge_partner') subheadingMatch = 'knowledge';
