@@ -2,14 +2,26 @@ const express = require('express');
 const { protectExhibitor } = require('../middleware/auth');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+const DelegateRegistration = require('../models/DelegateRegistration');
 
 const router = express.Router();
 
 router.get('/admin/all', authMiddleware, async (_req, res) => {
     try {
-        const requests = await ExhibitorPassRequest.find()
-            .populate('exhibitorId', 'exhibitorName registrationId participation contact1')
-            .sort({ createdAt: -1 });
+        const [passRequests, delegateRegistrations] = await Promise.all([
+            ExhibitorPassRequest.find({ passType: { $ne: 'vehicle' } })
+                .populate('exhibitorId', 'exhibitorName registrationId participation contact1').lean(),
+            DelegateRegistration.find({ registrationSource: 'exhibitor', exhibitorId: { $ne: null } })
+                .populate('exhibitorId', 'exhibitorName registrationId participation contact1').lean(),
+        ]);
+        const delegateRequests = delegateRegistrations.map(registration => ({
+            _id: registration._id, exhibitorId: registration.exhibitorId, passType: 'delegate', quantity: 1,
+            personnel: [{ name: registration.fullName, email: registration.email, phone: registration.mobile, designation: registration.designation, photoUrl: registration.profileImage }],
+            status: registration.paymentStatus === 'paid' ? 'approved' : registration.paymentStatus === 'failed' ? 'rejected' : 'pending',
+            source: 'delegate_registration', registrationId: registration.regNo,
+            createdAt: registration.createdAt, updatedAt: registration.updatedAt,
+        }));
+        const requests = [...passRequests, ...delegateRequests].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         res.json({ success: true, data: requests });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
