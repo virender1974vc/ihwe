@@ -68,6 +68,10 @@ async function makeAdminApplicationPayload(application) {
     const totalClaimed = existingClaim.totalClaimed != null
         ? Number(existingClaim.totalClaimed)
         : stallCharges + hotelStay + travel + courier + marketing;
+    const savedStallNo = payload.applicantDetails?.stallNo;
+    const displayStallNo = savedStallNo && !mongoose.isValidObjectId(String(savedStallNo))
+        ? savedStallNo
+        : exhibitor.participation?.stallFor || '';
     return {
         ...payload,
         exhibitorName: exhibitor.exhibitorName,
@@ -105,7 +109,7 @@ async function makeAdminApplicationPayload(application) {
         },
         event: {
             name: payload.applicantDetails?.eventName || exhibitor.eventId?.name || exhibitor.eventId?.title,
-            stallNumber: payload.applicantDetails?.stallNo || exhibitor.participation?.stallNo,
+            stallNumber: displayStallNo,
             hallNumber: payload.applicantDetails?.hallNo || 'Hall 8, 9 & 10',
             stallSize: payload.applicantDetails?.stallSize || exhibitor.participation?.stallSize,
             participationType: payload.applicantDetails?.participationType,
@@ -210,7 +214,7 @@ class MsmePmsSchemeController {
                         city: source.city || '',
                         pincode: source.pincode || '',
                         eventName: source.eventId?.name || source.eventId?.title || '',
-                        stallNo: source.participation?.stallNo || source.participation?.stallFor || '',
+                        stallNo: source.participation?.stallFor || '',
                         hallNo: 'Hall 8, 9 & 10',
                         stallSize: source.participation?.stallSize || '',
                         participationType: source.participation?.stallType || source.participation?.stallCategory || '',
