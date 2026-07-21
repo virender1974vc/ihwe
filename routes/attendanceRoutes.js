@@ -6,6 +6,8 @@ const Stall = require('../models/Stall');
 const mongoose = require('mongoose');
 const { authMiddleware, adminMiddleware } = require('../middleware/authMiddleware');
 const { resolveRegistration, getEventContext, registeredTotals } = require('../services/attendanceService');
+const { createAttendanceWorkbook } = require('../services/attendanceExportService');
+const aiService = require('../services/aiDocumentVerificationService');
 
 const router = express.Router();
 router.use(authMiddleware, adminMiddleware);
@@ -205,6 +207,124 @@ router.get('/records', asyncRoute(async (req, res) => {
         Attendance.countDocuments(query)
     ]);
     res.json({ success: true, data: records, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+}));
+
+router.get('/export', asyncRoute(async (req, res) => {
+    const context = await getEventContext(req.query.eventId);
+    const query = { eventId: context.eventId };
+    if (req.query.day && context.days.includes(req.query.day)) query.eventDay = req.query.day;
+    if (req.query.type && ['visitor', 'buyer', 'exhibitor'].includes(req.query.type)) query.subjectType = req.query.type;
+    if (req.query.subType) query.subjectSubType = String(req.query.subType);
+    if (req.query.companyId) query.companyId = String(req.query.companyId);
+    if (req.query.search) {
+        const regex = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+        query.$or = [{ registrationId: regex }, { name: regex }, { company: regex }, { email: regex }, { mobile: regex }];
+    }
+    const records = await Attendance.find(query).sort({ eventDay: 1, markedAt: 1 }).lean();
+    const companyMap = new Map();
+    records.filter(record => record.subjectType === 'exhibitor' && record.companyId).forEach(record => {
+        const id = String(record.companyId);
+        const current = companyMap.get(id) || {
+            companyId: id, name: record.company || record.name, registrationId: '', days: new Set(),
+            companyCheckIns: 0, memberCheckIns: 0, members: new Set(), passTypes: new Set(), lastMarkedAt: null
+        };
+        current.days.add(record.eventDay);
+        if (record.attendanceKind === 'pass') {
+            current.memberCheckIns += 1;
+            current.members.add(record.subjectKey);
+            if (record.passType) current.passTypes.add(record.passType);
+        } else {
+            current.companyCheckIns += 1;
+            current.registrationId ||= record.registrationId;
+        }
+        if (!current.lastMarkedAt || new Date(record.markedAt) > new Date(current.lastMarkedAt)) current.lastMarkedAt = record.markedAt;
+        companyMap.set(id, current);
+    });
+    const companies = [...companyMap.values()].map(company => ({
+        ...company,
+        days: [...company.days].map(day => new Date(day).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })).join(', '),
+        uniqueMembers: company.members.size,
+        passTypes: [...company.passTypes].join(', ')
+    }));
+    const workbook = await createAttendanceWorkbook({
+        event: context.event, days: context.days, records, companies,
+        filters: { day: query.eventDay, type: query.subjectType, subType: query.subjectSubType, search: req.query.search }
+    });
+    const scope = [query.subjectType, query.subjectSubType, query.eventDay].filter(Boolean).join('-') || 'overall';
+    const filename = `IHWE-attendance-${scope}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    await workbook.xlsx.write(res);
+    res.end();
+}));
+
+router.post('/ai-summary', asyncRoute(async (req, res) => {
+    const context = await getEventContext(req.body.eventId);
+    const scope = ['exhibition', 'company', 'person'].includes(req.body.scope) ? req.body.scope : 'exhibition';
+    let summaryData;
+    if (scope === 'exhibition') {
+        const records = await Attendance.find({ eventId: context.eventId })
+            .select('-rawQr -__v -updatedAt').sort({ eventDay: 1, markedAt: 1 }).lean();
+        const uniqueByType = type => new Set(records.filter(item => item.subjectType === type && item.attendanceKind !== 'pass').map(item => item.companyId || item.subjectKey)).size;
+        summaryData = {
+            event: context.event, eventDays: context.days,
+            totals: {
+                checkIns: records.length,
+                visitors: uniqueByType('visitor'), buyers: uniqueByType('buyer'), exhibitors: uniqueByType('exhibitor'),
+                companies: new Set(records.filter(item => item.subjectType === 'exhibitor' && item.companyId).map(item => item.companyId)).size
+            },
+            dayWise: context.days.map(day => ({
+                day,
+                checkIns: records.filter(item => item.eventDay === day).length,
+                visitors: new Set(records.filter(item => item.eventDay === day && item.subjectType === 'visitor').map(item => item.subjectKey)).size,
+                buyers: new Set(records.filter(item => item.eventDay === day && item.subjectType === 'buyer').map(item => item.subjectKey)).size,
+                exhibitorCompanies: new Set(records.filter(item => item.eventDay === day && item.subjectType === 'exhibitor').map(item => item.companyId || item.subjectKey)).size
+            })),
+            registrationTypes: Object.entries(records.reduce((acc, item) => {
+                acc[item.subjectSubType] = (acc[item.subjectSubType] || 0) + 1; return acc;
+            }, {})).map(([type, count]) => ({ type, count })),
+            passTypes: Object.entries(records.filter(item => item.attendanceKind === 'pass').reduce((acc, item) => {
+                acc[item.passType || 'other'] = (acc[item.passType || 'other'] || 0) + 1; return acc;
+            }, {})).map(([type, count]) => ({ type, count }))
+        };
+    } else if (scope === 'company') {
+        if (!mongoose.Types.ObjectId.isValid(String(req.body.id))) {
+            return res.status(400).json({ success: false, message: 'Valid company ID is required.' });
+        }
+        const [company, records] = await Promise.all([
+            ExhibitorRegistration.findById(req.body.id)
+                .select('exhibitorName registrationId contact1 participation country city status teamMembers').lean(),
+            Attendance.find({ eventId: context.eventId, companyId: String(req.body.id) })
+                .select('-rawQr -__v -updatedAt').sort({ eventDay: 1, markedAt: 1 }).lean()
+        ]);
+        if (!company) return res.status(404).json({ success: false, message: 'Company not found.' });
+        summaryData = {
+            company: {
+                name: company.exhibitorName, registrationId: company.registrationId,
+                contactPerson: `${company.contact1?.firstName || ''} ${company.contact1?.lastName || ''}`.trim(),
+                country: company.country, city: company.city, status: company.status,
+                registeredTeamMembers: company.teamMembers?.length || 0
+            },
+            companyAttendanceDays: [...new Set(records.filter(item => item.attendanceKind !== 'pass').map(item => item.eventDay))],
+            uniqueMembersAttended: new Set(records.filter(item => item.attendanceKind === 'pass').map(item => item.subjectKey)).size,
+            memberAttendance: records.filter(item => item.attendanceKind === 'pass').map(item => ({
+                name: item.name, designation: item.designation, passType: item.passType, eventDay: item.eventDay
+            }))
+        };
+    } else {
+        if (!mongoose.Types.ObjectId.isValid(String(req.body.id))) {
+            return res.status(400).json({ success: false, message: 'Valid attendance ID is required.' });
+        }
+        const record = await Attendance.findById(req.body.id).select('-rawQr -__v -updatedAt').lean();
+        if (!record) return res.status(404).json({ success: false, message: 'Attendance profile not found.' });
+        let live = {};
+        try { live = await resolveRegistration(record.registrationId, requestOrigin(req)); } catch (_) { /* snapshot is enough */ }
+        const attendance = await Attendance.find({ eventId: record.eventId, subjectKey: record.subjectKey })
+            .select('eventDay markedAt gate source').sort({ eventDay: 1 }).lean();
+        summaryData = { profile: { ...record, ...live, rawQr: undefined, subjectId: undefined, subjectKey: undefined }, attendance };
+    }
+    const summary = await aiService.generateAttendanceSummary({ scope, data: summaryData });
+    res.json({ success: true, data: { scope, summary } });
 }));
 
 router.get('/profile/:attendanceId', asyncRoute(async (req, res) => {

@@ -285,6 +285,52 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
             return { success: false, message: err.message || 'Connection failed' };
         }
     }
+
+    async generateAttendanceSummary({ scope, data }) {
+        const ai = await this.getAiSettings();
+        const provider = ai.provider || 'gemini';
+        const apiKey = this.getDecryptedKey(ai, provider);
+        if (!apiKey) {
+            const error = new Error(`No ${provider === 'openai' ? 'OpenAI' : 'Gemini'} API key is saved in AI Verification Settings.`);
+            error.status = 400;
+            throw error;
+        }
+        const model = provider === 'openai' ? ai.openaiModel : ai.geminiModel;
+        const prompt = `You are the official attendance insights assistant for IHWE exhibition administrators.
+Create a concise, factual and useful ${scope} summary from the JSON data below.
+Use clear headings and short bullet points. Highlight attendance across event days, important category/pass patterns,
+and practical operational observations. For a person, summarize identity/profile and attendance only.
+For a company, summarize company attendance plus unique member/pass participation.
+For the exhibition, summarize visitors, buyers, exhibitors, companies and day-wise movement.
+Never invent facts, percentages or recommendations unsupported by the supplied data. Do not expose database IDs.
+Return plain text only, maximum 450 words.
+
+DATA:
+${JSON.stringify(data).slice(0, 120000)}`;
+        try {
+            if (provider === 'gemini') {
+                const { GoogleGenerativeAI } = require('@google/generative-ai');
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const genModel = genAI.getGenerativeModel({ model: model || 'gemini-2.5-flash' });
+                const result = await genModel.generateContent(prompt);
+                return result.response.text().trim();
+            }
+            const OpenAI = require('openai');
+            const client = new OpenAI({ apiKey });
+            const response = await client.chat.completions.create({
+                model: model || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: 900
+            });
+            return String(response.choices?.[0]?.message?.content || '').trim();
+        } catch (error) {
+            const wrapped = new Error(this.isQuotaError(error)
+                ? `AI quota/rate limit reached: ${error.message}`
+                : `AI summary failed: ${error.message}`);
+            wrapped.status = this.isQuotaError(error) ? 429 : 502;
+            throw wrapped;
+        }
+    }
 }
 
 module.exports = new AiDocumentVerificationService();
