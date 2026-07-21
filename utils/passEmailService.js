@@ -8,7 +8,6 @@ const PASS_META = {
     service: { title: 'Service Pass', detailTitle: 'Service Personnel Details', color: '#6d28d9' },
     visitor: { title: 'Visitor Pass', detailTitle: 'Visitor Details', color: '#1d4ed8' },
     lunch: { title: 'Lunch Pass', detailTitle: 'Pass Holder Details', color: '#15803d' },
-    dinner: { title: 'Dinner Pass', detailTitle: 'Pass Holder Details', color: '#be185d' },
     water: { title: 'Water Bottle Pass', detailTitle: 'Pass Holder Details', color: '#0369a1' }
 };
 
