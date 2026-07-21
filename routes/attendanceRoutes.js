@@ -146,7 +146,8 @@ router.get('/dashboard', asyncRoute(async (req, res) => {
     if (req.query.subType) match.subjectSubType = req.query.subType;
     const summaryMatch = { ...match, attendanceKind: { $ne: 'pass' } };
 
-    const [registered, perDay, byType, bySubType, recent, uniquePeople, companies] = await Promise.all([
+    const overallMatch = { eventId: context.eventId, attendanceKind: { $ne: 'pass' } };
+    const [registered, perDay, byType, bySubType, recent, uniquePeople, companies, overallByType, overallBySubType] = await Promise.all([
         registeredTotals(),
         Attendance.aggregate([{ $match: { eventId: context.eventId } }, { $group: { _id: '$eventDay', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
         Attendance.aggregate([{ $match: summaryMatch }, { $group: {
@@ -167,10 +168,20 @@ router.get('/dashboard', asyncRoute(async (req, res) => {
         ]),
         match.subjectType && match.subjectType !== 'exhibitor'
             ? Promise.resolve([])
-            : companyAttendanceSummary(context.eventId, match.eventDay)
+            : companyAttendanceSummary(context.eventId, match.eventDay),
+        Attendance.aggregate([{ $match: overallMatch }, { $group: {
+            _id: '$subjectType',
+            people: { $addToSet: { $cond: [
+                { $and: [{ $eq: ['$subjectType', 'exhibitor'] }, { $ne: ['$companyId', ''] }] },
+                { $concat: ['company:', '$companyId'] }, '$subjectKey'
+            ] } }
+        } }]),
+        Attendance.aggregate([{ $match: overallMatch }, { $group: { _id: '$subjectSubType', people: { $addToSet: '$subjectKey' } } }])
     ]);
     const attendedByType = Object.fromEntries(byType.map((item) => [item._id, item.people.length]));
     const attendedBySubType = Object.fromEntries(bySubType.map((item) => [item._id, item.people.length]));
+    const overallAttendedByType = Object.fromEntries(overallByType.map((item) => [item._id, item.people.length]));
+    const overallAttendedBySubType = Object.fromEntries(overallBySubType.map((item) => [item._id, item.people.length]));
     const totalRegistered = registered.visitor + registered.buyer + registered.exhibitor;
     const scopeRegistered = match.subjectSubType
         ? (registered.bySubType[match.subjectSubType] || 0)
@@ -179,6 +190,7 @@ router.get('/dashboard', asyncRoute(async (req, res) => {
         event: context.event, days: context.days, selectedDay: match.eventDay || null,
         registered: { ...registered, total: totalRegistered },
         attended: { visitor: attendedByType.visitor || 0, buyer: attendedByType.buyer || 0, exhibitor: attendedByType.exhibitor || 0, total: uniquePeople.length, bySubType: attendedBySubType },
+        overallAttended: { visitor: overallAttendedByType.visitor || 0, buyer: overallAttendedByType.buyer || 0, exhibitor: overallAttendedByType.exhibitor || 0, bySubType: overallAttendedBySubType },
         scopeRegistered,
         notAttended: Math.max(0, scopeRegistered - uniquePeople.length),
         perDay: context.days.map((day) => ({ day, count: perDay.find((item) => item._id === day)?.count || 0 })),
