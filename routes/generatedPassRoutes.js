@@ -4,7 +4,7 @@ const GeneratedPassBatch = require('../models/GeneratedPassBatch');
 const PassTemplate = require('../models/PassTemplate');
 
 const router = express.Router();
-const ALLOWED_PASS_TYPES = new Set(['media', 'speaker', 'organizer', 'exhibitor', 'service', 'vehicle', 'visitor', 'food']);
+const ALLOWED_PASS_TYPES = new Set(['media', 'speaker', 'organizer', 'exhibitor', 'service', 'delegate', 'visitor', 'food']);
 
 const normalizeNameRows = (names) => {
     if (!Array.isArray(names)) return [];
