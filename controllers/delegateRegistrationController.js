@@ -4,7 +4,17 @@ const razorpay = require('../utils/razorpay');
 const crypto = require('crypto');
 const { sendWhatsAppMessage, sendOpusWhatsAppMessage } = require('../utils/whatsapp');
 const emailService = require('../utils/emailService'); // Ensure you have this
+const QRCode = require('qrcode');
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET;
+
+const delegateQrEmail = async (registration) => {
+    const payload = JSON.stringify({ registrationId: registration.regNo });
+    const content = await QRCode.toBuffer(payload, { width: 240, margin: 2 });
+    return {
+        html: `<div style="text-align:center;margin:20px auto;padding:18px;border:1px solid #dce5de;border-radius:8px;max-width:560px;background:#fff"><h3 style="color:#1a5c2a;margin:0 0 8px">Delegate Entry QR Code</h3><p style="color:#64748b;font-size:12px;margin:0 0 12px">Scan this QR at the venue to mark this delegate's attendance.</p><img src="cid:delegate_entry_qr@ihwe.in" width="160" height="160" alt="Delegate Entry QR"><p style="font-size:12px;color:#475569">Registration: <strong>${registration.regNo}</strong></p></div>`,
+        attachment: { filename: `delegate-entry-${registration.regNo}.png`, content, cid: 'delegate_entry_qr@ihwe.in' }
+    };
+};
 
 const generateDelegateRegNo = async () => {
     const lastReg = await DelegateRegistration.findOne().sort({ createdAt: -1 });
@@ -211,10 +221,12 @@ exports.verifyPayment = async (req, res) => {
 
             try {
                 if (emailService && emailService.sendEmail) {
+                    const qr = await delegateQrEmail(registration);
                     await emailService.sendEmail({
                         to: registration.email,
                         subject: 'IHWE 2026 - Delegate Registration Confirmation',
-                        html: emailHtml
+                        html: `${emailHtml}${qr.html}`,
+                        attachments: [qr.attachment]
                     });
                 }
             } catch (err) {
@@ -437,10 +449,12 @@ exports.createOfflineRegistration = async (req, res) => {
             `;
 
             if (registration.email) {
+                const qr = await delegateQrEmail(registration);
                 emailService.sendEmail({
                     to: registration.email,
                     subject: 'Delegate Registration Confirmed - 9th IHWE 2026',
-                    html: emailHtml
+                    html: `${emailHtml}${qr.html}`,
+                    attachments: [qr.attachment]
                 });
             }
         } catch (err) {
@@ -547,12 +561,12 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
                 totalAmount: finalTotalAmount,
                 paymentStatus: 'pending',
                 paymentMode: 'online',
-                paymentRemarks: `Exhibitor Delegate Paid: ${exhibitor.companyName}`,
+                paymentRemarks: `Exhibitor Delegate Paid: ${exhibitor.exhibitorName}`,
                 registrationSource: 'exhibitor',
                 sourceChannel: 'exhibitor_paid',
                 isComplimentary: false,
                 exhibitorId: exhibitor._id,
-                exhibitorCompanyName: exhibitor.companyName || ''
+                exhibitorCompanyName: exhibitor.exhibitorName || ''
             });
 
             const order = await razorpay.orders.create({
@@ -586,14 +600,14 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
             gatewayChargeAmount: 0,
             paymentStatus: 'paid',
             paymentMode: 'exhibitor_complimentary',
-            paymentRemarks: `Exhibitor Complimentary: ${exhibitor.companyName}`,
+            paymentRemarks: `Exhibitor Complimentary: ${exhibitor.exhibitorName}`,
             totalAmount: 0,
             registrationSource: 'exhibitor',
             sourceChannel: 'exhibitor_complimentary',
             isComplimentary: true,
             complimentaryType: 'exhibitor_delegate',
             exhibitorId: exhibitor._id,
-            exhibitorCompanyName: exhibitor.companyName || ''
+            exhibitorCompanyName: exhibitor.exhibitorName || ''
         });
 
         // Increment used quota
@@ -606,7 +620,7 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px;">
                 <h2 style="color: #1a5c2a; text-align: center; border-bottom: 2px solid #22c55e; padding-bottom: 10px;">Delegate Registration Confirmed</h2>
                 <p style="font-size: 16px; color: #374151;">Dear <strong>${registration.title} ${registration.fullName}</strong>,</p>
-                <p style="color: #4b5563; line-height: 1.6;">Thank you for registering for the <strong>9th International Health & Wellness Expo (IHWE) 2026</strong>. We are delighted to confirm that your delegate registration has been successfully completed as a complimentary pass from <strong>${exhibitor.companyName}</strong>.</p>
+                <p style="color: #4b5563; line-height: 1.6;">Thank you for registering for the <strong>9th International Health & Wellness Expo (IHWE) 2026</strong>. We are delighted to confirm that your delegate registration has been successfully completed as a complimentary pass from <strong>${exhibitor.exhibitorName}</strong>.</p>
                 <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
                     <h3 style="color: #1a5c2a; margin-top: 0;">Registration Details</h3>
                     <ul style="list-style: none; padding-left: 0;">
@@ -627,10 +641,12 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
             </div>
             `;
             if (registration.email) {
+                const qr = await delegateQrEmail(registration);
                 emailService.sendEmail({
                     to: registration.email,
                     subject: 'Delegate Registration Confirmed - 9th IHWE 2026',
-                    html: emailHtml
+                    html: `${emailHtml}${qr.html}`,
+                    attachments: [qr.attachment]
                 });
             }
         } catch (err) {
