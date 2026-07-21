@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const AboutOrganizerSchema = new mongoose.Schema({
+    project: {
+        type: String,
+        enum: ['ihwe', 'organicexpo'],
+        default: 'organicexpo',
+        index: true
+    },
     subtitle: {
         type: String,
         default: 'ABOUT THE ORGANIZER'

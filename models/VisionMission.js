@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
 const VisionMissionSchema = new mongoose.Schema({
+    project: {
+        type: String,
+        enum: ['ihwe', 'organicexpo'],
+        default: 'organicexpo',
+        index: true
+    },
     mission: {
         title: { type: String, default: 'Our Mission' },
         icon: { type: String, default: 'Target' },

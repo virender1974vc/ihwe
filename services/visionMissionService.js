@@ -1,5 +1,13 @@
 const VisionMission = require('../models/VisionMission');
 
+const normalizeProject = (project) => ['ihwe', 'organicexpo'].includes(project) ? project : 'organicexpo';
+const getProjectQuery = (project) => {
+    const normalizedProject = normalizeProject(project);
+    return normalizedProject === 'organicexpo'
+        ? { $or: [{ project: normalizedProject }, { project: { $exists: false } }] }
+        : { project: normalizedProject };
+};
+
 /**
  * Service to handle Vision and Mission section operations.
  */
@@ -7,10 +15,12 @@ class VisionMissionService {
     /**
      * Get content, creates default if none exists.
      */
-    async getContent() {
-        let content = await VisionMission.findOne();
+    async getContent(project) {
+        const normalizedProject = normalizeProject(project);
+        let content = await VisionMission.findOne(getProjectQuery(normalizedProject));
         if (!content) {
             content = await VisionMission.create({
+                project: normalizedProject,
                 mission: {
                     title: 'Our Mission',
                     icon: 'Target',
@@ -25,6 +35,9 @@ class VisionMissionService {
                 },
                 backgroundColor: '#23471d'
             });
+        } else if (content.project !== normalizedProject) {
+            content.project = normalizedProject;
+            await content.save();
         }
         return content;
     }
@@ -32,10 +45,11 @@ class VisionMissionService {
     /**
      * Update Vision & Mission content.
      */
-    async updateContent(data) {
+    async updateContent(data, project) {
+        const normalizedProject = normalizeProject(project);
         return await VisionMission.findOneAndUpdate(
-            {},
-            { ...data, lastUpdated: Date.now() },
+            getProjectQuery(normalizedProject),
+            { ...data, project: normalizedProject, lastUpdated: Date.now() },
             { returnDocument: 'after', upsert: true }
         );
     }

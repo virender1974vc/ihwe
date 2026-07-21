@@ -2,11 +2,23 @@ const AboutOrganizer = require('../models/AboutOrganizer');
 const path = require('path');
 const fs = require('fs');
 
+const normalizeProject = (project) => ['ihwe', 'organicexpo'].includes(project) ? project : 'organicexpo';
+const getProjectQuery = (project) => {
+    const normalizedProject = normalizeProject(project);
+    return normalizedProject === 'organicexpo'
+        ? { $or: [{ project: normalizedProject }, { project: { $exists: false } }] }
+        : { project: normalizedProject };
+};
+
 exports.getAboutOrganizer = async (req, res) => {
     try {
-        let data = await AboutOrganizer.findOne();
+        const project = normalizeProject(req.query.project);
+        let data = await AboutOrganizer.findOne(getProjectQuery(project));
         if (!data) {
-            data = new AboutOrganizer();
+            data = new AboutOrganizer({ project });
+            await data.save();
+        } else if (data.project !== project) {
+            data.project = project;
             await data.save();
         }
         res.status(200).json({ success: true, data });
@@ -18,14 +30,16 @@ exports.getAboutOrganizer = async (req, res) => {
 exports.updateAboutOrganizer = async (req, res) => {
     try {
         const updateData = req.body;
-        let data = await AboutOrganizer.findOne();
+        const project = normalizeProject(req.body.project || req.query.project);
+        let data = await AboutOrganizer.findOne(getProjectQuery(project));
         
         if (data) {
             Object.assign(data, updateData);
+            data.project = project;
             data.updatedAt = Date.now();
             await data.save();
         } else {
-            data = new AboutOrganizer(updateData);
+            data = new AboutOrganizer({ ...updateData, project });
             await data.save();
         }
         

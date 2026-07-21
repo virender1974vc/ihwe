@@ -10,7 +10,7 @@ class VisionMissionController {
      */
     async getContent(req, res) {
         try {
-            const data = await visionMissionService.getContent();
+            const data = await visionMissionService.getContent(req.query.project);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -22,7 +22,7 @@ class VisionMissionController {
      */
     async updateContent(req, res) {
         try {
-            const data = await visionMissionService.updateContent(req.body);
+            const data = await visionMissionService.updateContent(req.body, req.body.project || req.query.project);
             await logActivity(req, 'Updated', 'Vision & Mission', 'Updated Vision & Mission content');
             res.json({ success: true, data });
         } catch (error) {
