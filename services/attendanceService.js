@@ -180,7 +180,8 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
     if (doc) return subject(doc, 'buyer', 'international-buyer', {
         registrationId, name: doc.primaryContact?.fullName, company: doc.brandName || doc.companyName,
         email: doc.primaryContact?.emailId, mobile: doc.primaryContact?.mobileNumber,
-        country: doc.country, designation: doc.primaryContact?.designation, status: doc.status
+        country: doc.country, designation: doc.primaryContact?.designation,
+        status: doc.verification?.adminApprovalStatus || 'Pending'
         , photoUrl: doc.primaryContact?.photoUrl || doc.documents?.logo,
         details: { legalEntityType: doc.legalEntityType, countryOfRegistration: doc.countryOfRegistration,
             yearOfEstablishment: doc.yearOfEstablishment, natureOfBusiness: doc.natureOfBusiness,

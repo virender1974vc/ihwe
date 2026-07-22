@@ -98,9 +98,32 @@ router.post('/resolve', async (req, res) => {
     }
 });
 
+router.patch('/buyers/:id/status', asyncRoute(async (req, res) => {
+    const status = String(req.body.status || '').trim();
+    if (!['Pending', 'Approved', 'Rejected'].includes(status)) {
+        return res.status(400).json({ success: false, message: 'Buyer status must be Pending, Approved or Rejected.' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ success: false, message: 'Invalid buyer ID.' });
+    }
+    const buyer = await InternationalBuyer.findByIdAndUpdate(
+        req.params.id,
+        { $set: { 'verification.adminApprovalStatus': status } },
+        { new: true, runValidators: true }
+    ).lean();
+    if (!buyer) return res.status(404).json({ success: false, message: 'International buyer not found.' });
+    res.json({ success: true, message: `Buyer status changed to ${status}.`, data: { status } });
+}));
+
 router.post('/mark', asyncRoute(async (req, res) => {
     const origin = requestOrigin(req);
     const person = await resolveRegistration(req.body.raw || req.body.registrationId, origin);
+    if (person.subjectSubType === 'international-buyer' && person.status !== 'Approved') {
+        return res.status(409).json({
+            success: false,
+            message: `Attendance cannot be marked because this buyer is ${person.status || 'Pending'}. Approve the buyer first.`
+        });
+    }
     const company = person.attendanceKind === 'pass' && person.passType === 'exhibitor' && person.companyRegistrationId
         ? await resolveRegistration(person.companyRegistrationId, origin)
         : null;
@@ -303,8 +326,9 @@ router.get('/manual-search', asyncRoute(async (req, res) => {
 
 router.get('/insights', asyncRoute(async (req, res) => {
     const context = await getEventContext(req.query.eventId);
-    const [rows, buyers, international, products] = await Promise.all([
+    const [rows, allAttendance, buyers, international, products] = await Promise.all([
         Attendance.find({ eventId: context.eventId, attendanceKind: { $ne: 'pass' }, subjectType: { $in: ['visitor', 'buyer'] } }).lean(),
+        Attendance.find({ eventId: context.eventId }).select('eventDay subjectType subjectSubType subjectKey attendanceKind companyId').lean(),
         BuyerRegistration.find().select('country stateProvince city buyerIndustry primaryProductInterest secondaryProductCategories registrationCategory buyerTag').lean(),
         InternationalBuyer.find().select('country city natureOfBusiness productCategories b2bInterest').lean(),
         StallProduct.find({ isActive: { $ne: false } }).select('exhibitorId name category tags').lean()
@@ -326,6 +350,23 @@ router.get('/insights', asyncRoute(async (req, res) => {
             industries: tally(buyers.map(i => i.buyerIndustry)),
             buyerTypes: [{ label: 'Domestic', count: buyers.length }, { label: 'International', count: international.length }],
             visitorTypes, buyerAttendanceTypes,
+            overview: {
+                totalCheckIns: allAttendance.length,
+                uniquePeople: new Set(allAttendance.map(item => item.subjectKey)).size,
+                visitors: new Set(allAttendance.filter(item => item.subjectType === 'visitor').map(item => item.subjectKey)).size,
+                buyers: new Set(allAttendance.filter(item => item.subjectType === 'buyer').map(item => item.subjectKey)).size,
+                exhibitorCompanies: new Set(allAttendance.filter(item => item.subjectType === 'exhibitor' && item.attendanceKind !== 'pass').map(item => item.companyId || item.subjectKey)).size
+            },
+            dayWise: context.days.map(day => ({
+                day,
+                total: allAttendance.filter(item => item.eventDay === day).length,
+                visitors: new Set(allAttendance.filter(item => item.eventDay === day && item.subjectType === 'visitor').map(item => item.subjectKey)).size,
+                buyers: new Set(allAttendance.filter(item => item.eventDay === day && item.subjectType === 'buyer').map(item => item.subjectKey)).size,
+                exhibitors: new Set(allAttendance.filter(item => item.eventDay === day && item.subjectType === 'exhibitor' && item.attendanceKind !== 'pass').map(item => item.companyId || item.subjectKey)).size
+            })),
+            categoryWise: Object.entries(allAttendance.reduce((acc, item) => {
+                const key = item.subjectType || 'other'; acc[key] = (acc[key] || 0) + 1; return acc;
+            }, {})).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count),
             exhibitors: { presentCompanies, teamCheckIns: exhibitorRows.filter(item => item.attendanceKind === 'pass').length, products: products.length, topCompanies },
             interestMatches: matches
         }
@@ -342,10 +383,21 @@ router.get('/notifications', asyncRoute(async (req, res) => {
         Attendance.countDocuments({ eventId: context.eventId, markedAt: { $gte: new Date(now - (2 * fifteen)), $lt: new Date(now - fifteen) } }),
         Attendance.find({ eventId: context.eventId, $or: [{ subjectSubType: 'international-buyer' }, ...(vipIds.length ? [{ registrationId: { $in: vipIds } }] : [])] }).sort({ markedAt: -1 }).limit(10).select('name company subjectSubType registrationId markedAt photoUrl photoKind').lean(),
         AttendanceScanAttempt.aggregate([{ $match: { eventId: context.eventId, result: 'duplicate', createdAt: { $gte: new Date(now - 60 * 60 * 1000) } } }, { $group: { _id: '$registrationId', count: { $sum: 1 }, last: { $max: '$createdAt' } } }, { $match: { count: { $gte: 3 } } }, { $sort: { count: -1 } }, { $limit: 10 }]),
-        Attendance.countDocuments({ eventId: context.eventId, eventDay: new Date().toISOString().slice(0, 10) })
+        Attendance.countDocuments({ eventId: context.eventId, eventDay: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) })
     ]);
-    const target = Math.max(1, Number(req.query.target) || 500);
-    res.json({ success: true, data: { dailyTarget: { target, achieved: todayCount, percent: Math.min(100, Math.round(todayCount * 100 / target)) }, highTraffic: recent >= Math.max(10, previous * 2), traffic: { recent15Minutes: recent, previous15Minutes: previous }, specialArrivals: special, suspicious } });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const target = Math.max(1, Number(context.event?.dailyAttendanceTarget) || 500);
+    res.json({ success: true, data: { dailyTarget: { target, achieved: todayCount, percent: Math.min(100, Math.round(todayCount * 100 / target)), day: today, isEventDay: context.days.includes(today) }, highTraffic: recent >= Math.max(10, previous * 2), traffic: { recent15Minutes: recent, previous15Minutes: previous }, specialArrivals: special, suspicious } });
+}));
+
+router.patch('/daily-target', asyncRoute(async (req, res) => {
+    const context = await getEventContext(req.body.eventId);
+    const target = Number(req.body.target);
+    if (!Number.isInteger(target) || target < 1 || target > 1000000) {
+        return res.status(400).json({ success: false, message: 'Daily target must be a whole number between 1 and 1,000,000.' });
+    }
+    await mongoose.model('Event').findByIdAndUpdate(context.eventId, { $set: { dailyAttendanceTarget: target } }, { runValidators: true });
+    res.json({ success: true, message: 'Daily attendance target updated.', data: { target } });
 }));
 
 router.get('/super-admin/operations', asyncRoute(async (req, res) => {
