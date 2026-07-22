@@ -213,20 +213,32 @@ router.get('/dashboard', asyncRoute(async (req, res) => {
     const summaryMatch = { ...match, attendanceKind: { $ne: 'pass' } };
 
     const overallMatch = { eventId: context.eventId, attendanceKind: { $ne: 'pass' } };
+    const canonicalAttendanceIdentity = {
+        $cond: [
+            { $eq: ['$subjectType', 'exhibitor'] },
+            {
+                $cond: [
+                    { $gt: [{ $strLenCP: { $ifNull: ['$registrationId', ''] } }, 0] },
+                    { $concat: ['registration:', '$registrationId'] },
+                    {
+                        $cond: [
+                            { $gt: [{ $strLenCP: { $ifNull: ['$companyId', ''] } }, 0] },
+                            { $concat: ['company:', '$companyId'] },
+                            '$subjectKey'
+                        ]
+                    }
+                ]
+            },
+            '$subjectKey'
+        ]
+    };
     const [registered, perDay, byType, bySubType, recent, uniquePeople, companies, overallByType, overallBySubType] = await Promise.all([
         registeredTotals(),
         Attendance.aggregate([{ $match: { eventId: context.eventId } }, { $group: { _id: '$eventDay', count: { $sum: 1 } } }, { $sort: { _id: 1 } }]),
         Attendance.aggregate([{ $match: summaryMatch }, {
             $group: {
                 _id: '$subjectType',
-                people: {
-                    $addToSet: {
-                        $cond: [
-                            { $and: [{ $eq: ['$subjectType', 'exhibitor'] }, { $ne: ['$companyId', ''] }] },
-                            { $concat: ['company:', '$companyId'] }, '$subjectKey'
-                        ]
-                    }
-                }
+                people: { $addToSet: canonicalAttendanceIdentity }
             }
         }]),
         Attendance.aggregate([{ $match: summaryMatch }, { $group: { _id: '$subjectSubType', people: { $addToSet: '$subjectKey' } } }]),
@@ -235,12 +247,7 @@ router.get('/dashboard', asyncRoute(async (req, res) => {
             { $match: summaryMatch },
             {
                 $group: {
-                    _id: {
-                        $cond: [
-                            { $and: [{ $eq: ['$subjectType', 'exhibitor'] }, { $ne: ['$companyId', ''] }] },
-                            { $concat: ['company:', '$companyId'] }, '$subjectKey'
-                        ]
-                    }
+                    _id: canonicalAttendanceIdentity
                 }
             }
         ]),
@@ -250,14 +257,7 @@ router.get('/dashboard', asyncRoute(async (req, res) => {
         Attendance.aggregate([{ $match: overallMatch }, {
             $group: {
                 _id: '$subjectType',
-                people: {
-                    $addToSet: {
-                        $cond: [
-                            { $and: [{ $eq: ['$subjectType', 'exhibitor'] }, { $ne: ['$companyId', ''] }] },
-                            { $concat: ['company:', '$companyId'] }, '$subjectKey'
-                        ]
-                    }
-                }
+                people: { $addToSet: canonicalAttendanceIdentity }
             }
         }]),
         Attendance.aggregate([{ $match: overallMatch }, { $group: { _id: '$subjectSubType', people: { $addToSet: '$subjectKey' } } }])

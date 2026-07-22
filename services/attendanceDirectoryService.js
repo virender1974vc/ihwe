@@ -57,13 +57,18 @@ async function getDirectory({ type, view, day, subType, search, page = 1, limit 
     .select('_id subjectKey companyId registrationId eventDay markedAt').sort({ markedAt:-1 }).lean();
   const byKey = new Map();
   for (const a of attendance) {
-    const key = type === 'exhibitor' && a.companyId ? `company:${a.companyId}` : `registration:${a.registrationId}`;
-    const current = byKey.get(key) || { days:new Set(), attendanceId:String(a._id) };
-    current.days.add(a.eventDay); byKey.set(key, current);
+    const keys = [
+      ...(type === 'exhibitor' && a.companyId ? [`company:${a.companyId}`] : []),
+      ...(a.registrationId ? [`registration:${a.registrationId}`] : [])
+    ];
+    for (const key of keys) {
+      const current = byKey.get(key) || { days:new Set(), attendanceId:String(a._id) };
+      current.days.add(a.eventDay); byKey.set(key, current);
+    }
   }
   items = items.map(item => {
-    const key = type === 'exhibitor' && item.companyId ? `company:${item.companyId}` : `registration:${item.registrationId}`;
-    const hit = byKey.get(key);
+    const hit = (type === 'exhibitor' && item.companyId ? byKey.get(`company:${item.companyId}`) : null)
+      || byKey.get(`registration:${item.registrationId}`);
     return hit ? { ...item, present:true, presentDays:[...hit.days], attendanceId:hit.attendanceId } : item;
   });
   if (view === 'present') items = items.filter(item => item.present && (!day || item.presentDays.includes(day)));

@@ -90,11 +90,19 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             throw Object.assign(new Error('Pass QR type does not match the approved pass.'), { status: 400 });
         }
         const index = Number(qrData.index);
-        const items = request.passType === 'vehicle' ? request.vehicles : request.personnel;
-        const item = items?.[index];
-        if (!item) throw Object.assign(new Error('Pass holder was not found in this pass request.'), { status: 404 });
         const exhibitor = await ExhibitorRegistration.findById(request.exhibitorId).lean();
         if (!exhibitor) throw Object.assign(new Error('The company linked to this pass was not found.'), { status: 404 });
+        const requestItems = request.passType === 'vehicle' ? request.vehicles : request.personnel;
+        const isConsumablePass = ['lunch', 'water'].includes(request.passType);
+        const items = requestItems?.length
+            ? requestItems
+            : (isConsumablePass ? [{
+                _id: `${request._id}-coupon`,
+                name: `${exhibitor.exhibitorName} ${request.passType === 'lunch' ? 'Food Coupon' : 'Water Pass'}`,
+                designation: `${request.quantity || 1} ${request.passType === 'lunch' ? 'Packed Lunch' : 'Water'} entitlement`
+            }] : []);
+        const item = items[index];
+        if (!item) throw Object.assign(new Error('Pass holder was not found in this pass request.'), { status: 404 });
         const isVehicle = request.passType === 'vehicle';
         const passRegistrationId = `PASS-${String(request._id)}-${index + 1}`;
         return subject({ _id: item.teamMemberId || item._id || `${request._id}-${index}` }, 'exhibitor', `${request.passType}-pass`, {
