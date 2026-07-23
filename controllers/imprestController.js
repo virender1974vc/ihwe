@@ -103,7 +103,7 @@ const updateImprestStatus = async (req, res) => {
       updates.settledAt = new Date();
     }
     const request = await ImprestRequest.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true,
     });
     if (!request) return res.status(404).json({ success: false, message: "Imprest request not found" });

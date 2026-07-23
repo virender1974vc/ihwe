@@ -356,7 +356,7 @@ const updateAccountDebitNote = async (req, res) => {
     if (update.reviewedBy !== undefined) update.reviewedBy = parseJsonField(update.reviewedBy);
     if (req.file) update.attachmentUrl = `/uploads/account_debit_notes/${req.file.filename}`;
 
-    const updated = await AccountDebitNote.findByIdAndUpdate(req.params.id, update, { new: true });
+    const updated = await AccountDebitNote.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
     if (!updated) return res.status(404).json({ success: false, message: "Debit note not found" });
     const accountName = await getAccountNameById(updated.companyId, "account");
     await logActivity(req, "Updated", "Accounts", `Updated Debit Note ${updated.debit_note_no} for ${accountName}.`);

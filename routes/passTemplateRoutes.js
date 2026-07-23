@@ -179,7 +179,7 @@ const ensureReferenceTemplate = async () => {
                 categories: nextTemplate.categories,
                 logoPriority: nextTemplate.logoPriority,
             },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
     return template;
@@ -213,7 +213,7 @@ router.post('/', authMiddleware, async (req, res) => {
                 const updated = await PassTemplate.findByIdAndUpdate(
                     existing._id,
                     { ...payload, updatedBy: req.user?._id },
-                    { new: true, runValidators: true }
+                    { returnDocument: 'after', runValidators: true }
                 );
                 return res.json({ success: true, data: updated });
             }
@@ -230,7 +230,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
         const template = await PassTemplate.findByIdAndUpdate(
             req.params.id,
             { ...req.body, updatedBy: req.user?._id },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
         if (!template) return res.status(404).json({ success: false, message: 'Pass template not found' });
         res.json({ success: true, data: template });

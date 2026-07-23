@@ -110,7 +110,7 @@ router.patch('/buyers/:id/status', asyncRoute(async (req, res) => {
     const buyer = await InternationalBuyer.findByIdAndUpdate(
         req.params.id,
         { $set: { 'verification.adminApprovalStatus': status } },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     ).lean();
     if (!buyer) return res.status(404).json({ success: false, message: 'International buyer not found.' });
     res.json({ success: true, message: `Buyer status changed to ${status}.`, data: { status } });
@@ -418,7 +418,7 @@ router.post('/device-health/snapshot', asyncRoute(async (req, res) => {
                 lastReportedAt: new Date()
             }
         },
-        { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     ).lean();
     res.json({ success: true, data: snapshot });
 }));

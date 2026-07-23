@@ -190,7 +190,7 @@ exports.updateReminder = async (req, res) => {
             updateData.audioUrl = `/uploads/${req.file.filename}`;
         }
 
-        const reminder = await Reminder.findByIdAndUpdate(id, updateData, { new: true });
+        const reminder = await Reminder.findByIdAndUpdate(id, updateData, { returnDocument: 'after' });
         if (!reminder) return res.status(404).json({ success: false, message: 'Not found' });
 
         res.status(200).json({ success: true, data: reminder });
