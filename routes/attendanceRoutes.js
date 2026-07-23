@@ -11,6 +11,7 @@ const aiService = require('../services/aiDocumentVerificationService');
 const { getDirectory, registeredRows } = require('../services/attendanceDirectoryService');
 const AttendanceAudit = require('../models/AttendanceAudit');
 const AttendanceScanAttempt = require('../models/AttendanceScanAttempt');
+const AttendanceDeviceHealth = require('../models/AttendanceDeviceHealth');
 const User = require('../models/User');
 const PDFDocument = require('pdfkit');
 const BuyerRegistration = require('../models/BuyerRegistration');
@@ -324,6 +325,132 @@ router.get('/manual-search', asyncRoute(async (req, res) => {
     res.json({ success: true, data: items, days: context.days });
 }));
 
+router.get('/buyer-concierge/:buyerId', asyncRoute(async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.buyerId)) {
+        return res.status(400).json({ success: false, message: 'Invalid buyer ID.' });
+    }
+    const context = await getEventContext(req.query.eventId);
+    let buyer = await BuyerRegistration.findById(req.params.buyerId).lean();
+    let interests = [];
+    if (buyer) {
+        interests = [buyer.primaryProductInterest, ...(buyer.secondaryProductCategories || []), buyer.buyerIndustry, buyer.specificProductRequirements, buyer.natureOfBusiness];
+    } else {
+        buyer = await InternationalBuyer.findById(req.params.buyerId).lean();
+        if (buyer) interests = [...(buyer.productCategories || []), ...(buyer.natureOfBusiness || []), buyer.businessProfile?.keyProductsServices, ...(buyer.b2bInterest?.lookingFor || [])];
+    }
+    if (!buyer) return res.status(404).json({ success: false, message: 'Buyer not found.' });
+    const normalizeWords = values => new Set(values.filter(Boolean).flatMap(value => String(value).toLowerCase().split(/[^a-z0-9]+/)).filter(word => word.length > 2));
+    const buyerWords = normalizeWords(interests);
+    const [products, exhibitors, stalls] = await Promise.all([
+        StallProduct.find({ isActive: { $ne: false } }).lean(),
+        ExhibitorRegistration.find().select('exhibitorName registrationId exhibitorCategory industrySector natureOfBusiness companyLogo companyLogoUrl contact1').lean(),
+        Stall.find({ eventId: context.eventId, status: 'booked' }).select('stallNumber bookedBy').lean()
+    ]);
+    const productsByExhibitor = products.reduce((map, product) => {
+        const key = String(product.exhibitorId); (map[key] ||= []).push(product); return map;
+    }, {});
+    const stallByExhibitor = new Map(stalls.map(stall => [String(stall.bookedBy), stall.stallNumber]));
+    const recommendations = exhibitors.map(exhibitor => {
+        const companyProducts = productsByExhibitor[String(exhibitor._id)] || [];
+        const companyWords = normalizeWords([
+            exhibitor.exhibitorName, exhibitor.exhibitorCategory, exhibitor.industrySector, exhibitor.natureOfBusiness,
+            ...companyProducts.flatMap(product => [product.name, product.category, product.description, ...(product.tags || [])])
+        ]);
+        const matched = [...buyerWords].filter(word => companyWords.has(word));
+        const relevantProducts = companyProducts.map(product => {
+            const words = normalizeWords([product.name, product.category, product.description, ...(product.tags || [])]);
+            return { product, score: [...buyerWords].filter(word => words.has(word)).length };
+        }).filter(item => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 4).map(item => ({ id: item.product._id, name: item.product.name, category: item.product.category, image: item.product.images?.[0] || '' }));
+        const score = matched.length * 10 + relevantProducts.length * 4;
+        const stallNumber = stallByExhibitor.get(String(exhibitor._id)) || '';
+        return {
+            companyId: exhibitor._id, company: exhibitor.exhibitorName, registrationId: exhibitor.registrationId,
+            logo: exhibitor.companyLogoUrl || exhibitor.companyLogo || '', stallNumber, score,
+            matchPercent: Math.min(98, score ? 45 + score * 3 : 0), reasons: matched.slice(0, 6), products: relevantProducts,
+            navigation: stallNumber ? `Proceed to Stall ${stallNumber}. Show this recommendation at the help desk for floor directions.` : 'Stall allocation is not available yet. Please contact the exhibition help desk.'
+        };
+    }).filter(item => item.score > 0).sort((a, b) => b.score - a.score).slice(0, 8);
+    res.json({ success: true, data: { interests: interests.filter(Boolean), recommendations, event: context.event } });
+}));
+
+router.get('/companies/:companyId/timeline', asyncRoute(async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.companyId)) return res.status(400).json({ success: false, message: 'Invalid company ID.' });
+    const context = await getEventContext(req.query.eventId);
+    const company = await ExhibitorRegistration.findById(req.params.companyId).select('exhibitorName registrationId').lean();
+    if (!company) return res.status(404).json({ success: false, message: 'Company not found.' });
+    const records = await Attendance.find({ eventId: context.eventId, $or: [{ companyId: String(company._id) }, { registrationId: company.registrationId }] }).sort({ markedAt: 1 }).lean();
+    const timeline = records.map(record => ({
+        id: record._id, eventDay: record.eventDay, at: record.markedAt,
+        kind: record.attendanceKind === 'pass' ? 'member' : 'company',
+        title: record.attendanceKind === 'pass' ? `${record.name || 'Team member'} arrived` : 'Company arrived',
+        subtitle: record.attendanceKind === 'pass' ? `${record.passType || 'exhibitor'} pass • ${record.designation || company.exhibitorName}` : `${company.exhibitorName} checked in`,
+        passType: record.passType, source: record.source, markedByName: record.markedByName, photoUrl: record.photoUrl
+    }));
+    res.json({ success: true, data: { company: company.exhibitorName, firstArrival: timeline[0]?.at || null, lastActivity: timeline[timeline.length - 1]?.at || null, timeline } });
+}));
+
+router.get('/device-health', asyncRoute(async (req, res) => {
+    const started = Date.now();
+    await mongoose.connection.db.admin().ping();
+    const context = await getEventContext(req.query.eventId);
+    res.json({ success: true, data: { api: 'online', database: 'online', serverTime: new Date(), backendLatencyMs: Date.now() - started, eventId: context.eventId, eventName: context.event?.name || '' } });
+}));
+
+router.post('/device-health/snapshot', asyncRoute(async (req, res) => {
+    const local = req.body.local && typeof req.body.local === 'object' ? req.body.local : {};
+    const server = req.body.server && typeof req.body.server === 'object' ? req.body.server : {};
+    const lastSuccessfulScan = req.body.lastSuccessfulScan ? new Date(req.body.lastSuccessfulScan) : null;
+    const snapshot = await AttendanceDeviceHealth.findOneAndUpdate(
+        { userId: req.user.id },
+        {
+            $set: {
+                cameraAvailable: local.cameraAvailable === true,
+                cameraPermissionGranted: local.cameraPermissionGranted === true,
+                androidVersion: String(local.androidVersion || '').slice(0, 50),
+                sdkInt: Number.isFinite(Number(local.sdkInt)) ? Number(local.sdkInt) : null,
+                manufacturer: String(local.manufacturer || '').slice(0, 100),
+                model: String(local.model || '').slice(0, 100),
+                apiStatus: String(server.api || 'unknown').slice(0, 30),
+                databaseStatus: String(server.database || 'unknown').slice(0, 30),
+                roundTripMs: Number.isFinite(Number(req.body.roundTripMs)) ? Number(req.body.roundTripMs) : null,
+                backendLatencyMs: Number.isFinite(Number(server.backendLatencyMs)) ? Number(server.backendLatencyMs) : null,
+                lastSuccessfulScan: lastSuccessfulScan && !Number.isNaN(lastSuccessfulScan.getTime()) ? lastSuccessfulScan : null,
+                lastReportedAt: new Date()
+            }
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    res.json({ success: true, data: snapshot });
+}));
+
+router.get('/post-event-intelligence', asyncRoute(async (req, res) => {
+    const context = await getEventContext(req.query.eventId);
+    const [records, totals] = await Promise.all([
+        Attendance.find({ eventId: context.eventId, attendanceKind: { $ne: 'pass' } }).lean(),
+        registeredTotals()
+    ]);
+    const identities = record => record.subjectType === 'exhibitor' ? `exhibitor:${record.registrationId || record.companyId || record.subjectKey}` : record.subjectKey;
+    const unique = new Map();
+    records.forEach(record => { const key = identities(record); const current = unique.get(key) || { type: record.subjectType, days: new Set(), records: [] }; current.days.add(record.eventDay); current.records.push(record); unique.set(key, current); });
+    const byHour = records.reduce((acc, record) => { const hour = new Date(record.markedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: true }); acc[hour] = (acc[hour] || 0) + 1; return acc; }, {});
+    const peakHours = Object.entries(byHour).map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count).slice(0, 8);
+    const attended = type => [...unique.values()].filter(item => item.type === type).length;
+    const buyerRecords = records.filter(record => record.subjectType === 'buyer');
+    const buyerQuality = {
+        total: attended('buyer'),
+        international: new Set(buyerRecords.filter(record => record.subjectSubType === 'international-buyer').map(identities)).size,
+        returning: [...unique.values()].filter(item => item.type === 'buyer' && item.days.size > 1).length
+    };
+    res.json({ success: true, data: {
+        event: context.event, days: context.days,
+        overview: { registrations: totals.visitor + totals.buyer + totals.exhibitor, attended: unique.size, totalCheckIns: records.length, noShows: Math.max(0, totals.visitor + totals.buyer + totals.exhibitor - unique.size), returnVisitors: [...unique.values()].filter(item => item.days.size > 1).length },
+        peakHours,
+        dayWise: context.days.map(day => ({ day, checkIns: records.filter(record => record.eventDay === day).length, unique: new Set(records.filter(record => record.eventDay === day).map(identities)).size })),
+        participation: { visitors: { registered: totals.visitor, attended: attended('visitor') }, buyers: { registered: totals.buyer, attended: attended('buyer') }, exhibitors: { registered: totals.exhibitor, attended: attended('exhibitor') } },
+        buyerQuality
+    } });
+}));
+
 router.get('/insights', asyncRoute(async (req, res) => {
     const context = await getEventContext(req.query.eventId);
     const [rows, allAttendance, buyers, international, products] = await Promise.all([
@@ -430,13 +557,14 @@ router.get('/super-admin/operations/:userId', asyncRoute(async (req, res) => {
     const auditQuery = { eventId: context.eventId, performedBy: user._id };
     if (['created', 'corrected', 'removed', 'duplicate-scan'].includes(action)) auditQuery.action = action;
     if (day) { const start = new Date(`${day}T00:00:00+05:30`), end = new Date(start); end.setDate(end.getDate() + 1); auditQuery.createdAt = { $gte: start, $lt: end }; }
-    const [records, attempts, audits, allRecords, allAttempts, allAudits] = await Promise.all([
+    const [records, attempts, audits, allRecords, allAttempts, allAudits, deviceHealth] = await Promise.all([
         Attendance.find(recordQuery).sort({ markedAt: -1 }).limit(500).lean(),
         AttendanceScanAttempt.find(scanQuery).sort({ createdAt: -1 }).limit(500).lean(),
         AttendanceAudit.find(auditQuery).sort({ createdAt: -1 }).limit(500).lean(),
         Attendance.find({ eventId: context.eventId, markedBy: user._id }).lean(),
         AttendanceScanAttempt.find({ eventId: context.eventId, attemptedBy: user._id }).lean(),
-        AttendanceAudit.find({ eventId: context.eventId, performedBy: user._id }).lean()
+        AttendanceAudit.find({ eventId: context.eventId, performedBy: user._id }).lean(),
+        AttendanceDeviceHealth.findOne({ userId: user._id }).lean()
     ]);
     const dayWise = context.days.map(eventDay => ({
         day: eventDay,
@@ -450,7 +578,7 @@ router.get('/super-admin/operations/:userId', asyncRoute(async (req, res) => {
     const origin = requestOrigin(req).replace(/\/$/, ''); const profile = String(user.profileImage || '');
     res.json({
         success: true, data: {
-            user: { ...user, profileImage: profile && !/^https?:\/\//i.test(profile) ? `${origin}/${profile.replace(/^\//, '')}` : profile }, days: context.days, dayWise,
+            user: { ...user, profileImage: profile && !/^https?:\/\//i.test(profile) ? `${origin}/${profile.replace(/^\//, '')}` : profile }, deviceHealth, days: context.days, dayWise,
             summary: { marked: allRecords.length, qr: allRecords.filter(i => i.source === 'qr').length, manual: allRecords.filter(i => i.source === 'manual').length, scans: allAttempts.length, duplicates: allAttempts.filter(i => i.result === 'duplicate').length, invalid: allAttempts.filter(i => i.result === 'invalid').length, corrections: allAudits.filter(i => i.action === 'corrected').length, removals: allAudits.filter(i => i.action === 'removed').length },
             filtered: {
                 records: action ? [] : records,
