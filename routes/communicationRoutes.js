@@ -199,6 +199,25 @@ router.get('/conversations/:id/messages', asyncRoute(async (req, res) => {
     const before = req.query.before ? new Date(req.query.before) : null;
     const query = { conversationId: conversation._id, ...(before && !Number.isNaN(before.getTime()) ? { createdAt: { $lt: before } } : {}) };
     const messages = await Message.find(query).select('-deletedText').sort({ createdAt: -1 }).limit(limit).lean();
+    const now = new Date();
+    const deliveredIds = messages
+        .filter(message => String(message.senderId) !== userId(req) && !message.deliveredAt)
+        .map(message => message._id);
+    if (deliveredIds.length) {
+        await Message.updateMany(
+            { _id: { $in: deliveredIds }, deliveredAt: null },
+            { $set: { deliveredAt: now } }
+        );
+        for (const message of messages) {
+            if (deliveredIds.some(id => String(id) === String(message._id))) message.deliveredAt = now;
+        }
+        emitToUsers(req, conversation, 'message:delivered', {
+            conversationId: conversation._id,
+            messageIds: deliveredIds,
+            recipientId: userId(req),
+            deliveredAt: now
+        });
+    }
     res.json({ success: true, data: messages.reverse().map(message => ({
         ...message, isMine: String(message.senderId) === userId(req)
     })) });
@@ -262,7 +281,7 @@ router.patch('/conversations/:id/read', asyncRoute(async (req, res) => {
     const me = await currentUser(req);
     const unreadQuery = { conversationId: conversation._id, senderId: { $ne: me._id }, readAt: null };
     const now = new Date();
-    await Message.updateMany(unreadQuery, { $set: { readAt: now } });
+    await Message.updateMany(unreadQuery, { $set: { readAt: now, deliveredAt: now } });
     if (isSuperAdmin(me)) conversation.superAdminUnread = 0;
     else conversation.employeeUnread = 0;
     await conversation.save();

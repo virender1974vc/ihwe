@@ -18,7 +18,7 @@ const communicationMessageSchema = new mongoose.Schema({
     text: { type: String, trim: true, maxlength: 10000, default: '' },
     attachments: { type: [attachmentSchema], default: [] },
     replyTo: { type: mongoose.Schema.Types.ObjectId, ref: 'CommunicationMessage', default: null },
-    deliveredAt: { type: Date, default: Date.now },
+    deliveredAt: { type: Date, default: null },
     readAt: { type: Date, default: null },
     editedAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },

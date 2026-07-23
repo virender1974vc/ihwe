@@ -533,6 +533,32 @@ communicationIo.on('connection', socket => {
   if (!mongoose.Types.ObjectId.isValid(id)) return socket.disconnect(true);
   socket.join(`user:${id}`);
   socket.broadcast.emit('presence:changed', { userId: id, online: true, at: new Date() });
+  socket.on('message:delivered', async payload => {
+    try {
+      const CommunicationMessage = require('./models/CommunicationMessage');
+      const CommunicationConversation = require('./models/CommunicationConversation');
+      const messageId = String(payload?.messageId || '');
+      if (!mongoose.Types.ObjectId.isValid(messageId)) return;
+      const message = await CommunicationMessage.findById(messageId);
+      if (!message || String(message.senderId) === id) return;
+      const conversation = await CommunicationConversation.findById(message.conversationId).lean();
+      if (!conversation || ![String(conversation.superAdminId), String(conversation.employeeId)].includes(id)) return;
+      if (!message.deliveredAt) {
+        message.deliveredAt = new Date();
+        await message.save();
+      }
+      const event = {
+        conversationId: conversation._id,
+        messageIds: [message._id],
+        recipientId: id,
+        deliveredAt: message.deliveredAt
+      };
+      communicationIo.to(`user:${conversation.superAdminId}`).emit('message:delivered', event);
+      communicationIo.to(`user:${conversation.employeeId}`).emit('message:delivered', event);
+    } catch (error) {
+      console.error('Communication message delivery acknowledgement failed:', error.message);
+    }
+  });
   socket.on('call:signal', async payload => {
     try {
       const CommunicationCall = require('./models/CommunicationCall');

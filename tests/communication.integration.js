@@ -138,6 +138,7 @@ async function main() {
     text: 'Integration test message',
   });
   assert.equal(result.status, 201, 'Employee message should be accepted.');
+  assert.equal(result.json.data.deliveredAt, null, 'A new message must remain sent until the recipient acknowledges delivery.');
   const messageId = result.json.data._id;
 
   result = await request(baseUrl, employee, 'POST', `/conversations/${conversationId}/messages`, {
@@ -145,8 +146,15 @@ async function main() {
   });
   assert.equal(result.status, 403, 'Forged attachment metadata must be rejected.');
 
+  result = await request(baseUrl, admin, 'GET', `/conversations/${conversationId}/messages`);
+  assert.equal(result.status, 200, 'Recipient should fetch conversation messages.');
+  const deliveredMessage = result.json.data.find(message => message._id === messageId);
+  assert.ok(deliveredMessage?.deliveredAt, 'Recipient fetch must acknowledge message delivery.');
+
   result = await request(baseUrl, admin, 'PATCH', `/conversations/${conversationId}/read`, {});
   assert.equal(result.status, 200, 'Administrator should mark received messages read.');
+  const storedReadMessage = await Message.findById(messageId).lean();
+  assert.ok(storedReadMessage?.readAt, 'Read acknowledgement must be persisted.');
 
   result = await request(baseUrl, employee, 'PATCH', `/messages/${messageId}`, {
     text: 'Integration test message edited',
