@@ -670,7 +670,7 @@ class ExhibitorRegistrationService {
                 const bookedStall = await Stall.findOneAndUpdate(
                     { _id: data.participation.stallNo, status: { $ne: 'booked' } },
                     { status: 'booked', bookedBy: saved._id },
-                    { new: true }
+                    { returnDocument: 'after' }
                 );
                 if (!bookedStall) {
                     throw new Error('This stall has just been booked by someone else. Please choose a different stall and try again.');
@@ -755,7 +755,7 @@ class ExhibitorRegistrationService {
                 const bookedStall = await Stall.findOneAndUpdate(
                     { _id: data.participation.stallNo, status: { $ne: 'booked' } },
                     { status: 'booked', bookedBy: id },
-                    { new: true }
+                    { returnDocument: 'after' }
                 );
                 if (!bookedStall) {
                     throw new Error('The selected stall has already been booked by another registration. Please choose a different stall.');
@@ -1163,7 +1163,7 @@ class ExhibitorRegistrationService {
             const bookedStall = await Stall.findOneAndUpdate(
                 { _id: registration.participation.stallNo, status: { $ne: 'booked' } },
                 { status: 'booked', bookedBy: registration._id },
-                { new: true }
+                { returnDocument: 'after' }
             );
             if (!bookedStall) {
                 registration.stallConflict = true;

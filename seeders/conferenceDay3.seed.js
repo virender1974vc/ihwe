@@ -285,7 +285,7 @@ async function seed() {
     await ConferenceDay.findOneAndUpdate(
       { dayNumber: 3 },
       day3Data,
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     console.log("🔄 Day 3 updated successfully");

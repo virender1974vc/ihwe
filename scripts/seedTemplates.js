@@ -44,7 +44,7 @@ const defaultTemplates = [
             <p>May Mother Ganga bless you with health, prosperity, and well-being.</p>
             <p>With warm regards,<br/><strong>Team IHWE | Namo Gange Trust®</strong></p>
         `,
-        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Visitor registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 8, 9 & 10, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email. Please present it at the entrance.\n\nWe look forward to welcoming you!\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
+        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Visitor registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 12, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email. Please present it at the entrance.\n\nWe look forward to welcoming you!\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
     },
     {
         formType: 'corporate-visitor',
@@ -84,7 +84,7 @@ const defaultTemplates = [
             <p>May Mother Ganga bless you with health, prosperity, and well-being.</p>
             <p>With warm regards,<br/><strong>Team IHWE | Namo Gange Trust®</strong></p>
         `,
-        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Corporate Visitor registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 8, 9 & 10, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email. Please present it at the entrance.\n\nWe look forward to welcoming you!\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
+        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Corporate Visitor registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 12, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email. Please present it at the entrance.\n\nWe look forward to welcoming you!\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
     },
     {
         formType: 'health-camp-visitor',
@@ -134,7 +134,7 @@ const defaultTemplates = [
             <p>May Mother Ganga bless you with health, prosperity, and well-being.</p>
             <p>With warm regards,<br/><strong>Team IHWE | Namo Gange Trust®</strong></p>
         `,
-        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Buyer registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\nCompany: [[COMPANY]]\nCategory: [[CATEGORY]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 8, 9 & 10, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email.\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
+        whatsappBody: 'Hello [[NAME]]! 👋\n\nYour Buyer registration for the 9th IHWE 2026 is CONFIRMED! ✅\n\nRegistration ID: [[REG_ID]]\nCompany: [[COMPANY]]\nCategory: [[CATEGORY]]\n📅 Date: 21–23 August 2026\n📍 Venue: Hall 12, Pragati Maidan, New Delhi\n\nYour entry QR code has been sent to your email.\n\nBest Regards,\nTeam IHWE | Namo Gange Trust®'
     },
     {
         formType: 'exhibitor-registration',

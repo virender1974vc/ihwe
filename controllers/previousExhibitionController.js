@@ -142,7 +142,7 @@ exports.update = async (req, res) => {
         const data = await PreviousExhibition.findByIdAndUpdate(
             req.params.id,
             { ...payload, updatedBy: await auditUser(req) },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
         if (!data) {
             return res.status(404).json({ success: false, message: 'Previous exhibition not found.' });
