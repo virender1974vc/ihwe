@@ -129,7 +129,25 @@ const getAuthorizedCompanyIds = async (user) => {
 const lookupCompanyOrExhibitor = async (id) => {
   if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
   const company = await Company.findById(id).lean();
-  if (company) return { ...company, _source: "company" };
+  if (company) {
+    const exhibitor = await ExhibitorRegistration.findOne({
+      $or: [
+        { clientId: company._id },
+        ...(company.exhibitorRegistrationId ? [{ _id: company.exhibitorRegistrationId }] : [])
+      ]
+    }).lean();
+    if (exhibitor) {
+      return {
+        ...company,
+        ...exhibitor,
+        companyName: company.companyName || exhibitor.exhibitorName,
+        companyAddress: company.companyAddress || company.address || exhibitor.address,
+        contacts: company.contacts || [],
+        _source: "linkedExhibitorRegistration"
+      };
+    }
+    return { ...company, _source: "company" };
+  }
 
   const exhibitor = await ExhibitorRegistration.findById(id).lean();
   if (exhibitor) return { ...exhibitor, _source: "exhibitorRegistration" };
