@@ -32,6 +32,8 @@ const PerformaInvoiceSchema = new mongoose.Schema(
     event_gst_no: { type: String, default: "" },
     consignee_name: { type: String, required: true },
     consignee_addr: { type: String, required: true },
+    consignee_person: { type: String, default: "" },
+    consignee_phone: { type: String, default: "" },
     country: { type: String, required: true },
     state: { type: String, required: true },
     city: { type: String, required: true },

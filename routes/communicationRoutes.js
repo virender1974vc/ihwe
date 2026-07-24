@@ -218,9 +218,11 @@ router.get('/conversations/:id/messages', asyncRoute(async (req, res) => {
             deliveredAt: now
         });
     }
-    res.json({ success: true, data: messages.reverse().map(message => ({
-        ...message, isMine: String(message.senderId) === userId(req)
-    })) });
+    res.json({
+        success: true, data: messages.reverse().map(message => ({
+            ...message, isMine: String(message.senderId) === userId(req)
+        }))
+    });
 }));
 
 router.post('/conversations/:id/messages', asyncRoute(async (req, res) => {
@@ -268,11 +270,13 @@ router.post('/attachments', upload.single('file'), asyncRoute(async (req, res) =
         originalName: req.file.originalname, mimeType: req.file.mimetype,
         mediaType: mediaType(req.file.mimetype), bytes: req.file.size
     });
-    res.status(201).json({ success: true, data: {
-        _id: asset._id,
-        url: result.secure_url, publicId: result.public_id, originalName: req.file.originalname,
-        mimeType: req.file.mimetype, mediaType: mediaType(req.file.mimetype), bytes: req.file.size
-    } });
+    res.status(201).json({
+        success: true, data: {
+            _id: asset._id,
+            url: result.secure_url, publicId: result.public_id, originalName: req.file.originalname,
+            mimeType: req.file.mimetype, mediaType: mediaType(req.file.mimetype), bytes: req.file.size
+        }
+    });
 }));
 
 router.patch('/conversations/:id/read', asyncRoute(async (req, res) => {
@@ -366,12 +370,14 @@ router.patch('/availability', asyncRoute(async (req, res) => {
     }
     const presence = await Presence.findOneAndUpdate(
         { userId: userId(req) },
-        { $set: {
-            availability,
-            aiAssistantEnabled: req.body.aiAssistantEnabled === true,
-            statusMessage: String(req.body.statusMessage || '').trim().slice(0, 250),
-            lastSeenAt: new Date()
-        } },
+        {
+            $set: {
+                availability,
+                aiAssistantEnabled: req.body.aiAssistantEnabled === true,
+                statusMessage: String(req.body.statusMessage || '').trim().slice(0, 250),
+                lastSeenAt: new Date()
+            }
+        },
         { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     ).lean();
     req.app.get('communicationIo')?.emit('availability:changed', presence);
@@ -438,6 +444,10 @@ router.patch('/tasks/:id/status', asyncRoute(async (req, res) => {
     const status = String(req.body.status || '');
     const allowed = admin ? ['assigned', 'cancelled', 'completed'] : ['accepted', 'in-progress', 'completed'];
     if (!allowed.includes(status)) return res.status(400).json({ success: false, message: 'Invalid task status transition.' });
+    if (!admin && status === 'completed'
+        && (!Array.isArray(req.body.proofAttachments) || !req.body.proofAttachments.length)) {
+        return res.status(400).json({ success: false, message: 'At least one proof photo or document is required to complete the task.' });
+    }
     const before = task.toObject();
     task.status = status;
     if (status === 'completed') task.completedAt = new Date();
@@ -499,13 +509,15 @@ router.get('/analytics', asyncRoute(async (req, res) => {
         Task.aggregate([{ $match: { assignedBy: new mongoose.Types.ObjectId(userId(req)) } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
         Message.countDocuments({ conversationId: { $in: ids }, aiGenerated: true })
     ]);
-    res.json({ success: true, data: {
-        conversations: conversations.length,
-        unread: conversations.reduce((sum, item) => sum + item.superAdminUnread, 0),
-        messagesByRole: Object.fromEntries(messageCounts.map(item => [item._id, item.count])),
-        tasksByStatus: Object.fromEntries(taskCounts.map(item => [item._id, item.count])),
-        aiReplies: aiCount
-    } });
+    res.json({
+        success: true, data: {
+            conversations: conversations.length,
+            unread: conversations.reduce((sum, item) => sum + item.superAdminUnread, 0),
+            messagesByRole: Object.fromEntries(messageCounts.map(item => [item._id, item.count])),
+            tasksByStatus: Object.fromEntries(taskCounts.map(item => [item._id, item.count])),
+            aiReplies: aiCount
+        }
+    });
 }));
 
 router.get('/calls/ice-config', asyncRoute(async (_req, res) => {
@@ -517,11 +529,13 @@ router.get('/calls/ice-config', asyncRoute(async (_req, res) => {
             credential: process.env.WEBRTC_TURN_CREDENTIAL
         });
     }
-    res.json({ success: true, data: {
-        iceServers,
-        turnConfigured: iceServers.length > 1,
-        warning: iceServers.length > 1 ? '' : 'TURN is not configured; calls may fail across restrictive mobile networks.'
-    } });
+    res.json({
+        success: true, data: {
+            iceServers,
+            turnConfigured: iceServers.length > 1,
+            warning: iceServers.length > 1 ? '' : 'TURN is not configured; calls may fail across restrictive mobile networks.'
+        }
+    });
 }));
 
 router.get('/calls', asyncRoute(async (req, res) => {
@@ -531,9 +545,11 @@ router.get('/calls', asyncRoute(async (req, res) => {
         .populate('callerId', 'username fullName profileImage')
         .populate('calleeId', 'username fullName profileImage')
         .sort({ createdAt: -1 }).limit(200).lean();
-    res.json({ success: true, data: calls.map(call => ({
-        ...call, isCaller: String(call.callerId?._id || call.callerId) === userId(req)
-    })) });
+    res.json({
+        success: true, data: calls.map(call => ({
+            ...call, isCaller: String(call.callerId?._id || call.callerId) === userId(req)
+        }))
+    });
 }));
 
 router.post('/calls', asyncRoute(async (req, res) => {

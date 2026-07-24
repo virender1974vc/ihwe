@@ -339,12 +339,17 @@ const getEstimateById = async (req, res) => {
 
     if (estimate.companyId) {
       let company = await Company.findById(estimate.companyId).lean();
-      if (!company) {
-        company = await ExhibitorRegistration.findById(estimate.companyId).lean();
+      let exhibitor = null;
+      if (company?.exhibitorRegistrationId) {
+        exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId).lean();
+      } else {
+        exhibitor = await ExhibitorRegistration.findById(estimate.companyId).lean();
+        if (!company && exhibitor?.clientId) {
+          company = await Company.findById(exhibitor.clientId).lean();
+        }
       }
-      if (company) {
-        estimate.exhibitor = company;
-      }
+      if (company) estimate.company = company;
+      if (exhibitor) estimate.exhibitor = exhibitor;
     }
 
     res.status(200).json(estimate);

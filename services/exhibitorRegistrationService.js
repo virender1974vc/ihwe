@@ -130,6 +130,12 @@ class ExhibitorRegistrationService {
         if (query.$or.length === 0) return regs;
 
         const allRelated = await ExhibitorRegistration.find(query).sort({ updatedAt: -1 }).lean();
+        const Company = require('../models/Company');
+        const clientIds = [...new Set(regs.map((reg) => String(reg.clientId || '')).filter(Boolean))];
+        const linkedCompanies = clientIds.length
+            ? await Company.find({ _id: { $in: clientIds } }).select('contacts').lean()
+            : [];
+        const companyById = new Map(linkedCompanies.map((company) => [String(company._id), company]));
         const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'natureOfBusiness', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
 
         const results = regs.map(r => {
@@ -200,6 +206,43 @@ class ExhibitorRegistrationService {
             if (!doc.contact2?.firstName && masterData.contact2) {
                 doc.contact2 = masterData.contact2;
                 doc._isEnriched = true;
+            }
+
+            const hasContactDetails = (contact) => Boolean(
+                contact?.firstName || contact?.lastName || contact?.name || contact?.mobile || contact?.email
+            );
+            if (!hasContactDetails(doc.contact1)) {
+                const primaryTeamMember = doc.teamMembers?.find((member) =>
+                    member.isPrimary || /primary contact/i.test(member.roleAtExhibition || '')
+                );
+                const linkedCompany = companyById.get(String(doc.clientId || ''));
+                const companyContact =
+                    linkedCompany?.contacts?.find((contact) => contact.isPrimary)
+                    || linkedCompany?.contacts?.[0];
+
+                if (primaryTeamMember) {
+                    doc.contact1 = {
+                        title: '',
+                        firstName: primaryTeamMember.name || '',
+                        lastName: '',
+                        designation: primaryTeamMember.designation || '',
+                        email: primaryTeamMember.email || '',
+                        mobile: primaryTeamMember.mobile || '',
+                        photoUrl: primaryTeamMember.photoUrl || '',
+                    };
+                    doc._isEnriched = true;
+                } else if (companyContact) {
+                    doc.contact1 = {
+                        title: companyContact.title || '',
+                        firstName: companyContact.firstName || companyContact.name || '',
+                        lastName: companyContact.surname || '',
+                        designation: companyContact.designation || '',
+                        email: companyContact.email || '',
+                        mobile: companyContact.mobile || '',
+                        photoUrl: companyContact.photoUrl || companyContact.photo || '',
+                    };
+                    doc._isEnriched = true;
+                }
             }
             return doc;
         });
@@ -625,11 +668,19 @@ class ExhibitorRegistrationService {
                     supply_date: new Date().toISOString().split('T')[0],
                     consignee_name: data.exhibitorName || 'Unknown Company',
                     consignee_addr: data.address || 'N/A',
+                    consignee_person: [
+                        data.contact1?.title,
+                        data.contact1?.firstName,
+                        data.contact1?.lastName
+                    ].filter(Boolean).join(' '),
+                    consignee_phone: data.contact1?.mobile || '',
                     country: data.country || 'N/A',
                     state: data.state || 'N/A',
                     city: data.city || 'N/A',
                     pincode: data.pincode || 0,
-                    finalAmount: parsedFinance?.netPayable || 0,
+                    // Proforma/tax-invoice value is before TDS. TDS affects the cash
+                    // collected, not the taxable document value.
+                    finalAmount: parsedParticipation?.total || 0,
                     added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
                     items: []
                 };
@@ -637,7 +688,13 @@ class ExhibitorRegistrationService {
                 if (parsedParticipation && parsedParticipation.stallFor) {
                     const rate = Number(parsedParticipation.rate) || 0;
                     const size = Number(parsedParticipation.stallSize) || 0;
-                    const baseAmount = rate * size;
+                    const grossAmount = Number(parsedFinance?.grossAmount) || (rate * size);
+                    const taxableAmount = Number(parsedFinance?.subtotal) || Number(parsedParticipation.amount) || grossAmount;
+                    const discountPercent = grossAmount > 0
+                        ? Math.max(0, Math.min(100, ((grossAmount - taxableAmount) / grossAmount) * 100))
+                        : 0;
+                    const invoiceTotal = Number(parsedParticipation.total)
+                        || (taxableAmount + (Number(parsedFinance?.gstAmount) || 0));
 
                     estData.items.push({
                         description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
@@ -646,13 +703,13 @@ class ExhibitorRegistrationService {
                         size: size,
                         unit: "Sqm",
                         rate: rate,
-                        amount: baseAmount,
-                        disc: Number(parsedFinance?.discountAmount) || 0,
+                        amount: grossAmount,
+                        disc: Number(discountPercent.toFixed(4)),
                         tax: Number(parsedFinance?.gstAmount) || 0,
                         gstRate: "18%",
                         cgst_per: "9",
                         igst_per: "9",
-                        finalAmount: Number(parsedFinance?.netPayable) || 0,
+                        finalAmount: invoiceTotal,
                     });
                 }
 

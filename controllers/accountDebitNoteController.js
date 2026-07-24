@@ -292,7 +292,17 @@ const enrichWithSettlementStatus = async (notes) => {
 // GET ALL (optionally filtered by companyId) — enriched with real settlement status
 const getAccountDebitNotes = async (req, res) => {
   try {
-    const filter = req.query.companyId ? { companyId: req.query.companyId } : {};
+    let filter = {};
+    if (req.query.companyId) {
+      const requestedId = req.query.companyId;
+      const { company, exhibitor } = await resolveCompanyAndExhibitor(requestedId);
+      const linkedIds = [
+        requestedId,
+        company?._id?.toString(),
+        exhibitor?._id?.toString(),
+      ].filter(Boolean);
+      filter = { companyId: { $in: [...new Set(linkedIds)] } };
+    }
     const notes = await AccountDebitNote.find(filter).sort({ added: -1 }).lean();
     const enriched = await enrichWithSettlementStatus(notes);
 
