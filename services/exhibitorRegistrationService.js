@@ -629,7 +629,9 @@ class ExhibitorRegistrationService {
                     state: data.state || 'N/A',
                     city: data.city || 'N/A',
                     pincode: data.pincode || 0,
-                    finalAmount: parsedFinance?.netPayable || 0,
+                    // Proforma/tax-invoice value is before TDS. TDS affects the cash
+                    // collected, not the taxable document value.
+                    finalAmount: parsedParticipation?.total || 0,
                     added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
                     items: []
                 };
@@ -637,7 +639,13 @@ class ExhibitorRegistrationService {
                 if (parsedParticipation && parsedParticipation.stallFor) {
                     const rate = Number(parsedParticipation.rate) || 0;
                     const size = Number(parsedParticipation.stallSize) || 0;
-                    const baseAmount = rate * size;
+                    const grossAmount = Number(parsedFinance?.grossAmount) || (rate * size);
+                    const taxableAmount = Number(parsedFinance?.subtotal) || Number(parsedParticipation.amount) || grossAmount;
+                    const discountPercent = grossAmount > 0
+                        ? Math.max(0, Math.min(100, ((grossAmount - taxableAmount) / grossAmount) * 100))
+                        : 0;
+                    const invoiceTotal = Number(parsedParticipation.total)
+                        || (taxableAmount + (Number(parsedFinance?.gstAmount) || 0));
 
                     estData.items.push({
                         description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
@@ -646,13 +654,13 @@ class ExhibitorRegistrationService {
                         size: size,
                         unit: "Sqm",
                         rate: rate,
-                        amount: baseAmount,
-                        disc: Number(parsedFinance?.discountAmount) || 0,
+                        amount: grossAmount,
+                        disc: Number(discountPercent.toFixed(4)),
                         tax: Number(parsedFinance?.gstAmount) || 0,
                         gstRate: "18%",
                         cgst_per: "9",
                         igst_per: "9",
-                        finalAmount: Number(parsedFinance?.netPayable) || 0,
+                        finalAmount: invoiceTotal,
                     });
                 }
 

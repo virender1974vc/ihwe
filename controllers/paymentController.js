@@ -191,6 +191,27 @@ const resolveReceiptEvent = async (payment, contact, docData) => {
   return normalizeReceiptEvent(eventDoc);
 };
 
+const getRelatedPaymentDocumentIds = async (docData, payment) => {
+  const ids = new Set([String(payment.invoice_id || "")].filter(Boolean));
+  if (!docData) return [...ids];
+
+  if (docData.invoice_no) {
+    ids.add(String(docData._id));
+    if (docData.source_estimate_id) ids.add(String(docData.source_estimate_id));
+  } else if (docData.est_no) {
+    ids.add(String(docData._id));
+    const linkedInvoices = await Invoice.find({
+      companyId: String(docData.companyId),
+      $or: [
+        { source_estimate_id: String(docData._id) },
+        { estimate_no: docData.est_no },
+      ],
+    }).select("_id").lean();
+    linkedInvoices.forEach((invoice) => ids.add(String(invoice._id)));
+  }
+  return [...ids];
+};
+
 const generateAccountPaymentReceipt = async (payment) => {
   const docData = await resolvePaymentDocument(payment);
   const contact = await getReceiptContact(payment);
@@ -202,8 +223,9 @@ const generateAccountPaymentReceipt = async (payment) => {
   const unitRate = getDocumentUnitRate(docData);
   const receivedAmount = parseAmount(payment.amount_text);
   const tdsAmount = parseAmount(payment.tds_text);
-  const relatedPayments = payment.invoice_id
-    ? await Payment.find({ invoice_id: payment.invoice_id }).sort({ added: 1 }).lean()
+  const relatedDocumentIds = await getRelatedPaymentDocumentIds(docData, payment);
+  const relatedPayments = relatedDocumentIds.length
+    ? await Payment.find({ invoice_id: { $in: relatedDocumentIds } }).sort({ added: 1 }).lean()
     : [payment];
   const currentIndex = Math.max(0, relatedPayments.findIndex((p) => String(p._id) === String(payment._id)));
   const paymentsUpToCurrent = relatedPayments.slice(0, currentIndex + 1);
@@ -212,7 +234,7 @@ const generateAccountPaymentReceipt = async (payment) => {
   const taxableAmount = invoiceAmount > 0 ? Math.round((invoiceAmount / 1.18) * 100) / 100 : 0;
   const gstAmount = Math.max(0, Math.round((invoiceAmount - taxableAmount) * 100) / 100);
   const netPayable = Math.max(0, invoiceAmount - cumulativeTds);
-  const balanceAmount = Math.max(0, invoiceAmount - cumulativeReceived);
+  const balanceAmount = Math.max(0, invoiceAmount - cumulativeReceived - cumulativeTds);
   const [firstName, ...lastNameParts] = String(contact.name || "Contact").trim().split(/\s+/);
 
   const paymentMode = payment.payment_mode || "manual";
@@ -343,6 +365,62 @@ const resolvePaymentAccount = async (payment) => {
   };
 };
 
+const syncExhibitorFromAccountPayments = async (companyId) => {
+  if (!companyId) return;
+
+  const Company = require("../models/Company");
+  let company = mongoose.Types.ObjectId.isValid(companyId)
+    ? await Company.findById(companyId).lean()
+    : null;
+  let exhibitor = mongoose.Types.ObjectId.isValid(companyId)
+    ? await ExhibitorRegistration.findById(companyId).select("+password")
+    : null;
+
+  if (!exhibitor && company?.exhibitorRegistrationId) {
+    exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId).select("+password");
+  }
+  if (!company && exhibitor?.clientId && mongoose.Types.ObjectId.isValid(exhibitor.clientId)) {
+    company = await Company.findById(exhibitor.clientId).lean();
+  }
+  if (!exhibitor) return;
+
+  const linkedIds = [...new Set([
+    String(companyId),
+    company?._id?.toString(),
+    exhibitor._id.toString(),
+  ].filter(Boolean))];
+  const accountPayments = await Payment.find({ companyId: { $in: linkedIds } }).sort({ added: 1 }).lean();
+  const nonAccountHistory = (exhibitor.paymentHistory || []).filter(
+    (entry) => !entry.accountPaymentId
+  );
+  const syncedHistory = accountPayments.map((payment) => ({
+    accountPaymentId: String(payment._id),
+    amount: Number(payment.amount_text) || 0,
+    paymentType: payment.pymnt_type || "invoice",
+    paymentMode: "manual",
+    method: payment.payment_mode || "Manual",
+    transactionId: payment.utr_no || payment.cheque_no || payment.receipt_no || "",
+    notes: `Account receipt ${payment.receipt_no || payment.ex_no || ""}`.trim(),
+    paidAt: payment.payment_date ? new Date(payment.payment_date) : payment.added,
+  }));
+  const paymentHistory = [...nonAccountHistory, ...syncedHistory];
+  const amountPaid = paymentHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+  const netPayable = Number(exhibitor.financeBreakdown?.netPayable)
+    || Math.max(0, Number(exhibitor.participation?.total || 0) - Number(exhibitor.financeBreakdown?.tdsAmount || 0));
+  const balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
+
+  exhibitor.paymentHistory = paymentHistory;
+  exhibitor.amountPaid = amountPaid;
+  exhibitor.balanceAmount = balanceAmount;
+  exhibitor.totalPayable = balanceAmount + Number(exhibitor.penaltyAmount || 0);
+  if (amountPaid > 0) {
+    exhibitor.status = balanceAmount <= 0 ? "paid" : "advance-paid";
+  } else if (["paid", "advance-paid"].includes(exhibitor.status)) {
+    exhibitor.status = "pending";
+  }
+  await exhibitor.save();
+};
+
 // ➤ Add a new payment
 const addPayment = async (req, res) => {
   try {
@@ -355,6 +433,7 @@ const addPayment = async (req, res) => {
     }
     const payment = new Payment(payload);
     await payment.save();
+    await syncExhibitorFromAccountPayments(payment.companyId);
     const { accountName } = await resolvePaymentAccount(payment);
     await logActivity(
       req,
@@ -412,7 +491,7 @@ const getAllPayments = async (req, res) => {
 
     const mongoose = require("mongoose");
     const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
-    const documentFields = "companyId invoice_no invoice_date supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
+    const documentFields = "companyId invoice_no invoice_date source_estimate_id estimate_no supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
     const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, documentFields).lean();
     const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, documentFields.replace("invoice_no invoice_date", "est_no")).lean();
     const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, documentFields.replace("invoice_no invoice_date", "est_no")).lean();
@@ -499,6 +578,7 @@ const getAllPayments = async (req, res) => {
       return {
         ...p,
         invoice_no: getDocumentNo(doc, p),
+        payment_group_id: String(doc?.source_estimate_id || doc?._id || p.invoice_id || ""),
         invoice_date: getDocumentDate(doc),
         invoice_amount: getDocumentAmount(doc, p),
         client_name: p.company_name || doc?.company_name || doc?.consignee_name || company?.companyName || "Unknown Client",
@@ -539,6 +619,7 @@ const getPaymentById = async (req, res) => {
 // ➤ Update payment
 const updatePayment = async (req, res) => {
   try {
+    const previousPayment = await Payment.findById(req.params.id).lean();
     const updatedPayment = await Payment.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -547,6 +628,10 @@ const updatePayment = async (req, res) => {
 
     if (!updatedPayment)
       return res.status(404).json({ message: "Payment not found" });
+    await syncExhibitorFromAccountPayments(updatedPayment.companyId);
+    if (previousPayment?.companyId && previousPayment.companyId !== updatedPayment.companyId) {
+      await syncExhibitorFromAccountPayments(previousPayment.companyId);
+    }
     const { accountName } = await resolvePaymentAccount(updatedPayment);
     await logActivity(
       req,
@@ -574,6 +659,7 @@ const deletePayment = async (req, res) => {
 
     if (!deletedPayment)
       return res.status(404).json({ message: "Payment not found" });
+    await syncExhibitorFromAccountPayments(deletedPayment.companyId);
     const { accountName } = await resolvePaymentAccount(deletedPayment);
     await logActivity(
       req,

@@ -372,8 +372,13 @@ const buildRevisedInvoiceData = (invoice, estimate) => ({
 
 const getInvoiceRevisionDependencies = async (invoice) => {
   const invoiceId = String(invoice._id);
+  const paymentDocumentIds = [
+    invoiceId,
+    invoice.source_estimate_id ? String(invoice.source_estimate_id) : "",
+  ].filter(Boolean);
   const [payments, creditNotes, debitNotes] = await Promise.all([
-    Payment.find({ invoice_id: invoiceId }).select("_id ex_no amount_text f_amount payment_date status").lean(),
+    Payment.find({ invoice_id: { $in: paymentDocumentIds } })
+      .select("_id ex_no invoice_id amount_text f_amount payment_date status").lean(),
     CreditNote.find({ companyId: String(invoice.companyId), est_no: invoice.estimate_no })
       .select("_id create_note_no status").lean(),
     DebitNote.find({

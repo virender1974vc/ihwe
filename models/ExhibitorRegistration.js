@@ -129,6 +129,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     registrationPdfUrl: String,
     receiptPdfUrl: String,
     paymentHistory: [{
+        accountPaymentId: String,
         amount: Number,
         paymentType: String,
         paymentMode: String,

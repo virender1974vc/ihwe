@@ -438,6 +438,10 @@ router.patch('/tasks/:id/status', asyncRoute(async (req, res) => {
     const status = String(req.body.status || '');
     const allowed = admin ? ['assigned', 'cancelled', 'completed'] : ['accepted', 'in-progress', 'completed'];
     if (!allowed.includes(status)) return res.status(400).json({ success: false, message: 'Invalid task status transition.' });
+    if (!admin && status === 'completed'
+        && (!Array.isArray(req.body.proofAttachments) || !req.body.proofAttachments.length)) {
+        return res.status(400).json({ success: false, message: 'At least one proof photo or document is required to complete the task.' });
+    }
     const before = task.toObject();
     task.status = status;
     if (status === 'completed') task.completedAt = new Date();

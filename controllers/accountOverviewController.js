@@ -165,6 +165,24 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
     // so payment-status and remaining-balance math below never double counts an
     // invoice that's already been adjusted by a credit note.
     const creditedByInvoiceId = getCreditedByInvoiceId(activeInvoices, creditNotes, debitNotes);
+    const paymentIdsForDocument = (doc) => {
+      const ids = new Set([String(doc.id)]);
+      if (doc.type === "Invoice") {
+        const invoice = invoices.find((item) => String(item._id) === String(doc.id));
+        if (invoice?.source_estimate_id) ids.add(String(invoice.source_estimate_id));
+      } else if (doc.type === "Proforma Invoice") {
+        const estimate = proformaInvoices.find((item) => String(item._id) === String(doc.id));
+        invoices.forEach((invoice) => {
+          if (
+            String(invoice.source_estimate_id || "") === String(doc.id)
+            || (estimate?.est_no && invoice.estimate_no === estimate.est_no)
+          ) {
+            ids.add(String(invoice._id));
+          }
+        });
+      }
+      return ids;
+    };
 
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
     let paidBreakdown = [];
@@ -224,7 +242,8 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
     } else {
       let unallocatedOnlinePaid = onlinePaidAmount;
       dueBreakdown.forEach(doc => {
-        const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
+        const relatedIds = paymentIdsForDocument(doc);
+        const docPayments = payments.filter((p) => relatedIds.has(String(p.invoice_id)));
         let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
         docPaid += creditedByInvoiceId[String(doc.id)] || 0;
 
@@ -343,7 +362,11 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
     recentDocs = recentDocs.map((doc) => {
       if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
         if (doc.cancelled) return doc;
-        const docPayments = payments.filter((p) => String(p.invoice_id) === String(doc.id));
+        const relatedIds = paymentIdsForDocument({
+          id: doc.id,
+          type: doc.documentType,
+        });
+        const docPayments = payments.filter((p) => relatedIds.has(String(p.invoice_id)));
         let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
         docPaid += creditedByInvoiceId[String(doc.id)] || 0;
 

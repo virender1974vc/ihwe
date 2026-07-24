@@ -96,7 +96,7 @@ class ExhibitorRegistrationController {
             }
             const savedRegistration = await exhibitorRegistrationService.addRegistration(req.body);
 
-            await logActivity(req, 'Created', 'Exhibitor Bookings', `New booking: ${savedRegistration.companyName} (${savedRegistration.registrationId})`);
+            await logActivity(req, 'Created', 'Exhibitor Bookings', `New booking: ${savedRegistration.exhibitorName} (${savedRegistration.registrationId})`);
 
             res.status(201).json({ success: true, data: savedRegistration });
         } catch (error) {
@@ -112,7 +112,7 @@ class ExhibitorRegistrationController {
             const updatedRegistration = await exhibitorRegistrationService.updateRegistration(req.params.id, req.body);
 
             if (updatedRegistration) {
-                await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.companyName} (${updatedRegistration.registrationId})`);
+                await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.exhibitorName} (${updatedRegistration.registrationId})`);
             }
 
             res.status(200).json({ success: true, data: updatedRegistration });
@@ -130,7 +130,7 @@ class ExhibitorRegistrationController {
             const result = await exhibitorRegistrationService.deleteRegistration(req.params.id);
 
             if (registration) {
-                await logActivity(req, 'Deleted', 'Exhibitor Bookings', `Deleted booking: ${registration.companyName} (${registration.registrationId})`);
+                await logActivity(req, 'Deleted', 'Exhibitor Bookings', `Deleted booking: ${registration.exhibitorName} (${registration.registrationId})`);
             }
 
             res.status(200).json({ success: true, message: 'Registration deleted successfully' });
