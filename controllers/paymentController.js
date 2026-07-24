@@ -104,8 +104,14 @@ const buildPaymentDetails = (payment) => {
 
 const getReceiptContact = async (payment) => {
   const companyId = payment.companyId;
-  const exhibitor = companyId ? await ExhibitorRegistration.findById(companyId).lean() : null;
   const company = companyId ? await Company.findById(companyId).lean() : null;
+  let exhibitor = companyId ? await ExhibitorRegistration.findOne({
+    $or: [
+      { _id: companyId },
+      { clientId: companyId },
+      ...(company?.exhibitorRegistrationId ? [{ _id: company.exhibitorRegistrationId }] : [])
+    ]
+  }).lean() : null;
 
   let email = "";
   let mobile = "";
@@ -122,10 +128,13 @@ const getReceiptContact = async (payment) => {
 
   if (exhibitor) {
     const contact1 = exhibitor.contact1 || {};
-    email = contact1.email || "";
-    mobile = contact1.whatsapp || contact1.mobile || "";
-    name = contact1.name || `${contact1.firstName || ""} ${contact1.lastName || ""}`.trim() || exhibitor.companyName || "Contact";
-    designation = contact1.designation || "";
+    const primaryMember = exhibitor.teamMembers?.find((member) =>
+      member?.isPrimary || /primary contact/i.test(member?.roleAtExhibition || "")
+    ) || {};
+    email = primaryMember.email || contact1.email || "";
+    mobile = primaryMember.mobile || contact1.whatsapp || contact1.mobile || "";
+    name = primaryMember.name || contact1.name || `${contact1.firstName || ""} ${contact1.lastName || ""}`.trim() || exhibitor.companyName || "Contact";
+    designation = primaryMember.designation || primaryMember.roleAtExhibition || contact1.designation || "";
     companyName = exhibitor.exhibitorName || exhibitor.companyName || exhibitor.companyFirmName || companyName;
     address = exhibitor.address || "";
     city = exhibitor.city || "";
@@ -632,11 +641,32 @@ const getAllPayments = async (req, res) => {
 // ➤ Get a single payment by ID
 const getPaymentById = async (req, res) => {
   try {
-    const payment = await Payment.findById(req.params.id);
+    const payment = await Payment.findById(req.params.id).lean();
 
     if (!payment) return res.status(404).json({ message: "Payment not found" });
 
-    res.status(200).json(payment);
+    const contact = await getReceiptContact(payment);
+    res.status(200).json({
+      ...payment,
+      company: {
+        companyName: contact.companyName,
+        address: contact.address,
+        city: contact.city,
+        state: contact.state,
+        country: contact.country,
+        pincode: contact.pincode,
+        gstNo: contact.gstNo,
+      },
+      exhibitor: contact.exhibitor || {
+        exhibitorName: contact.companyName,
+        contact1: {
+          firstName: contact.name,
+          email: contact.email,
+          mobile: contact.mobile,
+          designation: contact.designation,
+        }
+      }
+    });
   } catch (error) {
     res.status(500).json({
       message: "Error fetching payment",

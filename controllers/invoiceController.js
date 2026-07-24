@@ -186,12 +186,23 @@ const getInvoiceById = async (req, res) => {
 
     if (invoice.companyId) {
       let company = await Company.findById(invoice.companyId).lean();
-      if (!company) {
-        company = await ExhibitorRegistration.findById(invoice.companyId).lean();
+      let exhibitor = null;
+      if (company?.exhibitorRegistrationId) {
+        exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId).lean();
       }
-      if (company) {
-        invoice.exhibitor = company;
+      if (!exhibitor) {
+        exhibitor = await ExhibitorRegistration.findOne({
+          $or: [
+            { _id: invoice.companyId },
+            { clientId: invoice.companyId }
+          ]
+        }).lean();
       }
+      if (!company && exhibitor?.clientId) {
+        company = await Company.findById(exhibitor.clientId).lean();
+      }
+      if (company) invoice.company = company;
+      if (exhibitor) invoice.exhibitor = exhibitor;
     }
 
     res.status(200).json(invoice);
