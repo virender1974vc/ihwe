@@ -39,6 +39,7 @@ router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobile
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
 router.get('/account-overview', protectExhibitor, (req, res) => exhibitorAuthController.getMyAccountOverview(req, res));
+router.get('/my-pass-usage', protectExhibitor, (req, res) => exhibitorAuthController.getMyPassUsage(req, res));
 router.get('/updates', protectExhibitor, (req, res) => exhibitorAuthController.getUpdates(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
 router.post('/pass-order', protectExhibitor, (req, res) => exhibitorAuthController.createPassOrder(req, res));

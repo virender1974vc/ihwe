@@ -1249,6 +1249,38 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    async getMyPassUsage(req, res) {
+        try {
+            if (req.user.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+            
+            const targetId = await resolveOwnedRegistrationId(req);
+            const exhibitor = await ExhibitorRegistration.findById(targetId).select('registrationId').lean();
+            
+            if (!exhibitor) {
+                return res.status(404).json({ success: false, message: 'Exhibitor not found' });
+            }
+
+            const Attendance = require('../models/Attendance');
+            const query = {
+                $or: [
+                    { companyId: String(targetId) },
+                    { registrationId: exhibitor.registrationId }
+                ]
+            };
+            if (req.query.eventId) {
+                query.eventId = req.query.eventId;
+            }
+
+            const usages = await Attendance.find(query).sort({ markedAt: -1 }).lean();
+
+            res.status(200).json({ success: true, data: usages });
+        } catch (error) {
+            console.error('Error fetching pass usage:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 module.exports = new ExhibitorAuthController();

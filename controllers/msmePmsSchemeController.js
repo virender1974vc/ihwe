@@ -130,6 +130,7 @@ async function makeAdminApplicationPayload(application) {
 
 async function getOrCreateClaim(exhibitorId) {
     let application = await MsmePmsScheme.findOne({ exhibitorId, applicationType: 'exhibitor_claim' });
+    let isNew = false;
     if (!application) {
         application = new MsmePmsScheme({
             exhibitorId,
@@ -140,8 +141,39 @@ async function getOrCreateClaim(exhibitorId) {
             status: 'Draft', currentStep: 1,
             statusHistory: [{ status: 'Draft', changedBy: String(exhibitorId), note: 'Application created' }]
         });
+        isNew = true;
+    }
+
+    if (application.status !== 'Approved' && application.status !== 'Rejected') {
+        const source = await ExhibitorRegistration.findById(exhibitorId).lean();
+        if (source) {
+            let changed = isNew;
+            const addDoc = (docType, url, filename) => {
+                if (url && !application.documents.some(d => d.documentType === docType)) {
+                    application.documents.push({
+                        documentType: docType,
+                        filename: filename,
+                        path: url,
+                        mimetype: 'application/pdf',
+                        size: 0
+                    });
+                    changed = true;
+                }
+            };
+            
+            addDoc('udyam', source.msme?.udyamCertificateUrl, 'udyam_certificate.pdf');
+            addDoc('gst', source.kycDocuments?.gstCertificate, 'gst_certificate.pdf');
+            addDoc('pan', source.kycDocuments?.panCard, 'pan_card.pdf');
+            addDoc('aadhaar', source.kycDocuments?.authorizedSignatoryId, 'aadhaar_card.pdf');
+            
+            if (changed) {
+                await application.save();
+            }
+        }
+    } else if (isNew) {
         await application.save();
     }
+    
     return application;
 }
 
@@ -280,7 +312,8 @@ class MsmePmsSchemeController {
 
     async getMyApplication(req, res) {
         try {
-            const application = await getOrCreateClaim(req.user.id);
+            let application = await getOrCreateClaim(req.user.id);
+            application = await makeAdminApplicationPayload(application);
             res.json({ success: true, data: application });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Could not load application', error: error.message });
