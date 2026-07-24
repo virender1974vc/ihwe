@@ -361,6 +361,8 @@ const buildRevisedInvoiceData = (invoice, estimate) => ({
   event_gst_no: estimate.event_gst_no || "",
   consignee_name: estimate.consignee_name || estimate.event_name || "",
   consignee_addr: estimate.consignee_addr || estimate.event_place_of_supply || "",
+  consignee_person: estimate.consignee_person || "",
+  consignee_phone: estimate.consignee_phone || "",
   billing_address: estimate.company_addr || invoice.billing_address,
   country: estimate.country || "", state: estimate.state || "", city: estimate.city || "",
   pincode: String(estimate.pincode || ""),

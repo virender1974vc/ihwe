@@ -114,7 +114,13 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       debitNotes.filter((dn) => !isCancelledDoc(dn)).reduce((sum, dn) => sum + (parseFloat(dn.totalAmount) || 0), 0);
     const debitNoteTotal = accountDebitNotes.reduce((sum, dn) => sum + (parseFloat(dn.totalAmount) || 0), 0);
 
-    const primaryContact = company?.contacts?.find((c) => c.isPrimary) || company?.contacts?.[0];
+    const primaryTeamMember = exhibitor?.teamMembers?.find((member) =>
+      member.isPrimary || /primary contact/i.test(member.roleAtExhibition || "")
+    );
+    const primaryContact =
+      company?.contacts?.find((c) => c.isPrimary)
+      || company?.contacts?.[0]
+      || primaryTeamMember;
 
     const activeInvoices = invoices.filter((invoice) => !isCancelledDoc(invoice));
     const activeProformaInvoices = proformaInvoices.filter((estimate) => !isCancelledDoc(estimate));
@@ -508,6 +514,7 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       (exhibitor?.contact1 && (exhibitor.contact1.firstName || exhibitor.contact1.lastName)
         ? `${exhibitor.contact1.firstName || ""} ${exhibitor.contact1.lastName || ""}`.trim()
         : null) ||
+      primaryTeamMember?.name ||
       (primaryContact && (primaryContact.firstName || primaryContact.name)
         ? primaryContact.name || `${primaryContact.firstName || ""} ${primaryContact.surname || ""}`.trim()
         : null) ||
@@ -557,16 +564,18 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
           id: company?._id || exhibitor?._id,
           name: company?.companyName || exhibitor?.exhibitorName || "Unknown Company",
           email:
-            company?.email ||
-            exhibitor?.companyEmail ||
             exhibitor?.contact1?.email ||
+            primaryTeamMember?.email ||
             primaryContact?.email ||
+            exhibitor?.companyEmail ||
+            company?.email ||
             "N/A",
           mobile:
-            company?.landline ||
-            exhibitor?.landlineNo ||
             exhibitor?.contact1?.mobile ||
+            primaryTeamMember?.mobile ||
             primaryContact?.mobile ||
+            exhibitor?.landlineNo ||
+            company?.landline ||
             "N/A",
           contactPerson,
           designation,

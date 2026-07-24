@@ -625,6 +625,12 @@ class ExhibitorRegistrationService {
                     supply_date: new Date().toISOString().split('T')[0],
                     consignee_name: data.exhibitorName || 'Unknown Company',
                     consignee_addr: data.address || 'N/A',
+                    consignee_person: [
+                        data.contact1?.title,
+                        data.contact1?.firstName,
+                        data.contact1?.lastName
+                    ].filter(Boolean).join(' '),
+                    consignee_phone: data.contact1?.mobile || '',
                     country: data.country || 'N/A',
                     state: data.state || 'N/A',
                     city: data.city || 'N/A',
