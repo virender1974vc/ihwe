@@ -28,7 +28,30 @@ const attendanceSchema = new mongoose.Schema({
     markedByName: { type: String, default: '' },
     source: { type: String, enum: ['qr', 'manual'], default: 'qr' },
     gate: { type: String, default: '' },
-    rawQr: { type: String, default: '' }
+    rawQr: { type: String, default: '' },
+    allocatedQuantity: { type: Number, min: 0, default: 1 },
+    deliveredQuantity: { type: Number, min: 0, default: 1 },
+    deliveryHistory: [{
+        quantity: { type: Number, min: 1 },
+        deliveredAt: { type: Date, default: Date.now },
+        deliveredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        deliveredByName: { type: String, default: '' },
+        acknowledgementStatus: {
+            type: String,
+            enum: ['pending', 'confirmed', 'disputed'],
+            default: 'pending'
+        },
+        acknowledgedAt: { type: Date, default: null },
+        acknowledgementNote: { type: String, default: '', trim: true }
+    }],
+    acknowledgementStatus: {
+        type: String,
+        enum: ['pending', 'confirmed', 'disputed'],
+        default: 'pending',
+        index: true
+    },
+    acknowledgedAt: { type: Date, default: null },
+    acknowledgementNote: { type: String, default: '', trim: true },
 }, { timestamps: true });
 
 attendanceSchema.index(

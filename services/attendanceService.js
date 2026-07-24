@@ -104,6 +104,9 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
         const item = items[index];
         if (!item) throw Object.assign(new Error('Pass holder was not found in this pass request.'), { status: 404 });
         const isVehicle = request.passType === 'vehicle';
+        const linkedTeamMember = item.teamMemberId
+            ? exhibitor.teamMembers?.find(member => String(member._id) === String(item.teamMemberId))
+            : null;
         const passRegistrationId = `PASS-${String(request._id)}-${index + 1}`;
         return subject({ _id: item.teamMemberId || item._id || `${request._id}-${index}` }, 'exhibitor', `${request.passType}-pass`, {
             registrationId: passRegistrationId,
@@ -114,14 +117,15 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             email: item.email,
             mobile: item.phone,
             designation: isVehicle ? `${item.vehicleType || 'Vehicle'} • ${item.vehicleNumber || ''}` : item.designation,
-            photoUrl: item.photoUrl || exhibitor.teamMembers?.find(member => String(member._id) === String(item.teamMemberId))?.photoUrl,
+            photoUrl: linkedTeamMember ? linkedTeamMember.photoUrl : item.photoUrl,
             status: request.status,
             attendanceKind: 'pass',
             passType: request.passType,
             details: {
                 gender: item.gender,
                 vehicleType: item.vehicleType,
-                vehicleNumber: item.vehicleNumber
+                vehicleNumber: item.vehicleNumber,
+                allocatedQuantity: isConsumablePass ? Number(request.quantity || 1) : 1
             }
         }, requestOrigin);
     }

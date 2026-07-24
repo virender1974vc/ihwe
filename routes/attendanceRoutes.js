@@ -90,7 +90,10 @@ router.post('/resolve', async (req, res) => {
     const context = await getEventContext(req.body.eventId);
     try {
         const person = await resolveRegistration(req.body.raw || req.body.registrationId || req.body, requestOrigin(req));
-        const records = await Attendance.find({ eventId: context.eventId, subjectKey: person.subjectKey }).select('eventDay markedAt markedByName gate source').lean();
+        const records = await Attendance.find({ eventId: context.eventId, subjectKey: person.subjectKey })
+            .select('eventDay markedAt markedByName gate source allocatedQuantity deliveredQuantity acknowledgementStatus acknowledgedAt')
+            .sort({ markedAt: -1 })
+            .lean();
         await AttendanceScanAttempt.create({ eventId: context.eventId, registrationId: person.registrationId, subjectKey: person.subjectKey, subjectType: person.subjectType, result: 'resolved', source: req.body.source === 'manual' ? 'manual' : 'qr', attemptedBy: req.user.id, attemptedByName: req.user.username || '' });
         res.json({ success: true, data: { person, attendance: records, event: context.event, days: context.days } });
     } catch (error) {
@@ -132,6 +135,12 @@ router.post('/mark', asyncRoute(async (req, res) => {
     const requestedDays = Array.isArray(req.body.days) ? req.body.days : [req.body.day];
     const days = [...new Set(requestedDays.filter((day) => context.days.includes(day)))];
     if (!days.length) return res.status(400).json({ success: false, message: 'Select at least one valid event day.' });
+    const isLunch = person.attendanceKind === 'pass' && person.passType === 'lunch';
+    const allocatedQuantity = isLunch ? Math.max(1, Number(person.details?.allocatedQuantity || 1)) : 1;
+    const requestedDeliveryQuantity = isLunch ? Number(req.body.quantity) : 1;
+    if (isLunch && (!Number.isInteger(requestedDeliveryQuantity) || requestedDeliveryQuantity < 1)) {
+        return res.status(400).json({ success: false, message: 'Enter a valid lunch delivery quantity.' });
+    }
 
     const base = {
         eventId: context.eventId, subjectKey: person.subjectKey, subjectId: person.subjectId,
@@ -146,9 +155,38 @@ router.post('/mark', asyncRoute(async (req, res) => {
 
     const results = await Promise.all(days.map(async (eventDay) => {
         const existing = await Attendance.findOne({ eventId: context.eventId, eventDay, subjectKey: person.subjectKey }).lean();
+        const alreadyDelivered = Number(existing?.deliveredQuantity || 0);
+        if (isLunch && alreadyDelivered + requestedDeliveryQuantity > allocatedQuantity) {
+            throw Object.assign(new Error(
+                `Only ${Math.max(0, allocatedQuantity - alreadyDelivered)} lunch item(s) remain for ${eventDay}.`
+            ), { status: 409 });
+        }
+        const deliveryEntry = {
+            quantity: requestedDeliveryQuantity,
+            deliveredAt: new Date(),
+            deliveredBy: req.user.id,
+            deliveredByName: req.user.username || '',
+            acknowledgementStatus: 'pending',
+            acknowledgedAt: null,
+            acknowledgementNote: ''
+        };
+        const quantityFields = {
+            allocatedQuantity,
+            deliveredQuantity: isLunch ? alreadyDelivered + requestedDeliveryQuantity : 1,
+            acknowledgementStatus: 'pending',
+            acknowledgedAt: null,
+            acknowledgementNote: ''
+        };
+        const attendanceUpdate = existing && !isLunch
+            ? { $set: base }
+            : {
+                $set: { ...base, ...quantityFields },
+                $push: { deliveryHistory: deliveryEntry },
+                $setOnInsert: { eventDay, markedAt: new Date() }
+            };
         const result = await Attendance.updateOne(
             { eventId: context.eventId, eventDay, subjectKey: person.subjectKey },
-            { $set: base, $setOnInsert: { eventDay, markedAt: new Date() } },
+            attendanceUpdate,
             { upsert: true }
         );
         const created = result.upsertedCount === 1;
@@ -176,7 +214,17 @@ router.post('/mark', asyncRoute(async (req, res) => {
             );
             companyCreated = companyResult.upsertedCount === 1;
         }
-        return { day: eventDay, created, companyCreated, duplicate: !created, existing: existing ? { markedAt: existing.markedAt, markedByName: existing.markedByName, gate: existing.gate, source: existing.source } : null };
+        return {
+            day: eventDay,
+            created,
+            deliveryRecorded: isLunch,
+            deliveredQuantity: quantityFields.deliveredQuantity,
+            allocatedQuantity,
+            remainingQuantity: Math.max(0, allocatedQuantity - quantityFields.deliveredQuantity),
+            companyCreated,
+            duplicate: !created && !isLunch,
+            existing: existing ? { markedAt: existing.markedAt, markedByName: existing.markedByName, gate: existing.gate, source: existing.source } : null
+        };
     }));
     res.json({ success: true, message: 'Attendance processed successfully.', data: { person, results } });
 }));

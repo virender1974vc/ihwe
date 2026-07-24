@@ -1322,11 +1322,97 @@ class ExhibitorAuthController {
                 query.eventId = req.query.eventId;
             }
 
-            const usages = await Attendance.find(query).sort({ markedAt: -1 }).lean();
+            const attendanceRecords = await Attendance.find(query).sort({ markedAt: -1 }).lean();
+            const usages = attendanceRecords.flatMap((usage) => {
+                if (usage.passType !== 'lunch' || !Array.isArray(usage.deliveryHistory) || usage.deliveryHistory.length === 0) {
+                    return [usage];
+                }
+                return usage.deliveryHistory.map((delivery, index) => ({
+                    ...usage,
+                    _id: `${usage._id}:${delivery._id || index}`,
+                    usageId: usage._id,
+                    deliveryId: delivery._id,
+                    markedAt: delivery.deliveredAt || usage.markedAt,
+                    markedByName: delivery.deliveredByName || usage.markedByName,
+                    deliveredQuantity: Number(delivery.quantity || 0),
+                    cumulativeDeliveredQuantity: usage.deliveryHistory
+                        .slice(0, index + 1)
+                        .reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+                    acknowledgementStatus: delivery.acknowledgementStatus || 'pending',
+                    acknowledgedAt: delivery.acknowledgedAt || null,
+                    acknowledgementNote: delivery.acknowledgementNote || ''
+                }));
+            }).sort((a, b) => new Date(b.markedAt) - new Date(a.markedAt));
 
             res.status(200).json({ success: true, data: usages });
         } catch (error) {
             console.error('Error fetching pass usage:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async acknowledgePassUsage(req, res) {
+        try {
+            if (req.user.role !== 'exhibitor')
+                return res.status(403).json({ success: false, message: 'Access denied.' });
+
+            const status = String(req.body.status || '').toLowerCase();
+            const note = String(req.body.note || '').trim();
+            const deliveryId = String(req.body.deliveryId || '').trim();
+            if (!['confirmed', 'disputed'].includes(status)) {
+                return res.status(400).json({ success: false, message: 'Status must be confirmed or disputed.' });
+            }
+            if (status === 'disputed' && !note) {
+                return res.status(400).json({ success: false, message: 'Please describe the issue.' });
+            }
+
+            const targetId = await resolveOwnedRegistrationId(req);
+            const exhibitor = await ExhibitorRegistration.findById(targetId).select('registrationId').lean();
+            const Attendance = require('../models/Attendance');
+            const usageId = String(req.params.id).split(':')[0];
+            const usage = await Attendance.findOne({
+                _id: usageId,
+                $or: [
+                    { companyId: String(targetId) },
+                    { registrationId: exhibitor?.registrationId }
+                ]
+            });
+            if (!usage) {
+                return res.status(404).json({ success: false, message: 'Pass usage record not found.' });
+            }
+
+            const acknowledgedAt = new Date();
+            if (deliveryId && usage.passType === 'lunch') {
+                const delivery = usage.deliveryHistory.id(deliveryId);
+                if (!delivery) {
+                    return res.status(404).json({ success: false, message: 'Lunch delivery entry not found.' });
+                }
+                delivery.acknowledgementStatus = status;
+                delivery.acknowledgedAt = acknowledgedAt;
+                delivery.acknowledgementNote = note;
+                const statuses = usage.deliveryHistory.map(item => item.acknowledgementStatus || 'pending');
+                usage.acknowledgementStatus = statuses.includes('disputed')
+                    ? 'disputed'
+                    : statuses.includes('pending')
+                        ? 'pending'
+                        : 'confirmed';
+            } else {
+                usage.acknowledgementStatus = status;
+            }
+            usage.acknowledgedAt = acknowledgedAt;
+            usage.acknowledgementNote = note;
+            await usage.save();
+            res.json({
+                success: true,
+                message: status === 'confirmed' ? 'Usage confirmed.' : 'Issue reported.',
+                data: {
+                    acknowledgementStatus: status,
+                    acknowledgedAt,
+                    acknowledgementNote: note
+                }
+            });
+        } catch (error) {
+            console.error('Error acknowledging pass usage:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     }
