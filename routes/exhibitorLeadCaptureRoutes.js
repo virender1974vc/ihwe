@@ -4,6 +4,10 @@ const { protectExhibitor } = require('../middleware/auth');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const ExhibitorLeadCapture = require('../models/ExhibitorLeadCapture');
 const BuyerRegistration = require('../models/BuyerRegistration');
+const InternationalBuyer = require('../models/InternationalBuyer');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+const Stall = require('../models/Stall');
 const CorporateVisitorModel = require('../models/visitor/CorporateVisitorModel');
 const GeneralVisitorModel = require('../models/visitor/GeneralVisitorModel');
 const FreeHealthCampModel = require('../models/visitor/FreeHealthCampModel');
@@ -12,7 +16,7 @@ const router = express.Router();
 
 const normalizeSourceType = (value) => {
     const sourceType = String(value || '').toLowerCase();
-    return ['buyer', 'visitor', 'unknown'].includes(sourceType) ? sourceType : 'unknown';
+    return ['buyer', 'visitor', 'exhibitor', 'exhibitor_pass', 'unknown'].includes(sourceType) ? sourceType : 'unknown';
 };
 
 const isPlainRegistrationCode = (value) => /^[a-zA-Z0-9_-]{4,60}$/.test(String(value || '').trim());
@@ -53,9 +57,16 @@ const parseScanPayload = (raw) => {
 
 const normalizeScanPayload = (payload = {}) => {
     const data = payload.data && typeof payload.data === 'object' ? payload.data : payload;
+    const requestedPassId = data.reqId || data.requestId || '';
+    const requestedPassIndex = Number.isInteger(Number(data.index))
+        ? Number(data.index) + 1
+        : 1;
     return {
         sourceType: normalizeSourceType(data.sourceType || data.type),
-        registrationId: data.registrationId || data.regId || data.buyerRegistrationId || '',
+        registrationId: data.registrationId
+            || data.regId
+            || data.buyerRegistrationId
+            || (requestedPassId ? `PASS-${requestedPassId}-${requestedPassIndex}` : ''),
         name: data.name || data.fullName || data.visitorName || data.contactName || '',
         company: data.company || data.companyName || data.companyFirmName || '',
         designation: data.designation || data.role || '',
@@ -134,6 +145,145 @@ router.post('/resolve-scan', protectExhibitor, async (req, res) => {
                     email: buyer.emailAddress || '',
                     country: buyer.country || '',
                     interest: buyer.primaryProductInterest || '',
+                    buyerKind: 'domestic',
+                    profileDetails: {
+                        businessType: buyer.businessType || buyer.basicBusinessType || '',
+                        brandName: buyer.brandName || '',
+                        address: buyer.registeredAddress || '',
+                        city: buyer.city || '',
+                        state: buyer.stateProvince || '',
+                        website: buyer.website || '',
+                        annualTurnover: buyer.annualTurnover || '',
+                        purchaseVolume: buyer.estimatedPurchaseVolume || '',
+                        budgetRange: buyer.budgetRange || '',
+                        purchaseTimeline: buyer.purchaseTimeline || '',
+                        secondaryInterests: buyer.secondaryProductCategories || [],
+                        meetingInterest: buyer.b2bMeetInterest || buyer.matchmakingInterest || ''
+                    },
+                    rawPayload: parsed
+                }
+            });
+        }
+
+        const internationalConditions = [
+            normalized.registrationId ? { registrationId: normalized.registrationId } : null,
+            normalized.email ? { 'primaryContact.emailId': normalized.email.toLowerCase() } : null,
+            normalized.phone ? { 'primaryContact.mobileNumber': normalized.phone } : null
+        ].filter(Boolean);
+        const internationalBuyer = internationalConditions.length
+            ? await InternationalBuyer.findOne({ $or: internationalConditions }).lean()
+            : null;
+
+        if (internationalBuyer) {
+            return res.json({
+                success: true,
+                data: {
+                    sourceType: 'buyer',
+                    linkedBuyerId: internationalBuyer._id,
+                    registrationId: internationalBuyer.registrationId,
+                    name: internationalBuyer.primaryContact?.fullName || internationalBuyer.brandName,
+                    company: internationalBuyer.brandName,
+                    designation: internationalBuyer.primaryContact?.designation || '',
+                    phone: internationalBuyer.primaryContact?.mobileNumber || '',
+                    email: internationalBuyer.primaryContact?.emailId || '',
+                    country: internationalBuyer.country || internationalBuyer.countryOfRegistration || '',
+                    interest: (internationalBuyer.productCategories || []).join(', '),
+                    buyerKind: 'international',
+                    profileDetails: {
+                        legalEntityType: internationalBuyer.legalEntityType || '',
+                        natureOfBusiness: internationalBuyer.natureOfBusiness || [],
+                        address: internationalBuyer.address || '',
+                        city: internationalBuyer.city || '',
+                        state: internationalBuyer.stateProvince || '',
+                        postalCode: internationalBuyer.postalCode || '',
+                        website: internationalBuyer.website || '',
+                        keyProductsServices: internationalBuyer.businessProfile?.keyProductsServices || '',
+                        lookingFor: internationalBuyer.b2bInterest?.lookingFor || [],
+                        meetingInterest: internationalBuyer.b2bInterest?.interested || ''
+                    },
+                    rawPayload: parsed
+                }
+            });
+        }
+
+        const passMatch = String(normalized.registrationId || '').match(/^PASS-([a-f\d]{24})-(\d+)$/i);
+        if (passMatch) {
+            const request = await ExhibitorPassRequest.findById(passMatch[1])
+                .populate('exhibitorId')
+                .lean();
+            const holders = request?.passType === 'vehicle' ? request?.vehicles : request?.personnel;
+            const holderIndex = Number(passMatch[2]) - 1;
+            const isValidPassIndex = request
+                && holderIndex >= 0
+                && holderIndex < Math.max(Number(request.quantity || 1), holders?.length || 0);
+            const holder = holders?.[holderIndex] || {};
+            if (isValidPassIndex) {
+                const exhibitor = request.exhibitorId || {};
+                const bookedStall = await Stall.findOne({ bookedBy: exhibitor._id })
+                    .select('stallNumber')
+                    .lean();
+                return res.json({
+                    success: true,
+                    data: {
+                        sourceType: 'exhibitor_pass',
+                        registrationId: normalized.registrationId,
+                        name: holder.name || holder.vehicleNumber || exhibitor.exhibitorName || `${request.passType} pass`,
+                        company: exhibitor.exhibitorName || '',
+                        designation: holder.designation || holder.vehicleType || '',
+                        phone: holder.phone || '',
+                        email: holder.email || '',
+                        country: exhibitor.country || '',
+                        interest: exhibitor.industrySector || exhibitor.primaryCategory || '',
+                        profileDetails: {
+                            passType: request.passType,
+                            passStatus: request.status,
+                            paymentStatus: request.paymentStatus,
+                            vehicleNumber: holder.vehicleNumber || '',
+                            gender: holder.gender || '',
+                            stallNumber: bookedStall?.stallNumber || exhibitor.participation?.stallNo || '',
+                            exhibitorRegistrationId: exhibitor.registrationId || ''
+                        },
+                        rawPayload: parsed
+                    }
+                });
+            }
+        }
+
+        const exhibitorConditions = [
+            normalized.registrationId ? { registrationId: normalized.registrationId } : null,
+            normalized.email ? { $or: [{ companyEmail: normalized.email.toLowerCase() }, { 'contact1.email': normalized.email.toLowerCase() }] } : null,
+            normalized.phone ? { 'contact1.mobile': normalized.phone } : null
+        ].filter(Boolean);
+        const exhibitor = exhibitorConditions.length
+            ? await ExhibitorRegistration.findOne({ $or: exhibitorConditions }).lean()
+            : null;
+        if (exhibitor) {
+            const bookedStall = await Stall.findOne({ bookedBy: exhibitor._id })
+                .select('stallNumber')
+                .lean();
+            return res.json({
+                success: true,
+                data: {
+                    sourceType: 'exhibitor',
+                    registrationId: exhibitor.registrationId,
+                    name: `${exhibitor.contact1?.firstName || ''} ${exhibitor.contact1?.lastName || ''}`.trim(),
+                    company: exhibitor.exhibitorName,
+                    designation: exhibitor.contact1?.designation || '',
+                    phone: exhibitor.contact1?.mobile || '',
+                    email: exhibitor.contact1?.email || exhibitor.companyEmail || '',
+                    country: exhibitor.country || '',
+                    interest: exhibitor.industrySector || exhibitor.primaryCategory || '',
+                    profileDetails: {
+                        address: exhibitor.address || '',
+                        city: exhibitor.city || '',
+                        state: exhibitor.state || '',
+                        website: exhibitor.website || '',
+                        stallNumber: bookedStall?.stallNumber || exhibitor.participation?.stallNo || '',
+                        stallSize: exhibitor.participation?.stallSize || '',
+                        stallType: exhibitor.participation?.stallType || '',
+                        category: exhibitor.primaryCategory || exhibitor.subCategory || '',
+                        status: exhibitor.status || ''
+                    },
                     rawPayload: parsed
                 }
             });
@@ -217,6 +367,10 @@ router.post('/', protectExhibitor, async (req, res) => {
             sourceType: buyer ? 'buyer' : (payload.sourceType === 'buyer' ? 'buyer' : payload.sourceType),
             linkedBuyerId,
             ...payload,
+            buyerKind: ['domestic', 'international'].includes(req.body.buyerKind) ? req.body.buyerKind : '',
+            profileDetails: req.body.profileDetails && typeof req.body.profileDetails === 'object'
+                ? req.body.profileDetails
+                : {},
             rawPayload: req.body.rawPayload || req.body
         };
 
@@ -241,7 +395,10 @@ router.post('/', protectExhibitor, async (req, res) => {
 
 router.get('/my', protectExhibitor, async (req, res) => {
     try {
-        const leads = await ExhibitorLeadCapture.find({ exhibitorId: req.user.id }).sort({ createdAt: -1 });
+        const leads = await ExhibitorLeadCapture.find({
+            exhibitorId: req.user.id,
+            sourceType: { $in: ['buyer', 'visitor'] }
+        }).sort({ createdAt: -1 });
         res.json({ success: true, data: leads });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
