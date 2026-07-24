@@ -15,6 +15,7 @@ const MessageTemplate = require("../models/MessageTemplate");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
+const mongoose = require("mongoose");
 
 const RECEIPT_DIR = path.join(__dirname, "../uploads/payment_receipts");
 if (!fs.existsSync(RECEIPT_DIR)) fs.mkdirSync(RECEIPT_DIR, { recursive: true });
@@ -430,6 +431,34 @@ const addPayment = async (req, res) => {
     }
     if (!payload.receipt_no) {
       payload.receipt_no = await Payment.generateNextReceiptNo(payload.payment_date);
+    }
+    const paymentReference = String(
+      payload.utr_no
+      || payload.cheque_no
+      || payload.card_transaction_no
+      || payload.wallet_transaction_no
+      || payload.cash_receipt_no
+      || ""
+    ).trim();
+    if (paymentReference) {
+      const duplicatePayment = await Payment.findOne({
+        invoice_id: String(payload.invoice_id || ""),
+        amount_text: String(payload.amount_text || ""),
+        payment_date: payload.payment_date,
+        $or: [
+          { utr_no: paymentReference },
+          { cheque_no: paymentReference },
+          { card_transaction_no: paymentReference },
+          { wallet_transaction_no: paymentReference },
+          { cash_receipt_no: paymentReference },
+        ],
+      }).lean();
+      if (duplicatePayment) {
+        return res.status(409).json({
+          message: "This payment is already recorded",
+          data: duplicatePayment,
+        });
+      }
     }
     const payment = new Payment(payload);
     await payment.save();

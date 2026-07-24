@@ -130,6 +130,12 @@ class ExhibitorRegistrationService {
         if (query.$or.length === 0) return regs;
 
         const allRelated = await ExhibitorRegistration.find(query).sort({ updatedAt: -1 }).lean();
+        const Company = require('../models/Company');
+        const clientIds = [...new Set(regs.map((reg) => String(reg.clientId || '')).filter(Boolean))];
+        const linkedCompanies = clientIds.length
+            ? await Company.find({ _id: { $in: clientIds } }).select('contacts').lean()
+            : [];
+        const companyById = new Map(linkedCompanies.map((company) => [String(company._id), company]));
         const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'natureOfBusiness', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
 
         const results = regs.map(r => {
@@ -200,6 +206,43 @@ class ExhibitorRegistrationService {
             if (!doc.contact2?.firstName && masterData.contact2) {
                 doc.contact2 = masterData.contact2;
                 doc._isEnriched = true;
+            }
+
+            const hasContactDetails = (contact) => Boolean(
+                contact?.firstName || contact?.lastName || contact?.name || contact?.mobile || contact?.email
+            );
+            if (!hasContactDetails(doc.contact1)) {
+                const primaryTeamMember = doc.teamMembers?.find((member) =>
+                    member.isPrimary || /primary contact/i.test(member.roleAtExhibition || '')
+                );
+                const linkedCompany = companyById.get(String(doc.clientId || ''));
+                const companyContact =
+                    linkedCompany?.contacts?.find((contact) => contact.isPrimary)
+                    || linkedCompany?.contacts?.[0];
+
+                if (primaryTeamMember) {
+                    doc.contact1 = {
+                        title: '',
+                        firstName: primaryTeamMember.name || '',
+                        lastName: '',
+                        designation: primaryTeamMember.designation || '',
+                        email: primaryTeamMember.email || '',
+                        mobile: primaryTeamMember.mobile || '',
+                        photoUrl: primaryTeamMember.photoUrl || '',
+                    };
+                    doc._isEnriched = true;
+                } else if (companyContact) {
+                    doc.contact1 = {
+                        title: companyContact.title || '',
+                        firstName: companyContact.firstName || companyContact.name || '',
+                        lastName: companyContact.surname || '',
+                        designation: companyContact.designation || '',
+                        email: companyContact.email || '',
+                        mobile: companyContact.mobile || '',
+                        photoUrl: companyContact.photoUrl || companyContact.photo || '',
+                    };
+                    doc._isEnriched = true;
+                }
             }
             return doc;
         });
