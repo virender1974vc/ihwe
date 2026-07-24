@@ -925,7 +925,9 @@ router.get('/companies/:companyId', asyncRoute(async (req, res) => {
             );
             return {
                 ...record,
-                photoUrl: assetUrl(record.photoUrl || member?.photoUrl || crmContact?.photoUrl || crmContact?.photo)
+                photoUrl: assetUrl(member
+                    ? member.photoUrl
+                    : (record.photoUrl || crmContact?.photoUrl || crmContact?.photo))
             };
         });
     res.json({
