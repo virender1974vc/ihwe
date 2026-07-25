@@ -556,9 +556,21 @@ class ExhibitorAuthController {
             let complimentaryServices = [];
             try {
                 complimentaryServices = await StallAccessory.find({ type: 'complimentary', isActive: true })
-                    .select('name itemType description unit includedQty category sortOrder imageUrl')
+                    .select('name itemType description unit includedQty category sortOrder imageUrl allocationMode ratioQty ratioArea roundingMode')
                     .sort({ sortOrder: 1, createdAt: -1 })
                     .lean();
+                const stallArea = await getExhibitorStallArea(plainReg._id);
+                complimentaryServices = complimentaryServices.map(service => ({
+                    ...service,
+                    allocatedQty: computeEntitlement({
+                        allocationMode: service.allocationMode,
+                        ratioQty: service.ratioQty,
+                        ratioArea: service.ratioArea,
+                        roundingMode: service.roundingMode,
+                        fixedQty: service.includedQty
+                    }, stallArea),
+                    allocationStatus: 'included'
+                }));
             } catch (err) {
                 console.error('Complimentary services lookup error:', err);
             }
@@ -1381,6 +1393,7 @@ class ExhibitorAuthController {
                 return res.status(404).json({ success: false, message: 'Pass usage record not found.' });
             }
 
+            const beforeAcknowledgement = usage.toObject();
             const acknowledgedAt = new Date();
             if (deliveryId && usage.passType === 'lunch') {
                 const delivery = usage.deliveryHistory.id(deliveryId);
@@ -1402,6 +1415,27 @@ class ExhibitorAuthController {
             usage.acknowledgedAt = acknowledgedAt;
             usage.acknowledgementNote = note;
             await usage.save();
+            const AttendanceAudit = require('../models/AttendanceAudit');
+            await AttendanceAudit.create({
+                eventId: usage.eventId,
+                attendanceId: usage._id,
+                subjectKey: usage.subjectKey,
+                registrationId: usage.registrationId,
+                action: status === 'confirmed' ? 'acknowledged' : 'disputed',
+                reason: note || 'Confirmed by exhibitor',
+                before: beforeAcknowledgement,
+                after: usage.toObject(),
+                performedBy: targetId,
+                performedByName: exhibitor?.registrationId || 'Exhibitor',
+                performedByRole: 'exhibitor'
+            });
+            req.app.get('io')?.emit('pass-usage:acknowledged', {
+                attendanceId: usage._id,
+                passType: usage.passType,
+                status,
+                acknowledgedAt,
+                exhibitorRegistrationId: exhibitor?.registrationId || ''
+            });
             res.json({
                 success: true,
                 message: status === 'confirmed' ? 'Usage confirmed.' : 'Issue reported.',

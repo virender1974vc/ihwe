@@ -10,6 +10,12 @@ const scanAttemptSchema = new mongoose.Schema({
   attemptedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   attemptedByName: { type: String, default: '' },
   detail: { type: String, default: '' },
+  clientOperationId: { type: String, trim: true, index: true },
 }, { timestamps: true });
+
+scanAttemptSchema.index(
+  { attemptedBy: 1, clientOperationId: 1 },
+  { unique: true, partialFilterExpression: { clientOperationId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('AttendanceScanAttempt', scanAttemptSchema);

@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { resolveRegistration, getEventContext, registeredTotals } = require('../services/attendanceService');
 const { createAttendanceWorkbook } = require('../services/attendanceExportService');
+const { sendExhibitorPush } = require('../utils/exhibitorPush');
 const aiService = require('../services/aiDocumentVerificationService');
 const { getDirectory, registeredRows } = require('../services/attendanceDirectoryService');
 const AttendanceAudit = require('../models/AttendanceAudit');
@@ -95,7 +96,9 @@ router.post('/resolve', async (req, res) => {
             .sort({ markedAt: -1 })
             .lean();
         await AttendanceScanAttempt.create({ eventId: context.eventId, registrationId: person.registrationId, subjectKey: person.subjectKey, subjectType: person.subjectType, result: 'resolved', source: req.body.source === 'manual' ? 'manual' : 'qr', attemptedBy: req.user.id, attemptedByName: req.user.username || '' });
-        res.json({ success: true, data: { person, attendance: records, event: context.event, days: context.days } });
+        const validityDays = Number(person.details?.validityDays || 0);
+        const allowedDays = validityDays > 0 ? context.days.slice(0, validityDays) : context.days;
+        res.json({ success: true, data: { person, attendance: records, event: context.event, days: allowedDays } });
     } catch (error) {
         await AttendanceScanAttempt.create({ eventId: context.eventId, registrationId: String(req.body.registrationId || req.body.raw || '').slice(0, 150), result: 'invalid', source: req.body.source === 'manual' ? 'manual' : 'qr', attemptedBy: req.user.id, attemptedByName: req.user.username || '', detail: error.message || 'Invalid QR' }).catch(() => { });
         res.status(error.status || 500).json({ success: false, message: error.message || 'Could not resolve QR.' });
@@ -121,6 +124,8 @@ router.patch('/buyers/:id/status', asyncRoute(async (req, res) => {
 
 router.post('/mark', asyncRoute(async (req, res) => {
     const origin = requestOrigin(req);
+    const staffUser = await User.findById(req.user.id).select('fullName username').lean();
+    const staffName = String(staffUser?.fullName || staffUser?.username || req.user.username || '').trim();
     const person = await resolveRegistration(req.body.raw || req.body.registrationId, origin);
     if (person.subjectSubType === 'international-buyer' && person.status !== 'Approved') {
         return res.status(409).json({
@@ -132,12 +137,15 @@ router.post('/mark', asyncRoute(async (req, res) => {
         ? await resolveRegistration(person.companyRegistrationId, origin)
         : null;
     const context = await getEventContext(req.body.eventId);
+    const validityDays = Number(person.details?.validityDays || 0);
+    const allowedDays = validityDays > 0 ? context.days.slice(0, validityDays) : context.days;
     const requestedDays = Array.isArray(req.body.days) ? req.body.days : [req.body.day];
-    const days = [...new Set(requestedDays.filter((day) => context.days.includes(day)))];
+    const days = [...new Set(requestedDays.filter((day) => allowedDays.includes(day)))];
     if (!days.length) return res.status(400).json({ success: false, message: 'Select at least one valid event day.' });
     const isLunch = person.attendanceKind === 'pass' && person.passType === 'lunch';
     const allocatedQuantity = isLunch ? Math.max(1, Number(person.details?.allocatedQuantity || 1)) : 1;
     const requestedDeliveryQuantity = isLunch ? Number(req.body.quantity) : 1;
+    const requestOperationId = String(req.body.clientOperationId || new mongoose.Types.ObjectId()).trim();
     if (isLunch && (!Number.isInteger(requestedDeliveryQuantity) || requestedDeliveryQuantity < 1)) {
         return res.status(400).json({ success: false, message: 'Enter a valid lunch delivery quantity.' });
     }
@@ -149,26 +157,23 @@ router.post('/mark', asyncRoute(async (req, res) => {
         registrationId: person.registrationId, name: person.name, company: person.company,
         email: person.email, mobile: person.mobile, designation: person.designation,
         photoUrl: person.photoUrl, photoKind: person.photoKind, markedBy: req.user.id,
-        markedByName: req.user.username || '', source: req.body.source === 'manual' ? 'manual' : 'qr',
+        markedByName: staffName, source: req.body.source === 'manual' ? 'manual' : 'qr',
         gate: String(req.body.gate || '').trim(), rawQr: String(req.body.raw || '').slice(0, 2000)
     };
 
     const results = await Promise.all(days.map(async (eventDay) => {
         const existing = await Attendance.findOne({ eventId: context.eventId, eventDay, subjectKey: person.subjectKey }).lean();
         const alreadyDelivered = Number(existing?.deliveredQuantity || 0);
-        if (isLunch && alreadyDelivered + requestedDeliveryQuantity > allocatedQuantity) {
-            throw Object.assign(new Error(
-                `Only ${Math.max(0, allocatedQuantity - alreadyDelivered)} lunch item(s) remain for ${eventDay}.`
-            ), { status: 409 });
-        }
+        const dayOperationId = `${requestOperationId}:${eventDay}`;
         const deliveryEntry = {
             quantity: requestedDeliveryQuantity,
             deliveredAt: new Date(),
             deliveredBy: req.user.id,
-            deliveredByName: req.user.username || '',
+            deliveredByName: staffName,
             acknowledgementStatus: 'pending',
             acknowledgedAt: null,
-            acknowledgementNote: ''
+            acknowledgementNote: '',
+            clientOperationId: dayOperationId
         };
         const quantityFields = {
             allocatedQuantity,
@@ -184,14 +189,96 @@ router.post('/mark', asyncRoute(async (req, res) => {
                 $push: { deliveryHistory: deliveryEntry },
                 $setOnInsert: { eventDay, markedAt: new Date() }
             };
-        const result = await Attendance.updateOne(
-            { eventId: context.eventId, eventDay, subjectKey: person.subjectKey },
-            attendanceUpdate,
-            { upsert: true }
-        );
-        const created = result.upsertedCount === 1;
-        await AttendanceScanAttempt.create({ eventId: context.eventId, registrationId: person.registrationId, subjectKey: person.subjectKey, subjectType: person.subjectType, result: created ? 'marked' : 'duplicate', source: req.body.source === 'manual' ? 'manual' : 'qr', attemptedBy: req.user.id, attemptedByName: req.user.username || '', detail: created ? eventDay : `Already marked ${eventDay} by ${existing?.markedByName || 'unknown'}` });
-        await AttendanceAudit.create({ eventId: context.eventId, attendanceId: existing?._id || result.upsertedId, subjectKey: person.subjectKey, registrationId: person.registrationId, action: created ? 'created' : 'duplicate-scan', reason: created ? 'Attendance marked' : 'Repeated attendance attempt', before: existing || null, performedBy: req.user.id, performedByName: req.user.username || '', performedByRole: req.user.role || '' });
+        let result;
+        let created = false;
+        let finalDeliveredQuantity = quantityFields.deliveredQuantity;
+        if (isLunch) {
+            await Attendance.updateOne(
+                { eventId: context.eventId, eventDay, subjectKey: person.subjectKey },
+                {
+                    $setOnInsert: {
+                        ...base,
+                        eventDay,
+                        markedAt: new Date(),
+                        allocatedQuantity,
+                        deliveredQuantity: 0,
+                        acknowledgementStatus: 'pending'
+                    }
+                },
+                { upsert: true }
+            ).catch(error => {
+                // A simultaneous first scan may create the shell between match and upsert.
+                if (error?.code !== 11000) throw error;
+            });
+            const updated = await Attendance.findOneAndUpdate(
+                {
+                    eventId: context.eventId,
+                    eventDay,
+                    subjectKey: person.subjectKey,
+                    deliveredQuantity: { $lte: allocatedQuantity - requestedDeliveryQuantity },
+                    'deliveryHistory.clientOperationId': { $ne: dayOperationId }
+                },
+                {
+                    $set: {
+                        ...base,
+                        allocatedQuantity,
+                        acknowledgementStatus: 'pending',
+                        acknowledgedAt: null,
+                        acknowledgementNote: '',
+                        confirmationDueAt: new Date(Date.now() + 15 * 60 * 1000)
+                    },
+                    $inc: { deliveredQuantity: requestedDeliveryQuantity },
+                    $push: { deliveryHistory: deliveryEntry }
+                },
+                { returnDocument: 'after' }
+            ).lean();
+            if (!updated) {
+                const current = await Attendance.findOne({
+                    eventId: context.eventId, eventDay, subjectKey: person.subjectKey
+                }).lean();
+                const duplicateOperation = current?.deliveryHistory?.some(
+                    item => item.clientOperationId === dayOperationId);
+                if (duplicateOperation) {
+                    finalDeliveredQuantity = Number(current.deliveredQuantity || 0);
+                    return {
+                        day: eventDay,
+                        created: false,
+                        deliveryRecorded: false,
+                        idempotentReplay: true,
+                        deliveredQuantity: finalDeliveredQuantity,
+                        allocatedQuantity,
+                        remainingQuantity: Math.max(0, allocatedQuantity - finalDeliveredQuantity),
+                        companyCreated: false,
+                        duplicate: true,
+                        existing: current
+                    };
+                }
+                throw Object.assign(new Error(
+                    `Only ${Math.max(0, allocatedQuantity - Number(current?.deliveredQuantity || 0))} lunch item(s) remain for ${eventDay}.`
+                ), { status: 409 });
+            }
+            finalDeliveredQuantity = Number(updated.deliveredQuantity || 0);
+            created = !existing;
+            result = { upsertedId: updated._id };
+        } else {
+            result = await Attendance.updateOne(
+                { eventId: context.eventId, eventDay, subjectKey: person.subjectKey },
+                {
+                    ...attendanceUpdate,
+                    $set: {
+                        ...(attendanceUpdate.$set || {}),
+                        confirmationDueAt: new Date(Date.now() + 15 * 60 * 1000)
+                    }
+                },
+                { upsert: true }
+            );
+            created = result.upsertedCount === 1;
+        }
+        await AttendanceScanAttempt.create({ eventId: context.eventId, registrationId: person.registrationId, subjectKey: person.subjectKey, subjectType: person.subjectType, result: created ? 'marked' : 'duplicate', source: req.body.source === 'manual' ? 'manual' : 'qr', attemptedBy: req.user.id, attemptedByName: staffName, detail: created ? eventDay : `Already marked ${eventDay} by ${existing?.markedByName || 'unknown'}`, clientOperationId: dayOperationId })
+            .catch(error => {
+                if (error?.code !== 11000) throw error;
+            });
+        await AttendanceAudit.create({ eventId: context.eventId, attendanceId: existing?._id || result.upsertedId, subjectKey: person.subjectKey, registrationId: person.registrationId, action: created ? 'created' : 'duplicate-scan', reason: created ? 'Attendance marked' : 'Repeated attendance attempt', before: existing || null, performedBy: req.user.id, performedByName: staffName, performedByRole: req.user.role || '' });
         let companyCreated = false;
         if (company) {
             const companyResult = await Attendance.updateOne(
@@ -205,7 +292,7 @@ router.post('/mark', asyncRoute(async (req, res) => {
                         name: company.name, company: company.company, email: company.email,
                         mobile: company.mobile, designation: company.designation,
                         photoUrl: company.photoUrl, photoKind: company.photoKind, markedBy: req.user.id,
-                        markedByName: req.user.username || '', source: 'qr',
+                        markedByName: staffName, source: 'qr',
                         gate: String(req.body.gate || '').trim(),
                         rawQr: String(req.body.raw || '').slice(0, 2000)
                     }, $setOnInsert: { markedAt: new Date() }
@@ -218,15 +305,150 @@ router.post('/mark', asyncRoute(async (req, res) => {
             day: eventDay,
             created,
             deliveryRecorded: isLunch,
-            deliveredQuantity: quantityFields.deliveredQuantity,
+            deliveredQuantity: finalDeliveredQuantity,
             allocatedQuantity,
-            remainingQuantity: Math.max(0, allocatedQuantity - quantityFields.deliveredQuantity),
+            remainingQuantity: Math.max(0, allocatedQuantity - finalDeliveredQuantity),
             companyCreated,
             duplicate: !created && !isLunch,
             existing: existing ? { markedAt: existing.markedAt, markedByName: existing.markedByName, gate: existing.gate, source: existing.source } : null
         };
     }));
+    const hasNewActivity = results.some(result => !result.idempotentReplay);
+    if (hasNewActivity && person.attendanceKind === 'pass' && person.companyId) {
+        const quantityText = isLunch ? `${requestedDeliveryQuantity} lunch item(s)` : `${person.passType || 'exhibitor'} pass`;
+        const gateText = String(req.body.gate || '').trim() || 'gate not specified';
+        const markedAt = new Date();
+        sendExhibitorPush(
+            person.companyId,
+            'Pass activity needs confirmation',
+            `${quantityText} was recorded by ${staffName || 'IHWE staff'} at ${gateText}. Please confirm it in Usage Activity.`,
+            {
+                type: 'pass_usage_confirmation',
+                route: '/pass-usage-activity',
+                passType: person.passType,
+                quantity: isLunch ? requestedDeliveryQuantity : 1,
+                staff: staffName,
+                gate: gateText,
+                markedAt: markedAt.toISOString()
+            }
+        );
+        req.app.get('io')?.to(`exhibitor:${person.companyId}`).emit('pass-usage:pending', {
+            passType: person.passType,
+            quantity: isLunch ? requestedDeliveryQuantity : 1,
+            markedByName: staffName,
+            gate: gateText,
+            at: markedAt
+        });
+    }
     res.json({ success: true, message: 'Attendance processed successfully.', data: { person, results } });
+}));
+
+router.get('/confirmation-report', asyncRoute(async (req, res) => {
+    const context = await getEventContext(req.query.eventId);
+    const query = { eventId: context.eventId, attendanceKind: 'pass' };
+    if (req.query.status && ['pending', 'confirmed', 'disputed'].includes(req.query.status)) {
+        query.acknowledgementStatus = req.query.status;
+    }
+    const now = new Date();
+    const records = await Attendance.find(query).sort({ markedAt: -1 }).lean();
+    const staffIds = [...new Set(records.flatMap(record => [
+        record.markedBy,
+        ...(record.deliveryHistory || []).map(delivery => delivery.deliveredBy)
+    ]).filter(Boolean).map(String))];
+    const staffUsers = await User.find({ _id: { $in: staffIds } }).select('fullName username designation').lean();
+    const staffById = new Map(staffUsers.map(user => [String(user._id), user]));
+    const rows = records.flatMap(record => {
+        if (record.passType === 'lunch' && record.deliveryHistory?.length) {
+            return record.deliveryHistory.map(delivery => ({
+                ...record,
+                rowId: `${record._id}:${delivery._id}`,
+                attendanceId: record._id,
+                deliveryId: delivery._id,
+                deliveredQuantity: delivery.quantity,
+                markedAt: delivery.deliveredAt,
+                markedBy: delivery.deliveredBy || record.markedBy,
+                markedByName: staffById.get(String(delivery.deliveredBy || record.markedBy))?.fullName
+                    || delivery.deliveredByName || record.markedByName,
+                acknowledgementStatus: delivery.acknowledgementStatus || 'pending',
+                acknowledgedAt: delivery.acknowledgedAt || null,
+                acknowledgementNote: delivery.acknowledgementNote || ''
+            }));
+        }
+        return [{
+            ...record,
+            rowId: String(record._id),
+            attendanceId: record._id,
+            markedByName: staffById.get(String(record.markedBy))?.fullName || record.markedByName
+        }];
+    }).map(row => ({
+        ...row,
+        pendingSince: row.acknowledgementStatus === 'pending' ? row.markedAt : null,
+        overdue: row.acknowledgementStatus === 'pending'
+            && new Date(row.confirmationDueAt || new Date(row.markedAt).getTime() + 15 * 60 * 1000) < now
+    }));
+    res.json({ success: true, data: rows });
+}));
+
+router.post('/confirmation-report/:id/remind', asyncRoute(async (req, res) => {
+    const attendanceId = String(req.params.id).split(':')[0];
+    const record = await Attendance.findByIdAndUpdate(
+        attendanceId,
+        { $inc: { confirmationReminderCount: 1 }, $set: { lastConfirmationReminderAt: new Date() } },
+        { returnDocument: 'after' }
+    );
+    if (!record) return res.status(404).json({ success: false, message: 'Attendance record not found.' });
+    if (record.companyId) {
+        await sendExhibitorPush(
+            record.companyId,
+            'Pass confirmation reminder',
+            `${record.passType || 'Pass'} activity recorded by ${record.markedByName || 'IHWE staff'} is awaiting your confirmation.`,
+            { type: 'pass_usage_confirmation', route: '/pass-usage-activity', attendanceId }
+        );
+    }
+    res.json({ success: true, message: 'Confirmation reminder sent.', data: record });
+}));
+
+router.post('/confirmation-report/:id/manual-confirm', asyncRoute(async (req, res) => {
+    const reason = String(req.body.reason || '').trim();
+    if (!reason) return res.status(400).json({ success: false, message: 'Manual confirmation reason is required.' });
+    const [attendanceId, deliveryId] = String(req.params.id).split(':');
+    const record = await Attendance.findById(attendanceId);
+    if (!record) return res.status(404).json({ success: false, message: 'Attendance record not found.' });
+    const before = record.toObject();
+    const confirmedAt = new Date();
+    if (deliveryId && record.passType === 'lunch') {
+        const delivery = record.deliveryHistory.id(deliveryId);
+        if (!delivery) return res.status(404).json({ success: false, message: 'Lunch delivery not found.' });
+        delivery.acknowledgementStatus = 'confirmed';
+        delivery.acknowledgedAt = confirmedAt;
+        delivery.acknowledgementNote = `Admin confirmation: ${reason}`;
+        const statuses = record.deliveryHistory.map(item => item.acknowledgementStatus || 'pending');
+        record.acknowledgementStatus = statuses.includes('disputed')
+            ? 'disputed'
+            : statuses.includes('pending') ? 'pending' : 'confirmed';
+    } else {
+        record.acknowledgementStatus = 'confirmed';
+    }
+    record.acknowledgedAt = confirmedAt;
+    record.acknowledgementNote = `Admin confirmation: ${reason}`;
+    record.manuallyConfirmedBy = req.user.id;
+    record.manuallyConfirmedByName = req.user.username || '';
+    record.manualConfirmationReason = reason;
+    await record.save();
+    await AttendanceAudit.create({
+        eventId: record.eventId,
+        attendanceId: record._id,
+        subjectKey: record.subjectKey,
+        registrationId: record.registrationId,
+        action: 'acknowledged',
+        reason,
+        before,
+        after: record.toObject(),
+        performedBy: req.user.id,
+        performedByName: req.user.username || '',
+        performedByRole: req.user.role || ''
+    });
+    res.json({ success: true, message: 'Activity manually confirmed.', data: record });
 }));
 
 router.patch('/records/:id', asyncRoute(async (req, res) => {
@@ -956,8 +1178,7 @@ router.get('/companies/:companyId', asyncRoute(async (req, res) => {
             products: products.map(item => ({ ...item, images: (item.images || []).map(assetUrl) })),
             freeAccessories: accessoryCatalog.filter(item => item.type === 'complimentary').map(item => {
                 const entitledQty = computeEntitlement({ allocationMode: item.allocationMode, fixedQty: item.includedQty, ratioQty: item.ratioQty, ratioArea: item.ratioArea, roundingMode: item.roundingMode }, stallArea);
-                const claimedQty = accessoryOrders.reduce((sum, order) => sum + (order.items || []).filter(orderItem => String(orderItem.accessoryId) === String(item._id) && orderItem.type === 'complimentary').reduce((qty, orderItem) => qty + Number(orderItem.qty || 0), 0), 0);
-                return { ...item, imageUrl: assetUrl(item.imageUrl), entitledQty, claimedQty, remainingQty: Math.max(0, entitledQty - claimedQty) };
+                return { ...item, imageUrl: assetUrl(item.imageUrl), entitledQty, allocatedQty: entitledQty, allocationStatus: entitledQty > 0 ? 'included' : 'not-included' };
             }),
             additionalAccessories: accessoryOrders.flatMap(order => (order.items || []).filter(item => item.type === 'purchasable').map(item => {
                 const catalogItem = accessoryCatalog.find(accessory => String(accessory._id) === String(item.accessoryId));

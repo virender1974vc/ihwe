@@ -42,7 +42,8 @@ const attendanceSchema = new mongoose.Schema({
             default: 'pending'
         },
         acknowledgedAt: { type: Date, default: null },
-        acknowledgementNote: { type: String, default: '', trim: true }
+        acknowledgementNote: { type: String, default: '', trim: true },
+        clientOperationId: { type: String, trim: true }
     }],
     acknowledgementStatus: {
         type: String,
@@ -52,6 +53,12 @@ const attendanceSchema = new mongoose.Schema({
     },
     acknowledgedAt: { type: Date, default: null },
     acknowledgementNote: { type: String, default: '', trim: true },
+    confirmationDueAt: { type: Date, default: null, index: true },
+    confirmationReminderCount: { type: Number, min: 0, default: 0 },
+    lastConfirmationReminderAt: { type: Date, default: null },
+    manuallyConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    manuallyConfirmedByName: { type: String, default: '' },
+    manualConfirmationReason: { type: String, default: '', trim: true }
 }, { timestamps: true });
 
 attendanceSchema.index(

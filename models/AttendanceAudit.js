@@ -5,7 +5,7 @@ const attendanceAuditSchema = new mongoose.Schema({
   attendanceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Attendance', index: true },
   subjectKey: { type: String, default: '', index: true },
   registrationId: { type: String, default: '', index: true },
-  action: { type: String, enum: ['created', 'corrected', 'removed', 'duplicate-scan'], required: true, index: true },
+  action: { type: String, enum: ['created', 'corrected', 'removed', 'duplicate-scan', 'acknowledged', 'disputed'], required: true, index: true },
   reason: { type: String, default: '' },
   before: { type: mongoose.Schema.Types.Mixed, default: null },
   after: { type: mongoose.Schema.Types.Mixed, default: null },

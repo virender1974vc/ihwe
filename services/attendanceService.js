@@ -9,9 +9,11 @@ const InternationalBuyer = require('../models/InternationalBuyer');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const SellerRegistration = require('../models/SellerRegistration');
 const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
 const DelegateRegistration = require('../models/DelegateRegistration');
 const Company = require('../models/Company');
 const mongoose = require('mongoose');
+const { verifyPassQr } = require('../utils/passQrToken');
 
 const pad = (value) => String(value).padStart(2, '0');
 const dayString = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -85,12 +87,20 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
     if (qrData.reqId && Number.isInteger(Number(qrData.index))) {
         const request = await ExhibitorPassRequest.findById(qrData.reqId).lean();
         if (!request) throw Object.assign(new Error('This pass QR is not linked to a valid pass request.'), { status: 404 });
+        if (request.revokedAt) throw Object.assign(new Error('This pass has been revoked. Ask the exhibitor to open the latest QR.'), { status: 410 });
+        if (!verifyPassQr(qrData)) throw Object.assign(new Error('This pass QR is unsigned, altered, or no longer valid.'), { status: 403 });
+        if (Number(qrData.version || 0) !== Number(request.qrVersion || 1)) {
+            throw Object.assign(new Error('This pass QR has been replaced. Open the latest QR from the wallet.'), { status: 410 });
+        }
         if (request.status !== 'approved') throw Object.assign(new Error('This pass is not approved for entry.'), { status: 403 });
         if (qrData.type && normalize(qrData.type) !== request.passType) {
             throw Object.assign(new Error('Pass QR type does not match the approved pass.'), { status: 400 });
         }
         const index = Number(qrData.index);
-        const exhibitor = await ExhibitorRegistration.findById(request.exhibitorId).lean();
+        const [exhibitor, passConfig] = await Promise.all([
+            ExhibitorRegistration.findById(request.exhibitorId).lean(),
+            ExhibitorPassConfig.findOne({ passType: request.passType, isActive: true }).lean()
+        ]);
         if (!exhibitor) throw Object.assign(new Error('The company linked to this pass was not found.'), { status: 404 });
         const requestItems = request.passType === 'vehicle' ? request.vehicles : request.personnel;
         const isConsumablePass = ['lunch', 'water'].includes(request.passType);
@@ -125,7 +135,8 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
                 gender: item.gender,
                 vehicleType: item.vehicleType,
                 vehicleNumber: item.vehicleNumber,
-                allocatedQuantity: isConsumablePass ? Number(request.quantity || 1) : 1
+                allocatedQuantity: isConsumablePass ? Number(request.quantity || 1) : 1,
+                validityDays: Math.max(0, Number(passConfig?.validityDays || 0))
             }
         }, requestOrigin);
     }

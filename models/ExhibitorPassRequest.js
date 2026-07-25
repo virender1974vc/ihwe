@@ -51,7 +51,11 @@ const exhibitorPassRequestSchema = new mongoose.Schema({
     totalAmount: { type: Number, default: 0 },
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
-    razorpaySignature: { type: String }
+    razorpaySignature: { type: String },
+    qrVersion: { type: Number, min: 1, default: 1 },
+    revokedAt: { type: Date, default: null },
+    revokedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    revocationReason: { type: String, default: '', trim: true }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ExhibitorPassRequest', exhibitorPassRequestSchema);
