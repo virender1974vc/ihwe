@@ -631,6 +631,21 @@ io.on('connection', (socket) => {
     if (adminId) onlineUsers.set(socket.id, { userId: adminId, userType: 'admin', roomId: 'admin_room', userName: adminName || 'Admin' });
   });
 
+  // Lightweight room used for app-wide exhibitor operational notifications.
+  socket.on('join_exhibitor', ({ exhibitorId, token } = {}) => {
+    try {
+      const decoded = jwt.verify(String(token || ''), process.env.JWT_SECRET);
+      const authenticatedId = String(decoded.id || decoded._id || '');
+      if (decoded.role === 'exhibitor'
+        && authenticatedId === String(exhibitorId)
+        && mongoose.Types.ObjectId.isValid(authenticatedId)) {
+        socket.join(`exhibitor:${authenticatedId}`);
+      }
+    } catch (_) {
+      // Invalid clients are not allowed into exhibitor operational rooms.
+    }
+  });
+
   // Send message
   socket.on('send_message', async ({ roomId, exhibitorRegistrationId, exhibitorName, buyerRegistrationId, buyerName, senderType, senderId, senderName, message }) => {
     if (mongoose.connection.readyState !== 1) return;

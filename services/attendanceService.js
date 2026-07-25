@@ -9,9 +9,11 @@ const InternationalBuyer = require('../models/InternationalBuyer');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const SellerRegistration = require('../models/SellerRegistration');
 const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
+const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
 const DelegateRegistration = require('../models/DelegateRegistration');
 const Company = require('../models/Company');
 const mongoose = require('mongoose');
+const { verifyPassQr } = require('../utils/passQrToken');
 
 const pad = (value) => String(value).padStart(2, '0');
 const dayString = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -85,12 +87,20 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
     if (qrData.reqId && Number.isInteger(Number(qrData.index))) {
         const request = await ExhibitorPassRequest.findById(qrData.reqId).lean();
         if (!request) throw Object.assign(new Error('This pass QR is not linked to a valid pass request.'), { status: 404 });
+        if (request.revokedAt) throw Object.assign(new Error('This pass has been revoked. Ask the exhibitor to open the latest QR.'), { status: 410 });
+        if (!verifyPassQr(qrData)) throw Object.assign(new Error('This pass QR is unsigned, altered, or no longer valid.'), { status: 403 });
+        if (Number(qrData.version || 0) !== Number(request.qrVersion || 1)) {
+            throw Object.assign(new Error('This pass QR has been replaced. Open the latest QR from the wallet.'), { status: 410 });
+        }
         if (request.status !== 'approved') throw Object.assign(new Error('This pass is not approved for entry.'), { status: 403 });
         if (qrData.type && normalize(qrData.type) !== request.passType) {
             throw Object.assign(new Error('Pass QR type does not match the approved pass.'), { status: 400 });
         }
         const index = Number(qrData.index);
-        const exhibitor = await ExhibitorRegistration.findById(request.exhibitorId).lean();
+        const [exhibitor, passConfig] = await Promise.all([
+            ExhibitorRegistration.findById(request.exhibitorId).lean(),
+            ExhibitorPassConfig.findOne({ passType: request.passType, isActive: true }).lean()
+        ]);
         if (!exhibitor) throw Object.assign(new Error('The company linked to this pass was not found.'), { status: 404 });
         const requestItems = request.passType === 'vehicle' ? request.vehicles : request.personnel;
         const isConsumablePass = ['lunch', 'water'].includes(request.passType);
@@ -125,7 +135,8 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
                 gender: item.gender,
                 vehicleType: item.vehicleType,
                 vehicleNumber: item.vehicleNumber,
-                allocatedQuantity: isConsumablePass ? Number(request.quantity || 1) : 1
+                allocatedQuantity: isConsumablePass ? Number(request.quantity || 1) : 1,
+                validityDays: Math.max(0, Number(passConfig?.validityDays || 0))
             }
         }, requestOrigin);
     }
@@ -137,27 +148,33 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
     if (doc) return subject(doc, 'visitor', 'corporate-visitor', {
         registrationId, name: `${doc.firstName || ''} ${doc.lastName || ''}`, company: doc.companyName,
         email: doc.email, mobile: doc.mobile, country: doc.country, designation: doc.designation, status: doc.status,
-        details: { registrationFor: doc.registrationFor, companyWebsite: doc.companyWebsite, industrySector: doc.industrySector,
+        details: {
+            registrationFor: doc.registrationFor, companyWebsite: doc.companyWebsite, industrySector: doc.industrySector,
             companySize: doc.companySize, state: doc.state, city: doc.city, b2bMeeting: doc.b2bMeeting,
-            purposeOfVisit: doc.purposeOfVisit, areaOfInterest: doc.areaOfInterest, specificRequirement: doc.specificRequirement }
+            purposeOfVisit: doc.purposeOfVisit, areaOfInterest: doc.areaOfInterest, specificRequirement: doc.specificRequirement
+        }
     }, requestOrigin);
 
     doc = await GeneralVisitor.findOne({ registrationId }).lean();
     if (doc) return subject(doc, 'visitor', 'general-visitor', {
         registrationId, name: `${doc.firstName || ''} ${doc.lastName || ''}`, company: doc.companyName,
         email: doc.email, mobile: doc.mobile, country: doc.country, designation: doc.designation, status: doc.status,
-        details: { registrationFor: doc.registrationFor, alternateNo: doc.alternateNo, dateOfBirth: doc.dateOfBirth,
+        details: {
+            registrationFor: doc.registrationFor, alternateNo: doc.alternateNo, dateOfBirth: doc.dateOfBirth,
             gender: doc.gender, industrySector: doc.industrySector, state: doc.state, city: doc.city,
-            purposeOfVisit: doc.purposeOfVisit, areaOfInterest: doc.areaOfInterest }
+            purposeOfVisit: doc.purposeOfVisit, areaOfInterest: doc.areaOfInterest
+        }
     }, requestOrigin);
 
     doc = await FreeHealthCamp.findOne({ registrationId }).lean();
     if (doc) return subject(doc, 'visitor', 'health-camp-visitor', {
         registrationId, name: `${doc.firstName || ''} ${doc.lastName || ''}`, email: doc.email,
         mobile: doc.mobile, country: doc.country, status: doc.status,
-        details: { registrationFor: doc.registrationFor, alternateNo: doc.alternateNo, dateOfBirth: doc.dateOfBirth,
+        details: {
+            registrationFor: doc.registrationFor, alternateNo: doc.alternateNo, dateOfBirth: doc.dateOfBirth,
             gender: doc.gender, residenceAddress: doc.residenceAddress, state: doc.state, city: doc.city,
-            preferredDate: doc.preferredDate, preferredTimeSlot: doc.preferredTimeSlot, specificHealthConcerns: doc.specificHealthConcerns }
+            preferredDate: doc.preferredDate, preferredTimeSlot: doc.preferredTimeSlot, specificHealthConcerns: doc.specificHealthConcerns
+        }
     }, requestOrigin);
 
     const group = await GroupVisitor.findOne({
@@ -170,9 +187,11 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             registrationId, name: `${item.firstName || group.primaryFirstName || ''} ${item.lastName || group.primaryLastName || ''}`,
             company: group.companyName, email: item.email || group.primaryEmail,
             mobile: item.mobileNo || group.primaryMobile, country: group.country, designation: item.designation, status: group.status,
-            details: { registrationFor: group.registrationFor, gender: item.gender, companyWebsite: group.companyWebsite,
+            details: {
+                registrationFor: group.registrationFor, gender: item.gender, companyWebsite: group.companyWebsite,
                 industrySector: group.industrySector, companySize: group.companySize, state: group.state, city: group.city,
-                groupSize: group.persons?.length, purposeOfVisit: group.purposeOfVisit, areaOfInterest: group.areaOfInterest }
+                groupSize: group.persons?.length, purposeOfVisit: group.purposeOfVisit, areaOfInterest: group.areaOfInterest
+            }
         }, requestOrigin);
     }
 
@@ -180,12 +199,14 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
     if (doc) return subject(doc, 'buyer', 'buyer', {
         registrationId, name: doc.fullName || doc.contactPerson, company: doc.companyName || doc.companyFirmName,
         email: doc.emailAddress, mobile: doc.mobileNumber, country: doc.country, designation: doc.designation, status: doc.paymentStatus,
-        details: { alternateNumber: doc.alternateNumber, website: doc.website, registeredAddress: doc.registeredAddress,
+        details: {
+            alternateNumber: doc.alternateNumber, website: doc.website, registeredAddress: doc.registeredAddress,
             state: doc.stateProvince, city: doc.city, pinCode: doc.pinCode, businessType: doc.businessType,
             natureOfBusiness: doc.natureOfBusiness, buyerIndustry: doc.buyerIndustry, annualTurnover: doc.annualTurnover,
             primaryProductInterest: doc.primaryProductInterest, secondaryProductCategories: doc.secondaryProductCategories,
             purchaseTimeline: doc.purchaseTimeline, roleInPurchaseDecision: doc.roleInPurchaseDecision,
-            registrationCategory: doc.registrationCategory, buyerTag: doc.buyerTag, b2bMeetInterest: doc.b2bMeetInterest }
+            registrationCategory: doc.registrationCategory, buyerTag: doc.buyerTag, b2bMeetInterest: doc.b2bMeetInterest
+        }
     }, requestOrigin);
 
     doc = await InternationalBuyer.findOne({ registrationId }).lean();
@@ -195,11 +216,13 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
         country: doc.country, designation: doc.primaryContact?.designation,
         status: doc.verification?.adminApprovalStatus || 'Pending'
         , photoUrl: doc.primaryContact?.photoUrl || doc.documents?.logo,
-        details: { legalEntityType: doc.legalEntityType, countryOfRegistration: doc.countryOfRegistration,
+        details: {
+            legalEntityType: doc.legalEntityType, countryOfRegistration: doc.countryOfRegistration,
             yearOfEstablishment: doc.yearOfEstablishment, natureOfBusiness: doc.natureOfBusiness,
             address: doc.address, state: doc.stateProvince, city: doc.city, postalCode: doc.postalCode,
             website: doc.website, whatsappNumber: doc.primaryContact?.whatsappNumber,
-            productCategories: doc.productCategories, b2bInterest: doc.b2bInterest?.interested }
+            productCategories: doc.productCategories, b2bInterest: doc.b2bInterest?.interested
+        }
     }, requestOrigin);
 
     doc = await ExhibitorRegistration.findOne({ registrationId }).lean();
@@ -216,11 +239,11 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             }).select('companyLogo').lean();
         }
         return subject(doc, 'exhibitor', 'exhibitor', {
-        registrationId, name: doc.exhibitorName,
-        company: doc.exhibitorName, companyId: doc._id, email: doc.contact1?.email, mobile: doc.contact1?.mobile,
-        country: doc.country, designation: doc.contact1?.designation, status: doc.status
-        , photoUrl: doc.companyLogoUrl || doc.companyLogo || linkedCompany?.companyLogo,
-        photoKind: 'logo'
+            registrationId, name: doc.exhibitorName,
+            company: doc.exhibitorName, companyId: doc._id, email: doc.contact1?.email, mobile: doc.contact1?.mobile,
+            country: doc.country, designation: doc.contact1?.designation, status: doc.status
+            , photoUrl: doc.companyLogoUrl || doc.companyLogo || linkedCompany?.companyLogo,
+            photoKind: 'logo'
         }, requestOrigin);
     }
 
@@ -228,11 +251,13 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
     if (doc) return subject(doc, 'exhibitor', 'seller', {
         registrationId, name: doc.fullName || doc.contactPerson, company: doc.companyName,
         email: doc.emailAddress, mobile: doc.mobileNumber, country: doc.country, designation: doc.designation, status: doc.paymentStatus,
-        details: { alternateNumber: doc.alternateNumber, website: doc.website, registeredAddress: doc.registeredAddress,
+        details: {
+            alternateNumber: doc.alternateNumber, website: doc.website, registeredAddress: doc.registeredAddress,
             state: doc.stateProvince, city: doc.city, pinCode: doc.pinCode, businessType: doc.businessType,
             natureOfBusiness: doc.natureOfBusiness, annualTurnover: doc.annualTurnover,
             primaryProductCategory: doc.primaryProductCategory, secondaryProductCategories: doc.secondaryProductCategories,
-            targetMarket: doc.targetMarket, registrationCategory: doc.registrationCategory, sellerTag: doc.sellerTag }
+            targetMarket: doc.targetMarket, registrationCategory: doc.registrationCategory, sellerTag: doc.sellerTag
+        }
     }, requestOrigin);
 
     doc = await DelegateRegistration.findOne({ regNo: registrationId }).lean();
@@ -245,11 +270,13 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             companyId: exhibitor?._id || '', email: doc.email, mobile: doc.mobile,
             country: doc.country, designation: doc.designation, photoUrl: doc.profileImage,
             status: doc.paymentStatus, attendanceKind: 'pass', passType: 'delegate',
-            details: { title: doc.title, alternateMobile: doc.alternateMobile, address: doc.address,
+            details: {
+                title: doc.title, alternateMobile: doc.alternateMobile, address: doc.address,
                 state: doc.state, city: doc.city, pincode: doc.pincode, industrySector: doc.industrySector,
                 typeOfBusiness: doc.typeOfBusiness, registrationSource: doc.registrationSource,
                 sessions: (doc.sessions || []).map(item => item.title).filter(Boolean),
-                specialPasses: (doc.specialPasses || []).map(item => item.title).filter(Boolean) }
+                specialPasses: (doc.specialPasses || []).map(item => item.title).filter(Boolean)
+            }
         }, requestOrigin);
     }
 

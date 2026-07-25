@@ -280,9 +280,6 @@ const getMyEntitlements = async (req, res) => {
                     fixedQty: accessory.includedQty,
                 }, stallArea)
                 : 0;
-            const usedQty = accessory.type === 'complimentary'
-                ? await getUsedComplimentaryQty(exhibitorRegistrationId, accessory._id)
-                : 0;
             return {
                 accessoryId: accessory._id,
                 name: accessory.name,
@@ -290,8 +287,10 @@ const getMyEntitlements = async (req, res) => {
                 unit: accessory.unit,
                 imageUrl: accessory.imageUrl,
                 entitledQty,
-                usedQty,
-                remainingQty: Math.max(0, entitledQty - usedQty),
+                allocatedQty: entitledQty,
+                allocationStatus: entitledQty > 0 ? 'included' : 'not-included',
+                usedQty: 0,
+                remainingQty: entitledQty,
             };
         }));
 

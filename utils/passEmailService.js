@@ -1,4 +1,5 @@
 const QRCode = require('qrcode');
+const { signPassQr } = require('./passQrToken');
 const emailServiceInstance = require('./emailService');
 const whatsapp = require('./whatsapp');
 
@@ -152,7 +153,12 @@ const sendPassNotifications = async (passRequest, exhibitorData) => {
         if (items && items.length > 0) {
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
-                const qrData = JSON.stringify({ reqId: passRequest._id.toString(), type, index: i });
+                const qrData = signPassQr({
+                    reqId: passRequest._id,
+                    type,
+                    index: i,
+                    version: passRequest.qrVersion || 1
+                });
                 const qrBuffer = await QRCode.toBuffer(qrData, {
                     width: 240,
                     margin: 2,
