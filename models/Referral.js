@@ -25,6 +25,22 @@ const ReferralSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    location: {
+      type: String,
+      trim: true,
+    },
+    referralBy: {
+      type: String,
+      trim: true,
+    },
+    handleBy: {
+      type: String,
+      trim: true,
+    },
+    industry: {
+      type: String,
+      trim: true,
+    },
     remarks: {
       type: String,
       trim: true,

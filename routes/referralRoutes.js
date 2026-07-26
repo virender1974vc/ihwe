@@ -14,4 +14,8 @@ router.get('/', referralController.getReferrals);
 // @desc    Delete a referral
 router.delete('/:id', referralController.deleteReferral);
 
+// @route   PUT /api/referrals/:id
+// @desc    Update a referral
+router.put('/:id', referralController.updateReferral);
+
 module.exports = router;

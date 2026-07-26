@@ -107,6 +107,23 @@ class ReferralController {
       res.status(500).json({ success: false, message: 'Failed to delete referral' });
     }
   }
+  /**
+   * Update a referral
+   */
+  async updateReferral(req, res) {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const referral = await Referral.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+      if (!referral) {
+        return res.status(404).json({ success: false, message: 'Referral not found' });
+      }
+      res.json({ success: true, message: 'Referral updated successfully', data: referral });
+    } catch (error) {
+      console.error('Error updating referral:', error);
+      res.status(500).json({ success: false, message: 'Failed to update referral' });
+    }
+  }
 }
 
 module.exports = new ReferralController();
