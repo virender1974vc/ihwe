@@ -1,7 +1,17 @@
 const User = require('../models/User');
+const Role = require('../models/Role');
+const Department = require('../models/Department');
+const Designation = require('../models/Designation');
+const jwt = require('jsonwebtoken');
 
 const cleanString = (value) => (typeof value === 'string' ? value.trim() : '');
 const cleanOptionalImage = (value) => (typeof value === 'string' ? value : '');
+const hasUserManagementPermission = async (requester) => {
+    const roleSlug = String(requester?.role || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (roleSlug === 'superadmin' || roleSlug === 'ihwesuperadministrator') return true;
+    const role = await Role.findOne({ name: requester?.role }).select('permissions').lean();
+    return role?.permissions?.['User ID Management'] === true;
+};
 
 /**
  * Service to handle Admin User operations.
@@ -11,11 +21,7 @@ class AdminUsersService {
      * Get users based on requester's role.
      */
     async getAllAdmins(requester) {
-        let filter = {};
-        const reqRole = requester.role;
-        if (reqRole !== 'IHWE–Super Administrator') {
-            filter = { createdBy: requester.id };
-        }
+        const filter = await hasUserManagementPermission(requester) ? {} : { _id: requester.id };
         return await User.find(filter)
             .select('-password')
             .populate('createdBy', 'username role') // Optional: see who created whom
@@ -28,11 +34,52 @@ class AdminUsersService {
     async getAdminById(id, requester) {
         const user = await User.findById(id).select('-password').populate('createdBy', 'username role');
         if (!user) throw { status: 404, message: 'User not found' };
-        
-        const reqRole = requester.role;
-        if (reqRole !== 'IHWE–Super Administrator' && user._id.toString() !== requester.id && user.createdBy?.toString() !== requester.id) {
+
+        const canManageUsers = await hasUserManagementPermission(requester);
+        if (!canManageUsers && user._id.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to view this user' };
         }
+
+        const findLinkedUser = async (name, email, mobile) => {
+            const candidates = [];
+            if (email) candidates.push({ email });
+            if (mobile) candidates.push({ mobile });
+            if (name) candidates.push({ fullName: name }, { username: name });
+            if (!candidates.length) return null;
+            return User.findOne({ _id: { $ne: user._id }, $or: candidates })
+                .select('username fullName designation email mobile profileImage')
+                .lean();
+        };
+        const [hodUser, reportingUser] = await Promise.all([
+            findLinkedUser(user.hodName, user.hodEmail, user.hodMobile),
+            findLinkedUser(user.reportingToName, user.reportingToEmail, user.reportingToMobile)
+        ]);
+        let linkedDetailsChanged = false;
+        if (hodUser) {
+            const next = {
+                hodName: hodUser.fullName || hodUser.username || '',
+                hodMobile: hodUser.mobile || '',
+                hodEmail: hodUser.email || '',
+                hodDesignation: hodUser.designation || '',
+                hodImage: hodUser.profileImage || ''
+            };
+            Object.entries(next).forEach(([key, value]) => {
+                if (user[key] !== value) { user[key] = value; linkedDetailsChanged = true; }
+            });
+        }
+        if (reportingUser) {
+            const next = {
+                reportingToName: reportingUser.fullName || reportingUser.username || '',
+                reportingToMobile: reportingUser.mobile || '',
+                reportingToEmail: reportingUser.email || '',
+                reportingToDesignation: reportingUser.designation || '',
+                reportingToImage: reportingUser.profileImage || ''
+            };
+            Object.entries(next).forEach(([key, value]) => {
+                if (user[key] !== value) { user[key] = value; linkedDetailsChanged = true; }
+            });
+        }
+        if (linkedDetailsChanged) await user.save();
         return user;
     }
 
@@ -126,12 +173,48 @@ class AdminUsersService {
 
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
+        const previousIdentityNames = [userToUpdate.fullName, userToUpdate.username].filter(Boolean);
 
         const reqRole = requester.role;
-        const assignRole = role;
+        const roleSlug = String(reqRole || '').toLowerCase().replace(/[^a-z]/g, '');
+        const isSuperAdmin = roleSlug === 'superadmin' || roleSlug === 'ihwesuperadministrator';
+        const isSelf = userToUpdate._id.toString() === requester.id;
+        const canManageUsers = await hasUserManagementPermission(requester);
 
-        if (reqRole !== 'IHWE–Super Administrator' && userToUpdate.createdBy?.toString() !== requester.id) {
-            throw { status: 403, message: 'Unauthorized to update this user' };
+        if (!canManageUsers) {
+            throw { status: 403, message: 'You do not have User ID Management permission' };
+        }
+        if (password && String(password).length < 6) {
+            throw { status: 400, message: 'Password must be at least 6 characters long' };
+        }
+
+        const verifyContactProof = (token, identifier, type) => {
+            try {
+                const proof = jwt.verify(token || '', process.env.JWT_SECRET || 'ihwe_secret_2026');
+                return proof.purpose === 'official-contact-verification'
+                    && proof.type === type
+                    && proof.identifier === identifier;
+            } catch {
+                return false;
+            }
+        };
+
+        if (email !== undefined && email !== userToUpdate.email
+            && !verifyContactProof(data.emailVerificationToken, email, 'email')) {
+            throw { status: 400, message: 'Please verify the new Official Email via OTP' };
+        }
+        if (mobile !== undefined && mobile !== userToUpdate.mobile
+            && !verifyContactProof(data.mobileVerificationToken, mobile, 'phone')) {
+            throw { status: 400, message: 'Please verify the new Official Mobile Number via WhatsApp OTP' };
+        }
+
+        if (isSelf && !isSuperAdmin) {
+            if (role !== undefined && role !== userToUpdate.role) {
+                throw { status: 403, message: 'You cannot change your own role' };
+            }
+            if (status !== undefined && status !== userToUpdate.status) {
+                throw { status: 403, message: 'You cannot change your own account status' };
+            }
         }
 
         if (username && username !== userToUpdate.username) {
@@ -156,12 +239,7 @@ class AdminUsersService {
             userToUpdate.mobile = '';
         }
 
-        if (role) {
-            if (reqRole !== 'IHWE–Super Administrator' && assignRole !== 'Employee' && assignRole !== 'employee') {
-                throw { status: 403, message: 'Cannot assign non-employee roles' };
-            }
-            userToUpdate.role = role;
-        }
+        if (role) userToUpdate.role = role;
 
         if (status) userToUpdate.status = status;
         if (password) userToUpdate.password = password;
@@ -186,14 +264,52 @@ class AdminUsersService {
         if (signatureImage !== undefined) userToUpdate.signatureImage = signatureImage;
 
         await userToUpdate.save();
+
+        const linkedSnapshot = {
+            name: userToUpdate.fullName || userToUpdate.username || '',
+            mobile: userToUpdate.mobile || '',
+            email: userToUpdate.email || '',
+            designation: userToUpdate.designation || '',
+            image: userToUpdate.profileImage || ''
+        };
+        await Promise.all([
+            User.updateMany(
+                { _id: { $ne: userToUpdate._id }, hodName: { $in: previousIdentityNames } },
+                {
+                    $set: {
+                        hodName: linkedSnapshot.name,
+                        hodMobile: linkedSnapshot.mobile,
+                        hodEmail: linkedSnapshot.email,
+                        hodDesignation: linkedSnapshot.designation,
+                        hodImage: linkedSnapshot.image
+                    }
+                }
+            ),
+            User.updateMany(
+                { _id: { $ne: userToUpdate._id }, reportingToName: { $in: previousIdentityNames } },
+                {
+                    $set: {
+                        reportingToName: linkedSnapshot.name,
+                        reportingToMobile: linkedSnapshot.mobile,
+                        reportingToEmail: linkedSnapshot.email,
+                        reportingToDesignation: linkedSnapshot.designation,
+                        reportingToImage: linkedSnapshot.image
+                    }
+                }
+            ),
+            Department.updateMany(
+                { hodName: { $in: previousIdentityNames } },
+                { $set: { hodName: linkedSnapshot.name } }
+            ),
+            Designation.updateMany(
+                { reportTo: { $in: previousIdentityNames } },
+                { $set: { reportTo: linkedSnapshot.name } }
+            )
+        ]);
         const userData = userToUpdate.toObject();
         delete userData.password;
         return userData;
     }
-
-    /**
-     * Delete a user with permission checks.
-     */
     async deleteAdmin(id, requester) {
         const userToDelete = await User.findById(id);
         if (!userToDelete) throw { status: 404, message: 'User not found' };

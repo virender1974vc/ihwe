@@ -1,10 +1,7 @@
 const Otp = require('../models/Otp');
 const emailService = require('../utils/emailService');
 const whatsapp = require('../utils/whatsapp');
-
-/**
- * Controller for handling OTP generation and verification
- */
+const jwt = require('jsonwebtoken');
 class OtpController {
     /**
      * Request OTP for email or phone
@@ -62,7 +59,13 @@ class OtpController {
             // OTP is valid, delete it
             await Otp.deleteOne({ _id: otpRecord._id });
 
-            res.json({ success: true, message: 'OTP verified successfully' });
+            const verificationToken = jwt.sign(
+                { purpose: 'official-contact-verification', identifier, type },
+                process.env.JWT_SECRET || 'ihwe_secret_2026',
+                { expiresIn: '10m' }
+            );
+
+            res.json({ success: true, message: 'OTP verified successfully', verificationToken });
         } catch (error) {
             console.error('Error verifying OTP:', error);
             res.status(500).json({ success: false, message: 'Verification failed' });
