@@ -7,10 +7,10 @@ class SettingsService {
     /**
      * Get settings, creates default if none exists.
      */
-    async getSettings() {
-        let settings = await Settings.findOne();
+    async getSettings(website = '9th IHWE') {
+        let settings = await Settings.findOne({ website });
         if (!settings) {
-            settings = await new Settings({}).save();
+            settings = await new Settings({ website }).save();
         }
         return settings;
     }
@@ -18,9 +18,9 @@ class SettingsService {
     /**
      * Update settings.
      */
-    async updateSettings(updateData) {
-        let settings = await Settings.findOne();
-        if (!settings) settings = new Settings({});
+    async updateSettings(updateData, website = '9th IHWE') {
+        let settings = await Settings.findOne({ website });
+        if (!settings) settings = new Settings({ website });
 
         const { 
             logo, exhibitorBrochurePdf, emails, phones, addresses, mapIframe, 

@@ -7,8 +7,11 @@ class HeroService {
     /**
      * Get all hero slides.
      */
-    async getAllSlides() {
-        return await Hero.find().sort({ order: 1, createdAt: 1 });
+    async getAllSlides(website = '9th IHWE') {
+        const query = website === '9th IHWE' 
+            ? { $or: [{ website }, { website: { $exists: false } }] } 
+            : { website };
+        return await Hero.find(query).sort({ order: 1, createdAt: 1 });
     }
 
     /**
