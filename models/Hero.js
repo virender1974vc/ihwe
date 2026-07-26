@@ -25,6 +25,7 @@ const heroSchema = new mongoose.Schema({
         endDate: String,
         endTime: String
     },
+    website: { type: String, default: '9th IHWE' },
     createdAt: { type: Date, default: Date.now }
 });
 

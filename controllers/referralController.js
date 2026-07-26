@@ -79,6 +79,23 @@ class ReferralController {
   /**
    * Get all referrals
    */
+  
+  /**
+   * Get referral by ID
+   */
+  async getReferralById(req, res) {
+    try {
+      const referral = await Referral.findById(req.params.id);
+      if (!referral) {
+        return res.status(404).json({ success: false, message: 'Referral not found' });
+      }
+      res.json({ success: true, data: referral });
+    } catch (error) {
+      console.error('Error fetching referral by ID:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch referral' });
+    }
+  }
+
   async getReferrals(req, res) {
     try {
       const referrals = await Referral.find().sort({ createdAt: -1 });
@@ -105,6 +122,23 @@ class ReferralController {
     } catch (error) {
       console.error('Error deleting referral:', error);
       res.status(500).json({ success: false, message: 'Failed to delete referral' });
+    }
+  }
+  /**
+   * Update a referral
+   */
+  async updateReferral(req, res) {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const referral = await Referral.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
+      if (!referral) {
+        return res.status(404).json({ success: false, message: 'Referral not found' });
+      }
+      res.json({ success: true, message: 'Referral updated successfully', data: referral });
+    } catch (error) {
+      console.error('Error updating referral:', error);
+      res.status(500).json({ success: false, message: 'Failed to update referral' });
     }
   }
 }
