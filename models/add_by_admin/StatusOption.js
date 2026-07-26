@@ -22,6 +22,27 @@ const statusOptionSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    status_code: {
+      type: String,
+      trim: true,
+    },
+    description: {
+      type: String,
+      trim: true,
+    },
+    display_order: {
+      type: Number,
+      required: true,
+      default: 1,
+    },
+    color: {
+      type: String,
+      default: "#2563eb",
+    },
+    applicable_for: {
+      type: [String],
+      default: ["All"],
+    },
     added: {
       type: Date,
       default: Date.now,
