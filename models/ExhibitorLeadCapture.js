@@ -9,7 +9,7 @@ const exhibitorLeadCaptureSchema = new mongoose.Schema({
     },
     sourceType: {
         type: String,
-        enum: ['buyer', 'visitor', 'unknown'],
+        enum: ['buyer', 'visitor', 'exhibitor', 'exhibitor_pass', 'unknown'],
         default: 'unknown'
     },
     linkedBuyerId: {
@@ -24,6 +24,8 @@ const exhibitorLeadCaptureSchema = new mongoose.Schema({
     email: { type: String, trim: true, lowercase: true },
     country: { type: String, trim: true },
     interest: { type: String, trim: true },
+    buyerKind: { type: String, enum: ['domestic', 'international', ''], default: '' },
+    profileDetails: { type: mongoose.Schema.Types.Mixed, default: {} },
     notes: { type: String, trim: true },
     temperature: {
         type: String,

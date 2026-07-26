@@ -65,7 +65,7 @@ exports.updateDocumentRequirement = async (req, res) => {
                 updated_by: added_by || "admin",
                 updated: Date.now()
             },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!updatedRequirement) {

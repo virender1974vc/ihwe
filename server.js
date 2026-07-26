@@ -15,6 +15,7 @@ const cookieParser = require("cookie-parser");
 });
 const http = require("http");
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 
@@ -105,6 +106,7 @@ const generalVisitorRoutes = require("./routes/visitor/generalVisitorRoutes");
 const freeHealthCampRoutes = require("./routes/visitor/freeHealthCampRoutes");
 const visitorReviewRoutes = require("./routes/visitor/visitorReviewRoutes");
 const groupVisitorRoutes = require("./routes/visitor/groupVisitorRoutes");
+const attendanceRoutes = require("./routes/attendanceRoutes");
 const serviceDetailRoutes = require("./routes/serviceDetail");
 const bookingRoutes = require("./routes/bookingRoutes");
 const contactRoutes = require("./routes/contactRoutes");
@@ -418,6 +420,8 @@ app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
 app.use("/api/group-visitors", groupVisitorRoutes);
 app.use("/api/health-camp-visitors", freeHealthCampRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/communications", require("./routes/communicationRoutes"));
 app.use("/api/service-details", serviceDetailRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/contacts", contactRoutes);
@@ -497,6 +501,85 @@ const io = new Server(httpServer, {
 });
 app.set('io', io);
 
+// Authenticated namespace used only by the attendance-app employee communication module.
+// Identity comes from the signed JWT, never from client-supplied user IDs.
+const communicationIo = io.of('/communications');
+app.set('communicationIo', communicationIo);
+communicationIo.use(async (socket, next) => {
+  try {
+    const raw = socket.handshake.auth?.token || socket.handshake.headers?.authorization || '';
+    const token = String(raw).replace(/^Bearer\s+/i, '');
+    if (!token) return next(new Error('Authentication required.'));
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'ihwe_secret_2026');
+    const id = String(decoded?.id || decoded?._id || '');
+    if (!mongoose.Types.ObjectId.isValid(id)) return next(new Error('Invalid authenticated user.'));
+    const CommunicationUser = require('./models/User');
+    const user = await CommunicationUser.findOne({ _id: id, status: 'Active' })
+      .select('_id username fullName role')
+      .lean();
+    const normalizedRole = String(user?.role || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!user || normalizedRole === 'exhibitor') {
+      return next(new Error('Employee communication access denied.'));
+    }
+    socket.user = { ...decoded, ...user, id: String(user._id), role: user.role };
+    return next();
+  } catch (_) {
+    return next(new Error('Invalid or expired token.'));
+  }
+});
+communicationIo.on('connection', socket => {
+  const id = String(socket.user?.id || socket.user?._id || '');
+  if (!mongoose.Types.ObjectId.isValid(id)) return socket.disconnect(true);
+  socket.join(`user:${id}`);
+  socket.broadcast.emit('presence:changed', { userId: id, online: true, at: new Date() });
+  socket.on('message:delivered', async payload => {
+    try {
+      const CommunicationMessage = require('./models/CommunicationMessage');
+      const CommunicationConversation = require('./models/CommunicationConversation');
+      const messageId = String(payload?.messageId || '');
+      if (!mongoose.Types.ObjectId.isValid(messageId)) return;
+      const message = await CommunicationMessage.findById(messageId);
+      if (!message || String(message.senderId) === id) return;
+      const conversation = await CommunicationConversation.findById(message.conversationId).lean();
+      if (!conversation || ![String(conversation.superAdminId), String(conversation.employeeId)].includes(id)) return;
+      if (!message.deliveredAt) {
+        message.deliveredAt = new Date();
+        await message.save();
+      }
+      const event = {
+        conversationId: conversation._id,
+        messageIds: [message._id],
+        recipientId: id,
+        deliveredAt: message.deliveredAt
+      };
+      communicationIo.to(`user:${conversation.superAdminId}`).emit('message:delivered', event);
+      communicationIo.to(`user:${conversation.employeeId}`).emit('message:delivered', event);
+    } catch (error) {
+      console.error('Communication message delivery acknowledgement failed:', error.message);
+    }
+  });
+  socket.on('call:signal', async payload => {
+    try {
+      const CommunicationCall = require('./models/CommunicationCall');
+      const call = await CommunicationCall.findById(payload?.callId).lean();
+      if (!call || call.status !== 'accepted'
+          || ![String(call.callerId), String(call.calleeId)].includes(id)) return;
+      const recipientId = String(call.callerId) === id ? call.calleeId : call.callerId;
+      communicationIo.to(`user:${recipientId}`).emit('call:signal', {
+        callId: call._id,
+        fromUserId: id,
+        signal: payload.signal
+      });
+    } catch (error) {
+      console.error('Communication call signal failed:', error.message);
+    }
+  });
+  socket.on('disconnect', () => {
+    socket.broadcast.emit('presence:changed', { userId: id, online: false, at: new Date() });
+  });
+});
+
 const ChatMessage = require('./models/ChatMessage');
 
 // Track online users: socketId → { userId, userType, roomId, userName }
@@ -522,6 +605,21 @@ io.on('connection', (socket) => {
     socket.join('admin_room');
     if (adminName) socket.join(`admin_room_${adminName.toLowerCase()}`);
     if (adminId) onlineUsers.set(socket.id, { userId: adminId, userType: 'admin', roomId: 'admin_room', userName: adminName || 'Admin' });
+  });
+
+  // Lightweight room used for app-wide exhibitor operational notifications.
+  socket.on('join_exhibitor', ({ exhibitorId, token } = {}) => {
+    try {
+      const decoded = jwt.verify(String(token || ''), process.env.JWT_SECRET);
+      const authenticatedId = String(decoded.id || decoded._id || '');
+      if (decoded.role === 'exhibitor'
+        && authenticatedId === String(exhibitorId)
+        && mongoose.Types.ObjectId.isValid(authenticatedId)) {
+        socket.join(`exhibitor:${authenticatedId}`);
+      }
+    } catch (_) {
+      // Invalid clients are not allowed into exhibitor operational rooms.
+    }
   });
 
   // Send message
@@ -622,6 +720,8 @@ databaseReady
       console.log(`🚀 Server running on port ${PORT} with Socket.io`);
 
       // Start background services only after MongoDB is ready.
+      const { initCommunicationCallCron } = require('./jobs/communicationCallCron');
+      initCommunicationCallCron(communicationIo);
       const { startImapPoller } = require("./services/imapPollerService");
       startImapPoller();
     });

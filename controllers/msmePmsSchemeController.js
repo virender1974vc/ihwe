@@ -110,7 +110,7 @@ async function makeAdminApplicationPayload(application) {
         event: {
             name: payload.applicantDetails?.eventName || exhibitor.eventId?.name || exhibitor.eventId?.title,
             stallNumber: displayStallNo,
-            hallNumber: payload.applicantDetails?.hallNo || 'Hall 8, 9 & 10',
+            hallNumber: payload.applicantDetails?.hallNo || 'Hall 12',
             stallSize: payload.applicantDetails?.stallSize || exhibitor.participation?.stallSize,
             participationType: payload.applicantDetails?.participationType,
             bookingStatus: payload.applicantDetails?.bookingStatus,
@@ -130,6 +130,7 @@ async function makeAdminApplicationPayload(application) {
 
 async function getOrCreateClaim(exhibitorId) {
     let application = await MsmePmsScheme.findOne({ exhibitorId, applicationType: 'exhibitor_claim' });
+    let isNew = false;
     if (!application) {
         application = new MsmePmsScheme({
             exhibitorId,
@@ -140,8 +141,39 @@ async function getOrCreateClaim(exhibitorId) {
             status: 'Draft', currentStep: 1,
             statusHistory: [{ status: 'Draft', changedBy: String(exhibitorId), note: 'Application created' }]
         });
+        isNew = true;
+    }
+
+    if (application.status !== 'Approved' && application.status !== 'Rejected') {
+        const source = await ExhibitorRegistration.findById(exhibitorId).lean();
+        if (source) {
+            let changed = isNew;
+            const addDoc = (docType, url, filename) => {
+                if (url && !application.documents.some(d => d.documentType === docType)) {
+                    application.documents.push({
+                        documentType: docType,
+                        filename: filename,
+                        path: url,
+                        mimetype: 'application/pdf',
+                        size: 0
+                    });
+                    changed = true;
+                }
+            };
+            
+            addDoc('udyam', source.msme?.udyamCertificateUrl, 'udyam_certificate.pdf');
+            addDoc('gst', source.kycDocuments?.gstCertificate, 'gst_certificate.pdf');
+            addDoc('pan', source.kycDocuments?.panCard, 'pan_card.pdf');
+            addDoc('aadhaar', source.kycDocuments?.authorizedSignatoryId, 'aadhaar_card.pdf');
+            
+            if (changed) {
+                await application.save();
+            }
+        }
+    } else if (isNew) {
         await application.save();
     }
+    
     return application;
 }
 
@@ -159,7 +191,7 @@ async function hydrateAdminDraft(application) {
         contactName, designation: source.contact1?.designation || '', mobileNumber: source.contact1?.mobile || '', alternateNumber: source.contact1?.alternateNo || '',
         addressLine1: source.address || '', addressLine2: '', country: source.country || 'India', state: source.state || '', city: source.city || '', pincode: source.pincode || '',
         eventName: source.eventId?.name || source.eventId?.title || '', stallNo: source.participation?.stallFor || source.participation?.stallNo || '',
-        hallNo: 'Hall 8, 9 & 10', stallSize: source.participation?.stallSize || '', participationType: source.participation?.stallType || source.participation?.stallCategory || '',
+        hallNo: 'Hall 12', stallSize: source.participation?.stallSize || '', participationType: source.participation?.stallType || source.participation?.stallCategory || '',
         bookingStatus: source.participation?.stallFor || source.participation?.stallNo ? 'Confirmed' : source.status,
         paymentStatus: invoiceValue > 0 && Number(source.amountPaid || 0) >= invoiceValue ? 'Fully Paid' : Number(source.amountPaid || 0) > 0 ? 'Partially Paid' : 'Pending',
         emailId: source.contact1?.email || source.companyEmail || '',
@@ -215,7 +247,7 @@ class MsmePmsSchemeController {
                         pincode: source.pincode || '',
                         eventName: source.eventId?.name || source.eventId?.title || '',
                         stallNo: source.participation?.stallFor || '',
-                        hallNo: 'Hall 8, 9 & 10',
+                        hallNo: 'Hall 12',
                         stallSize: source.participation?.stallSize || '',
                         participationType: source.participation?.stallType || source.participation?.stallCategory || '',
                         bookingStatus: source.participation?.stallNo || source.participation?.stallFor ? 'Confirmed' : source.status,
@@ -280,7 +312,8 @@ class MsmePmsSchemeController {
 
     async getMyApplication(req, res) {
         try {
-            const application = await getOrCreateClaim(req.user.id);
+            let application = await getOrCreateClaim(req.user.id);
+            application = await makeAdminApplicationPayload(application);
             res.json({ success: true, data: application });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Could not load application', error: error.message });

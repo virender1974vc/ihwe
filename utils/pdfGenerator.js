@@ -357,11 +357,11 @@ class PDFGenerator {
                 // ── QR Code ──
                 const qrX = pageW - 120, qrY = y + 35;
                 try {
-                    const siteUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
-                    const loginUrl = `${siteUrl}/exhibitor-login`;
-                    const qrBuffer = await QRCode.toBuffer(loginUrl, { margin: 1, width: 80 });
+                    const qrPayload = JSON.stringify({ registrationId: String(registration.registrationId || '').trim() });
+                    if (!registration.registrationId) throw new Error('Exhibitor registration ID is missing');
+                    const qrBuffer = await QRCode.toBuffer(qrPayload, { margin: 1, width: 80 });
                     doc.image(qrBuffer, qrX, qrY, { width: 80 });
-                    doc.fillColor(GRAY).fontSize(7).text('Scan for Login', qrX, qrY + 85, { width: 80, align: 'center' });
+                    doc.fillColor(GRAY).fontSize(7).text('Exhibitor Entry QR', qrX, qrY + 85, { width: 80, align: 'center' });
                 } catch (qrErr) { console.error('QR Generate Error:', qrErr); }
 
                 doc.end();

@@ -61,6 +61,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     pincode: String,
     landlineNo: String,
     companyEmail: { type: String, trim: true, lowercase: true },
+    companyLogoUrl: { type: String, default: '' },
     gstNo: String,
     panNo: String,
     aadhaarNo: String,
@@ -128,6 +129,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     registrationPdfUrl: String,
     receiptPdfUrl: String,
     paymentHistory: [{
+        accountPaymentId: String,
         amount: Number,
         paymentType: String,
         paymentMode: String,
@@ -265,14 +267,12 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
             service: Boolean,
             visitor: Boolean,
             water: Boolean,
-            dinner: Boolean
         },
         verificationStatus: { type: String, enum: ['Pending', 'Verified', 'Rejected'], default: 'Pending' }
     }],
     entitlements: {
         lunchCount: { type: Number, default: 0 },
         waterBottleCount: { type: Number, default: 0 },
-        dinnerCount: { type: Number, default: 0 },
         delegatePassQuota: { type: Number, default: 0 },
         delegatePassUsed: { type: Number, default: 0 }
     }

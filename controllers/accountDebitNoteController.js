@@ -292,7 +292,17 @@ const enrichWithSettlementStatus = async (notes) => {
 // GET ALL (optionally filtered by companyId) — enriched with real settlement status
 const getAccountDebitNotes = async (req, res) => {
   try {
-    const filter = req.query.companyId ? { companyId: req.query.companyId } : {};
+    let filter = {};
+    if (req.query.companyId) {
+      const requestedId = req.query.companyId;
+      const { company, exhibitor } = await resolveCompanyAndExhibitor(requestedId);
+      const linkedIds = [
+        requestedId,
+        company?._id?.toString(),
+        exhibitor?._id?.toString(),
+      ].filter(Boolean);
+      filter = { companyId: { $in: [...new Set(linkedIds)] } };
+    }
     const notes = await AccountDebitNote.find(filter).sort({ added: -1 }).lean();
     const enriched = await enrichWithSettlementStatus(notes);
 
@@ -356,7 +366,7 @@ const updateAccountDebitNote = async (req, res) => {
     if (update.reviewedBy !== undefined) update.reviewedBy = parseJsonField(update.reviewedBy);
     if (req.file) update.attachmentUrl = `/uploads/account_debit_notes/${req.file.filename}`;
 
-    const updated = await AccountDebitNote.findByIdAndUpdate(req.params.id, update, { new: true });
+    const updated = await AccountDebitNote.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after' });
     if (!updated) return res.status(404).json({ success: false, message: "Debit note not found" });
     const accountName = await getAccountNameById(updated.companyId, "account");
     await logActivity(req, "Updated", "Accounts", `Updated Debit Note ${updated.debit_note_no} for ${accountName}.`);

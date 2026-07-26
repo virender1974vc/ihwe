@@ -1292,6 +1292,33 @@ class EmailService {
             const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
             let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
             let bodyContent = this.applyPlaceholders(rawBody, data);
+            let exhibitorQrBuffer = null;
+            if (registration.registrationId) {
+                const qrPayload = JSON.stringify({ registrationId: String(registration.registrationId).trim() });
+                try {
+                    const storedQr = String(registration.qrCode || '');
+                    const base64Match = storedQr.match(/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/);
+                    exhibitorQrBuffer = base64Match
+                        ? Buffer.from(base64Match[1], 'base64')
+                        : await QRCode.toBuffer(qrPayload, {
+                            width: 180,
+                            margin: 2,
+                            color: { dark: '#000000', light: '#ffffff' }
+                        });
+                    const qrBlock = `
+                        <div style="text-align:center;margin:24px 0;padding:18px;border:1px solid #dbe4d8;border-radius:10px;background:#f8fbf7;">
+                            <p style="font-weight:700;color:#23471d;margin:0 0 10px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Exhibitor Entry QR Code</p>
+                            <img src="cid:exhibitor_entry_qr@ihwe.in" alt="Exhibitor Entry QR Code" width="150" height="150" style="display:inline-block;border:4px solid #23471d;border-radius:8px;" />
+                            <p style="margin:9px 0 0;font-size:12px;color:#64748b;">Registration ID: <strong>${registration.registrationId}</strong></p>
+                            <p style="margin:4px 0 0;font-size:11px;color:#94a3b8;">Use this same QR code at the venue and in your stall dashboard.</p>
+                        </div>`;
+                    bodyContent = bodyContent.includes(QR_TOKEN)
+                        ? bodyContent.replace(QR_TOKEN, qrBlock)
+                        : bodyContent + qrBlock;
+                } catch (qrError) {
+                    console.error('[Exhibitor QR] Email QR generation failed:', qrError.message);
+                }
+            }
             bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
 
             const getImageBuffer = (imgPath) => {
@@ -1325,6 +1352,13 @@ class EmailService {
             });
 
             const attachments = [];
+            if (exhibitorQrBuffer) {
+                attachments.push({
+                    filename: `exhibitor-entry-${registration.registrationId}.png`,
+                    content: exhibitorQrBuffer,
+                    cid: 'exhibitor_entry_qr@ihwe.in'
+                });
+            }
             if (headerBuf) {
                 const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
                 attachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img' });

@@ -50,7 +50,7 @@ mongoose.connect(process.env.MONGO_URI_MAIN || process.env.MONGO_URI)
             await ExhibitorPassConfig.findOneAndUpdate(
                 { passType: pass.passType },
                 { $setOnInsert: pass },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
             console.log(`Ensured config for ${pass.passType}`);
         }

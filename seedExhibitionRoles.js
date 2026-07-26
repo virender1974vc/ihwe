@@ -27,7 +27,7 @@ const seedExhibitionRoles = async () => {
       await ExhibitionRole.findOneAndUpdate(
         { name },
         { $setOnInsert: { name, status: "active", updated_by: "Seed" } },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
     }
 

@@ -141,7 +141,7 @@ const getDebitNoteById = async (req, res) => {
 const updateDebitNote = async (req, res) => {
   try {
     const updated = await DebitNote.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
     });
     if (!updated) {
       return res.status(404).json({ success: false, message: "Debit note not found" });
