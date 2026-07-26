@@ -1,4 +1,5 @@
 const QRCode = require('qrcode');
+const { signPassQr } = require('./passQrToken');
 const emailServiceInstance = require('./emailService');
 const whatsapp = require('./whatsapp');
 
@@ -8,7 +9,6 @@ const PASS_META = {
     service: { title: 'Service Pass', detailTitle: 'Service Personnel Details', color: '#6d28d9' },
     visitor: { title: 'Visitor Pass', detailTitle: 'Visitor Details', color: '#1d4ed8' },
     lunch: { title: 'Lunch Pass', detailTitle: 'Pass Holder Details', color: '#15803d' },
-    dinner: { title: 'Dinner Pass', detailTitle: 'Pass Holder Details', color: '#be185d' },
     water: { title: 'Water Bottle Pass', detailTitle: 'Pass Holder Details', color: '#0369a1' }
 };
 
@@ -153,7 +153,12 @@ const sendPassNotifications = async (passRequest, exhibitorData) => {
         if (items && items.length > 0) {
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
-                const qrData = JSON.stringify({ reqId: passRequest._id.toString(), type, index: i });
+                const qrData = signPassQr({
+                    reqId: passRequest._id,
+                    type,
+                    index: i,
+                    version: passRequest.qrVersion || 1
+                });
                 const qrBuffer = await QRCode.toBuffer(qrData, {
                     width: 240,
                     margin: 2,

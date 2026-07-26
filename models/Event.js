@@ -35,6 +35,11 @@ const eventSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    dailyAttendanceTarget: {
+        type: Number,
+        default: 500,
+        min: 1
+    },
     paymentPlans: [{
         id: String,
         label: String,

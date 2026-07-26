@@ -39,7 +39,7 @@ exports.createDay = async (req, res) => {
 
 exports.updateDay = async (req, res) => {
     try {
-        const updated = await DelegateDay.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const updated = await DelegateDay.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         res.json({ success: true, data: updated });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
@@ -67,7 +67,7 @@ exports.createSession = async (req, res) => {
 
 exports.updateSession = async (req, res) => {
     try {
-        const updated = await DelegateSession.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const updated = await DelegateSession.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         res.json({ success: true, data: updated });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });
@@ -103,7 +103,7 @@ exports.createPass = async (req, res) => {
 
 exports.updatePass = async (req, res) => {
     try {
-        const updated = await DelegatePass.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const updated = await DelegatePass.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         res.json({ success: true, data: updated });
     } catch (error) {
         res.status(400).json({ success: false, message: error.message });

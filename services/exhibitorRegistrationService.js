@@ -6,18 +6,11 @@ const path = require('path');
 const qrcode = require('qrcode');
 
 class ExhibitorRegistrationService {
-    async getAllRegistrations(options = {}) {
-        const {
-            page = 1,
-            limit = 20,
-            search = '',
-            status = '',
-            referredBy = '',
-            industry = '',
-        } = options;
-
-        // Build MongoDB query — filter at DB level, not in JS
+    // Shared filter builder used by both the paginated list and the summary
+    // aggregation, so "what matches" is defined in exactly one place.
+    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = {}) {
         const query = {};
+        const orGroups = []; // each entry ANDed together; each entry itself is an $or list
 
         if (status) {
             query.status = status;
@@ -27,31 +20,69 @@ class ExhibitorRegistrationService {
             query.referredBy = { $regex: new RegExp(`^${esc}$`, 'i') };
         }
         if (industry) {
+            // Must mirror the exact "natureOfBusiness || industrySector || typeOfBusiness"
+            // priority chain the UI displays under the company name — otherwise a row can
+            // match the filter on one field while showing a DIFFERENT field's value,
+            // making the filter look broken.
             const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            query.$or = [
-                { natureOfBusiness: { $regex: new RegExp(esc, 'i') } },
-                { industrySector: { $regex: new RegExp(esc, 'i') } },
-                { typeOfBusiness: { $regex: new RegExp(esc, 'i') } },
-            ];
+            const exact = new RegExp(`^${esc}$`, 'i');
+            const isEmpty = (field) => ({ $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }] });
+            orGroups.push([
+                { natureOfBusiness: exact },
+                { $and: [isEmpty('natureOfBusiness'), { industrySector: exact }] },
+                { $and: [isEmpty('natureOfBusiness'), isEmpty('industrySector'), { typeOfBusiness: exact }] },
+            ]);
         }
         if (search) {
             const esc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const searchOr = [
+            orGroups.push([
                 { exhibitorName: { $regex: new RegExp(esc, 'i') } },
                 { companyName: { $regex: new RegExp(esc, 'i') } },
                 { 'contact1.email': { $regex: new RegExp(esc, 'i') } },
                 { 'contact1.mobile': { $regex: new RegExp(esc, 'i') } },
                 { 'contact2.email': { $regex: new RegExp(esc, 'i') } },
                 { 'contact2.mobile': { $regex: new RegExp(esc, 'i') } },
-            ];
-            if (query.$or) {
-                query.$and = [{ $or: query.$or }, { $or: searchOr }];
-                delete query.$or;
-            } else {
-                query.$or = searchOr;
-            }
+            ]);
         }
 
+        // Restrict non-super-admins to registrations they personally handled.
+        // Super admins (and requests with no user context, e.g. internal jobs) see everything.
+        const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
+        const isSuperAdmin = cleanRole === 'superadmin' || cleanRole === 'ihwesuperadministrator';
+        if (username && !isSuperAdmin) {
+            const escUser = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const nameCandidates = [username];
+            try {
+                const User = require('../models/User');
+                const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escUser}$`, 'i') } }).select('fullName').lean();
+                if (adminUser?.fullName) nameCandidates.push(adminUser.fullName);
+            } catch (_) { }
+
+            const scopeOr = [];
+            nameCandidates.forEach((name) => {
+                const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                scopeOr.push({ spokenWith: { $regex: new RegExp(`^${esc}$`, 'i') } });
+                scopeOr.push({ filledByFullName: { $regex: new RegExp(`^${esc}$`, 'i') } });
+            });
+            orGroups.push(scopeOr);
+        }
+
+        if (orGroups.length === 1) {
+            query.$or = orGroups[0];
+        } else if (orGroups.length > 1) {
+            query.$and = orGroups.map((group) => ({ $or: group }));
+        }
+
+        return query;
+    }
+
+    async getAllRegistrations(options = {}) {
+        const {
+            page = 1,
+            limit = 20,
+        } = options;
+
+        const query = await this._buildRegistrationsQuery(options);
         const skip = (Number(page) - 1) * Number(limit);
 
         // Count + fetch in parallel — only fetches current page records
@@ -76,6 +107,104 @@ class ExhibitorRegistrationService {
         };
     }
 
+    // Aggregated totals across ALL registrations matching the current filters/user-scope
+    // (not just the current page) — powers the stat cards on the exhibitor list.
+    async getRegistrationsSummary(options = {}) {
+        const query = await this._buildRegistrationsQuery(options);
+
+        const [result] = await ExhibitorRegistration.aggregate([
+            { $match: query },
+            {
+                $addFields: {
+                    _revenueValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$financeBreakdown.netPayable', 0] }, 0] }, '$financeBreakdown.netPayable',
+                            { $cond: [
+                                { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
+                                { $ifNull: ['$amountPaid', 0] },
+                            ] },
+                        ],
+                    },
+                    _paymentValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$amountPaid', 0] }, 0] }, '$amountPaid',
+                            { $ifNull: ['$financeBreakdown.paidAmount', 0] },
+                        ],
+                    },
+                    _areaValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$participation.stallSize', 0] }, 0] }, '$participation.stallSize',
+                            { $ifNull: ['$stallSize', 0] },
+                        ],
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalCount: { $sum: 1 },
+                    totalArea: { $sum: '$_areaValue' },
+                    totalRevenue: { $sum: '$_revenueValue' },
+                    paymentReceived: { $sum: '$_paymentValue' },
+                    // Missing exhibitorStatus (e.g. direct website self-registrations with no admin
+                    // selection) defaults to "New Client" — only an explicit "Existing Client" counts otherwise.
+                    existingClientsCount: { $sum: { $cond: [{ $eq: ['$exhibitorStatus', 'Existing Client'] }, 1, 0] } },
+                    newClientsCount: { $sum: { $cond: [{ $eq: ['$exhibitorStatus', 'Existing Client'] }, 0, 1] } },
+                },
+            },
+        ]);
+
+        return result || {
+            totalCount: 0,
+            totalArea: 0,
+            totalRevenue: 0,
+            paymentReceived: 0,
+            newClientsCount: 0,
+            existingClientsCount: 0,
+        };
+    }
+
+    // Distinct filter dropdown values scoped to the user (same scoping as the list),
+    // computed across ALL of that user's registrations — not just the current page.
+    async getFilterOptions(options = {}) {
+        const { username = '', role = '' } = options;
+        const query = await this._buildRegistrationsQuery({ username, role });
+
+        const isNonEmpty = (field) => ({ $and: [{ $ne: [field, null] }, { $ne: [field, ''] }] });
+
+        const [sources, statuses, industryDocs] = await Promise.all([
+            ExhibitorRegistration.distinct('referredBy', query),
+            ExhibitorRegistration.distinct('status', query),
+            // Resolve the SAME "natureOfBusiness || industrySector || typeOfBusiness"
+            // priority chain the UI displays under the company name, so the dropdown
+            // options exactly match what filtering by them will show.
+            ExhibitorRegistration.aggregate([
+                { $match: query },
+                {
+                    $addFields: {
+                        _resolvedIndustry: {
+                            $switch: {
+                                branches: [
+                                    { case: isNonEmpty('$natureOfBusiness'), then: '$natureOfBusiness' },
+                                    { case: isNonEmpty('$industrySector'), then: '$industrySector' },
+                                ],
+                                default: '$typeOfBusiness',
+                            },
+                        },
+                    },
+                },
+                { $match: { _resolvedIndustry: { $nin: [null, ''] } } },
+                { $group: { _id: '$_resolvedIndustry' } },
+                { $sort: { _id: 1 } },
+            ]),
+        ]);
+
+        return {
+            sources: sources.filter(Boolean).sort(),
+            statuses: statuses.filter(Boolean).sort(),
+            industries: industryDocs.map((d) => d._id),
+        };
+    }
 
     async getRegistrationById(id) {
         const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate paymentPlans');
@@ -130,7 +259,17 @@ class ExhibitorRegistrationService {
         if (query.$or.length === 0) return regs;
 
         const allRelated = await ExhibitorRegistration.find(query).sort({ updatedAt: -1 }).lean();
-        const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'natureOfBusiness', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
+        const Company = require('../models/Company');
+        const clientIds = [...new Set(regs.map((reg) => String(reg.clientId || '')).filter(Boolean))];
+        const linkedCompanies = clientIds.length
+            ? await Company.find({ _id: { $in: clientIds } }).select('contacts').lean()
+            : [];
+        const companyById = new Map(linkedCompanies.map((company) => [String(company._id), company]));
+        // natureOfBusiness intentionally excluded: it drives the Industry filter and the
+        // "Company Name" subtitle, both computed from each registration's OWN raw field —
+        // cross-filling it from a sibling registration made the filter look broken (a row
+        // would match on its real field but *display* a different sibling's value).
+        const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
 
         const results = regs.map(r => {
             const doc = r;
@@ -200,6 +339,43 @@ class ExhibitorRegistrationService {
             if (!doc.contact2?.firstName && masterData.contact2) {
                 doc.contact2 = masterData.contact2;
                 doc._isEnriched = true;
+            }
+
+            const hasContactDetails = (contact) => Boolean(
+                contact?.firstName || contact?.lastName || contact?.name || contact?.mobile || contact?.email
+            );
+            if (!hasContactDetails(doc.contact1)) {
+                const primaryTeamMember = doc.teamMembers?.find((member) =>
+                    member.isPrimary || /primary contact/i.test(member.roleAtExhibition || '')
+                );
+                const linkedCompany = companyById.get(String(doc.clientId || ''));
+                const companyContact =
+                    linkedCompany?.contacts?.find((contact) => contact.isPrimary)
+                    || linkedCompany?.contacts?.[0];
+
+                if (primaryTeamMember) {
+                    doc.contact1 = {
+                        title: '',
+                        firstName: primaryTeamMember.name || '',
+                        lastName: '',
+                        designation: primaryTeamMember.designation || '',
+                        email: primaryTeamMember.email || '',
+                        mobile: primaryTeamMember.mobile || '',
+                        photoUrl: primaryTeamMember.photoUrl || '',
+                    };
+                    doc._isEnriched = true;
+                } else if (companyContact) {
+                    doc.contact1 = {
+                        title: companyContact.title || '',
+                        firstName: companyContact.firstName || companyContact.name || '',
+                        lastName: companyContact.surname || '',
+                        designation: companyContact.designation || '',
+                        email: companyContact.email || '',
+                        mobile: companyContact.mobile || '',
+                        photoUrl: companyContact.photoUrl || companyContact.photo || '',
+                    };
+                    doc._isEnriched = true;
+                }
             }
             return doc;
         });
@@ -625,11 +801,19 @@ class ExhibitorRegistrationService {
                     supply_date: new Date().toISOString().split('T')[0],
                     consignee_name: data.exhibitorName || 'Unknown Company',
                     consignee_addr: data.address || 'N/A',
+                    consignee_person: [
+                        data.contact1?.title,
+                        data.contact1?.firstName,
+                        data.contact1?.lastName
+                    ].filter(Boolean).join(' '),
+                    consignee_phone: data.contact1?.mobile || '',
                     country: data.country || 'N/A',
                     state: data.state || 'N/A',
                     city: data.city || 'N/A',
                     pincode: data.pincode || 0,
-                    finalAmount: parsedFinance?.netPayable || 0,
+                    // Proforma/tax-invoice value is before TDS. TDS affects the cash
+                    // collected, not the taxable document value.
+                    finalAmount: parsedParticipation?.total || 0,
                     added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
                     items: []
                 };
@@ -637,7 +821,13 @@ class ExhibitorRegistrationService {
                 if (parsedParticipation && parsedParticipation.stallFor) {
                     const rate = Number(parsedParticipation.rate) || 0;
                     const size = Number(parsedParticipation.stallSize) || 0;
-                    const baseAmount = rate * size;
+                    const grossAmount = Number(parsedFinance?.grossAmount) || (rate * size);
+                    const taxableAmount = Number(parsedFinance?.subtotal) || Number(parsedParticipation.amount) || grossAmount;
+                    const discountPercent = grossAmount > 0
+                        ? Math.max(0, Math.min(100, ((grossAmount - taxableAmount) / grossAmount) * 100))
+                        : 0;
+                    const invoiceTotal = Number(parsedParticipation.total)
+                        || (taxableAmount + (Number(parsedFinance?.gstAmount) || 0));
 
                     estData.items.push({
                         description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
@@ -646,13 +836,13 @@ class ExhibitorRegistrationService {
                         size: size,
                         unit: "Sqm",
                         rate: rate,
-                        amount: baseAmount,
-                        disc: Number(parsedFinance?.discountAmount) || 0,
+                        amount: grossAmount,
+                        disc: Number(discountPercent.toFixed(4)),
                         tax: Number(parsedFinance?.gstAmount) || 0,
                         gstRate: "18%",
                         cgst_per: "9",
                         igst_per: "9",
-                        finalAmount: Number(parsedFinance?.netPayable) || 0,
+                        finalAmount: invoiceTotal,
                     });
                 }
 
@@ -670,7 +860,7 @@ class ExhibitorRegistrationService {
                 const bookedStall = await Stall.findOneAndUpdate(
                     { _id: data.participation.stallNo, status: { $ne: 'booked' } },
                     { status: 'booked', bookedBy: saved._id },
-                    { new: true }
+                    { returnDocument: 'after' }
                 );
                 if (!bookedStall) {
                     throw new Error('This stall has just been booked by someone else. Please choose a different stall and try again.');
@@ -755,7 +945,7 @@ class ExhibitorRegistrationService {
                 const bookedStall = await Stall.findOneAndUpdate(
                     { _id: data.participation.stallNo, status: { $ne: 'booked' } },
                     { status: 'booked', bookedBy: id },
-                    { new: true }
+                    { returnDocument: 'after' }
                 );
                 if (!bookedStall) {
                     throw new Error('The selected stall has already been booked by another registration. Please choose a different stall.');
@@ -1163,7 +1353,7 @@ class ExhibitorRegistrationService {
             const bookedStall = await Stall.findOneAndUpdate(
                 { _id: registration.participation.stallNo, status: { $ne: 'booked' } },
                 { status: 'booked', bookedBy: registration._id },
-                { new: true }
+                { returnDocument: 'after' }
             );
             if (!bookedStall) {
                 registration.stallConflict = true;

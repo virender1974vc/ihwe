@@ -130,6 +130,7 @@ router.get('/by-username/:username', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
+router.get('/:id', verifyToken, (req, res) => adminUsersController.getAdminById(req, res));
 
 // @route   POST /api/admin/create
 // @desc    Create a new admin user

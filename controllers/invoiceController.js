@@ -186,12 +186,23 @@ const getInvoiceById = async (req, res) => {
 
     if (invoice.companyId) {
       let company = await Company.findById(invoice.companyId).lean();
-      if (!company) {
-        company = await ExhibitorRegistration.findById(invoice.companyId).lean();
+      let exhibitor = null;
+      if (company?.exhibitorRegistrationId) {
+        exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId).lean();
       }
-      if (company) {
-        invoice.exhibitor = company;
+      if (!exhibitor) {
+        exhibitor = await ExhibitorRegistration.findOne({
+          $or: [
+            { _id: invoice.companyId },
+            { clientId: invoice.companyId }
+          ]
+        }).lean();
       }
+      if (!company && exhibitor?.clientId) {
+        company = await Company.findById(exhibitor.clientId).lean();
+      }
+      if (company) invoice.company = company;
+      if (exhibitor) invoice.exhibitor = exhibitor;
     }
 
     res.status(200).json(invoice);
@@ -361,6 +372,8 @@ const buildRevisedInvoiceData = (invoice, estimate) => ({
   event_gst_no: estimate.event_gst_no || "",
   consignee_name: estimate.consignee_name || estimate.event_name || "",
   consignee_addr: estimate.consignee_addr || estimate.event_place_of_supply || "",
+  consignee_person: estimate.consignee_person || "",
+  consignee_phone: estimate.consignee_phone || "",
   billing_address: estimate.company_addr || invoice.billing_address,
   country: estimate.country || "", state: estimate.state || "", city: estimate.city || "",
   pincode: String(estimate.pincode || ""),
@@ -372,8 +385,13 @@ const buildRevisedInvoiceData = (invoice, estimate) => ({
 
 const getInvoiceRevisionDependencies = async (invoice) => {
   const invoiceId = String(invoice._id);
+  const paymentDocumentIds = [
+    invoiceId,
+    invoice.source_estimate_id ? String(invoice.source_estimate_id) : "",
+  ].filter(Boolean);
   const [payments, creditNotes, debitNotes] = await Promise.all([
-    Payment.find({ invoice_id: invoiceId }).select("_id ex_no amount_text f_amount payment_date status").lean(),
+    Payment.find({ invoice_id: { $in: paymentDocumentIds } })
+      .select("_id ex_no invoice_id amount_text f_amount payment_date status").lean(),
     CreditNote.find({ companyId: String(invoice.companyId), est_no: invoice.estimate_no })
       .select("_id create_note_no status").lean(),
     DebitNote.find({

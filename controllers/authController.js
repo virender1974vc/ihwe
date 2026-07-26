@@ -107,6 +107,32 @@ class AuthController {
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
         }
     }
+    async sendChangePasswordOtp(req, res) {
+        try {
+            const adminId = req.body.adminId;
+            const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
+            if (req.user.id !== adminId && userRole !== 'ihwe–super-administrator') {
+                return res.status(403).json({ success: false, message: 'Unauthorized' });
+            }
+            await authService.sendChangePasswordOtp(adminId);
+            res.json({ success: true, message: 'OTP sent to your registered WhatsApp number' });
+        } catch (error) {
+            res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
+        }
+    }
+    async changePasswordWithOtp(req, res) {
+        try {
+            const { adminId, otp, newPassword, newUsername } = req.body;
+            const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
+            if (req.user.id !== adminId && userRole !== 'ihwe–super-administrator') {
+                return res.status(403).json({ success: false, message: 'Unauthorized' });
+            }
+            const data = await authService.changePasswordWithOtp(adminId, otp, newPassword, newUsername);
+            res.json({ success: true, message: 'Password updated successfully', user: data });
+        } catch (error) {
+            res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
+        }
+    }
 }
 
 module.exports = new AuthController();
