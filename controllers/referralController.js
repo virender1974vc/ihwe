@@ -79,6 +79,23 @@ class ReferralController {
   /**
    * Get all referrals
    */
+  
+  /**
+   * Get referral by ID
+   */
+  async getReferralById(req, res) {
+    try {
+      const referral = await Referral.findById(req.params.id);
+      if (!referral) {
+        return res.status(404).json({ success: false, message: 'Referral not found' });
+      }
+      res.json({ success: true, data: referral });
+    } catch (error) {
+      console.error('Error fetching referral by ID:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch referral' });
+    }
+  }
+
   async getReferrals(req, res) {
     try {
       const referrals = await Referral.find().sort({ createdAt: -1 });

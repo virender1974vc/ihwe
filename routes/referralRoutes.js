@@ -10,6 +10,9 @@ router.post('/', referralController.createReferral);
 // @desc    Get all referrals
 router.get('/', referralController.getReferrals);
 
+// @route   GET /api/referrals/:id
+router.get('/:id', referralController.getReferralById);
+
 // @route   DELETE /api/referrals/:id
 // @desc    Delete a referral
 router.delete('/:id', referralController.deleteReferral);

@@ -41,6 +41,27 @@ const ReferralSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    estStallSize: {
+      type: String,
+      trim: true,
+    },
+    estValue: {
+      type: Number,
+      default: 0,
+    },
+    leadSource: {
+      type: String,
+      trim: true,
+    },
+    conversionStatus: {
+      type: String,
+      enum: ["Open", "Contacted", "In Discussion", "Proposal Sent", "Under Negotiation", "Stall Booked", "Payment Pending", "Converted", "Lost", "N/A"],
+      default: "Open",
+    },
+    referralBonus: {
+      type: Number,
+      default: 0,
+    },
     remarks: {
       type: String,
       trim: true,
