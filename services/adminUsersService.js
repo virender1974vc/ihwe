@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Role = require('../models/Role');
 const Department = require('../models/Department');
 const Designation = require('../models/Designation');
+const ActivityLog = require('../models/activity/activityLogModel');
 const jwt = require('jsonwebtoken');
 
 const cleanString = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -24,7 +25,8 @@ class AdminUsersService {
         const filter = await hasUserManagementPermission(requester) ? {} : { _id: requester.id };
         return await User.find(filter)
             .select('-password')
-            .populate('createdBy', 'username role') // Optional: see who created whom
+            .populate('createdBy', 'username fullName role')
+            .populate('updatedBy', 'username fullName role')
             .sort({ createdAt: 1 });
     }
 
@@ -32,12 +34,47 @@ class AdminUsersService {
      * Get a single admin by ID.
      */
     async getAdminById(id, requester) {
-        const user = await User.findById(id).select('-password').populate('createdBy', 'username role');
+        const user = await User.findById(id)
+            .select('-password')
+            .populate('createdBy', 'username fullName role')
+            .populate('updatedBy', 'username fullName role');
         if (!user) throw { status: 404, message: 'User not found' };
 
         const canManageUsers = await hasUserManagementPermission(requester);
         if (!canManageUsers && user._id.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to view this user' };
+        }
+
+        // Backfill legacy records created before `updatedBy` was stored on User.
+        // The admin update controller has always written an activity log, so use
+        // the latest matching log as the authoritative updater when available.
+        if (!user.updatedBy) {
+            const identity = user.username || user.fullName || '';
+            const escapedIdentity = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const latestUpdate = await ActivityLog.findOne({
+                module: 'Admin Management',
+                action: { $regex: /^Updated$/i },
+                details: { $regex: new RegExp(`Updated admin user:\\s*${escapedIdentity}`, 'i') }
+            }).sort({ createdAt: -1 }).lean();
+
+            let updater = null;
+            if (latestUpdate?.user_id) {
+                updater = await User.findById(latestUpdate.user_id).select('_id').lean();
+            }
+            if (!updater && latestUpdate?.user) {
+                const escapedUser = String(latestUpdate.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                updater = await User.findOne({
+                    $or: [
+                        { username: { $regex: new RegExp(`^${escapedUser}$`, 'i') } },
+                        { fullName: { $regex: new RegExp(`^${escapedUser}$`, 'i') } }
+                    ]
+                }).select('_id').lean();
+            }
+            if (updater?._id) {
+                user.updatedBy = updater._id;
+                await user.save();
+                await user.populate('updatedBy', 'username fullName role');
+            }
         }
 
         const findLinkedUser = async (name, email, mobile) => {
@@ -262,6 +299,7 @@ class AdminUsersService {
         if (reportingToImage !== undefined) userToUpdate.reportingToImage = reportingToImage;
         if (profileImage !== undefined) userToUpdate.profileImage = profileImage;
         if (signatureImage !== undefined) userToUpdate.signatureImage = signatureImage;
+        userToUpdate.updatedBy = requester.id;
 
         await userToUpdate.save();
 
@@ -305,6 +343,10 @@ class AdminUsersService {
                 { reportTo: { $in: previousIdentityNames } },
                 { $set: { reportTo: linkedSnapshot.name } }
             )
+        ]);
+        await userToUpdate.populate([
+            { path: 'createdBy', select: 'username fullName role' },
+            { path: 'updatedBy', select: 'username fullName role' }
         ]);
         const userData = userToUpdate.toObject();
         delete userData.password;
