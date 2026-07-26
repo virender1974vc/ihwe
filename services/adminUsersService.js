@@ -23,6 +23,20 @@ class AdminUsersService {
     }
 
     /**
+     * Get a single admin by ID.
+     */
+    async getAdminById(id, requester) {
+        const user = await User.findById(id).select('-password').populate('createdBy', 'username role');
+        if (!user) throw { status: 404, message: 'User not found' };
+        
+        const reqRole = requester.role;
+        if (reqRole !== 'IHWE–Super Administrator' && user._id.toString() !== requester.id && user.createdBy?.toString() !== requester.id) {
+            throw { status: 403, message: 'Unauthorized to view this user' };
+        }
+        return user;
+    }
+
+    /**
      * Create a new user with permission checks.
      */
     async createAdmin(data, requester) {

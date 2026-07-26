@@ -6,18 +6,11 @@ const path = require('path');
 const qrcode = require('qrcode');
 
 class ExhibitorRegistrationService {
-    async getAllRegistrations(options = {}) {
-        const {
-            page = 1,
-            limit = 20,
-            search = '',
-            status = '',
-            referredBy = '',
-            industry = '',
-        } = options;
-
-        // Build MongoDB query — filter at DB level, not in JS
+    // Shared filter builder used by both the paginated list and the summary
+    // aggregation, so "what matches" is defined in exactly one place.
+    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = {}) {
         const query = {};
+        const orGroups = []; // each entry ANDed together; each entry itself is an $or list
 
         if (status) {
             query.status = status;
@@ -27,31 +20,69 @@ class ExhibitorRegistrationService {
             query.referredBy = { $regex: new RegExp(`^${esc}$`, 'i') };
         }
         if (industry) {
+            // Must mirror the exact "natureOfBusiness || industrySector || typeOfBusiness"
+            // priority chain the UI displays under the company name — otherwise a row can
+            // match the filter on one field while showing a DIFFERENT field's value,
+            // making the filter look broken.
             const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            query.$or = [
-                { natureOfBusiness: { $regex: new RegExp(esc, 'i') } },
-                { industrySector: { $regex: new RegExp(esc, 'i') } },
-                { typeOfBusiness: { $regex: new RegExp(esc, 'i') } },
-            ];
+            const exact = new RegExp(`^${esc}$`, 'i');
+            const isEmpty = (field) => ({ $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }] });
+            orGroups.push([
+                { natureOfBusiness: exact },
+                { $and: [isEmpty('natureOfBusiness'), { industrySector: exact }] },
+                { $and: [isEmpty('natureOfBusiness'), isEmpty('industrySector'), { typeOfBusiness: exact }] },
+            ]);
         }
         if (search) {
             const esc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const searchOr = [
+            orGroups.push([
                 { exhibitorName: { $regex: new RegExp(esc, 'i') } },
                 { companyName: { $regex: new RegExp(esc, 'i') } },
                 { 'contact1.email': { $regex: new RegExp(esc, 'i') } },
                 { 'contact1.mobile': { $regex: new RegExp(esc, 'i') } },
                 { 'contact2.email': { $regex: new RegExp(esc, 'i') } },
                 { 'contact2.mobile': { $regex: new RegExp(esc, 'i') } },
-            ];
-            if (query.$or) {
-                query.$and = [{ $or: query.$or }, { $or: searchOr }];
-                delete query.$or;
-            } else {
-                query.$or = searchOr;
-            }
+            ]);
         }
 
+        // Restrict non-super-admins to registrations they personally handled.
+        // Super admins (and requests with no user context, e.g. internal jobs) see everything.
+        const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
+        const isSuperAdmin = cleanRole === 'superadmin' || cleanRole === 'ihwesuperadministrator';
+        if (username && !isSuperAdmin) {
+            const escUser = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const nameCandidates = [username];
+            try {
+                const User = require('../models/User');
+                const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escUser}$`, 'i') } }).select('fullName').lean();
+                if (adminUser?.fullName) nameCandidates.push(adminUser.fullName);
+            } catch (_) { }
+
+            const scopeOr = [];
+            nameCandidates.forEach((name) => {
+                const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                scopeOr.push({ spokenWith: { $regex: new RegExp(`^${esc}$`, 'i') } });
+                scopeOr.push({ filledByFullName: { $regex: new RegExp(`^${esc}$`, 'i') } });
+            });
+            orGroups.push(scopeOr);
+        }
+
+        if (orGroups.length === 1) {
+            query.$or = orGroups[0];
+        } else if (orGroups.length > 1) {
+            query.$and = orGroups.map((group) => ({ $or: group }));
+        }
+
+        return query;
+    }
+
+    async getAllRegistrations(options = {}) {
+        const {
+            page = 1,
+            limit = 20,
+        } = options;
+
+        const query = await this._buildRegistrationsQuery(options);
         const skip = (Number(page) - 1) * Number(limit);
 
         // Count + fetch in parallel — only fetches current page records
@@ -76,6 +107,104 @@ class ExhibitorRegistrationService {
         };
     }
 
+    // Aggregated totals across ALL registrations matching the current filters/user-scope
+    // (not just the current page) — powers the stat cards on the exhibitor list.
+    async getRegistrationsSummary(options = {}) {
+        const query = await this._buildRegistrationsQuery(options);
+
+        const [result] = await ExhibitorRegistration.aggregate([
+            { $match: query },
+            {
+                $addFields: {
+                    _revenueValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$financeBreakdown.netPayable', 0] }, 0] }, '$financeBreakdown.netPayable',
+                            { $cond: [
+                                { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
+                                { $ifNull: ['$amountPaid', 0] },
+                            ] },
+                        ],
+                    },
+                    _paymentValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$amountPaid', 0] }, 0] }, '$amountPaid',
+                            { $ifNull: ['$financeBreakdown.paidAmount', 0] },
+                        ],
+                    },
+                    _areaValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$participation.stallSize', 0] }, 0] }, '$participation.stallSize',
+                            { $ifNull: ['$stallSize', 0] },
+                        ],
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalCount: { $sum: 1 },
+                    totalArea: { $sum: '$_areaValue' },
+                    totalRevenue: { $sum: '$_revenueValue' },
+                    paymentReceived: { $sum: '$_paymentValue' },
+                    // Missing exhibitorStatus (e.g. direct website self-registrations with no admin
+                    // selection) defaults to "New Client" — only an explicit "Existing Client" counts otherwise.
+                    existingClientsCount: { $sum: { $cond: [{ $eq: ['$exhibitorStatus', 'Existing Client'] }, 1, 0] } },
+                    newClientsCount: { $sum: { $cond: [{ $eq: ['$exhibitorStatus', 'Existing Client'] }, 0, 1] } },
+                },
+            },
+        ]);
+
+        return result || {
+            totalCount: 0,
+            totalArea: 0,
+            totalRevenue: 0,
+            paymentReceived: 0,
+            newClientsCount: 0,
+            existingClientsCount: 0,
+        };
+    }
+
+    // Distinct filter dropdown values scoped to the user (same scoping as the list),
+    // computed across ALL of that user's registrations — not just the current page.
+    async getFilterOptions(options = {}) {
+        const { username = '', role = '' } = options;
+        const query = await this._buildRegistrationsQuery({ username, role });
+
+        const isNonEmpty = (field) => ({ $and: [{ $ne: [field, null] }, { $ne: [field, ''] }] });
+
+        const [sources, statuses, industryDocs] = await Promise.all([
+            ExhibitorRegistration.distinct('referredBy', query),
+            ExhibitorRegistration.distinct('status', query),
+            // Resolve the SAME "natureOfBusiness || industrySector || typeOfBusiness"
+            // priority chain the UI displays under the company name, so the dropdown
+            // options exactly match what filtering by them will show.
+            ExhibitorRegistration.aggregate([
+                { $match: query },
+                {
+                    $addFields: {
+                        _resolvedIndustry: {
+                            $switch: {
+                                branches: [
+                                    { case: isNonEmpty('$natureOfBusiness'), then: '$natureOfBusiness' },
+                                    { case: isNonEmpty('$industrySector'), then: '$industrySector' },
+                                ],
+                                default: '$typeOfBusiness',
+                            },
+                        },
+                    },
+                },
+                { $match: { _resolvedIndustry: { $nin: [null, ''] } } },
+                { $group: { _id: '$_resolvedIndustry' } },
+                { $sort: { _id: 1 } },
+            ]),
+        ]);
+
+        return {
+            sources: sources.filter(Boolean).sort(),
+            statuses: statuses.filter(Boolean).sort(),
+            industries: industryDocs.map((d) => d._id),
+        };
+    }
 
     async getRegistrationById(id) {
         const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate paymentPlans');
@@ -136,7 +265,11 @@ class ExhibitorRegistrationService {
             ? await Company.find({ _id: { $in: clientIds } }).select('contacts').lean()
             : [];
         const companyById = new Map(linkedCompanies.map((company) => [String(company._id), company]));
-        const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'natureOfBusiness', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
+        // natureOfBusiness intentionally excluded: it drives the Industry filter and the
+        // "Company Name" subtitle, both computed from each registration's OWN raw field —
+        // cross-filling it from a sibling registration made the filter look broken (a row
+        // would match on its real field but *display* a different sibling's value).
+        const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
 
         const results = regs.map(r => {
             const doc = r;

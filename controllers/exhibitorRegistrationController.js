@@ -12,7 +12,7 @@ const toPublicUploadPath = (filePath = '') => {
 class ExhibitorRegistrationController {
     async getAllRegistrations(req, res) {
         try {
-            const { page = 1, limit = 20, search = '', status = '', referredBy = '', industry = '' } = req.query;
+            const { page = 1, limit = 20, search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = req.query;
             const result = await exhibitorRegistrationService.getAllRegistrations({
                 page: Number(page),
                 limit: Number(limit),
@@ -20,6 +20,8 @@ class ExhibitorRegistrationController {
                 status,
                 referredBy,
                 industry,
+                username,
+                role,
             });
             res.status(200).json({
                 success: true,
@@ -29,6 +31,28 @@ class ExhibitorRegistrationController {
                 limit: result.limit,
                 totalPages: result.totalPages,
             });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getRegistrationsSummary(req, res) {
+        try {
+            const { search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = req.query;
+            const summary = await exhibitorRegistrationService.getRegistrationsSummary({
+                search, status, referredBy, industry, username, role,
+            });
+            res.status(200).json({ success: true, data: summary });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getFilterOptions(req, res) {
+        try {
+            const { username = '', role = '' } = req.query;
+            const options = await exhibitorRegistrationService.getFilterOptions({ username, role });
+            res.status(200).json({ success: true, data: options });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }

@@ -7,15 +7,22 @@ const cloudinary = require('cloudinary').v2;
 const jwt = require('jsonwebtoken');
 
 // ─── Server-Side In-Memory Cache ─────────────────────────────────────────────
-// Caches the full GET response for 2 minutes to avoid repeated DB+enrichment
-// queries. Auto-invalidates on any write so data stays consistent.
+// Caches each distinct GET query (page/filters/user scope) for 2 minutes to
+// avoid repeated DB+enrichment queries. Keyed by the full query string so
+// different pages, filters, or users never receive each other's cached data.
+// Auto-invalidates entirely on any write so data stays consistent.
 const _cache = {
-  data: null,
-  at: 0,
+  entries: new Map(),
   TTL: 2 * 60 * 1000, // 2 minutes
-  isValid() { return this.data && (Date.now() - this.at) < this.TTL; },
-  set(d) { this.data = d; this.at = Date.now(); },
-  clear() { this.data = null; this.at = 0; }
+  keyFor(query) { return JSON.stringify(query); },
+  get(key) {
+    const hit = this.entries.get(key);
+    if (!hit) return null;
+    if ((Date.now() - hit.at) >= this.TTL) { this.entries.delete(key); return null; }
+    return hit.data;
+  },
+  set(key, d) { this.entries.set(key, { data: d, at: Date.now() }); },
+  clear() { this.entries.clear(); }
 };
 // Expose clear so controller can call it after writes
 module.exports._clearRegistrationCache = () => _cache.clear();
@@ -56,17 +63,52 @@ const upload = multer({ storage });
 
 // GET all registrations — served from cache after first hit
 router.get('/', async (req, res) => {
-  if (_cache.isValid()) {
+  const cacheKey = _cache.keyFor(req.query);
+  const cached = _cache.get(cacheKey);
+  if (cached) {
     // Instant response from memory — no DB hit
-    return res.status(200).json(_cache.data);
+    return res.status(200).json(cached);
   }
   // Miss: call controller, intercept response, populate cache
   const originalJson = res.json.bind(res);
   res.json = (body) => {
-    if (res.statusCode === 200) _cache.set(body);
+    if (res.statusCode === 200) _cache.set(cacheKey, body);
     return originalJson(body);
   };
   return exhibitorRegistrationController.getAllRegistrations(req, res);
+});
+
+// Aggregated totals across ALL matching registrations (not just the current page) —
+// powers the stat cards. Must be declared before '/:id' so Express doesn't treat
+// "summary" as an :id param.
+router.get('/summary', async (req, res) => {
+  const cacheKey = 'summary:' + _cache.keyFor(req.query);
+  const cached = _cache.get(cacheKey);
+  if (cached) {
+    return res.status(200).json(cached);
+  }
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) _cache.set(cacheKey, body);
+    return originalJson(body);
+  };
+  return exhibitorRegistrationController.getRegistrationsSummary(req, res);
+});
+
+// Distinct filter dropdown values (industry/source/status), scoped to the user,
+// across ALL of their registrations — not just the current page.
+router.get('/filter-options', async (req, res) => {
+  const cacheKey = 'filter-options:' + _cache.keyFor(req.query);
+  const cached = _cache.get(cacheKey);
+  if (cached) {
+    return res.status(200).json(cached);
+  }
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) _cache.set(cacheKey, body);
+    return originalJson(body);
+  };
+  return exhibitorRegistrationController.getFilterOptions(req, res);
 });
 
 // Write operations — always invalidate cache so next GET is fresh
