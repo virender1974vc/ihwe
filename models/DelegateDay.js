@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const delegateDaySchema = new mongoose.Schema({
+    // Multi-event support: which event's schedule this day belongs to. Nullable —
+    // existing/shared days stay visible everywhere until explicitly scoped.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
     date: { type: String, required: true },
     day: { type: String, required: true },
     title: { type: String, required: true },

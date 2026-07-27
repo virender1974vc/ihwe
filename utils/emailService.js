@@ -127,6 +127,7 @@ class EmailService {
             });
 
 
+            const eventId = await whatsapp.resolveEventIdForCompany(logData.companyId);
             await EmailLog.create({
                 recipient,
                 subject,
@@ -137,12 +138,14 @@ class EmailService {
                 senderId: logData.senderId || null,
                 senderName: logData.senderName || null,
                 companyId: logData.companyId || null,
-                companyName: logData.companyName || null
+                companyName: logData.companyName || null,
+                eventId
             }).catch(err => console.error("EmailLog (success) failed:", err.message));
 
             return true;
         } catch (error) {
             console.error('Email send failed:', error);
+            const eventId = await whatsapp.resolveEventIdForCompany(logData.companyId);
             await EmailLog.create({
                 recipient,
                 subject,
@@ -154,7 +157,8 @@ class EmailService {
                 senderId: logData.senderId || null,
                 senderName: logData.senderName || null,
                 companyId: logData.companyId || null,
-                companyName: logData.companyName || null
+                companyName: logData.companyName || null,
+                eventId
             }).catch(err => console.error("EmailLog (failed) failed:", err.message));
             return false;
         }

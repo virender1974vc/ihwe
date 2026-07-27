@@ -49,13 +49,14 @@ const createWhatsappRecord = async (req, res) => {
       senderId,
       senderName,
       companyName,
+      eventId,
     } = req.body;
 
     const whatsappResult = await whatsapp.sendWhatsAppMessage(
       phone_no,
       whtsapp_desc,
       whtsapp_title || "CRM Support Msg",
-      { senderId, senderName, companyId: compny_id, companyName }
+      { senderId, senderName, companyId: compny_id, companyName, eventId }
     );
     const newRecord = new CommonWhatsapp({
       compny_id,

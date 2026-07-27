@@ -243,7 +243,7 @@ class UserTargetController {
 
     async getTableLogs(req, res) {
         try {
-            const { userId, type, page = 1, limit = 10 } = req.query;
+            const { userId, type, page = 1, limit = 10, eventId } = req.query;
             const CallLog = require('../models/CallLog');
             const WhatsAppLog = require('../models/WhatsAppLog');
             const EmailLog = require('../models/EmailLog');
@@ -252,6 +252,11 @@ class UserTargetController {
             let total = 0;
             const userFilter = userId ? { senderId: userId } : {};
             const callFilter = userId ? { callerId: userId } : {};
+            // Scope to a single event when one is selected (multi-event support).
+            if (eventId) {
+                userFilter.eventId = eventId;
+                callFilter.eventId = eventId;
+            }
 
             const pageNum = parseInt(page);
             const limitNum = parseInt(limit);

@@ -6,6 +6,9 @@ const GeneratedPassNameSchema = new mongoose.Schema({
 }, { _id: true });
 
 const GeneratedPassBatchSchema = new mongoose.Schema({
+    // Multi-event support: which event these badges were printed for. Nullable —
+    // existing batches stay visible everywhere until explicitly scoped.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
     title: { type: String, trim: true, default: '' },
     passType: {
         type: String,
