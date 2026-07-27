@@ -14,6 +14,12 @@ const CallLogSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    // Multi-event support: which event this company/lead belonged to at call time.
+    // Nullable — resolved from the Company doc when available, null for older data.
+    eventId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null
+    },
     companyName: {
         type: String,
         required: true,

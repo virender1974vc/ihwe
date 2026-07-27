@@ -33,6 +33,9 @@ router.get('/', authMiddleware, async (req, res) => {
             }
             filter.passType = passType;
         }
+        if (req.query.eventId) {
+            filter.eventId = req.query.eventId;
+        }
 
         const batches = await GeneratedPassBatch.find(filter)
             .populate('templateId', 'name slug categories passTypes')
@@ -82,6 +85,7 @@ router.post('/', authMiddleware, async (req, res) => {
                 passesPerPage: Number(req.body?.printSettings?.passesPerPage || 8),
             },
             createdBy: req.user?._id,
+            eventId: req.body?.eventId || null,
         });
 
         res.status(201).json({ success: true, data: batch });

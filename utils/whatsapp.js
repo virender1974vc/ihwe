@@ -1,6 +1,31 @@
 const WhatsAppLog = require('../models/WhatsAppLog');
 const aisensy = require('./aisensyService');
 
+// Multi-event support: look up which event a CRM company/lead belongs to, so
+// log entries can be scoped later. Safe no-op (returns null) for companyIds
+// that don't resolve to a Company doc — e.g. buyer/visitor/OTP flows that pass
+// an unrelated id or none at all.
+// Fallback only — a company can belong to several events now (Company.events),
+// so this just picks its original/legacy one. Prefer resolveEventId(options)
+// below, which uses the event the send was actually triggered from.
+const resolveEventIdForCompany = async (companyId) => {
+    if (!companyId) return null;
+    try {
+        const Company = require('../models/Company');
+        const company = await Company.findById(companyId).select('eventId').lean();
+        return company?.eventId || null;
+    } catch (_) {
+        return null;
+    }
+};
+
+// The event a log entry should be scoped to: whichever event's page/section
+// the send was triggered from (options.eventId, passed by the frontend via
+// useEventContext()'s currentEventId), falling back to the company's legacy
+// single eventId for system-triggered sends with no page context (crons, OTPs).
+const resolveEventId = (options = {}) =>
+    options.eventId ? Promise.resolve(options.eventId) : resolveEventIdForCompany(options.companyId);
+
 const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) => {
     let status = 'failed';
     let errorMsg = null;
@@ -146,7 +171,7 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        WhatsAppLog.create({
+        resolveEventId(options).then((eventId) => WhatsAppLog.create({
             recipient: mobile,
             message: msg,
             name: name || 'System Notification',
@@ -155,8 +180,9 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
             senderId: options.senderId || null,
             senderName: options.senderName || null,
             companyId: options.companyId || null,
-            companyName: options.companyName || null
-        }).catch(err => console.error('Error saving WhatsApp log:', err));
+            companyName: options.companyName || null,
+            eventId
+        })).catch(err => console.error('Error saving WhatsApp log:', err));
     }
 };
 
@@ -205,7 +231,7 @@ const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) =
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        WhatsAppLog.create({
+        resolveEventId(options).then((eventId) => WhatsAppLog.create({
             recipient: mobile,
             message: msg,
             name: name || 'System Notification (Opus)',
@@ -214,8 +240,9 @@ const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) =
             senderId: options.senderId || null,
             senderName: options.senderName || null,
             companyId: options.companyId || null,
-            companyName: options.companyName || null
-        }).catch(err => console.error('Error saving WhatsApp log:', err));
+            companyName: options.companyName || null,
+            eventId
+        })).catch(err => console.error('Error saving WhatsApp log:', err));
     }
 };
 
@@ -362,7 +389,7 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        WhatsAppLog.create({
+        resolveEventId(options).then((eventId) => WhatsAppLog.create({
             recipient: mobile,
             message: msg + " [RICH MEDIA]",
             name: name || 'System Notification',
@@ -371,8 +398,9 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
             senderId: options.senderId || null,
             senderName: options.senderName || null,
             companyId: options.companyId || null,
-            companyName: options.companyName || null
-        }).catch(err => console.error('Error saving WhatsApp log:', err));
+            companyName: options.companyName || null,
+            eventId
+        })).catch(err => console.error('Error saving WhatsApp log:', err));
     }
 };
 
@@ -425,5 +453,7 @@ module.exports = {
     sendPassApprovalWhatsApp,
     sendWhatsAppRichMessage,
     sendProformaInvoiceWhatsApp,
-    sendTaxInvoiceWhatsApp
+    sendTaxInvoiceWhatsApp,
+    resolveEventIdForCompany,
+    resolveEventId
 };
