@@ -35,7 +35,11 @@ class SpeakerNominationService {
             expertise: areaOfExpertise,
             designation,
             organization: organizationName,
-            city
+            linkedinUrl,
+            country,
+            state,
+            city,
+            biography: shortBiography
         }).catch(err => {
             console.error('Speaker Messaging Error:', err);
         });

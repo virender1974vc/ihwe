@@ -4,9 +4,9 @@ const QRCode = require('qrcode');
 const whatsapp = require('../whatsapp');
 const aisensy = require('../aisensyService');
 const { AISENSY_CAMPAIGN_BY_FORM_TYPE, AISENSY_BANNER_BY_FORM_TYPE } = require('./aisensyConfig');
-const { adminLeadShell } = require('../emailTemplates/adminLeadShell');
 const { getCorporateVisitorAdminAlertTemplate } = require('../emailTemplates/corporateVisitorAdminAlert');
 const { getGeneralVisitorAdminAlertTemplate } = require('../emailTemplates/generalVisitorAdminAlert');
+const { getGeneralEnquiryAdminAlertTemplate } = require('../emailTemplates/generalEnquiryAdminAlert');
 
 async function getTemplate(formType) {
         try {
@@ -150,7 +150,7 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
         });
     }
 
-async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding }) {
+async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding, notifyAdmin: shouldNotifyAdmin = true }) {
         try {
             const template = await this.getTemplate(formType);
             if (!template) {
@@ -336,7 +336,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                     console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
                 });
             }
-            if (formType !== 'exhibitor-registration') {
+            if (shouldNotifyAdmin && formType !== 'exhibitor-registration') {
                 await this.notifyAdmin(formType, data, subject, profile).catch(err => {
                     console.error(`[AdminNotification] Failed for ${formType}:`, err.message);
                 });
@@ -350,30 +350,35 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
     }
 
 async function notifyAdmin(formType, data, originalSubject, profile) {
+        const dedicatedAlerts = {
+            'general-visitor': {
+                html: () => getGeneralVisitorAdminAlertTemplate(data),
+                subject: `NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`
+            },
+            'corporate-visitor': {
+                html: () => getCorporateVisitorAdminAlertTemplate(data),
+                subject: `NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`
+            },
+            'contact-enquiry': {
+                html: () => getGeneralEnquiryAdminAlertTemplate(data),
+                subject: `NEW GENERAL ENQUIRY RECEIVED | IHWE 2026 | ${data.name || 'Website Enquiry'}`
+            }
+        };
+        const alert = dedicatedAlerts[formType];
+        if (!alert) {
+            console.warn(`[AdminNotification] Skipped unsupported generic admin alert for "${formType}". Use a dedicated admin template.`);
+            return false;
+        }
 
-        const deptAdmin = (this.getAdminEmailForProfile(profile) || '').trim();
-        const globalAdmin = (process.env.ADMIN_EMAIL || '').trim();
-
-
-        const targetAdmin = deptAdmin || globalAdmin;
-
+        const targetAdmin = ((this.getAdminEmailForProfile(profile) || process.env.ADMIN_EMAIL) || '').trim();
         if (!targetAdmin) {
-            console.warn(`[AdminNotification] No receiver found for ${formType} Lead.`);
-            return;
+            console.warn(`[AdminNotification] No receiver found for ${formType} lead.`);
+            return false;
         }
 
-        console.log(`[AdminNotification] Routing ${formType} lead specifically to designated admin: ${targetAdmin}`);
-
-        let adminHtml = this.adminLeadShell(formType, data);
-        let adminSubject = `New ${formType.replace(/-/g, ' ')} lead - ${originalSubject}`;
-
-        if (formType === 'general-visitor') {
-            adminHtml = getGeneralVisitorAdminAlertTemplate(data);
-            adminSubject = `NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`;
-        } else if (formType === 'corporate-visitor') {
-            adminHtml = getCorporateVisitorAdminAlertTemplate(data);
-            adminSubject = `NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`;
-        }
+        const adminHtml = alert.html();
+        const adminSubject = alert.subject;
+        console.log(`[AdminNotification] Routing ${formType} lead to designated admin: ${targetAdmin}`);
 
         await this.sendEmail({
             to: targetAdmin,
@@ -394,8 +399,7 @@ async function notifyAdmin(formType, data, originalSubject, profile) {
                 console.error(`[AdminWhatsAppAlert] Failed for ${formType}:`, err.message);
             });
         }
-
-
+        return true;
     }
 
 function getAdminEmailForProfile(profile) {

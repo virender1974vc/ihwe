@@ -1155,6 +1155,15 @@ class ExhibitorRegistrationService {
         if (statusJustActivated) {
             await this.activateRegistration(id);
         }
+
+        if (updated.status === 'payment-failed' && current.status !== 'payment-failed') {
+            try {
+                await emailService.sendPaymentFailedEmail(updated);
+            } catch (err) {
+                console.error('Payment Failed Notification Error:', err);
+            }
+        }
+
         const newlyReceived = (data.amountPaid != null && data.amountPaid > (current.amountPaid || 0));
         const statusJustChanged = (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status));
 

@@ -1,10 +1,17 @@
 const nodemailer = require('nodemailer');
 const EmailLog = require('../models/EmailLog');
 const { emailShell } = require('./emailTemplates/emailShell');
-const { adminLeadShell } = require('./emailTemplates/adminLeadShell');
 const templateEngineMethods = require('./emailComponents/templateEngine');
 const visitorEmailMethods = require('./emailComponents/visitorEmails');
+const contactEmailMethods = require('./emailComponents/contactEmails');
+const sellerEmailMethods = require('./emailComponents/sellerEmails');
+const referralEmailMethods = require('./emailComponents/referralEmails');
+const sponsorshipEmailMethods = require('./emailComponents/sponsorshipEmails');
+const expoSupportEmailMethods = require('./emailComponents/expoSupportEmails');
+const speakerEmailMethods = require('./emailComponents/speakerEmails');
+const healthCampEmailMethods = require('./emailComponents/healthCampEmails');
 const exhibitorEmailMethods = require('./emailComponents/exhibitorEmails');
+const exhibitorAdminEmailMethods = require('./emailComponents/exhibitorAdminEmails');
 const accessoryRegistrationMethods = require('./emailComponents/accessoryRegistration');
 const sendB2BMeetingNotificationHandler = require('./emailHandlers/b2bMeetingNotification');
 const sendSponsorshipConfirmationHandler = require('./emailHandlers/sponsorshipConfirmation');
@@ -17,7 +24,6 @@ const sendManualPaymentReceiptHandler = require('./emailHandlers/manualPaymentRe
 
 class EmailService {
     constructor() {
-        // Main SMTP Transporter
         this.transporter = nodemailer.createTransport({
             host: process.env.SMTP_HOST,
             port: process.env.SMTP_PORT,
@@ -73,7 +79,6 @@ class EmailService {
         });
 
         this.emailShell = emailShell;
-        this.adminLeadShell = adminLeadShell;
     }
 
     async sendEmail({ to, subject, html, attachments = [], profile = 'DEFAULT', logData = {} }) {
@@ -166,7 +171,15 @@ Object.assign(
     EmailService.prototype,
     templateEngineMethods,
     visitorEmailMethods,
+    contactEmailMethods,
+    sellerEmailMethods,
+    referralEmailMethods,
+    sponsorshipEmailMethods,
+    expoSupportEmailMethods,
+    speakerEmailMethods,
+    healthCampEmailMethods,
     exhibitorEmailMethods,
+    exhibitorAdminEmailMethods,
     accessoryRegistrationMethods,
     {
         sendB2BMeetingNotification: sendB2BMeetingNotificationHandler,

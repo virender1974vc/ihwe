@@ -396,19 +396,22 @@ async function sendPaymentReceipt(registration, pdfPath) {
             }
         }
 
-        return await this.sendDynamicConfirmation({
+        const userResult = await this.sendDynamicConfirmation({
             to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-payment-receipt',
             data,
             profile: 'EXHIBITOR',
-            attachments
+            attachments,
+            notifyAdmin: false
         });
+        await this.sendPaymentReceiptAdminAlert(registration);
+        return userResult;
     }
 
 async function sendApprovalEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
         const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
-        return await this.sendDynamicConfirmation({
+        const userResult = await this.sendDynamicConfirmation({
             to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-registration-approved',
             data: {
@@ -426,8 +429,11 @@ async function sendApprovalEmail(registration) {
                 status: 'Approved',
                 phone: registration.contact1.mobile
             },
-            profile: 'EXHIBITOR'
+            profile: 'EXHIBITOR',
+            notifyAdmin: false
         });
+        await this.sendRegistrationApprovedAdminAlert(registration);
+        return userResult;
     }
 
 async function sendConfirmationEmail(registration) {
@@ -447,12 +453,15 @@ async function sendConfirmationEmail(registration) {
             phone: registration.contact1.mobile
         };
 
-        return await this.sendDynamicConfirmation({
+        const userResult = await this.sendDynamicConfirmation({
             to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-booking-confirmed',
             data,
-            profile: 'EXHIBITOR'
+            profile: 'EXHIBITOR',
+            notifyAdmin: false
         });
+        await this.sendBookingConfirmedAdminAlert(registration);
+        return userResult;
     }
 
 async function sendRejectionEmail(registration) {
@@ -467,12 +476,15 @@ async function sendRejectionEmail(registration) {
             phone: registration.contact1.mobile
         };
 
-        return await this.sendDynamicConfirmation({
+        const userResult = await this.sendDynamicConfirmation({
             to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-registration-rejection',
             data,
-            profile: 'EXHIBITOR'
+            profile: 'EXHIBITOR',
+            notifyAdmin: false
         });
+        await this.sendRejectionAdminAlert(registration);
+        return userResult;
     }
 
 async function sendPaymentFailedEmail(registration) {
@@ -488,12 +500,15 @@ async function sendPaymentFailedEmail(registration) {
             login_url: loginUrl,
             phone: registration.contact1.mobile
         };
-        return await this.sendDynamicConfirmation({
+        const userResult = await this.sendDynamicConfirmation({
             to: this.getExhibitorRecipient(registration),
             formType: 'exhibitor-payment-failed',
             data,
-            profile: 'EXHIBITOR'
+            profile: 'EXHIBITOR',
+            notifyAdmin: false
         });
+        await this.sendPaymentFailedAdminAlert(registration);
+        return userResult;
     }
 
 module.exports = { sendRegistrationConfirmation, sendPaymentReceipt, sendApprovalEmail, sendConfirmationEmail, sendRejectionEmail, sendPaymentFailedEmail };
