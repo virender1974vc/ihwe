@@ -58,14 +58,7 @@ class ReferralController {
       }
 
       // Send Notification to Admin
-      emailService.notifyAdmin('referral', {
-          name: contactPerson,
-          company: companyName,
-          phone: mobileNumber,
-          email: emailId || 'N/A',
-          category: category || 'N/A',
-          remarks: remarks || 'N/A'
-      }, 'New Referral Submission', 'DEFAULT').catch(err => {
+      emailService.sendReferralAdminNotification(referral).catch(err => {
           console.error('[AdminNotification] Failed for Referral:', err.message);
       });
 

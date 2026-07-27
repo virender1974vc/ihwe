@@ -51,6 +51,7 @@ exports.createGeneralVisitor = async (req, res) => {
       city: saved.city || 'N/A',
       country: saved.country || 'India',
       registrationId: saved.registrationId,
+      registrationDate: saved.createdAt,
     };
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
