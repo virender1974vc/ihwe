@@ -65,10 +65,14 @@ async function sendAccessoryOrderEmail(registration, order, pdfPath) {
                 formType: 'exhibitor-accessory-order',
                 data,
                 profile: 'EXHIBITOR',
-                attachments
+                attachments,
+                notifyAdmin: false
             });
 
-            if (templateResult) return templateResult;
+            if (templateResult) {
+                await this.sendAccessoryOrderAdminAlert(resolvedRegistration, order);
+                return templateResult;
+            }
 
             // --- FALLBACK: No template in DB — send direct email + WhatsApp ---
             console.warn('[sendAccessoryOrderEmail] No template found. Using direct fallback.');
@@ -138,6 +142,7 @@ async function sendAccessoryOrderEmail(registration, order, pdfPath) {
             }
 
             if (tasks.length > 0) await Promise.allSettled(tasks);
+            await this.sendAccessoryOrderAdminAlert(resolvedRegistration, order);
             return true;
         } catch (err) {
             console.error('sendAccessoryOrderEmail error:', err.message);

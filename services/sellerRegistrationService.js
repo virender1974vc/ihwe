@@ -95,7 +95,7 @@ class SellerRegistrationService {
         });
 
         // Alert to Admin
-        emailService.notifyAdmin('seller-registration', saved, `New Seller Registration: ${saved.companyName}`, 'EXHIBITOR').catch(err => {
+        emailService.sendSellerAdminNotification(saved).catch(err => {
             console.error("Seller admin notification fail:", err.message);
         });
 

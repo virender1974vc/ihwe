@@ -45,7 +45,7 @@ async function sendExpoSupportConfirmation(data) {
             }
 
 
-            await this.notifyAdmin('expo-support-enquiry', data, subject, 'CONTACT');
+            await this.sendExpoSupportAdminNotification(data);
 
             return true;
         } catch (error) {
