@@ -18,6 +18,8 @@ const emailLogSchema = new mongoose.Schema({
     senderName: { type: String, default: null },
     companyId: { type: String, default: null },
     companyName: { type: String, default: null },
+    // Multi-event support: resolved from the Company doc when companyId is available.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
     phone: {
         type: String,
         default: null

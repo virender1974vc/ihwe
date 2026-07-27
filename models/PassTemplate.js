@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const PassTemplateSchema = new mongoose.Schema({
+    // Multi-event support: a template can stay global/reusable (null — the default,
+    // seeded reference template) OR be scoped to one event's specific badge design.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, unique: true, trim: true },
     templateVersion: { type: Number, default: 1 },

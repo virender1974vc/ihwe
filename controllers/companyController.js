@@ -58,9 +58,16 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const { search, status, source, industry, page, limit, countOnly, dashboard, username, role, startDate, endDate, forwardTo } = req.query;
+    const { search, status, source, industry, page, limit, countOnly, dashboard, username, role, startDate, endDate, forwardTo, eventId } = req.query;
 
     let query = {};
+
+    // Scope to a single event when one is selected (multi-event support).
+    // No eventId means "all events" — kept for backward compatibility for any
+    // caller that hasn't been wired to the event-selector yet.
+    if (eventId) {
+      query.eventId = eventId;
+    }
 
     // Authorization filter
     const lowerUsername = username ? username.toLowerCase() : null;
@@ -191,6 +198,68 @@ const getCompanyById = async (req, res) => {
       message: "Error fetching company",
       error: error.message,
     });
+  }
+};
+
+// ➤ Re-engage a company from master data for a NEW event.
+// Instead of the admin re-typing GST/PAN/address/contacts from scratch, this copies
+// the profile fields from any of that company's past records into a fresh lead row
+// scoped to the target event, with the sales pipeline reset to "New Lead".
+// Idempotent: if a row for this company already exists in the target event, that's
+// returned instead of creating a duplicate.
+const PROFILE_FIELDS = [
+  'companyName', 'category', 'businessNature', 'address', 'country', 'state', 'city',
+  'clientType', 'pincode', 'website', 'landline', 'email', 'udyamNumber', 'gstNumber',
+  'panNo', 'exhibitorCategory', 'companyLogo', 'companyDescription', 'contacts',
+];
+
+const addCompanyToEvent = async (req, res) => {
+  try {
+    const { eventId } = req.body;
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: 'eventId is required' });
+    }
+
+    const source = await Company.findById(req.params.id);
+    if (!source) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    // Already has a lead in this event (by GST/PAN/email — the same identity signals
+    // used elsewhere for dedup)? Reuse it instead of creating a duplicate.
+    const identityOr = [];
+    if (source.gstNumber) identityOr.push({ gstNumber: source.gstNumber });
+    if (source.panNo) identityOr.push({ panNo: source.panNo });
+    if (source.email) identityOr.push({ email: { $regex: new RegExp(`^${escapeRegex(source.email)}$`, 'i') } });
+    const existing = identityOr.length
+      ? await Company.findOne({ eventId, $or: identityOr })
+      : null;
+    if (existing) {
+      return res.status(200).json({ success: true, data: existing, reused: true });
+    }
+
+    const profileData = {};
+    PROFILE_FIELDS.forEach((field) => {
+      if (source[field] !== undefined) profileData[field] = source[field];
+    });
+
+    const newCompany = new Company({
+      ...profileData,
+      eventId,
+      companyStatus: 'New Lead',
+      dataSource: 'Master Data Re-engagement',
+      forwardTo: undefined,
+      followUpDate: undefined,
+      reminder: undefined,
+      exhibitorRegistrationId: null,
+    });
+    await newCompany.save();
+
+    await logActivity(req, 'Created', 'Client Data', `Re-engaged "${source.companyName}" for a new event from master data`);
+
+    res.status(201).json({ success: true, data: newCompany, reused: false });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error adding company to event', error: error.message });
   }
 };
 
@@ -726,6 +795,7 @@ module.exports = {
   addCompany,
   getCompanies,
   getCompanyById,
+  addCompanyToEvent,
   lookupCompanyOrExhibitor,
   updateCompany,
   deleteCompany,

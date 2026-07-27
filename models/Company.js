@@ -42,6 +42,7 @@ const CompanySchema = new mongoose.Schema(
     referralName: { type: String },
     referralMobile: { type: String },
     eventName: { type: String },
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
     reminder: { type: Date },
     companyStatus: { type: String, default: "New Lead" },
     added_by: { type: String, trim: true },
@@ -70,5 +71,6 @@ CompanySchema.index({ companyStatus: 1, createdAt: -1 });
 CompanySchema.index({ "contacts.mobile": 1 });
 CompanySchema.index({ email: 1 });
 CompanySchema.index({ companyName: 1 });
+CompanySchema.index({ eventId: 1 });
 
 module.exports = secondaryDB.model("Company", CompanySchema);

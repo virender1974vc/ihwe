@@ -7,6 +7,7 @@ const {
   addCompany,
   getCompanies,
   getCompanyById,
+  addCompanyToEvent,
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,
@@ -23,8 +24,8 @@ const _companiesCache = new Map();
 const COMPANIES_TTL = 90 * 1000; // 90 seconds
 
 const getCompanyCacheKey = (req) => {
-  const { username = '', role = '', dashboard = '' } = req.query;
-  return `${username.toLowerCase()}:${role.toLowerCase()}:${dashboard}`;
+  const { username = '', role = '', dashboard = '', eventId = '' } = req.query;
+  return `${username.toLowerCase()}:${role.toLowerCase()}:${dashboard}:${eventId}`;
 };
 const clearCompaniesCache = () => _companiesCache.clear();
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ router.get("/:id", getCompanyById);
 router.post("/", (req, res) => { clearCompaniesCache(); addCompany(req, res); });
 router.put("/:id", (req, res) => { clearCompaniesCache(); updateCompany(req, res); });
 router.delete("/:id", (req, res) => { clearCompaniesCache(); deleteCompany(req, res); });
+router.post("/:id/add-to-event", (req, res) => { clearCompaniesCache(); addCompanyToEvent(req, res); });
 router.post("/:id/logo", upload.single("companyLogo"), (req, res) => { clearCompaniesCache(); uploadCompanyLogo(req, res); });
 router.post("/:id/contact-photo", contactUpload.single("contactPhoto"), uploadContactPhoto);
 router.post(

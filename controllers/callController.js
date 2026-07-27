@@ -2,6 +2,7 @@ const cloudinary = require('cloudinary').v2;
 const CallLog = require('../models/CallLog');
 const Company = require('../models/Company');
 const { logActivity } = require('../utils/logger');
+const { resolveEventIdForCompany } = require('../utils/whatsapp');
 
 // 1. Configure Cloudinary
 cloudinary.config({
@@ -59,6 +60,7 @@ const uploadCallLog = async (req, res) => {
         }
 
         // Save CallLog record
+        const eventId = await resolveEventIdForCompany(companyId);
         const callLog = await CallLog.create({
             callerId,
             callerName,
@@ -69,7 +71,8 @@ const uploadCallLog = async (req, res) => {
             duration: Number(duration || 0),
             recordingUrl,
             companyStatus: newStatus || companyStatus || 'New Lead',
-            notes: notes || ''
+            notes: notes || '',
+            eventId
         });
 
         // Update Client/Company status if a new one is selected
@@ -100,11 +103,16 @@ const getCallHistory = async (req, res) => {
         const adminUsername = req.query.adminUsername || '';
         const adminRole = req.query.adminRole?.toLowerCase().replace(/\s+/g, '-') || '';
         const isSuperAdmin = adminRole === 'IHWE–Super Administrator';
+        const { eventId } = req.query;
 
         let filter = {};
         // Regular RMs only see their own calls, Super Admin sees all calls
         if (!isSuperAdmin && adminUsername) {
             filter = { callerName: { $regex: new RegExp(`^${adminUsername.trim()}$`, 'i') } };
+        }
+        // Scope to a single event when one is selected (multi-event support).
+        if (eventId) {
+            filter.eventId = eventId;
         }
 
         const logs = await CallLog.find(filter)

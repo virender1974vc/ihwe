@@ -4,12 +4,14 @@ const DelegatePass = require('../models/DelegatePass');
 
 exports.getDaysWithSessions = async (req, res) => {
     try {
-        const days = await DelegateDay.find().sort({ displayOrder: 1 }).populate({
+        const { eventId } = req.query;
+        const query = eventId ? { eventId } : {};
+        const days = await DelegateDay.find(query).sort({ displayOrder: 1 }).populate({
             path: 'sessions',
             match: { isActive: true },
             options: { sort: { displayOrder: 1, time: 1 } }
         });
-        const passes = await DelegatePass.find({ isActive: true });
+        const passes = await DelegatePass.find({ isActive: true, ...query });
         res.json({ success: true, data: { days, passes } });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -18,7 +20,9 @@ exports.getDaysWithSessions = async (req, res) => {
 
 exports.getAllDaysAdmin = async (req, res) => {
     try {
-        const days = await DelegateDay.find().sort({ displayOrder: 1 }).populate({
+        const { eventId } = req.query;
+        const query = eventId ? { eventId } : {};
+        const days = await DelegateDay.find(query).sort({ displayOrder: 1 }).populate({
             path: 'sessions',
             options: { sort: { displayOrder: 1, time: 1 } }
         });
@@ -85,7 +89,8 @@ exports.deleteSession = async (req, res) => {
 
 exports.getAllPassesAdmin = async (req, res) => {
     try {
-        const passes = await DelegatePass.find();
+        const { eventId } = req.query;
+        const passes = await DelegatePass.find(eventId ? { eventId } : {});
         res.json({ success: true, data: passes });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -124,6 +129,7 @@ exports.getDaysPaginated = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
+        const { eventId } = req.query;
 
         const query = search ? {
             $or: [
@@ -134,6 +140,7 @@ exports.getDaysPaginated = async (req, res) => {
                 { updatedBy: { $regex: search, $options: 'i' } }
             ]
         } : {};
+        if (eventId) query.eventId = eventId;
 
         const total = await DelegateDay.countDocuments(query);
         const days = await DelegateDay.find(query)
@@ -153,6 +160,7 @@ exports.getSessionsPaginated = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
+        const { eventId } = req.query;
 
         const query = search ? {
             $or: [
@@ -164,6 +172,7 @@ exports.getSessionsPaginated = async (req, res) => {
                 { updatedBy: { $regex: search, $options: 'i' } }
             ]
         } : {};
+        if (eventId) query.eventId = eventId;
 
         const total = await DelegateSession.countDocuments(query);
         const sessions = await DelegateSession.find(query)
@@ -183,6 +192,7 @@ exports.getPassesPaginated = async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const search = req.query.search || '';
+        const { eventId } = req.query;
 
         const query = search ? {
             $or: [
@@ -193,6 +203,7 @@ exports.getPassesPaginated = async (req, res) => {
                 { updatedBy: { $regex: search, $options: 'i' } }
             ]
         } : {};
+        if (eventId) query.eventId = eventId;
 
         const total = await DelegatePass.countDocuments(query);
         const passes = await DelegatePass.find(query)

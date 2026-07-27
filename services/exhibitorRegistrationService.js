@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
@@ -8,9 +9,12 @@ const qrcode = require('qrcode');
 class ExhibitorRegistrationService {
     // Shared filter builder used by both the paginated list and the summary
     // aggregation, so "what matches" is defined in exactly one place.
-    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = {}) {
+    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '' } = {}) {
         const query = {};
-        const orGroups = []; // each entry ANDed together; each entry itself is an $or list
+        const orGroups = [];
+        if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
+            query.eventId = new mongoose.Types.ObjectId(eventId);
+        }
 
         if (status) {
             query.status = status;
@@ -119,10 +123,12 @@ class ExhibitorRegistrationService {
                     _revenueValue: {
                         $cond: [
                             { $gt: [{ $ifNull: ['$financeBreakdown.netPayable', 0] }, 0] }, '$financeBreakdown.netPayable',
-                            { $cond: [
-                                { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
-                                { $ifNull: ['$amountPaid', 0] },
-                            ] },
+                            {
+                                $cond: [
+                                    { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
+                                    { $ifNull: ['$amountPaid', 0] },
+                                ]
+                            },
                         ],
                     },
                     _paymentValue: {
@@ -167,8 +173,8 @@ class ExhibitorRegistrationService {
     // Distinct filter dropdown values scoped to the user (same scoping as the list),
     // computed across ALL of that user's registrations — not just the current page.
     async getFilterOptions(options = {}) {
-        const { username = '', role = '' } = options;
-        const query = await this._buildRegistrationsQuery({ username, role });
+        const { username = '', role = '', eventId = '' } = options;
+        const query = await this._buildRegistrationsQuery({ username, role, eventId });
 
         const isNonEmpty = (field) => ({ $and: [{ $ne: [field, null] }, { $ne: [field, ''] }] });
 

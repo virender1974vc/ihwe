@@ -3,6 +3,7 @@ const MarketingShareLog = require("../models/MarketingShareLog");
 const EmailLog = require("../models/EmailLog");
 const nodemailer = require("nodemailer");
 const { sendWhatsappMessage } = require("./commonWhatsappController");
+const { resolveEventIdForCompany } = require("../utils/whatsapp");
 const axios = require("axios");
 
 const getAdminName = (req) => req.user?.username || req.user?.name || req.body.updatedBy || req.body.createdBy || "Admin";
@@ -254,6 +255,7 @@ exports.shareMaterials = async (req, res) => {
       };
       await transporter.sendMail(mailOptions);
       try {
+        const eventId = await resolveEventIdForCompany(cmpny_id);
         await EmailLog.create({
           recipient: clientEmailVar,
           subject: "Marketing Materials from IHWE",
@@ -262,7 +264,8 @@ exports.shareMaterials = async (req, res) => {
           senderId: senderId || null,
           senderName: senderName || sentBy || null,
           companyId: cmpny_id || null,
-          companyName: clientNameVar || null
+          companyName: clientNameVar || null,
+          eventId
         });
       } catch (err) {
         console.error("EmailLog (Marketing Material) failed:", err.message);
