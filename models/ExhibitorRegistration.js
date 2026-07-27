@@ -91,6 +91,10 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    updatedByName: {
+        type: String,
+        default: ''
+    },
     status: { type: String, enum: ['pending', 'approved', 'rejected', 'paid', 'advance-paid', 'confirmed', 'payment-failed'], default: 'pending' },
     paymentMode: { type: String, enum: ['manual', 'online'], default: 'manual' },
     paymentType: { type: String, default: 'full' },

@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
+    website: {
+        type: String,
+        enum: ['9th IHWE', 'Organicexpo'],
+        default: '9th IHWE'
+    },
     logo: {
         type: String,
         default: ""

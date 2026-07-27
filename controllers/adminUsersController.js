@@ -49,6 +49,19 @@ class AdminUsersController {
     }
 
     /**
+     * Get admin user by ID.
+     */
+    async getAdminById(req, res) {
+        try {
+            const data = await adminUsersService.getAdminById(req.params.id, req.user);
+            res.json({ success: true, data });
+        } catch (error) {
+            console.error('Fetch admin by id error:', error);
+            res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
+        }
+    }
+
+    /**
      * Create a new admin user.
      */
     async createAdmin(req, res) {

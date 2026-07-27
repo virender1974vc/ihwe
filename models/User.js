@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema({
     profileImage: { type: String, default: '' },
     role: { type: String, default: 'employee' },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
     lastLogin: { type: Date, default: null }
 }, { timestamps: true });

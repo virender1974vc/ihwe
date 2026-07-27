@@ -17,5 +17,7 @@ router.get('/verify-token', (req, res) => authController.verifyToken(req, res));
 
 // @route   PUT /api/admin/change-password
 router.put('/admin/change-password', verifyToken, (req, res) => authController.changePassword(req, res));
+router.post('/admin/change-password-send-otp', verifyToken, (req, res) => authController.sendChangePasswordOtp(req, res));
+router.put('/admin/change-password-verify-otp', verifyToken, (req, res) => authController.changePasswordWithOtp(req, res));
 
 module.exports = router;

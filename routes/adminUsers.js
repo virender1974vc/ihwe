@@ -131,6 +131,69 @@ router.get('/by-username/:username', async (req, res) => {
     }
 });
 
+// @route   GET /api/admin/performance/:id
+// @desc    Get person-specific lead and exhibitor-booking performance
+router.get('/performance/:id', verifyToken, async (req, res) => {
+    try {
+        const User = require('../models/User');
+        const Role = require('../models/Role');
+        const Company = require('../models/Company');
+        const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+        const user = await User.findById(req.params.id).select('username fullName role').lean();
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        const roleSlug = String(req.user?.role || '').toLowerCase().replace(/[^a-z]/g, '');
+        const isSuperAdmin = roleSlug === 'superadmin' || roleSlug === 'ihwesuperadministrator';
+        const requesterRole = isSuperAdmin ? null : await Role.findOne({ name: req.user?.role }).select('permissions').lean();
+        const canManageUsers = isSuperAdmin || requesterRole?.permissions?.['User ID Management'] === true;
+        if (!canManageUsers && String(req.user?.id) !== String(user._id)) {
+            return res.status(403).json({ success: false, message: 'Unauthorized to view this performance' });
+        }
+
+        const names = [user.username, user.fullName].filter(Boolean);
+        const exactNameMatchers = names.map(name => ({
+            $regex: new RegExp(`^${String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+        }));
+        const start = new Date(new Date().getFullYear(), 0, 1);
+        const end = new Date(new Date().getFullYear() + 1, 0, 1);
+        const attribution = [];
+        exactNameMatchers.forEach(matcher => {
+            attribution.push({ forwardTo: matcher }, { assignedTo: matcher }, { spokenWith: matcher }, { added_by: matcher });
+        });
+
+        const totalLeads = await Company.countDocuments({
+            companyStatus: { $regex: /^New Lead$/i },
+            createdAt: { $gte: start, $lt: end },
+            $or: attribution
+        });
+        const bookingAttribution = exactNameMatchers.map(matcher => ({ spokenWith: matcher }));
+        const stallBookings = await ExhibitorRegistration.countDocuments({
+            createdAt: { $gte: start, $lt: end },
+            $or: bookingAttribution
+        });
+        const amountResult = await ExhibitorRegistration.aggregate([
+            {
+                $match: {
+                    createdAt: { $gte: start, $lt: end },
+                    $or: bookingAttribution
+                }
+            },
+            { $group: { _id: null, total: { $sum: { $ifNull: ['$amountPaid', 0] } } } }
+        ]);
+        const totalAmountAchieved = Number(amountResult[0]?.total || 0);
+        const conversionRate = totalLeads > 0 ? Number(((stallBookings / totalLeads) * 100).toFixed(2)) : 0;
+
+        res.json({
+            success: true,
+            data: { totalLeads, stallBookings, conversionRate, totalAmountAchieved, period: 'this_year' }
+        });
+    } catch (error) {
+        console.error('Fetch admin performance error:', error);
+        res.status(500).json({ success: false, message: 'Failed to fetch user performance' });
+    }
+});
+router.get('/:id', verifyToken, (req, res) => adminUsersController.getAdminById(req, res));
+
 // @route   POST /api/admin/create
 // @desc    Create a new admin user
 router.post('/create', verifyToken, upload.fields([{ name: 'hodImage', maxCount: 1 }, { name: 'profileImage', maxCount: 1 }, { name: 'signatureImage', maxCount: 1 }]), (req, res) => adminUsersController.createAdmin(req, res));

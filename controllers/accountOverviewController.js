@@ -189,7 +189,6 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       }
       return ids;
     };
-
     let paidAmount = payments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
     let paidBreakdown = [];
     if (payments.length > 0) {
@@ -208,20 +207,42 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
         };
       });
     }
+
+    const claimedPaymentIds = new Set();
     let onlinePaidAmount = 0;
     if (exhibitor?.paymentHistory && exhibitor.paymentHistory.length > 0) {
       exhibitor.paymentHistory.forEach(ph => {
         const amt = parseFloat(ph.amount) || 0;
-        onlinePaidAmount += amt;
-        paidBreakdown.push({
-          id: ph._id || ph.transactionId || Math.random().toString(),
-          no: ph.transactionId || 'Online Payment',
-          amount: amt,
-          date: ph.paidAt,
-          type: 'Online Payment',
-          forNo: 'Registration',
-          forType: 'Registration'
-        });
+        const txId = String(ph.transactionId || ph.razorpayPaymentId || '').trim();
+        
+        let isDuplicate = false;
+        if (txId) {
+            isDuplicate = payments.some(p => {
+                const utr = String(p.utr_no || p.payment_no || '').trim();
+                return utr === txId || String(p.notes || '').includes(txId);
+            });
+        }
+        
+        if (!isDuplicate) {
+            const match = payments.find(p => !claimedPaymentIds.has(p._id.toString()) && Math.abs(parseFloat(p.amount_text || 0) - amt) < 1);
+            if (match) {
+                isDuplicate = true;
+                claimedPaymentIds.add(match._id.toString());
+            }
+        }
+
+        if (!isDuplicate) {
+            onlinePaidAmount += amt;
+            paidBreakdown.push({
+                id: ph._id || ph.transactionId || Math.random().toString(),
+                no: ph.transactionId || 'Online Payment',
+                amount: amt,
+                date: ph.paidAt,
+                type: 'Online Payment',
+                forNo: 'Registration',
+                forType: 'Registration'
+            });
+        }
       });
       paidAmount += onlinePaidAmount;
     } else if (paidAmount === 0 && exhibitor?.amountPaid) {
@@ -231,8 +252,6 @@ const buildAccountOverview = async (companyId, company, exhibitor) => {
       paidBreakdown.push({ no: 'Registration Paid', amount: amt, type: 'Registration', date: exhibitor?.createdAt });
     }
 
-    // 3. Compute Remaining Balance — nets credit notes the same way the Client Ledger does,
-    // so a credit note reduces "amount due" here too instead of only appearing in the activity feed.
     let remainingBalance = Math.max(0, totalDue - paidAmount - creditNoteTotal);
     let remainingBreakdown = [];
 

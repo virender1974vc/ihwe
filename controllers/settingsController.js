@@ -9,7 +9,8 @@ class SettingsController {
      */
     async getSettings(req, res) {
         try {
-            const data = await settingsService.getSettings();
+            const website = req.query.website || '9th IHWE';
+            const data = await settingsService.getSettings(website);
             res.json({ success: true, data });
         } catch (error) {
             console.error('Fetch settings error:', error);
@@ -23,6 +24,7 @@ class SettingsController {
     async updateSettings(req, res) {
         try {
             const {
+                website,
                 emails, phones, addresses, mapIframe, marqueeText, topbarDate,
                 supportDeskText, onlineAdvancePercentage, manualAdvancePercentage,
                 quickLinks, exhibitionLinks,
@@ -100,7 +102,7 @@ class SettingsController {
                 }
             }
 
-            const data = await settingsService.updateSettings(updateData);
+            const data = await settingsService.updateSettings(updateData, website || '9th IHWE');
 
             // If a file was uploaded, return the path in response
             const response = { success: true, data, message: 'Settings updated successfully' };
