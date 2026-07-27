@@ -5,6 +5,9 @@ const aisensy = require('./aisensyService');
 // log entries can be scoped later. Safe no-op (returns null) for companyIds
 // that don't resolve to a Company doc — e.g. buyer/visitor/OTP flows that pass
 // an unrelated id or none at all.
+// Fallback only — a company can belong to several events now (Company.events),
+// so this just picks its original/legacy one. Prefer resolveEventId(options)
+// below, which uses the event the send was actually triggered from.
 const resolveEventIdForCompany = async (companyId) => {
     if (!companyId) return null;
     try {
@@ -15,6 +18,13 @@ const resolveEventIdForCompany = async (companyId) => {
         return null;
     }
 };
+
+// The event a log entry should be scoped to: whichever event's page/section
+// the send was triggered from (options.eventId, passed by the frontend via
+// useEventContext()'s currentEventId), falling back to the company's legacy
+// single eventId for system-triggered sends with no page context (crons, OTPs).
+const resolveEventId = (options = {}) =>
+    options.eventId ? Promise.resolve(options.eventId) : resolveEventIdForCompany(options.companyId);
 
 const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) => {
     let status = 'failed';
@@ -161,7 +171,7 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        resolveEventIdForCompany(options.companyId).then((eventId) => WhatsAppLog.create({
+        resolveEventId(options).then((eventId) => WhatsAppLog.create({
             recipient: mobile,
             message: msg,
             name: name || 'System Notification',
@@ -221,7 +231,7 @@ const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) =
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        resolveEventIdForCompany(options.companyId).then((eventId) => WhatsAppLog.create({
+        resolveEventId(options).then((eventId) => WhatsAppLog.create({
             recipient: mobile,
             message: msg,
             name: name || 'System Notification (Opus)',
@@ -379,7 +389,7 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
         errorMsg = error.message || 'Failed to connect to WhatsApp API';
         return { success: false, error: errorMsg };
     } finally {
-        resolveEventIdForCompany(options.companyId).then((eventId) => WhatsAppLog.create({
+        resolveEventId(options).then((eventId) => WhatsAppLog.create({
             recipient: mobile,
             message: msg + " [RICH MEDIA]",
             name: name || 'System Notification',
@@ -444,5 +454,6 @@ module.exports = {
     sendWhatsAppRichMessage,
     sendProformaInvoiceWhatsApp,
     sendTaxInvoiceWhatsApp,
-    resolveEventIdForCompany
+    resolveEventIdForCompany,
+    resolveEventId
 };

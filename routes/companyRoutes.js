@@ -8,6 +8,8 @@ const {
   getCompanies,
   getCompanyById,
   addCompanyToEvent,
+  assignEventsToCompany,
+  bulkAssignCompanies,
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,
@@ -89,6 +91,8 @@ router.post("/", (req, res) => { clearCompaniesCache(); addCompany(req, res); })
 router.put("/:id", (req, res) => { clearCompaniesCache(); updateCompany(req, res); });
 router.delete("/:id", (req, res) => { clearCompaniesCache(); deleteCompany(req, res); });
 router.post("/:id/add-to-event", (req, res) => { clearCompaniesCache(); addCompanyToEvent(req, res); });
+router.post("/:id/assign-events", (req, res) => { clearCompaniesCache(); assignEventsToCompany(req, res); });
+router.post("/bulk-assign", (req, res) => { clearCompaniesCache(); bulkAssignCompanies(req, res); });
 router.post("/:id/logo", upload.single("companyLogo"), (req, res) => { clearCompaniesCache(); uploadCompanyLogo(req, res); });
 router.post("/:id/contact-photo", contactUpload.single("contactPhoto"), uploadContactPhoto);
 router.post(

@@ -43,6 +43,12 @@ const CompanySchema = new mongoose.Schema(
     referralMobile: { type: String },
     eventName: { type: String },
     eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // Multi-event support: a company can be tagged into several events at once
+    // (e.g. IHWE 2026 and Organic 2027) without duplicating the record.
+    // `eventId` above stays as the "event this lead-row was created for" (legacy,
+    // still used by per-event pages); `events` is the new assignable set shown
+    // together in Master Data.
+    events: [{ type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" }],
     reminder: { type: Date },
     companyStatus: { type: String, default: "New Lead" },
     added_by: { type: String, trim: true },
@@ -72,5 +78,6 @@ CompanySchema.index({ "contacts.mobile": 1 });
 CompanySchema.index({ email: 1 });
 CompanySchema.index({ companyName: 1 });
 CompanySchema.index({ eventId: 1 });
+CompanySchema.index({ events: 1 });
 
 module.exports = secondaryDB.model("Company", CompanySchema);

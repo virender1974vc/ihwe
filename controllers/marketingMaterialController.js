@@ -3,7 +3,7 @@ const MarketingShareLog = require("../models/MarketingShareLog");
 const EmailLog = require("../models/EmailLog");
 const nodemailer = require("nodemailer");
 const { sendWhatsappMessage } = require("./commonWhatsappController");
-const { resolveEventIdForCompany } = require("../utils/whatsapp");
+const { resolveEventId } = require("../utils/whatsapp");
 const axios = require("axios");
 
 const getAdminName = (req) => req.user?.username || req.user?.name || req.body.updatedBy || req.body.createdBy || "Admin";
@@ -135,7 +135,7 @@ exports.deleteMaterial = async (req, res) => {
 
 exports.shareMaterials = async (req, res) => {
   try {
-    let { cmpny_id, material_ids, sentVia, sentBy, senderId, senderName, clientMobile, clientEmail, clientName } = req.body;
+    let { cmpny_id, material_ids, sentVia, sentBy, senderId, senderName, clientMobile, clientEmail, clientName, eventId: requestEventId } = req.body;
 
     if (!material_ids || !Array.isArray(material_ids) || material_ids.length === 0) {
       return res.status(400).json({ success: false, message: "No materials selected" });
@@ -255,7 +255,7 @@ exports.shareMaterials = async (req, res) => {
       };
       await transporter.sendMail(mailOptions);
       try {
-        const eventId = await resolveEventIdForCompany(cmpny_id);
+        const eventId = await resolveEventId({ companyId: cmpny_id, eventId: requestEventId });
         await EmailLog.create({
           recipient: clientEmailVar,
           subject: "Marketing Materials from IHWE",
@@ -280,7 +280,8 @@ exports.shareMaterials = async (req, res) => {
           senderId,
           senderName,
           companyId: cmpny_id,
-          companyName: clientNameVar
+          companyName: clientNameVar,
+          eventId: requestEventId
         });
       } catch (waErr) {
         console.error("WhatsApp sending error:", waErr.message);

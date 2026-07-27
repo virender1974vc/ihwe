@@ -2,7 +2,7 @@ const cloudinary = require('cloudinary').v2;
 const CallLog = require('../models/CallLog');
 const Company = require('../models/Company');
 const { logActivity } = require('../utils/logger');
-const { resolveEventIdForCompany } = require('../utils/whatsapp');
+const { resolveEventId } = require('../utils/whatsapp');
 
 // 1. Configure Cloudinary
 cloudinary.config({
@@ -26,7 +26,8 @@ const uploadCallLog = async (req, res) => {
             duration,
             companyStatus,
             newStatus,
-            notes
+            notes,
+            eventId: requestEventId
         } = req.body;
 
         if (!callerId || !callerName || !companyId || !companyName || !clientName || !mobile) {
@@ -60,7 +61,7 @@ const uploadCallLog = async (req, res) => {
         }
 
         // Save CallLog record
-        const eventId = await resolveEventIdForCompany(companyId);
+        const eventId = await resolveEventId({ companyId, eventId: requestEventId });
         const callLog = await CallLog.create({
             callerId,
             callerName,
