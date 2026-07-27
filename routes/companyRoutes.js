@@ -6,6 +6,7 @@ const uploadMiddleware = require("../middlewares/upload.js");
 const {
   addCompany,
   getCompanies,
+  getCompanyStatsSummary,
   getCompanyById,
   addCompanyToEvent,
   assignEventsToCompany,
@@ -83,6 +84,7 @@ router.get("/", async (req, res) => {
 
 router.get("/achievement-revenue", require("../controllers/companyController.js").getAchievementRevenue);
 router.get("/leaderboard", require("../controllers/companyController.js").getSalesLeaderboard);
+router.get("/stats-summary", getCompanyStatsSummary);
 router.get("/lookup/:id", require("../controllers/companyController.js").lookupCompanyOrExhibitor);
 router.get("/:id", getCompanyById);
 
