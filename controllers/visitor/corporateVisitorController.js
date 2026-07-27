@@ -70,6 +70,7 @@ const createCorporateVisitor = async (req, res) => {
       b2bMeeting: saved.b2bMeeting,
       designation: saved.designation || 'N/A',
       companyName: saved.companyName || 'N/A',
+      registrationDate: saved.createdAt,
     };
     emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
