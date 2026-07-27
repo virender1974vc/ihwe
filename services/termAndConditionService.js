@@ -17,7 +17,7 @@ class TermAndConditionService {
         return await TermAndCondition.findById(id);
     }
     async updateTerm(id, data) {
-        return await TermAndCondition.findByIdAndUpdate(id, data, { new: true });
+        return await TermAndCondition.findByIdAndUpdate(id, data, { returnDocument: 'after' });
     }
     async deleteTerm(id) {
         return await TermAndCondition.findByIdAndDelete(id);

@@ -10,7 +10,8 @@ class HeroController {
      */
     async getAllSlides(req, res) {
         try {
-            const data = await heroService.getAllSlides();
+            const { website } = req.query;
+            const data = await heroService.getAllSlides(website);
             res.json({ success: true, data });
         } catch (error) {
             console.error('Fetch hero slides error:', error);
@@ -23,7 +24,7 @@ class HeroController {
      */
     async createSlide(req, res) {
         try {
-            const { subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, button3Name, button3Url, isActive, schedule, order } = req.body;
+            const { subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, button3Name, button3Url, isActive, schedule, order, website } = req.body;
 
             if (!req.file) {
                 return res.status(400).json({ success: false, message: 'Please upload an image' });
@@ -48,7 +49,8 @@ class HeroController {
                 button3Url,
                 isActive: isActive === 'true' || isActive === true,
                 order: order ? parseInt(order) : 0,
-                schedule: schedule ? JSON.parse(schedule) : undefined
+                schedule: schedule ? JSON.parse(schedule) : undefined,
+                website: website || '9th IHWE'
             };
 
             const data = await heroService.createSlide(slideData);
@@ -65,7 +67,7 @@ class HeroController {
      */
     async updateSlide(req, res) {
         try {
-            const { subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, button3Name, button3Url, isActive, schedule, order } = req.body;
+            const { subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, description, descriptionFontSize, altText, button1Name, button1Url, button2Name, button2Url, button3Name, button3Url, isActive, schedule, order, website } = req.body;
 
             let updateData = {
                 subtitle,
@@ -85,7 +87,8 @@ class HeroController {
                 button3Url,
                 isActive: isActive === 'true' || isActive === true,
                 order: order ? parseInt(order) : 0,
-                schedule: schedule ? JSON.parse(schedule) : undefined
+                schedule: schedule ? JSON.parse(schedule) : undefined,
+                website: website || '9th IHWE'
             };
 
             if (req.file) {

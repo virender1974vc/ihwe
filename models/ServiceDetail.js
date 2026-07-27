@@ -1,51 +1,19 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const ServiceDetailSchema = new mongoose.Schema({
-  serviceName: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-  bgImage: {
-    type: String,
-  },
-  bgAltText: {
-    type: String,
-  },
-  bgTitle: {
-    type: String,
-  },
-  title: {
-    type: String,
-  },
-  highlightText: {
-    type: String,
-  },
-  description: {
-    type: String,
-  },
-  galleryImages: [
-    {
-      url: String,
-      altText: String,
-    }
-  ],
-  seo: {
-    metaTitle: String,
-    metaKeywords: String,
-    metaDescription: String,
-    ogTitle: String,
-    ogDescription: String,
-    ogImage: String,
-    ogImageAltText: String,
-    canonicalTag: String,
-    schemaMarkup: String,
-    openGraphTags: String,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  }
-});
+    serviceCardId: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        required: true,
+        unique: true // One detail page per service card
+    },
+    serviceTitle: { type: String, required: true }, // Store for easier listing
+    slug: { type: String, sparse: true }, // Not strictly required, will fallback to ID
+    heroImage: { type: String, default: '' },
+    heroImageAlt: { type: String, default: '' },
+    heroOverlayOpacity: { type: Number, default: 0.7 },
+    h1Heading: { type: String, required: true },
+    content: { type: String, default: '' },
+    updatedBy: { type: String, default: 'System' }
+}, { timestamps: true });
 
-module.exports = mongoose.model("ServiceDetail", ServiceDetailSchema);
+module.exports = mongoose.model('ServiceDetail', ServiceDetailSchema);

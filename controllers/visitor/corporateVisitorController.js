@@ -1,4 +1,6 @@
 const CorporateVisitor = require("../../models/visitor/CorporateVisitorModel");
+const fs = require("fs");
+const XLSX = require("xlsx");
 const emailService = require("../../utils/emailService");
 const whatsapp = require("../../utils/whatsapp");
 const {
@@ -8,6 +10,7 @@ const { logActivity } = require("../../utils/logger");
 const {
   normalizeVisitorMultiSelectFields,
 } = require("../../utils/visitorSelectionNormalizer");
+const qrcode = require('qrcode');
 
 // ➤ Get all corporate visitors
 const getAllCorporateVisitors = async (req, res) => {
@@ -47,6 +50,9 @@ const createCorporateVisitor = async (req, res) => {
       registrationId,
     });
 
+    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    visitor.qrCode = await qrcode.toDataURL(qrPayload);
+
     const saved = await visitor.save();
 
     const emailData = {
@@ -64,6 +70,7 @@ const createCorporateVisitor = async (req, res) => {
       b2bMeeting: saved.b2bMeeting,
       designation: saved.designation || 'N/A',
       companyName: saved.companyName || 'N/A',
+      registrationDate: saved.createdAt,
     };
     emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
@@ -104,7 +111,7 @@ const updateCorporateVisitor = async (req, res) => {
     const updated = await CorporateVisitor.findByIdAndUpdate(
       req.params.id,
       normalizedBody,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
@@ -134,6 +141,94 @@ const deleteCorporateVisitor = async (req, res) => {
   }
 };
 
+// ➤ Upload Corporate Visitors from Excel
+const uploadCorporateVisitors = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "Excel file required" });
+    }
+
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+
+    if (!rows.length) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ success: false, message: "Excel file is empty" });
+    }
+
+    let insertedCount = 0;
+    let skippedCount = 0;
+
+    for (const row of rows) {
+      const email = String(row.email || "").trim().toLowerCase();
+      const mobile = String(row.mobile || "").trim();
+
+      if (!email && !mobile) {
+        skippedCount++;
+        continue;
+      }
+
+      // Check for duplicate by email OR mobile
+      const existing = await CorporateVisitor.findOne({
+        $or: [
+          ...(email ? [{ email }] : []),
+          ...(mobile ? [{ mobile }] : [])
+        ]
+      });
+
+      if (existing) {
+        skippedCount++;
+        continue;
+      }
+
+      const registrationId = await generateRegistrationId("corporate");
+      const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+      const qrCode = await qrcode.toDataURL(qrPayload);
+
+      const visitorData = {
+        registrationId,
+        registrationFor: row.registrationFor || "Corporate Visitor",
+        firstName: row.firstName || "",
+        lastName: row.lastName || "",
+        email,
+        mobile,
+        designation: row.designation || "",
+        companyName: row.companyName || "",
+        companyWebsite: row.companyWebsite || "",
+        industrySector: row.industrySector || "",
+        companySize: row.companySize || "",
+        country: row.country || "India",
+        state: row.state || "",
+        city: row.city || "",
+        b2bMeeting: row.b2bMeeting || "No",
+        whatsappUpdates: row.whatsappUpdates || "Yes",
+        specificRequirement: row.specificRequirement || "",
+        purposeOfVisit: row.purposeOfVisit ? String(row.purposeOfVisit).split(',').map(s => s.trim()) : [],
+        areaOfInterest: row.areaOfInterest ? String(row.areaOfInterest).split(',').map(s => s.trim()) : [],
+        qrCode,
+        status: "New Reg.",
+        created_by: req.user ? req.user.username : "Bulk Import",
+      };
+
+      const visitor = new CorporateVisitor(visitorData);
+      await visitor.save();
+      insertedCount++;
+    }
+
+    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+    res.status(200).json({
+      success: true,
+      message: `Import complete. Inserted: ${insertedCount}, Skipped (duplicates/invalid): ${skippedCount}`
+    });
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    console.error("Error importing corporate visitors:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // ✅ EXPORT
 module.exports = {
   getAllCorporateVisitors,
@@ -141,4 +236,5 @@ module.exports = {
   createCorporateVisitor,
   updateCorporateVisitor,
   deleteCorporateVisitor,
+  uploadCorporateVisitors,
 };

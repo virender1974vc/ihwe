@@ -11,6 +11,12 @@ const CrmExhibitorCategorySchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    parent_category: { type: String, default: null },
+    cat_description: { type: String },
+    display_order: { type: Number },
+    applicable_for: { type: [String] },
+    icon_name: { type: String },
+    icon_data_url: { type: String },
   },
   { timestamps: { createdAt: "cat_added", updatedAt: "cat_updated" } },
 );

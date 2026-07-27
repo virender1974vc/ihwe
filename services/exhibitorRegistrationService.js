@@ -2,25 +2,236 @@ const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
-const whatsapp = require('../utils/whatsapp');
 const path = require('path');
+const qrcode = require('qrcode');
 
 class ExhibitorRegistrationService {
-    async getAllRegistrations() {
-        const regs = await ExhibitorRegistration.find()
-            .populate('eventId', 'name')
-            .sort({ createdAt: -1 });
+    // Shared filter builder used by both the paginated list and the summary
+    // aggregation, so "what matches" is defined in exactly one place.
+    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = {}) {
+        const query = {};
+        const orGroups = []; // each entry ANDed together; each entry itself is an $or list
 
+        if (status) {
+            query.status = status;
+        }
+        if (referredBy) {
+            const esc = referredBy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            query.referredBy = { $regex: new RegExp(`^${esc}$`, 'i') };
+        }
+        if (industry) {
+            // Must mirror the exact "natureOfBusiness || industrySector || typeOfBusiness"
+            // priority chain the UI displays under the company name — otherwise a row can
+            // match the filter on one field while showing a DIFFERENT field's value,
+            // making the filter look broken.
+            const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const exact = new RegExp(`^${esc}$`, 'i');
+            const isEmpty = (field) => ({ $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }] });
+            orGroups.push([
+                { natureOfBusiness: exact },
+                { $and: [isEmpty('natureOfBusiness'), { industrySector: exact }] },
+                { $and: [isEmpty('natureOfBusiness'), isEmpty('industrySector'), { typeOfBusiness: exact }] },
+            ]);
+        }
+        if (search) {
+            const esc = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            orGroups.push([
+                { exhibitorName: { $regex: new RegExp(esc, 'i') } },
+                { companyName: { $regex: new RegExp(esc, 'i') } },
+                { 'contact1.email': { $regex: new RegExp(esc, 'i') } },
+                { 'contact1.mobile': { $regex: new RegExp(esc, 'i') } },
+                { 'contact2.email': { $regex: new RegExp(esc, 'i') } },
+                { 'contact2.mobile': { $regex: new RegExp(esc, 'i') } },
+            ]);
+        }
 
-        return this._enrichRegistrations(regs);
+        // Restrict non-super-admins to registrations they personally handled.
+        // Super admins (and requests with no user context, e.g. internal jobs) see everything.
+        const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
+        const isSuperAdmin = cleanRole === 'superadmin' || cleanRole === 'ihwesuperadministrator';
+        if (username && !isSuperAdmin) {
+            const escUser = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const nameCandidates = [username];
+            try {
+                const User = require('../models/User');
+                const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escUser}$`, 'i') } }).select('fullName').lean();
+                if (adminUser?.fullName) nameCandidates.push(adminUser.fullName);
+            } catch (_) { }
+
+            const scopeOr = [];
+            nameCandidates.forEach((name) => {
+                const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                scopeOr.push({ spokenWith: { $regex: new RegExp(`^${esc}$`, 'i') } });
+                scopeOr.push({ filledByFullName: { $regex: new RegExp(`^${esc}$`, 'i') } });
+            });
+            orGroups.push(scopeOr);
+        }
+
+        if (orGroups.length === 1) {
+            query.$or = orGroups[0];
+        } else if (orGroups.length > 1) {
+            query.$and = orGroups.map((group) => ({ $or: group }));
+        }
+
+        return query;
+    }
+
+    async getAllRegistrations(options = {}) {
+        const {
+            page = 1,
+            limit = 20,
+        } = options;
+
+        const query = await this._buildRegistrationsQuery(options);
+        const skip = (Number(page) - 1) * Number(limit);
+
+        // Count + fetch in parallel — only fetches current page records
+        const [total, regs] = await Promise.all([
+            ExhibitorRegistration.countDocuments(query),
+            ExhibitorRegistration.find(query)
+                .populate('eventId', 'name paymentPlans')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(Number(limit)),
+        ]);
+
+        // Enrich only the ~10-20 records on this page (not all records)
+        const enriched = await this._enrichRegistrations(regs);
+
+        return {
+            data: enriched,
+            total,
+            page: Number(page),
+            limit: Number(limit),
+            totalPages: Math.ceil(total / Number(limit)),
+        };
+    }
+
+    // Aggregated totals across ALL registrations matching the current filters/user-scope
+    // (not just the current page) — powers the stat cards on the exhibitor list.
+    async getRegistrationsSummary(options = {}) {
+        const query = await this._buildRegistrationsQuery(options);
+
+        const [result] = await ExhibitorRegistration.aggregate([
+            { $match: query },
+            {
+                $addFields: {
+                    _revenueValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$financeBreakdown.netPayable', 0] }, 0] }, '$financeBreakdown.netPayable',
+                            { $cond: [
+                                { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
+                                { $ifNull: ['$amountPaid', 0] },
+                            ] },
+                        ],
+                    },
+                    _paymentValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$amountPaid', 0] }, 0] }, '$amountPaid',
+                            { $ifNull: ['$financeBreakdown.paidAmount', 0] },
+                        ],
+                    },
+                    _areaValue: {
+                        $cond: [
+                            { $gt: [{ $ifNull: ['$participation.stallSize', 0] }, 0] }, '$participation.stallSize',
+                            { $ifNull: ['$stallSize', 0] },
+                        ],
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalCount: { $sum: 1 },
+                    totalArea: { $sum: '$_areaValue' },
+                    totalRevenue: { $sum: '$_revenueValue' },
+                    paymentReceived: { $sum: '$_paymentValue' },
+                    // Missing exhibitorStatus (e.g. direct website self-registrations with no admin
+                    // selection) defaults to "New Client" — only an explicit "Existing Client" counts otherwise.
+                    existingClientsCount: { $sum: { $cond: [{ $eq: ['$exhibitorStatus', 'Existing Client'] }, 1, 0] } },
+                    newClientsCount: { $sum: { $cond: [{ $eq: ['$exhibitorStatus', 'Existing Client'] }, 0, 1] } },
+                },
+            },
+        ]);
+
+        return result || {
+            totalCount: 0,
+            totalArea: 0,
+            totalRevenue: 0,
+            paymentReceived: 0,
+            newClientsCount: 0,
+            existingClientsCount: 0,
+        };
+    }
+
+    // Distinct filter dropdown values scoped to the user (same scoping as the list),
+    // computed across ALL of that user's registrations — not just the current page.
+    async getFilterOptions(options = {}) {
+        const { username = '', role = '' } = options;
+        const query = await this._buildRegistrationsQuery({ username, role });
+
+        const isNonEmpty = (field) => ({ $and: [{ $ne: [field, null] }, { $ne: [field, ''] }] });
+
+        const [sources, statuses, industryDocs] = await Promise.all([
+            ExhibitorRegistration.distinct('referredBy', query),
+            ExhibitorRegistration.distinct('status', query),
+            // Resolve the SAME "natureOfBusiness || industrySector || typeOfBusiness"
+            // priority chain the UI displays under the company name, so the dropdown
+            // options exactly match what filtering by them will show.
+            ExhibitorRegistration.aggregate([
+                { $match: query },
+                {
+                    $addFields: {
+                        _resolvedIndustry: {
+                            $switch: {
+                                branches: [
+                                    { case: isNonEmpty('$natureOfBusiness'), then: '$natureOfBusiness' },
+                                    { case: isNonEmpty('$industrySector'), then: '$industrySector' },
+                                ],
+                                default: '$typeOfBusiness',
+                            },
+                        },
+                    },
+                },
+                { $match: { _resolvedIndustry: { $nin: [null, ''] } } },
+                { $group: { _id: '$_resolvedIndustry' } },
+                { $sort: { _id: 1 } },
+            ]),
+        ]);
+
+        return {
+            sources: sources.filter(Boolean).sort(),
+            statuses: statuses.filter(Boolean).sort(),
+            industries: industryDocs.map((d) => d._id),
+        };
     }
 
     async getRegistrationById(id) {
-        const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate');
+        const reg = await ExhibitorRegistration.findById(id).populate('eventId', 'name startDate endDate paymentPlans');
         if (!reg) return null;
 
         const enriched = await this._enrichRegistrations([reg]);
-        return enriched[0];
+        const result = enriched[0];
+        if (result && result.filledBy && result.filledBy !== 'User') {
+            try {
+                const User = require('../models/User');
+                const filledByVal = (result.filledBy || '').trim();
+                let adminUser = await User.findOne({ username: filledByVal }).select('fullName username').lean();
+                if (!adminUser) {
+                    adminUser = await User.findOne({ username: { $regex: new RegExp(`^${filledByVal}`, 'i') } }).select('fullName username').lean();
+                }
+                if (!adminUser) {
+                    adminUser = await User.findOne({ fullName: { $regex: new RegExp(filledByVal, 'i') } }).select('fullName username').lean();
+                }
+                const plain = result.toObject ? result.toObject() : Object.assign({}, result);
+                plain.filledByFullName = (adminUser?.fullName && adminUser.fullName.trim()) ? adminUser.fullName.trim() : filledByVal;
+                return plain;
+            } catch (err) {
+                console.error('filledByFullName lookup error:', err);
+            }
+        }
+
+        return result;
     }
 
     async _enrichRegistrations(regs) {
@@ -34,7 +245,6 @@ class ExhibitorRegistrationService {
 
         if (names.length) {
             const pattern = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-            // Loose match: any registration containing the name (with word boundaries)
             query.$or.push({ exhibitorName: { $regex: new RegExp(`(${pattern})`, 'i') } });
         }
         if (emails.length) {
@@ -49,7 +259,17 @@ class ExhibitorRegistrationService {
         if (query.$or.length === 0) return regs;
 
         const allRelated = await ExhibitorRegistration.find(query).sort({ updatedAt: -1 }).lean();
-        const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'natureOfBusiness', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
+        const Company = require('../models/Company');
+        const clientIds = [...new Set(regs.map((reg) => String(reg.clientId || '')).filter(Boolean))];
+        const linkedCompanies = clientIds.length
+            ? await Company.find({ _id: { $in: clientIds } }).select('contacts').lean()
+            : [];
+        const companyById = new Map(linkedCompanies.map((company) => [String(company._id), company]));
+        // natureOfBusiness intentionally excluded: it drives the Industry filter and the
+        // "Company Name" subtitle, both computed from each registration's OWN raw field —
+        // cross-filling it from a sibling registration made the filter look broken (a row
+        // would match on its real field but *display* a different sibling's value).
+        const profileFields = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
 
         const results = regs.map(r => {
             const doc = r;
@@ -58,7 +278,6 @@ class ExhibitorRegistrationService {
             const rMobile = (doc.contact1?.mobile || '').trim();
 
             const masterData = {};
-            // We'll map multiple keys to a single 'canonical' key for the UI
             const fieldAliases = {
                 'companyLogoUrl': ['companyLogo', 'logo'],
                 'panCardFrontUrl': ['panFrontUrl', 'panCardFront', 'panFront'],
@@ -84,7 +303,6 @@ class ExhibitorRegistrationService {
                         const keysToCheck = [f, ...(fieldAliases[f] || [])];
                         keysToCheck.forEach(key => {
                             const val = sib[key];
-                            // If we don't have a master value for this field yet, the first one seen is the LATEST (due to sort)
                             if (val && typeof val === 'string' && val !== 'undefined' && val !== 'null' && val.trim() !== '' && !masterData[f]) {
                                 masterData[f] = val;
                             }
@@ -100,8 +318,6 @@ class ExhibitorRegistrationService {
                     }
                 }
             });
-
-            // APPLY: Fill missing fields only — NEVER overwrite existing data
             const KYC_IMAGE_FIELDS = ['companyLogoUrl', 'panCardFrontUrl', 'panCardBackUrl', 'aadhaarCardFrontUrl', 'aadhaarCardBackUrl', 'gstCertificateUrl', 'cancelledChequeUrl', 'representativePhotoUrl'];
             profileFields.forEach(f => {
                 const currentVal = doc[f];
@@ -124,6 +340,43 @@ class ExhibitorRegistrationService {
                 doc.contact2 = masterData.contact2;
                 doc._isEnriched = true;
             }
+
+            const hasContactDetails = (contact) => Boolean(
+                contact?.firstName || contact?.lastName || contact?.name || contact?.mobile || contact?.email
+            );
+            if (!hasContactDetails(doc.contact1)) {
+                const primaryTeamMember = doc.teamMembers?.find((member) =>
+                    member.isPrimary || /primary contact/i.test(member.roleAtExhibition || '')
+                );
+                const linkedCompany = companyById.get(String(doc.clientId || ''));
+                const companyContact =
+                    linkedCompany?.contacts?.find((contact) => contact.isPrimary)
+                    || linkedCompany?.contacts?.[0];
+
+                if (primaryTeamMember) {
+                    doc.contact1 = {
+                        title: '',
+                        firstName: primaryTeamMember.name || '',
+                        lastName: '',
+                        designation: primaryTeamMember.designation || '',
+                        email: primaryTeamMember.email || '',
+                        mobile: primaryTeamMember.mobile || '',
+                        photoUrl: primaryTeamMember.photoUrl || '',
+                    };
+                    doc._isEnriched = true;
+                } else if (companyContact) {
+                    doc.contact1 = {
+                        title: companyContact.title || '',
+                        firstName: companyContact.firstName || companyContact.name || '',
+                        lastName: companyContact.surname || '',
+                        designation: companyContact.designation || '',
+                        email: companyContact.email || '',
+                        mobile: companyContact.mobile || '',
+                        photoUrl: companyContact.photoUrl || companyContact.photo || '',
+                    };
+                    doc._isEnriched = true;
+                }
+            }
             return doc;
         });
         return results;
@@ -132,6 +385,26 @@ class ExhibitorRegistrationService {
     async addRegistration(data) {
         const bcrypt = require('bcryptjs');
         const crypto = require('crypto');
+
+        // ── Registrant type validation ──────────────────────────────────────────
+        const registrantType = data.registrantType || 'registered';
+        if (registrantType === 'registered') {
+            if (!data.gstNo || data.gstNo.trim() === '') {
+                throw new Error('GST Number (GSTIN) is required for Registered Exhibitors.');
+            }
+        } else {
+            // unregistered
+            if (!data.panNo || data.panNo.trim() === '') {
+                throw new Error('PAN Card Number is required for Unregistered Buyers.');
+            }
+            if (!data.aadhaarNo || data.aadhaarNo.trim() === '') {
+                throw new Error('Aadhaar Card Number is required for Unregistered Buyers.');
+            }
+            if (data.aadhaarNo.replace(/\D/g, '').length !== 12) {
+                throw new Error('Aadhaar Card Number must be exactly 12 digits.');
+            }
+        }
+
         const year = new Date().getFullYear();
         // Use a persistent counter to ensure sequential IDs starting from 8001
         const Counter = require('../models/visitor/CounterModel');
@@ -141,14 +414,14 @@ class ExhibitorRegistrationService {
             counterRecord = await Counter.findOneAndUpdate(
                 { type: `exhibitor-v2-${year}` },
                 { $setOnInsert: { seq: 8000 } },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
         }
 
         let counter = await Counter.findOneAndUpdate(
             { type: `exhibitor-v2-${year}` },
             { $inc: { seq: 1 } },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         let currentSeq = counter.seq;
@@ -179,8 +452,6 @@ class ExhibitorRegistrationService {
             rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
             data.password = await bcrypt.hash(rawPassword, 10);
         }
-
-        // --- AUTO-POPULATE stallFor from Stall model ---
         if (data.participation?.stallNo) {
             try {
                 const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber');
@@ -188,16 +459,153 @@ class ExhibitorRegistrationService {
             } catch (_) { }
         }
 
-        // --- AUTO-CALCULATE balanceAmount ---
-        const total = data.participation?.total || 0;
+        // --- SERVER-SIDE PRICE VALIDATION ---
+        // participation.total / financeBreakdown.netPayable are otherwise taken verbatim
+        // from the request body, so a tampered client could book a real stall for an
+        // arbitrary price (this is what actually gets charged via Razorpay downstream).
+        // Recompute the same way updateRegistration does (Stall area/increment/discount +
+        // StallRate + full-payment discount + 18% GST - TDS) and reject on a real mismatch.
+        // If the recompute itself can't run (rate not configured, lookup error, etc.) we
+        // log and allow the booking through rather than risk blocking a legitimate one on
+        // an unanticipated data shape.
+        if (data.participation?.stallNo && data.participation?.stallType && data.participation?.currency) {
+            try {
+                const StallRate = require('../models/StallRate');
+                const stallForCalc = await Stall.findById(data.participation.stallNo)
+                    .select('area incrementPercentage discountPercentage');
+                const rateDoc = await StallRate.findOne({
+                    eventId: data.eventId,
+                    currency: data.participation.currency,
+                    stallType: data.participation.stallType
+                });
+                if (stallForCalc && rateDoc) {
+                    const baseCost = (stallForCalc.area || 0) * (rateDoc.ratePerSqm || 0);
+                    const plInc = Math.round(baseCost * (stallForCalc.incrementPercentage || 0) / 100);
+                    const gross = baseCost + plInc;
+                    const stallDiscAmt = Math.round(gross * (stallForCalc.discountPercentage || 0) / 100);
+                    const sub1 = gross - stallDiscAmt;
+
+                    const Settings = require('../models/Settings');
+                    const Event = require('../models/Event');
+                    const settings = await Settings.findOne();
+                    const chosenPlanId = data.paymentPlanType || 'full';
+                    let isFullPayment = chosenPlanId === 'full';
+                    if (!isFullPayment) {
+                        const eventForCalc = await Event.findById(data.eventId).lean();
+                        const selectedPlan = eventForCalc?.paymentPlans?.find(p => p.id === chosenPlanId);
+                        if (selectedPlan && Number(selectedPlan.percentage) === 100) isFullPayment = true;
+                    }
+                    const discP = isFullPayment ? (settings?.fullPaymentDiscount ?? 5) : 0;
+                    const discA = Math.round(sub1 * discP / 100);
+                    const sub = sub1 - discA;
+                    const gstA = Math.round(sub * 0.18);
+                    const tdsP = data.chosenTdsPercent || 0;
+                    const tdsA = Math.round(sub * tdsP / 100);
+                    const expectedNet = (sub + gstA) - tdsA;
+
+                    const submittedNet = data.financeBreakdown?.netPayable
+                        ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
+                    const TOLERANCE = 5;
+                    if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
+                        throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
+                    }
+                }
+            } catch (validationErr) {
+                if (String(validationErr.message).includes('Pricing could not be verified')) throw validationErr;
+                console.error('[PriceValidation] Skipped due to lookup error:', validationErr.message);
+            }
+        }
+
+        const invoiceTotal = data.participation?.total || 0;
+        const tdsAmount = data.financeBreakdown?.tdsAmount || 0;
+        const netPayable = invoiceTotal - tdsAmount;
         const amountPaid = data.amountPaid || 0;
-        data.balanceAmount = Math.max(0, total - amountPaid);
+        data.balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
+
+        // --- AUTO-GENERATE INSTALLMENTS based on payment plan ---
+        const Event = require('../models/Event');
+        const eventDoc = data.eventId ? await Event.findById(data.eventId).lean() : null;
+        const paymentPlans = eventDoc?.paymentPlans || [];
+        const chosenPlanId = data.paymentPlanType || 'full';
+        const chosenPlan = paymentPlans.find(p => p.id === chosenPlanId);
+        const isFull = chosenPlanId === 'full' || (chosenPlan && Number(chosenPlan.percentage) === 100);
+
+        if (!isFull && paymentPlans.length > 0) {
+            // Generate installments for all phases
+            // Each phase's dueAmount = (this phase % - previous phase %) of netPayable
+            // e.g. Phase1=25%, Phase2=50%, Phase3=75%
+            //   → Phase1 pays 25%, Phase2 pays 25% (50-25), Phase3 pays 25% (75-50)
+            // Last phase always gets the exact remaining to avoid rounding drift
+            const installmentPlans = paymentPlans.filter(p => p.id !== 'full' && Number(p.percentage) < 100);
+            const today = new Date();
+
+            // Sort by percentage ascending to ensure correct cumulative calculation
+            const sortedPlans = [...installmentPlans].sort((a, b) => Number(a.percentage) - Number(b.percentage));
+
+            let cumulativePaid = 0;
+            const installments = [];
+
+            sortedPlans.forEach((plan, idx) => {
+                const thisPct = Number(plan.percentage);
+                const cumulativeTarget = Math.round(netPayable * thisPct / 100);
+                const amount = cumulativeTarget - cumulativePaid;
+                cumulativePaid = cumulativeTarget;
+
+                const isPaidInstallment = idx === 0 && amountPaid > 0 && chosenPlanId === plan.id;
+                installments.push({
+                    installmentNumber: idx + 1,
+                    planId: plan.id,
+                    label: plan.label || `Installment ${idx + 1}`,
+                    percentage: thisPct,
+                    dueAmount: amount,
+                    paidAmount: isPaidInstallment ? amountPaid : 0,
+                    status: isPaidInstallment ? 'paid' : 'pending',
+                    dueDate: plan.dueDate ? new Date(plan.dueDate) : new Date(today.getTime() + (idx + 1) * 30 * 24 * 60 * 60 * 1000),
+                    paidAt: isPaidInstallment ? new Date() : null
+                });
+            });
+
+            // Add Final Balance if not reached 100%
+            if (cumulativePaid < netPayable) {
+                const finalAmt = Math.max(0, Math.round(netPayable - cumulativePaid));
+                if (finalAmt > 0) {
+                    installments.push({
+                        installmentNumber: installments.length + 1,
+                        planId: 'final_balance',
+                        label: 'Final Balance Payment',
+                        percentage: 100,
+                        dueAmount: finalAmt,
+                        paidAmount: 0,
+                        status: 'pending',
+                        dueDate: installments.length > 0 ? installments[installments.length - 1].dueDate : today,
+                        paidAt: null
+                    });
+                }
+            }
+            data.installments = installments;
+
+            // Set paymentDueDate to first unpaid installment's due date
+            const firstUnpaid = data.installments.find(i => i.status !== 'paid');
+            if (firstUnpaid) data.paymentDueDate = firstUnpaid.dueDate;
+        } else {
+            // Full payment - set due date to 7 days from now
+            if (!data.paymentDueDate) {
+                const dueDate = new Date();
+                dueDate.setDate(dueDate.getDate() + 7);
+                data.paymentDueDate = dueDate;
+            }
+            data.installments = [];
+        }
+
+        // Set totalPayable
+        data.totalPayable = data.balanceAmount;
 
         // --- INITIAL PAYMENT HISTORY ---
         if (amountPaid > 0) {
+            const isFull = data.balanceAmount === 0;
             data.paymentHistory = [{
                 amount: amountPaid,
-                paymentType: data.paymentType || 'full',
+                paymentType: data.paymentType || (isFull ? 'full' : 'installment'),
                 paymentMode: data.paymentMode || 'online',
                 method: data.paymentMode === 'online' ? 'Razorpay' : (data.manualPaymentDetails?.method || 'Manual'),
                 transactionId: data.paymentId || data.manualPaymentDetails?.transactionId || '',
@@ -206,32 +614,257 @@ class ExhibitorRegistrationService {
                 paidAt: new Date()
             }];
         }
-
-        // --- HANDLE DUPLICATE/RETRY LOGIC ---
-        // If a registration exists for the same email and stall in pending/failed state, update it instead of creating new
         const duplicate = await ExhibitorRegistration.findOne({
             'contact1.email': data.contact1?.email,
             'participation.stallNo': data.participation?.stallNo,
             status: { $in: ['pending', 'payment-failed'] }
         });
+        try {
+            if (data.registrationId) {
+                const qrPayload = JSON.stringify({ registrationId: data.registrationId });
+                data.qrCode = await qrcode.toDataURL(qrPayload);
+            }
+        } catch (err) {
+            console.error("Failed to generate QR code for exhibitor", err);
+        }
 
         let saved;
         if (duplicate) {
             // Update existing record
-            saved = await ExhibitorRegistration.findByIdAndUpdate(duplicate._id, data, { new: true });
+            saved = await ExhibitorRegistration.findByIdAndUpdate(duplicate._id, data, { returnDocument: 'after' });
         } else {
             // Create new record
             const newRegistration = new ExhibitorRegistration(data);
             saved = await newRegistration.save();
         }
 
+        if (data.clientId) {
+            try {
+                const Company = require('../models/Company');
+                const companyUpdate = {
+                    exhibitorRegistrationId: saved._id,
+                    companyStatus: 'Closed - Won'
+                };
+
+                if (data.exhibitorName) companyUpdate.companyName = data.exhibitorName;
+                if (data.website) companyUpdate.website = data.website;
+                if (data.address) companyUpdate.address = data.address;
+                if (data.country) companyUpdate.country = data.country;
+                if (data.state) companyUpdate.state = data.state;
+                if (data.city) companyUpdate.city = data.city;
+                if (data.pincode) companyUpdate.pincode = data.pincode;
+                if (data.landlineNo) companyUpdate.landline = data.landlineNo;
+                if (data.companyEmail) companyUpdate.email = data.companyEmail;
+                if (data.gstNo) companyUpdate.gstNumber = data.gstNo;
+                if (data.aboutCompany) companyUpdate.companyDescription = data.aboutCompany;
+                if (data.typeOfBusiness) companyUpdate.category = data.typeOfBusiness;
+                if (data.natureOfBusiness) companyUpdate.businessNature = data.natureOfBusiness;
+                if (data.participation && data.participation.stallCategory) {
+                    companyUpdate.exhibitorCategory = data.participation.stallCategory;
+                }
+
+                const existingCompany = await Company.findById(data.clientId);
+                let newContacts = [];
+                if (data.contact1 && data.contact1.firstName) {
+                    newContacts.push({
+                        title: data.contact1.title,
+                        firstName: data.contact1.firstName,
+                        surname: data.contact1.lastName,
+                        email: data.contact1.email,
+                        designation: data.contact1.designation,
+                        mobile: data.contact1.mobile,
+                        alternate: data.contact1.alternateNo,
+                        photo: existingCompany?.contacts?.[0]?.photo || ""
+                    });
+                }
+                if (data.contact2 && data.contact2.firstName) {
+                    newContacts.push({
+                        title: data.contact2.title,
+                        firstName: data.contact2.firstName,
+                        surname: data.contact2.lastName,
+                        email: data.contact2.email,
+                        designation: data.contact2.designation,
+                        mobile: data.contact2.mobile,
+                        alternate: data.contact2.alternateNo,
+                        photo: existingCompany?.contacts?.[1]?.photo || ""
+                    });
+                }
+                if (newContacts.length > 0) {
+                    companyUpdate.contacts = newContacts;
+                }
+
+                if (existingCompany) {
+                    await Company.findByIdAndUpdate(data.clientId, companyUpdate);
+                }
+                const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
+                const adminName = data.spokenWith || data.filledByFullName || 'System Admin';
+                await CrmExhibatorReview2023.create({
+                    cmpny_id: data.clientId,
+                    status_short: 'Closed - Won',
+                    re_msg: `Lead successfully converted to confirmed Exhibitor Registration. Stall booked: ${data.participation?.stallFor || 'N/A'}.`,
+                    type: 'status',
+                    updated_by: adminName
+                });
+
+            } catch (err) {
+                console.error('Failed to link registration to company:', err);
+            }
+        } else {
+            try {
+                const Company = require('../models/Company');
+                const adminName = data.spokenWith || data.filledByFullName || 'Website Direct Booking';
+
+                const newCompanyData = {
+                    companyName: data.exhibitorName || 'Unknown Company',
+                    email: data.companyEmail || data.contact1?.email || 'N/A', // Required field
+                    website: data.website || '',
+                    address: data.address || '',
+                    country: data.country || '',
+                    state: data.state || '',
+                    city: data.city || '',
+                    pincode: data.pincode || '',
+                    landline: data.landlineNo || '',
+                    gstNumber: data.gstNo || '',
+                    companyDescription: data.aboutCompany || '',
+                    category: data.typeOfBusiness || '',
+                    businessNature: data.natureOfBusiness || '',
+                    exhibitorCategory: (data.participation && data.participation.stallCategory) ? data.participation.stallCategory : "General Category",
+                    companyStatus: 'Closed - Won',
+                    exhibitorRegistrationId: saved._id,
+                    added_by: adminName,
+                    forwardTo: adminName,
+                    contacts: []
+                };
+
+                if (data.contact1 && data.contact1.firstName) {
+                    newCompanyData.contacts.push({
+                        title: data.contact1.title,
+                        firstName: data.contact1.firstName,
+                        surname: data.contact1.lastName,
+                        email: data.contact1.email,
+                        designation: data.contact1.designation,
+                        mobile: data.contact1.mobile,
+                        alternate: data.contact1.alternateNo,
+                        photo: ""
+                    });
+                }
+                if (data.contact2 && data.contact2.firstName) {
+                    newCompanyData.contacts.push({
+                        title: data.contact2.title,
+                        firstName: data.contact2.firstName,
+                        surname: data.contact2.lastName,
+                        email: data.contact2.email,
+                        designation: data.contact2.designation,
+                        mobile: data.contact2.mobile,
+                        alternate: data.contact2.alternateNo,
+                        photo: ""
+                    });
+                }
+
+                const newCompany = await Company.create(newCompanyData);
+                saved.clientId = newCompany._id;
+                await ExhibitorRegistration.findByIdAndUpdate(saved._id, { clientId: newCompany._id });
+
+                const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
+                await CrmExhibatorReview2023.create({
+                    cmpny_id: newCompany._id,
+                    status_short: 'Closed - Won',
+                    re_msg: `Lead successfully created and converted to confirmed Exhibitor Registration from Website. Stall booked: ${data.participation?.stallFor || 'N/A'}.`,
+                    type: 'status',
+                    updated_by: adminName
+                });
+            } catch (err) {
+                console.error('Failed to create company for website registration:', err);
+            }
+        }
+
+        // ── Auto-Generate Estimate (instead of PROFORMA Invoice) ──
+        try {
+            if (saved.clientId) {
+                const Estimate = require('../models/Estimate');
+                const nextEstNo = await Estimate.generateNextEstimateNo();
+
+
+                let parsedParticipation = data.participation;
+                if (typeof parsedParticipation === 'string') {
+                    try { parsedParticipation = JSON.parse(parsedParticipation); } catch (e) { }
+                }
+                let parsedFinance = data.financeBreakdown;
+                if (typeof parsedFinance === 'string') {
+                    try { parsedFinance = JSON.parse(parsedFinance); } catch (e) { }
+                }
+
+                const estData = {
+                    companyId: saved.clientId,
+                    est_no: nextEstNo,
+                    gst_no: data.gstNo || "N/A",
+                    supply_date: new Date().toISOString().split('T')[0],
+                    consignee_name: data.exhibitorName || 'Unknown Company',
+                    consignee_addr: data.address || 'N/A',
+                    consignee_person: [
+                        data.contact1?.title,
+                        data.contact1?.firstName,
+                        data.contact1?.lastName
+                    ].filter(Boolean).join(' '),
+                    consignee_phone: data.contact1?.mobile || '',
+                    country: data.country || 'N/A',
+                    state: data.state || 'N/A',
+                    city: data.city || 'N/A',
+                    pincode: data.pincode || 0,
+                    // Proforma/tax-invoice value is before TDS. TDS affects the cash
+                    // collected, not the taxable document value.
+                    finalAmount: parsedParticipation?.total || 0,
+                    added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
+                    items: []
+                };
+
+                if (parsedParticipation && parsedParticipation.stallFor) {
+                    const rate = Number(parsedParticipation.rate) || 0;
+                    const size = Number(parsedParticipation.stallSize) || 0;
+                    const grossAmount = Number(parsedFinance?.grossAmount) || (rate * size);
+                    const taxableAmount = Number(parsedFinance?.subtotal) || Number(parsedParticipation.amount) || grossAmount;
+                    const discountPercent = grossAmount > 0
+                        ? Math.max(0, Math.min(100, ((grossAmount - taxableAmount) / grossAmount) * 100))
+                        : 0;
+                    const invoiceTotal = Number(parsedParticipation.total)
+                        || (taxableAmount + (Number(parsedFinance?.gstAmount) || 0));
+
+                    estData.items.push({
+                        description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
+                        hsn: "998596",
+                        qty: 1,
+                        size: size,
+                        unit: "Sqm",
+                        rate: rate,
+                        amount: grossAmount,
+                        disc: Number(discountPercent.toFixed(4)),
+                        tax: Number(parsedFinance?.gstAmount) || 0,
+                        gstRate: "18%",
+                        cgst_per: "9",
+                        igst_per: "9",
+                        finalAmount: invoiceTotal,
+                    });
+                }
+
+                if (estData.items.length > 0) {
+                    await Estimate.create(estData);
+                }
+            }
+        } catch (err) {
+            console.error('Failed to auto-generate Estimate:', err);
+        }
+
         // Only book stall and send emails if payment is NOT failed
         if (data.status !== 'payment-failed') {
             if (data.participation?.stallNo) {
-                await Stall.findByIdAndUpdate(data.participation.stallNo, {
-                    status: 'booked',
-                    bookedBy: saved._id
-                });
+                const bookedStall = await Stall.findOneAndUpdate(
+                    { _id: data.participation.stallNo, status: { $ne: 'booked' } },
+                    { status: 'booked', bookedBy: saved._id },
+                    { returnDocument: 'after' }
+                );
+                if (!bookedStall) {
+                    throw new Error('This stall has just been booked by someone else. Please choose a different stall and try again.');
+                }
             }
 
             // --- ASYNC DYNAMIC MESSAGING (Email + WhatsApp) ---
@@ -282,26 +915,212 @@ class ExhibitorRegistrationService {
     async updateRegistration(id, data) {
         const current = await ExhibitorRegistration.findById(id);
 
-        // --- AUTO-POPULATE stallFor if stallNo changed ---
+        // Fix: empty string planId causes ObjectId cast error — convert to null
+        if (data.sellerSubscription?.planId === '' || data.sellerSubscription?.planId === null) {
+            data.sellerSubscription.planId = undefined; // unset it
+        }
+        if (data.sellerSubscription?.expiresAt === '') {
+            data.sellerSubscription.expiresAt = undefined;
+        }
+        let stallChanged = false;
         if (data.participation?.stallNo && data.participation.stallNo !== current.participation?.stallNo?.toString()) {
+            stallChanged = true;
             try {
-                const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber');
-                if (stallDoc) data.participation.stallFor = stallDoc.stallNumber;
+                const stallDoc = await Stall.findById(data.participation.stallNo).select('stallNumber area incrementPercentage discountPercentage');
+                if (stallDoc) {
+                    data.participation.stallFor = stallDoc.stallNumber;
+                    const rate = data.participation?.rate || current.participation?.rate || 0;
+                    const baseCost = stallDoc.area * rate;
+                    const plInc = Math.round(baseCost * (stallDoc.incrementPercentage || 0) / 100);
+                    const newGross = baseCost + plInc;
+                    const stallDiscPct = stallDoc.discountPercentage || 0;
+                    const stallDiscAmt = Math.round(newGross * stallDiscPct / 100);
+                    data._newGross = newGross;
+                    data._stallDiscountPercent = stallDiscPct;
+                    data._stallDiscountAmount = stallDiscAmt;
+                }
             } catch (_) { }
+            const targetStatus = data.status || current.status;
+            if (targetStatus !== 'payment-failed') {
+                const bookedStall = await Stall.findOneAndUpdate(
+                    { _id: data.participation.stallNo, status: { $ne: 'booked' } },
+                    { status: 'booked', bookedBy: id },
+                    { returnDocument: 'after' }
+                );
+                if (!bookedStall) {
+                    throw new Error('The selected stall has already been booked by another registration. Please choose a different stall.');
+                }
+            }
             // Free old stall
             if (current.participation?.stallNo) {
                 await Stall.findByIdAndUpdate(current.participation.stallNo, { status: 'available', bookedBy: null });
             }
-            // Book new stall
-            await Stall.findByIdAndUpdate(data.participation.stallNo, { status: 'booked', bookedBy: id });
         }
 
-        // --- AUTO-CALCULATE balanceAmount ---
-        const total = data.participation?.total ?? current.participation?.total ?? 0;
+        // --- AUTO-CALCULATE balanceAmount (will be recalculated below if finance recalc runs) ---
+        const invoiceTotal = data.participation?.total ?? current.participation?.total ?? 0;
+        const tdsAmountCurrent = data.financeBreakdown?.tdsAmount ?? current.financeBreakdown?.tdsAmount ?? 0;
+        const netPayableCurrent = invoiceTotal - tdsAmountCurrent;
         const amountPaid = data.amountPaid ?? current.amountPaid ?? 0;
-        data.balanceAmount = Math.max(0, total - amountPaid);
+        data.balanceAmount = Math.max(0, Math.round(netPayableCurrent - amountPaid));
 
-        // --- PUSH PAYMENT HISTORY if new payment is being recorded ---
+        // Only recalc if grossAmount is missing (new record from old schema) or TDS/plan/stall explicitly changed
+        const needsFinanceRecalc =
+            stallChanged ||
+            !current.financeBreakdown?.grossAmount ||
+            (data.chosenTdsPercent !== undefined && data.chosenTdsPercent !== current.chosenTdsPercent) ||
+            (data.paymentPlanType && data.paymentPlanType !== current.paymentPlanType);
+
+        if (needsFinanceRecalc) {
+            const Settings = require('../models/Settings');
+            const settings = await Settings.findOne();
+            const plan = data.paymentPlanType || current.paymentPlanType || 'full';
+
+            // If stall changed, use newly calculated gross; otherwise use stored grossAmount
+            const gross = data._newGross || current.financeBreakdown?.grossAmount || data.financeBreakdown?.grossAmount || 0;
+            const stallDiscPct = data._stallDiscountPercent ?? current.financeBreakdown?.stallDiscountPercent ?? 0;
+            const stallDiscAmt = data._stallDiscountAmount ?? current.financeBreakdown?.stallDiscountAmount ?? 0;
+            const sub1 = gross - stallDiscAmt;
+
+            let isFullPayment = (plan === 'full');
+            const Event = require('../models/Event');
+            const event = await Event.findById(current.eventId);
+            if (event?.paymentPlans) {
+                const selectedPlan = event.paymentPlans.find(p => p.id === plan);
+                if (selectedPlan && (Number(selectedPlan.percentage) === 100)) isFullPayment = true;
+            }
+
+            const discP = isFullPayment ? (settings?.fullPaymentDiscount ?? 5) : 0;
+            const discA = Math.round(sub1 * (discP / 100));
+            const sub = sub1 - discA;
+            const gstA = Math.round(sub * 0.18);
+            const tdsP = (data.chosenTdsPercent !== undefined) ? data.chosenTdsPercent : (current.chosenTdsPercent || 0);
+            const tdsA = Math.round(sub * (tdsP / 100));
+            const invoiceTot = sub + gstA;
+            const net = invoiceTot - tdsA;
+
+            if (!data.participation) data.participation = { ...current.participation.toObject() };
+            data.participation.amount = sub;
+            data.participation.total = invoiceTot;
+            data.balanceAmount = Math.max(0, Math.round(net - amountPaid));
+
+            data.financeBreakdown = {
+                grossAmount: gross,
+                stallDiscountPercent: stallDiscPct,
+                stallDiscountAmount: stallDiscAmt,
+                subtotal1: Math.round(sub1),
+                discountPercent: discP,
+                discountAmount: discA,
+                subtotal: sub,
+                gstAmount: gstA,
+                tdsPercent: tdsP,
+                tdsAmount: tdsA,
+                netPayable: net
+            };
+            if (!isFullPayment && event?.paymentPlans) {
+                const installmentPlans = event.paymentPlans.filter(p => p.id !== 'full' && Number(p.percentage) < 100);
+                const sortedPlans = [...installmentPlans].sort((a, b) => Number(a.percentage) - Number(b.percentage));
+
+                let cumulativePaidSoFar = 0;
+                const installments = [];
+
+                sortedPlans.forEach((plan, idx) => {
+                    const thisPct = Number(plan.percentage);
+                    const cumulativeTarget = Math.round(net * thisPct / 100);
+                    const amount = cumulativeTarget - cumulativePaidSoFar;
+                    cumulativePaidSoFar = cumulativeTarget;
+
+                    const existing = (current.installments || []).find(inst => inst.installmentNumber === (idx + 1));
+                    const paidAmt = existing ? (existing.paidAmount || 0) : 0;
+                    let status = 'pending';
+                    if (paidAmt >= amount) status = 'paid';
+                    else if (paidAmt > 0) status = 'partial';
+
+                    installments.push({
+                        installmentNumber: idx + 1,
+                        planId: plan.id,
+                        label: plan.label || `Installment ${idx + 1}`,
+                        percentage: thisPct,
+                        dueAmount: amount,
+                        paidAmount: paidAmt,
+                        status: status,
+                        dueDate: plan.dueDate ? new Date(plan.dueDate) : (existing ? existing.dueDate : new Date()),
+                        paidAt: existing ? existing.paidAt : null
+                    });
+                });
+
+                // Add Final Balance if not reached 100%
+                if (cumulativePaidSoFar < net) {
+                    const finalAmt = Math.max(0, Math.round(net - cumulativePaidSoFar));
+                    if (finalAmt > 0) {
+                        const existing = (current.installments || []).find(inst => inst.planId === 'final_balance');
+                        const paidAmt = existing ? (existing.paidAmount || 0) : 0;
+                        let status = 'pending';
+                        if (paidAmt >= finalAmt) status = 'paid';
+                        else if (paidAmt > 0) status = 'partial';
+
+                        installments.push({
+                            installmentNumber: installments.length + 1,
+                            planId: 'final_balance',
+                            label: 'Final Balance Payment',
+                            percentage: 100,
+                            dueAmount: finalAmt,
+                            paidAmount: paidAmt,
+                            status: status,
+                            dueDate: installments.length > 0 ? installments[installments.length - 1].dueDate : new Date(),
+                            paidAt: existing ? existing.paidAt : null
+                        });
+                    }
+                }
+                data.installments = installments;
+
+                const selectedPlan = event.paymentPlans.find(p => p.id === plan);
+                data.paymentPlanLabel = selectedPlan?.label || 'Installment Plan';
+            } else if (isFullPayment) {
+                data.installments = [];
+                data.paymentPlanLabel = 'Full Payment';
+                if (!data.paymentDueDate && !current.paymentDueDate) {
+                    const dueDate = new Date();
+                    dueDate.setDate(dueDate.getDate() + 7);
+                    data.paymentDueDate = dueDate;
+                }
+            }
+            delete data._newGross;
+            delete data._stallDiscountPercent;
+            delete data._stallDiscountAmount;
+        }
+
+        if (!data.installments && data.amountPaid != null && current.installments?.length) {
+            let remainingPaid = Number(data.amountPaid || 0);
+            data.installments = current.installments
+                .slice()
+                .sort((a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0))
+                .map((inst) => {
+                    const dueAmount = Number(inst.dueAmount || 0);
+                    const paidAmount = Math.min(dueAmount, Math.max(0, remainingPaid));
+                    remainingPaid = Math.max(0, remainingPaid - dueAmount);
+
+                    let status = 'pending';
+                    if (paidAmount >= dueAmount && dueAmount > 0) status = 'paid';
+                    else if (paidAmount > 0) status = 'partial';
+
+                    return {
+                        ...inst.toObject(),
+                        paidAmount,
+                        status,
+                        paidAt: status === 'paid' ? (inst.paidAt || new Date()) : inst.paidAt
+                    };
+                });
+
+            const firstUnpaid = data.installments.find((inst) => inst.status !== 'paid');
+            data.paymentDueDate = firstUnpaid?.dueDate || null;
+        }
+
+        // --- ALWAYS Update totalPayable (balance + penalty) ---
+        const finalBalance = data.balanceAmount ?? current.balanceAmount ?? 0;
+        const penalty = data.penaltyAmount ?? current.penaltyAmount ?? 0;
+        data.totalPayable = finalBalance + penalty;
+
         const paymentStatuses = ['paid', 'advance-paid'];
         const wasAlreadyPaid = paymentStatuses.includes(current.status);
         const isNowPaid = paymentStatuses.includes(data.status);
@@ -311,7 +1130,7 @@ class ExhibitorRegistrationService {
             if (newlyPaid > 0) {
                 const historyEntry = {
                     amount: newlyPaid,
-                    paymentType: data.paymentType || (wasAlreadyPaid ? 'balance' : 'advance'),
+                    paymentType: data.paymentType || (wasAlreadyPaid ? 'installment' : 'installment'),
                     paymentMode: data.paymentMode || current.paymentMode || 'manual',
                     method: data.manualPaymentDetails?.method || (data.paymentMode === 'online' ? 'Razorpay' : 'Manual'),
                     transactionId: data.manualPaymentDetails?.transactionId || data.paymentId || '',
@@ -323,10 +1142,23 @@ class ExhibitorRegistrationService {
             }
         }
 
-        const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { new: true });
+        const statusJustActivated = (data.status && data.status !== 'payment-failed' && current.status === 'payment-failed');
+        if (data.status === 'payment-failed' && current.status !== 'payment-failed') {
+            const stallId = current.participation?.stallNo;
+            if (stallId) {
+                await Stall.findByIdAndUpdate(stallId, { status: 'available', bookedBy: null });
+            }
+        }
 
-        // --- PAYMENT RECEIPT ---
-        if (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status)) {
+        const updated = await ExhibitorRegistration.findByIdAndUpdate(id, data, { returnDocument: 'after' });
+
+        if (statusJustActivated) {
+            await this.activateRegistration(id);
+        }
+        const newlyReceived = (data.amountPaid != null && data.amountPaid > (current.amountPaid || 0));
+        const statusJustChanged = (['paid', 'advance-paid'].includes(updated.status) && !['paid', 'advance-paid'].includes(current.status));
+
+        if ((statusJustChanged || newlyReceived) && ['paid', 'advance-paid'].includes(updated.status)) {
             try {
                 const templateData = await emailService.getExhibitorTemplateData();
                 const pdfOptions = {
@@ -334,10 +1166,18 @@ class ExhibitorRegistrationService {
                     footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
                 };
 
-                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated, pdfOptions);
+                // Generate receipt for the latest payment
+                const latestPaymentIdx = (updated.paymentHistory?.length || 1) - 1;
+                const receiptPdf = await pdfGenerator.generatePaymentSlip(updated, { ...pdfOptions, paymentIndex: latestPaymentIdx });
                 const receiptPath = receiptPdf?.filePath || receiptPdf;
+
                 if (receiptPdf?.cloudUrl) {
-                    await ExhibitorRegistration.findByIdAndUpdate(id, { receiptPdfUrl: receiptPdf.cloudUrl });
+                    // Save to main receiptPdfUrl AND to the latest paymentHistory entry
+                    const updateObj = { receiptPdfUrl: receiptPdf.cloudUrl };
+                    if (latestPaymentIdx >= 0) {
+                        updateObj[`paymentHistory.${latestPaymentIdx}.receiptPdfUrl`] = receiptPdf.cloudUrl;
+                    }
+                    await ExhibitorRegistration.findByIdAndUpdate(id, { $set: updateObj });
                 }
                 await emailService.sendPaymentReceipt(updated, receiptPath);
             } catch (err) {
@@ -349,8 +1189,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'approved' && current.status !== 'approved') {
             try {
                 await emailService.sendApprovalEmail(updated);
-                const msg = `Congratulations ${updated.exhibitorName}! 👋\n\nYour registration for IHWE 2026 has been APPROVED. ✅\n\nPlease login to the Exhibitor Portal to complete the payment and secure your stall ${updated.participation?.stallFor || ''}.\n\n- Team Namo Gange`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Approved');
             } catch (err) { console.error('Approval Notification Error:', err); }
         }
 
@@ -358,8 +1196,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'confirmed' && current.status !== 'confirmed') {
             try {
                 await emailService.sendConfirmationEmail(updated);
-                const msg = `Booking Confirmed! 🎊\n\nDear ${updated.exhibitorName}, your stall booking for IHWE 2026 is now CONFIRMED. We look forward to seeing you at the expo!\n\n- Team Namo Gange`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Confirmed');
             } catch (err) { console.error('Confirmation Notification Error:', err); }
         }
 
@@ -367,8 +1203,6 @@ class ExhibitorRegistrationService {
         if (updated.status === 'rejected' && current.status !== 'rejected') {
             try {
                 await emailService.sendRejectionEmail(updated);
-                const msg = `Hello ${updated.exhibitorName}. We regret to inform you that your registration application for IHWE 2026 has not been approved at this time. Please contact our support for more details.`;
-                whatsapp.sendWhatsAppMessage(updated.contact1.mobile, msg, 'Exhibitor Rejected');
             } catch (err) { console.error('Rejection Notification Error:', err); }
         }
 
@@ -378,13 +1212,9 @@ class ExhibitorRegistrationService {
     async deleteRegistration(id) {
         const reg = await ExhibitorRegistration.findById(id);
         if (!reg) throw new Error('Registration not found');
-
-        // Only free stall if payment was not failed (failed entries never booked a stall)
         if (reg.status !== 'payment-failed' && reg.participation?.stallNo) {
             await Stall.findByIdAndUpdate(reg.participation.stallNo, { status: 'available', bookedBy: null });
         }
-
-        // Archive payment snapshot to console/log before delete (soft audit trail)
         if (reg.amountPaid > 0) {
             console.log(`[PAYMENT ARCHIVE] Deleting registration ${id} | Exhibitor: ${reg.exhibitorName} | Paid: ${reg.amountPaid} | Receipt: ${reg.receiptUrl || 'none'} | TxnId: ${reg.paymentId || 'none'}`);
         }
@@ -505,6 +1335,65 @@ class ExhibitorRegistrationService {
         await ExhibitorRegistration.updateMany(query, { $set: { ...update, updatedAt: new Date() } });
         const final = await ExhibitorRegistration.findById(id);
         return { final, count: Object.keys(update).length };
+    }
+
+    async activateRegistration(registrationId, customRawPassword = null) {
+        const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+        const Stall = require('../models/Stall');
+        const emailService = require('../utils/emailService');
+        const pdfGenerator = require('../utils/pdfGenerator');
+        const path = require('path');
+        const crypto = require('crypto');
+        const bcrypt = require('bcryptjs');
+
+        const registration = await ExhibitorRegistration.findById(registrationId);
+        if (!registration) return null;
+
+        if (registration.participation?.stallNo) {
+            const bookedStall = await Stall.findOneAndUpdate(
+                { _id: registration.participation.stallNo, status: { $ne: 'booked' } },
+                { status: 'booked', bookedBy: registration._id },
+                { returnDocument: 'after' }
+            );
+            if (!bookedStall) {
+                registration.stallConflict = true;
+                await registration.save();
+                console.error(`[StallConflict] Registration ${registration.registrationId} (${registration._id}) paid successfully but stall ${registration.participation.stallNo} was already booked by another registration. Needs manual resolution.`);
+            }
+        }
+
+        // 2. Generate and hash raw password for login credentials
+        let rawPassword = customRawPassword;
+        if (!rawPassword) {
+            rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
+            registration.password = await bcrypt.hash(rawPassword, 10);
+            await registration.save();
+        }
+
+        // 3. Generate registration PDF & dispatch confirmation emails / WhatsApp alerts
+        try {
+            const templateData = await emailService.getExhibitorTemplateData();
+            const pdfOptions = {
+                headerImage: templateData?.headerImage ? path.resolve(__dirname, '..', templateData.headerImage.replace(/^\//, '')) : null,
+                footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
+            };
+
+            const regPdf = await pdfGenerator.generateRegistrationForm(registration, pdfOptions);
+            const pdfPath = regPdf?.filePath || regPdf;
+            if (regPdf?.cloudUrl) {
+                await ExhibitorRegistration.findByIdAndUpdate(registration._id, { registrationPdfUrl: regPdf.cloudUrl });
+            }
+            await emailService.sendRegistrationConfirmation(registration, pdfPath, rawPassword);
+        } catch (err) {
+            console.error('Registration Activation Email Error:', err);
+        }
+
+        // 4. Dispatch Admin Alert notification
+        await emailService.sendExhibitorAdminAlert(registration).catch(err => {
+            console.error('Exhibitor Admin Alert Error:', err);
+        });
+
+        return registration;
     }
 }
 

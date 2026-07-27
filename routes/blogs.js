@@ -4,43 +4,53 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const blogsController = require('../controllers/blogsController');
-
-// Multer Storage Configuration
-const storage = multer.diskStorage({
+const createStorage = (destPath) => multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadPath = 'uploads/blogs';
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
+        if (!fs.existsSync(destPath)) {
+            fs.mkdirSync(destPath, { recursive: true });
         }
-        cb(null, uploadPath);
+        cb(null, destPath);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, `blog-${uniqueSuffix}${path.extname(file.originalname)}`);
+        cb(null, `${path.basename(destPath)}-${uniqueSuffix}${path.extname(file.originalname)}`);
     }
 });
 
-const upload = multer({ storage });
-
-// Multi-file upload configuration
-const blogUpload = upload.fields([
+const blogUpload = multer({ storage: createStorage('uploads/blogs') }).fields([
     { name: 'image', maxCount: 1 },
     { name: 'ogImage', maxCount: 1 }
 ]);
 
-// GET all blogs
+const expertUpload = multer({ storage: createStorage('uploads/experts') }).single('image');
+const mediaUpload = multer({ storage: createStorage('uploads/media') }).single('file');
+
+/**
+ * Public Routes
+ */
 router.get('/', (req, res) => blogsController.getAllBlogs(req, res));
-
-// GET single blog by ID or Slug
+router.get('/expert-insights', (req, res) => blogsController.getExpertInsights(req, res));
+router.get('/media-resources', (req, res) => blogsController.getMediaResources(req, res));
+router.get('/settings', (req, res) => blogsController.getSettings(req, res));
 router.get('/:idOrSlug', (req, res) => blogsController.getBlogByIdOrSlug(req, res));
-
-// POST new blog
+router.post('/subscribe', (req, res) => blogsController.subscribeToNewsletter(req, res));
 router.post('/', blogUpload, (req, res) => blogsController.createBlog(req, res));
-
-// PATCH update blog
 router.patch('/:id', blogUpload, (req, res) => blogsController.updateBlog(req, res));
-
-// DELETE blog
 router.delete('/:id', (req, res) => blogsController.deleteBlog(req, res));
+router.post('/experts', expertUpload, (req, res) => blogsController.createExpertInsight(req, res));
+router.patch('/experts/:id', expertUpload, (req, res) => blogsController.updateExpertInsight(req, res));
+router.delete('/experts/:id', (req, res) => blogsController.deleteExpertInsight(req, res));
+
+// Media Resources CRUD
+router.post('/resources', mediaUpload, (req, res) => blogsController.createMediaResource(req, res));
+router.patch('/resources/:id', mediaUpload, (req, res) => blogsController.updateMediaResource(req, res));
+router.delete('/resources/:id', (req, res) => blogsController.deleteMediaResource(req, res));
+
+// Newsletter Management
+router.get('/admin/subscribers', (req, res) => blogsController.getSubscribers(req, res));
+router.delete('/admin/subscribers/:id', (req, res) => blogsController.deleteSubscriber(req, res));
+
+// Settings
+router.patch('/admin/settings', (req, res) => blogsController.updateSettings(req, res));
 
 module.exports = router;

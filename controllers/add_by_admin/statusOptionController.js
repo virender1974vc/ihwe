@@ -57,7 +57,7 @@ const updateStatusOption = async (req, res) => {
     const updated = await StatusOption.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updated) {

@@ -7,7 +7,7 @@ const ServiceCardSchema = new mongoose.Schema({
     image: { type: String, default: '' },
     imageAlt: { type: String, default: '' },
     accent: { type: String, default: '#23471d' },
-    buttonText: { type: String, default: 'Explore Zone' },
+    buttonText: { type: String, default: 'Learn More' },
     buttonUrl: { type: String, default: '#' },
     order: { type: Number, default: 0 },
     updatedBy: { type: String, default: 'System' },

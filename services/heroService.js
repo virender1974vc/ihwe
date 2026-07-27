@@ -7,8 +7,11 @@ class HeroService {
     /**
      * Get all hero slides.
      */
-    async getAllSlides() {
-        return await Hero.find().sort({ order: 1, createdAt: 1 });
+    async getAllSlides(website = '9th IHWE') {
+        const query = website === '9th IHWE' 
+            ? { $or: [{ website }, { website: { $exists: false } }] } 
+            : { website };
+        return await Hero.find(query).sort({ order: 1, createdAt: 1 });
     }
 
     /**
@@ -23,7 +26,7 @@ class HeroService {
      * Update a hero slide.
      */
     async updateSlide(id, data) {
-        const updatedSlide = await Hero.findByIdAndUpdate(id, data, { new: true });
+        const updatedSlide = await Hero.findByIdAndUpdate(id, data, { returnDocument: 'after' });
         if (!updatedSlide) throw { status: 404, message: 'Slide not found' };
         return updatedSlide;
     }

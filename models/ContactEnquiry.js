@@ -18,7 +18,15 @@ const contactEnquirySchema = new mongoose.Schema({
     },
     service: {
         type: String,
-        required: true
+        required: false
+    },
+    organization: {
+        type: String,
+        trim: true
+    },
+    source: {
+        type: String,
+        default: 'Contact Page'
     },
     message: {
         type: String,

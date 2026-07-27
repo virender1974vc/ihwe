@@ -17,7 +17,7 @@ const storage = new CloudinaryStorage({
     params: async (req, file) => ({
         folder: 'exhibitor-docs',
         resource_type: 'auto',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
     }),
 });
 
@@ -34,12 +34,29 @@ const uploadFields = upload.fields([
 ]);
 
 router.post('/login', (req, res) => exhibitorAuthController.login(req, res));
+router.post('/send-email-otp', (req, res) => exhibitorAuthController.sendEmailOtp(req, res));
 router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobileOtp(req, res));
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
+router.get('/account-overview', protectExhibitor, (req, res) => exhibitorAuthController.getMyAccountOverview(req, res));
+router.get('/my-pass-usage', protectExhibitor, (req, res) => exhibitorAuthController.getMyPassUsage(req, res));
+router.patch('/my-pass-usage/:id/acknowledge', protectExhibitor, (req, res) => exhibitorAuthController.acknowledgePassUsage(req, res));
+router.get('/updates', protectExhibitor, (req, res) => exhibitorAuthController.getUpdates(req, res));
 router.post('/change-password', protectExhibitor, (req, res) => exhibitorAuthController.changePassword(req, res));
-
-// Update profile with error handling for multer
+router.post('/pass-order', protectExhibitor, (req, res) => exhibitorAuthController.createPassOrder(req, res));
+router.post('/pass-request', protectExhibitor, (req, res) => exhibitorAuthController.requestPass(req, res));
+router.post('/team-member-photo', protectExhibitor, (req, res, next) => {
+    upload.single('photo')(req, res, (err) => {
+        if (err) {
+            console.error('Team member photo upload error:', err);
+            return res.status(400).json({
+                success: false,
+                message: 'Photo upload failed: ' + err.message
+            });
+        }
+        next();
+    });
+}, (req, res) => exhibitorAuthController.uploadTeamMemberPhoto(req, res));
 router.put('/update-profile', protectExhibitor, (req, res, next) => {
     uploadFields(req, res, (err) => {
         if (err) {
@@ -52,5 +69,11 @@ router.put('/update-profile', protectExhibitor, (req, res, next) => {
         next();
     });
 }, (req, res) => exhibitorAuthController.updateProfile(req, res));
+router.post('/register-seller', protectExhibitor, (req, res) => exhibitorAuthController.registerSeller(req, res));
+
+const exhibitorDocumentPaymentController = require('../controllers/exhibitorDocumentPaymentController');
+router.get('/documents/:docType/:docId', protectExhibitor, exhibitorDocumentPaymentController.getDocument);
+router.post('/documents/:docType/:docId/create-order', protectExhibitor, exhibitorDocumentPaymentController.createOrder);
+router.post('/documents/verify-payment', protectExhibitor, exhibitorDocumentPaymentController.verifyPayment);
 
 module.exports = router;

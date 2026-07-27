@@ -14,6 +14,10 @@ const emailLogSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'CrmUser', default: null },
+    senderName: { type: String, default: null },
+    companyId: { type: String, default: null },
+    companyName: { type: String, default: null },
     phone: {
         type: String,
         default: null

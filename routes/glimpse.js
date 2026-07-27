@@ -42,7 +42,22 @@ router.get('/', async (req, res) => {
   try {
     let glimpse = await Glimpse.findOne();
     if (!glimpse) {
-      glimpse = new Glimpse();
+      glimpse = new Glimpse({
+        subheading: "Event Glimpses",
+        heading: "BEST MOMENTS – IHWE 2026",
+        highlightText: "BEST MOMENTS",
+        description: "A glimpse into the energy, innovation, and success of IHWE 2026.",
+        counterText: "Relive the moments that inspired connections and created impact",
+        counters: [
+          { icon: "Users", number: "10,000+", label: "Trade Visitors", order: 1 },
+          { icon: "Globe", number: "30+", label: "Countries", order: 2 },
+          { icon: "Building2", number: "250+", label: "Exhibitors", order: 3 },
+          { icon: "Mic", number: "40+", label: "Expert Speakers", order: 4 },
+          { icon: "Handshake", number: "B2B", label: "B2B Meetings", order: 5 },
+          { icon: "Package", number: "500+", label: "Organic Products", order: 6 },
+          { icon: "Sparkles", number: "Endless", label: "Opportunities", order: 7 }
+        ]
+      });
       await glimpse.save();
     }
     res.json({ success: true, data: glimpse });
@@ -54,15 +69,16 @@ router.get('/', async (req, res) => {
 // Update headings
 router.post('/headings', verifyToken, async (req, res) => {
   try {
-    const { subheading, heading, highlightText, description } = req.body;
+    const { subheading, heading, highlightText, description, counterText } = req.body;
     let glimpse = await Glimpse.findOne();
     if (!glimpse) {
-      glimpse = new Glimpse({ subheading, heading, highlightText, description });
+      glimpse = new Glimpse({ subheading, heading, highlightText, description, counterText });
     } else {
       glimpse.subheading = subheading;
       glimpse.heading = heading;
       glimpse.highlightText = highlightText;
       glimpse.description = description;
+      glimpse.counterText = counterText;
     }
     glimpse.updatedBy = req.user.username;
     await glimpse.save();
@@ -131,6 +147,69 @@ router.delete('/images/:imageId', verifyToken, async (req, res) => {
     glimpse.updatedBy = req.user.username;
     await glimpse.save();
     await logActivity(req, 'Deleted', 'Glimpse Management', `Deleted glimpse image ID: ${imageId}`);
+    res.json({ success: true, data: glimpse });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// --- COUNTERS ROUTES ---
+
+// Add counter
+router.post('/counters', verifyToken, async (req, res) => {
+  try {
+    const { icon, number, label, order } = req.body;
+    let glimpse = await Glimpse.findOne();
+    if (!glimpse) glimpse = new Glimpse();
+    
+    glimpse.counters.push({ icon, number, label, order, updatedBy: req.user.username, updatedAt: new Date() });
+    glimpse.updatedBy = req.user.username;
+    await glimpse.save();
+    await logActivity(req, 'Created', 'Glimpse Management', `Added new counter: ${label}`);
+    res.json({ success: true, data: glimpse });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update counter
+router.put('/counters/:counterId', verifyToken, async (req, res) => {
+  try {
+    const { icon, number, label, order } = req.body;
+    const { counterId } = req.params;
+    let glimpse = await Glimpse.findOne();
+    if (!glimpse) return res.status(404).json({ success: false, message: "Glimpse not found" });
+
+    const counter = glimpse.counters.id(counterId);
+    if (!counter) return res.status(404).json({ success: false, message: "Counter not found" });
+
+    counter.icon = icon;
+    counter.number = number;
+    counter.label = label;
+    counter.order = order;
+    counter.updatedBy = req.user.username;
+    counter.updatedAt = new Date();
+    glimpse.updatedBy = req.user.username;
+
+    await glimpse.save();
+    await logActivity(req, 'Updated', 'Glimpse Management', `Updated counter: ${label}`);
+    res.json({ success: true, data: glimpse });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete counter
+router.delete('/counters/:counterId', verifyToken, async (req, res) => {
+  try {
+    const { counterId } = req.params;
+    let glimpse = await Glimpse.findOne();
+    if (!glimpse) return res.status(404).json({ success: false, message: "Glimpse not found" });
+
+    glimpse.counters = glimpse.counters.filter(c => c._id.toString() !== counterId);
+    glimpse.updatedBy = req.user.username;
+    await glimpse.save();
+    await logActivity(req, 'Deleted', 'Glimpse Management', `Deleted counter ID: ${counterId}`);
     res.json({ success: true, data: glimpse });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

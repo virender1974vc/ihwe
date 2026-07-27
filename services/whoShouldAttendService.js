@@ -37,7 +37,7 @@ class WhoShouldAttendService {
         let updateData = { subheading, heading, highlightText, imageAlt, lastUpdated: Date.now() };
         if (image) updateData.image = image;
 
-        return await WhoShouldAttend.findOneAndUpdate({}, updateData, { upsert: true, new: true });
+        return await WhoShouldAttend.findOneAndUpdate({}, updateData, { upsert: true, returnDocument: 'after' });
     }
 
     /**
@@ -47,7 +47,7 @@ class WhoShouldAttendService {
         return await WhoShouldAttend.findOneAndUpdate(
             {},
             { $push: { groups: group }, lastUpdated: Date.now() },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
 

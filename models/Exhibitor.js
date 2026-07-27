@@ -9,6 +9,14 @@ const exhibitorSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    category: {
+        type: String,
+        default: 'OTHERS'
+    },
+    order: {
+        type: Number,
+        default: 0
+    },
     websiteUrl: {
         type: String,
         default: ''
@@ -21,7 +29,15 @@ const exhibitorSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    updatedBy: {
+        type: String,
+        default: 'System'
+    },
     createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
         type: Date,
         default: Date.now
     }

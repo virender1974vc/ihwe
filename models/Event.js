@@ -1,27 +1,19 @@
 const mongoose = require('mongoose');
 
 const eventSchema = new mongoose.Schema({
-    name: { 
-        type: String, 
-        required: true, 
+    name: {
+        type: String,
+        required: true,
         trim: true,
         unique: true
     },
     startDate: Date,
     endDate: Date,
     location: String,
-    onlineAdvancePercentage: { 
-        type: Number, 
-        default: 50 
-    },
-    manualAdvancePercentage: { 
-        type: Number, 
-        default: 50 
-    },
-    status: { 
-        type: String, 
-        enum: ['active', 'inactive'], 
-        default: 'active' 
+    status: {
+        type: String,
+        enum: ['active', 'inactive'],
+        default: 'active'
     },
     ticketsStatus: {
         type: String,
@@ -42,6 +34,26 @@ const eventSchema = new mongoose.Schema({
     order: {
         type: Number,
         default: 0
+    },
+    dailyAttendanceTarget: {
+        type: Number,
+        default: 500,
+        min: 1
+    },
+    paymentPlans: [{
+        id: String,
+        label: String,
+        percentage: Number,
+        isDefault: { type: Boolean, default: false },
+        dueDate: { type: Date, default: null }
+    }],
+    generalReminderDays: {
+        type: Number,
+        default: 10
+    },
+    installmentReminderDays: {
+        type: Number,
+        default: 15
     }
 }, { timestamps: true });
 

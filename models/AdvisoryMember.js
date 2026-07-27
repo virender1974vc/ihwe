@@ -20,6 +20,17 @@ const advisoryMemberSchema = new mongoose.Schema({
     imageAlt: {
         type: String,
         required: true
+    },
+    country: {
+        type: String,
+        default: 'India'
+    },
+    linkedin: {
+        type: String
+    },
+    displayOrder: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 

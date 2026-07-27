@@ -27,7 +27,7 @@ class OrganizedByService {
      * Update content.
      */
     async updateContent(data) {
-        return await OrganizedBy.findOneAndUpdate({}, { ...data, lastUpdated: Date.now() }, { upsert: true, new: true });
+        return await OrganizedBy.findOneAndUpdate({}, { ...data, lastUpdated: Date.now() }, { upsert: true, returnDocument: 'after' });
     }
 }
 

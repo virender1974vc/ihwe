@@ -1,7 +1,16 @@
 const mongoose = require('mongoose');
 
 const settingsSchema = new mongoose.Schema({
+    website: {
+        type: String,
+        enum: ['9th IHWE', 'Organicexpo'],
+        default: '9th IHWE'
+    },
     logo: {
+        type: String,
+        default: ""
+    },
+    emailLogo: {
         type: String,
         default: ""
     },
@@ -66,6 +75,128 @@ const settingsSchema = new mongoose.Schema({
     exhibitorBrochurePdf: {
         type: String,
         default: ""
+    },
+    domesticRegistrationFormPdf: {
+        type: String,
+        default: ""
+    },
+    internationalRegistrationFormPdf: {
+        type: String,
+        default: ""
+    },
+    sponsorshipDeckPdf: {
+        type: String,
+        default: ""
+    },
+    // --- Corporate & Financial Settings (New) ---
+    companyName: {
+        type: String,
+        default: "Namo Gange Wellness Pvt. Ltd."
+    },
+    companyAddress: {
+        type: String,
+        default: "12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India"
+    },
+    companyGst: {
+        type: String,
+        default: ""
+    },
+    companyCin: {
+        type: String,
+        default: ""
+    },
+    contactPhone: {
+        type: String,
+        default: "+91 96549 00525"
+    },
+    contactEmail: {
+        type: String,
+        default: "info@namogangewellness.com"
+    },
+    contactWebsite: {
+        type: String,
+        default: "www.namogangewellness.com"
+    },
+    contactPerson: {
+        type: String,
+        default: "Vijay Sharma"
+    },
+    contactDesignation: {
+        type: String,
+        default: "Managing Director"
+    },
+    authorizedSignature: {
+        type: String,
+        default: ""
+    },
+    companyStamp: {
+        type: String,
+        default: ""
+    },
+    fullPaymentDiscount: {
+        type: Number,
+        default: 5
+    },
+    availableTdsRates: {
+        type: [Number],
+        default: [1, 2, 10]
+    },
+    msmeLogos: [{
+        imageUrl: {
+            type: String,
+            required: true
+        },
+        title: {
+            type: String,
+            default: "Partner Logo"
+        },
+        category: {
+            type: String,
+            default: "Supported By"
+        },
+        isActive: {
+            type: Boolean,
+            default: true
+        },
+        displayOrder: {
+            type: Number,
+            default: 0
+        }
+    }],
+    isMsmeLogoActive: {
+        type: Boolean,
+        default: true
+    },
+    floatingVideoTimer: {
+        type: Number,
+        default: 7
+    },
+    showBrochurePopUp: {
+        type: Boolean,
+        default: true
+    },
+    brochurePopUpDelay: {
+        type: Number,
+        default: 7
+    },
+    showGovtPmsScheme: {
+        type: Boolean,
+        default: true
+    },
+    downloadBrochurePdf: {
+        type: String,
+        default: ""
+    },
+    // --- AI Document Verification Settings ---
+    aiVerification: {
+        provider: { type: String, enum: ['gemini', 'openai'], default: 'gemini' },
+        isEnabled: { type: Boolean, default: false },
+        geminiApiKey: { type: String, default: "" },
+        geminiModel: { type: String, default: "gemini-2.5-flash" },
+        openaiApiKey: { type: String, default: "" },
+        openaiModel: { type: String, default: "gpt-4o-mini" },
+        lastTestedAt: { type: Date, default: null },
+        lastTestResult: { type: String, default: "" }
     }
 }, { timestamps: true });
 

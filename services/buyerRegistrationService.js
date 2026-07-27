@@ -2,6 +2,7 @@ const BuyerRegistration = require('../models/BuyerRegistration');
 const emailService = require('../utils/emailService');
 const whatsapp = require('../utils/whatsapp');
 const Razorpay = require('razorpay');
+const qrcode = require('qrcode');
 
 /**
  * Service to handle Buyer Registration operations.
@@ -46,11 +47,11 @@ class BuyerRegistrationService {
         const year = new Date().getFullYear();
         const randBuyer = Math.floor(100 + Math.random() * 899); // 3-digit random for a suffix
         const randTxn = Math.floor(1000 + Math.random() * 8999); // 4-digit random for txn
-        
+
         if (!data.registrationId) {
             data.registrationId = `IHWE/${year}/BYR-${randBuyer}`;
         }
-        
+
         if (!data.transactionId) {
             data.transactionId = `IHWE/${year}/TXN-${randTxn}`;
         }
@@ -58,6 +59,12 @@ class BuyerRegistrationService {
         // 3. Ensure registrationFee is set (or default to 0)
         if (!data.registrationFee) {
             data.registrationFee = "0"; // Default or lookup based on category
+        }
+        try {
+            const qrPayload = JSON.stringify({ registrationId: data.registrationId });
+            data.qrCode = await qrcode.toDataURL(qrPayload);
+        } catch (err) {
+            console.error("Failed to generate QR code for buyer", err);
         }
 
         const newRegistration = new BuyerRegistration(data);
@@ -127,10 +134,6 @@ class BuyerRegistrationService {
         emailService.sendDetailedBuyerNotification(saved).catch(err => {
             console.error("Admin notification fail:", err.message);
         });
-
-        // WhatsApp to User
-        const msg = `Hello ${saved.companyName},\n\nThank you for registering for the Buyer-Seller Meet at IHWE 2026. Your registration under ${saved.registrationCategory} category is received.\n\nOur team will review your application soon.\n\nRegards,\nIHWE Team`;
-        whatsapp.sendWhatsAppMessage(saved.mobileNumber, msg, 'Buyer Registration').catch(err => console.error("WA fail:", err.message));
     }
 
     /**
@@ -138,7 +141,7 @@ class BuyerRegistrationService {
      */
     async createOrder(amount, currency = 'INR') {
         const options = {
-            amount: amount * 100, // Amount in paise
+            amount: amount * 100,
             currency,
             receipt: `buyer_reg_${Date.now()}`
         };
@@ -155,7 +158,7 @@ class BuyerRegistrationService {
         registration.paymentStatus = 'Completed';
         registration.razorpayPaymentId = paymentDetails.razorpay_payment_id;
         registration.razorpaySignature = paymentDetails.razorpay_signature;
-        
+
         return await registration.save();
     }
 
@@ -173,7 +176,7 @@ class BuyerRegistrationService {
     }
 
     async updateRegistration(id, data) {
-        const updated = await BuyerRegistration.findByIdAndUpdate(id, data, { new: true });
+        const updated = await BuyerRegistration.findByIdAndUpdate(id, data, { returnDocument: 'after' });
         if (!updated) throw { status: 404, message: 'Registration not found' };
         return updated;
     }
@@ -194,9 +197,9 @@ class BuyerRegistrationService {
             throw { status: 400, message: 'Email and Registration ID are required' };
         }
 
-        const buyer = await BuyerRegistration.findOne({ 
-            emailAddress: emailAddress.trim().toLowerCase(), 
-            registrationId: registrationId.trim() 
+        const buyer = await BuyerRegistration.findOne({
+            emailAddress: emailAddress.trim().toLowerCase(),
+            registrationId: registrationId.trim()
         });
 
         if (!buyer) {

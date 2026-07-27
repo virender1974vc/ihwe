@@ -31,7 +31,7 @@ const getBuyerInterestAlertTemplate = (data) => {
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); 
         }
         .header { 
-            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            background-color: #065f46;
             padding: 20px 15px; 
             text-align: center; 
             color: #ffffff; 
@@ -188,10 +188,14 @@ const getBuyerInterestAlertTemplate = (data) => {
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Buyer Registration Interest Received | IHWE 2026</h1>
-            <p>Reg ID: ${data.registrationId}</p>
-        </div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#065f46" style="width:100%;border-collapse:collapse;background-color:#065f46;">
+            <tr>
+                <td align="center" bgcolor="#065f46" style="padding:25px 30px;text-align:center;background-color:#065f46;font-family:Arial,sans-serif;color:#ffffff;">
+                    <h1 style="margin:0;font-size:22px;line-height:31px;font-weight:700;color:#ffffff;">Buyer Registration Interest Received | IHWE 2026</h1>
+                    <p style="margin:8px 0 0;font-size:14px;line-height:20px;color:#ffffff;">Reg ID: ${data.registrationId}</p>
+                </td>
+            </tr>
+        </table>
         <div class="priority-badge">
             🔥 HIGH PRIORITY LEAD - IMMEDIATE ACTION REQUIRED
         </div>

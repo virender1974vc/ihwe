@@ -32,7 +32,7 @@ class HeroBackgroundService {
      * Update hero background.
      */
     async updateHeroBackground(id, data) {
-        const updated = await HeroBackground.findByIdAndUpdate(id, data, { new: true });
+        const updated = await HeroBackground.findByIdAndUpdate(id, data, { returnDocument: 'after' });
         if (!updated) throw { status: 404, message: 'Not found' };
         return updated;
     }

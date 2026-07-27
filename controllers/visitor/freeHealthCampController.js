@@ -5,6 +5,7 @@ const {
   generateRegistrationId,
 } = require("../../utils/generateRegistrationId");
 const { logActivity } = require("../../utils/logger");
+const qrcode = require('qrcode');
 
 // ➤ Get all health camp visitors
 const getAllHealthCampVisitors = async (req, res) => {
@@ -43,6 +44,9 @@ const createHealthCampVisitor = async (req, res) => {
       registrationId,
     });
 
+    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    visitor.qrCode = await qrcode.toDataURL(qrPayload);
+
     const saved = await visitor.save();
 
     // Map fields for existing Visitor Email template
@@ -79,7 +83,7 @@ const updateHealthCampVisitor = async (req, res) => {
     const updated = await FreeHealthCamp.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     if (!updated) return res.status(404).json({ message: "Visitor not found" });

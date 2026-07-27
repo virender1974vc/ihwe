@@ -1,24 +1,74 @@
 const exhibitorRegistrationService = require('../services/exhibitorRegistrationService');
 const { logActivity } = require('../utils/logger');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const PreviousExhibition = require('../models/PreviousExhibition');
 
-/**
- * Controller for handling Exhibitor Registration requests.
- */
+const toPublicUploadPath = (filePath = '') => {
+    const normalized = String(filePath).replace(/\\/g, '/');
+    if (normalized.startsWith('/uploads/')) return normalized;
+    if (normalized.startsWith('uploads/')) return `/${normalized}`;
+    return normalized;
+};
 class ExhibitorRegistrationController {
-    /**
-     * Get all registrations.
-     */
     async getAllRegistrations(req, res) {
         try {
-            const enriched = await exhibitorRegistrationService.getAllRegistrations();
-            res.status(200).json({ success: true, data: enriched });
+            const { page = 1, limit = 20, search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = req.query;
+            const result = await exhibitorRegistrationService.getAllRegistrations({
+                page: Number(page),
+                limit: Number(limit),
+                search,
+                status,
+                referredBy,
+                industry,
+                username,
+                role,
+            });
+            res.status(200).json({
+                success: true,
+                data: result.data,
+                total: result.total,
+                page: result.page,
+                limit: result.limit,
+                totalPages: result.totalPages,
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
     }
 
+    async getRegistrationsSummary(req, res) {
+        try {
+            const { search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = req.query;
+            const summary = await exhibitorRegistrationService.getRegistrationsSummary({
+                search, status, referredBy, industry, username, role,
+            });
+            res.status(200).json({ success: true, data: summary });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+    async getFilterOptions(req, res) {
+        try {
+            const { username = '', role = '' } = req.query;
+            const options = await exhibitorRegistrationService.getFilterOptions({ username, role });
+            res.status(200).json({ success: true, data: options });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
+
     async getRegistrationById(req, res) {
         try {
+            if (req.query.light === 'true') {
+                const registration = await ExhibitorRegistration.findById(req.params.id)
+                    .populate('eventId', 'name startDate endDate location venue paymentPlans')
+                    .lean();
+                if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
+                return res.status(200).json({ success: true, data: registration });
+            }
+
             const registration = await exhibitorRegistrationService.getRegistrationById(req.params.id);
             if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
             res.status(200).json({ success: true, data: registration });
@@ -32,9 +82,45 @@ class ExhibitorRegistrationController {
      */
     async addRegistration(req, res) {
         try {
+            const previousExhibitionId = req.body.previousExhibition?.id;
+            const previousExhibitionYear = Number(req.body.previousExhibition?.year);
+            const currentYear = new Date().getFullYear();
+            if (
+                req.body.exhibitorStatus === 'Existing Client'
+                && (
+                    !previousExhibitionId
+                    || !Number.isInteger(previousExhibitionYear)
+                    || previousExhibitionYear < 2016
+                    || previousExhibitionYear > currentYear
+                )
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Please select a valid previous exhibition and year between 2016 and ${currentYear}.`
+                });
+            }
+            if (previousExhibitionId) {
+                const previousExhibition = await PreviousExhibition.findOne({
+                    _id: previousExhibitionId,
+                    status: 'Active'
+                }).lean();
+                if (!previousExhibition) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Please select a valid previous exhibition.'
+                    });
+                }
+                req.body.previousExhibition = {
+                    id: previousExhibition._id,
+                    name: previousExhibition.name,
+                    year: previousExhibitionYear
+                };
+            } else {
+                delete req.body.previousExhibition;
+            }
             const savedRegistration = await exhibitorRegistrationService.addRegistration(req.body);
 
-            await logActivity(req, 'Created', 'Exhibitor Bookings', `New booking: ${savedRegistration.companyName} (${savedRegistration.registrationId})`);
+            await logActivity(req, 'Created', 'Exhibitor Bookings', `New booking: ${savedRegistration.exhibitorName} (${savedRegistration.registrationId})`);
 
             res.status(201).json({ success: true, data: savedRegistration });
         } catch (error) {
@@ -50,7 +136,7 @@ class ExhibitorRegistrationController {
             const updatedRegistration = await exhibitorRegistrationService.updateRegistration(req.params.id, req.body);
 
             if (updatedRegistration) {
-                await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.companyName} (${updatedRegistration.registrationId})`);
+                await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.exhibitorName} (${updatedRegistration.registrationId})`);
             }
 
             res.status(200).json({ success: true, data: updatedRegistration });
@@ -68,7 +154,7 @@ class ExhibitorRegistrationController {
             const result = await exhibitorRegistrationService.deleteRegistration(req.params.id);
 
             if (registration) {
-                await logActivity(req, 'Deleted', 'Exhibitor Bookings', `Deleted booking: ${registration.companyName} (${registration.registrationId})`);
+                await logActivity(req, 'Deleted', 'Exhibitor Bookings', `Deleted booking: ${registration.exhibitorName} (${registration.registrationId})`);
             }
 
             res.status(200).json({ success: true, message: 'Registration deleted successfully' });
@@ -99,13 +185,13 @@ class ExhibitorRegistrationController {
 
                 Object.keys(fileFields).forEach(field => {
                     if (req.files[field] && req.files[field][0]) {
-                        update[fileFields[field]] = req.files[field][0].path;
+                        update[fileFields[field]] = toPublicUploadPath(req.files[field][0].path);
                     }
                 });
             }
 
             // Also merge any text body fields
-            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
+            const allowed = ['website', 'address', 'city', 'state', 'country', 'pincode', 'landlineNo', 'companyEmail', 'fasciaName', 'gstNo', 'panNo', 'contact1', 'contact2'];
             allowed.forEach(key => {
                 if (req.body[key] !== undefined) {
                     try {
@@ -124,7 +210,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 req.params.id,
                 { $set: update },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -157,7 +243,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
                 { $unset: { [field]: "" } },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -213,14 +299,14 @@ class ExhibitorRegistrationController {
             const ExhibitorRegistration = require('../models/ExhibitorRegistration');
             const { id } = req.params;
             const { label } = req.body;
-            
+
             if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
             if (!label) return res.status(400).json({ success: false, message: 'Label is required' });
 
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
-                { $push: { specialDocuments: { label, url: req.file.path } } },
-                { new: true }
+                { $push: { specialDocuments: { label, url: toPublicUploadPath(req.file.path) } } },
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
@@ -242,7 +328,7 @@ class ExhibitorRegistrationController {
             const updated = await ExhibitorRegistration.findByIdAndUpdate(
                 id,
                 { $pull: { specialDocuments: { _id: docId } } },
-                { new: true }
+                { returnDocument: 'after' }
             );
 
             if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });

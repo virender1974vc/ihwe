@@ -2,12 +2,9 @@ const jwt = require("jsonwebtoken");
 const CrmUser = require("../models/CrmUser");
 const generateToken = require("../utils/generateToken");
 const { generateOtp, sendOtpWhatsapp } = require("../utils/otpService");
+const emailService = require("../utils/emailService");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
-
-// ============================
-// LOGIN WITH PASSWORD (OTP)
-// ============================
 const loginWithPassword = async (req, res) => {
   try {
     const { user_name, user_mobile, user_password } = req.body;
@@ -45,6 +42,14 @@ const loginWithPassword = async (req, res) => {
       console.error("OTP WhatsApp send failed:", error.message);
     }
 
+    try {
+      if (user.user_email) {
+        await emailService.sendOtpEmail(user.user_email, otp, user.user_fullname || user.user_name, 'ADMIN');
+      }
+    } catch (error) {
+      console.error("OTP Email send failed:", error.message);
+    }
+
     res.json({
       success: true,
       message: "OTP sent successfully",
@@ -77,6 +82,14 @@ const resendOtp = async (req, res) => {
       await sendOtpWhatsapp(user.user_mobile, otp);
     } catch (error) {
       console.error("OTP WhatsApp send failed:", error.message);
+    }
+
+    try {
+      if (user.user_email) {
+        await emailService.sendOtpEmail(user.user_email, otp, user.user_fullname || user.user_name, 'ADMIN');
+      }
+    } catch (error) {
+      console.error("OTP Email send failed:", error.message);
     }
 
     res.json({
@@ -122,6 +135,7 @@ const verifyOtpLogin = async (req, res) => {
       user: {
         id: user._id,
         username: user.user_name,
+        fullName: user.user_fullname,
         email: user.user_email,
         role: user.user_role,
         mobile: user.user_mobile,

@@ -20,7 +20,7 @@ exports.createPdf = async (req, res) => {
 
 exports.updatePdf = async (req, res) => {
   try {
-    const pdf = await PdfManager.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const pdf = await PdfManager.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     if (!pdf) return res.status(404).json({ success: false, message: "PDF not found" });
     res.json({ success: true, data: pdf });
   } catch (err) {

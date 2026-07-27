@@ -1,4 +1,18 @@
 const User = require('../models/User');
+const Role = require('../models/Role');
+const Department = require('../models/Department');
+const Designation = require('../models/Designation');
+const ActivityLog = require('../models/activity/activityLogModel');
+const jwt = require('jsonwebtoken');
+
+const cleanString = (value) => (typeof value === 'string' ? value.trim() : '');
+const cleanOptionalImage = (value) => (typeof value === 'string' ? value : '');
+const hasUserManagementPermission = async (requester) => {
+    const roleSlug = String(requester?.role || '').toLowerCase().replace(/[^a-z]/g, '');
+    if (roleSlug === 'superadmin' || roleSlug === 'ihwesuperadministrator') return true;
+    const role = await Role.findOne({ name: requester?.role }).select('permissions').lean();
+    return role?.permissions?.['User ID Management'] === true;
+};
 
 /**
  * Service to handle Admin User operations.
@@ -8,24 +22,126 @@ class AdminUsersService {
      * Get users based on requester's role.
      */
     async getAllAdmins(requester) {
-        let filter = {};
-        if (requester.role !== 'super-admin') {
-            filter = { createdBy: requester.id };
-        }
+        const filter = await hasUserManagementPermission(requester) ? {} : { _id: requester.id };
         return await User.find(filter)
             .select('-password')
-            .populate('createdBy', 'username role') // Optional: see who created whom
+            .populate('createdBy', 'username fullName role')
+            .populate('updatedBy', 'username fullName role')
             .sort({ createdAt: 1 });
+    }
+
+    /**
+     * Get a single admin by ID.
+     */
+    async getAdminById(id, requester) {
+        const user = await User.findById(id)
+            .select('-password')
+            .populate('createdBy', 'username fullName role')
+            .populate('updatedBy', 'username fullName role');
+        if (!user) throw { status: 404, message: 'User not found' };
+
+        const canManageUsers = await hasUserManagementPermission(requester);
+        if (!canManageUsers && user._id.toString() !== requester.id) {
+            throw { status: 403, message: 'Unauthorized to view this user' };
+        }
+
+        // Backfill legacy records created before `updatedBy` was stored on User.
+        // The admin update controller has always written an activity log, so use
+        // the latest matching log as the authoritative updater when available.
+        if (!user.updatedBy) {
+            const identity = user.username || user.fullName || '';
+            const escapedIdentity = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const latestUpdate = await ActivityLog.findOne({
+                module: 'Admin Management',
+                action: { $regex: /^Updated$/i },
+                details: { $regex: new RegExp(`Updated admin user:\\s*${escapedIdentity}`, 'i') }
+            }).sort({ createdAt: -1 }).lean();
+
+            let updater = null;
+            if (latestUpdate?.user_id) {
+                updater = await User.findById(latestUpdate.user_id).select('_id').lean();
+            }
+            if (!updater && latestUpdate?.user) {
+                const escapedUser = String(latestUpdate.user).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                updater = await User.findOne({
+                    $or: [
+                        { username: { $regex: new RegExp(`^${escapedUser}$`, 'i') } },
+                        { fullName: { $regex: new RegExp(`^${escapedUser}$`, 'i') } }
+                    ]
+                }).select('_id').lean();
+            }
+            if (updater?._id) {
+                user.updatedBy = updater._id;
+                await user.save();
+                await user.populate('updatedBy', 'username fullName role');
+            }
+        }
+
+        const findLinkedUser = async (name, email, mobile) => {
+            const candidates = [];
+            if (email) candidates.push({ email });
+            if (mobile) candidates.push({ mobile });
+            if (name) candidates.push({ fullName: name }, { username: name });
+            if (!candidates.length) return null;
+            return User.findOne({ _id: { $ne: user._id }, $or: candidates })
+                .select('username fullName designation email mobile profileImage')
+                .lean();
+        };
+        const [hodUser, reportingUser] = await Promise.all([
+            findLinkedUser(user.hodName, user.hodEmail, user.hodMobile),
+            findLinkedUser(user.reportingToName, user.reportingToEmail, user.reportingToMobile)
+        ]);
+        let linkedDetailsChanged = false;
+        if (hodUser) {
+            const next = {
+                hodName: hodUser.fullName || hodUser.username || '',
+                hodMobile: hodUser.mobile || '',
+                hodEmail: hodUser.email || '',
+                hodDesignation: hodUser.designation || '',
+                hodImage: hodUser.profileImage || ''
+            };
+            Object.entries(next).forEach(([key, value]) => {
+                if (user[key] !== value) { user[key] = value; linkedDetailsChanged = true; }
+            });
+        }
+        if (reportingUser) {
+            const next = {
+                reportingToName: reportingUser.fullName || reportingUser.username || '',
+                reportingToMobile: reportingUser.mobile || '',
+                reportingToEmail: reportingUser.email || '',
+                reportingToDesignation: reportingUser.designation || '',
+                reportingToImage: reportingUser.profileImage || ''
+            };
+            Object.entries(next).forEach(([key, value]) => {
+                if (user[key] !== value) { user[key] = value; linkedDetailsChanged = true; }
+            });
+        }
+        if (linkedDetailsChanged) await user.save();
+        return user;
     }
 
     /**
      * Create a new user with permission checks.
      */
     async createAdmin(data, requester) {
-        const { username, password, role, fullName, designation, email, mobile, altMobile } = data;
+        const {
+            password, role, fullName, designation, altMobile, status,
+            title, department, hodName, hodMobile, hodEmail, hodDesignation,
+            reportingToName, reportingToMobile, reportingToEmail, reportingToDesignation
+        } = data;
+        const username = cleanString(data.username);
+        const email = cleanString(data.email);
+        const mobile = cleanString(data.mobile);
+        const hodImage = cleanOptionalImage(data.hodImage);
+        const profileImage = cleanOptionalImage(data.profileImage);
+        const reportingToImage = cleanOptionalImage(data.reportingToImage);
+        const signatureImage = cleanOptionalImage(data.signatureImage);
 
-        if (requester.role !== 'super-admin') {
-            if (role && role !== 'employee') {
+        const reqRole = requester.role;
+        const assignRole = role;
+
+        if (reqRole !== 'IHWE–Super Administrator') {
+            if (role && assignRole !== 'Employee' && assignRole !== 'employee') {
                 throw { status: 403, message: 'You only have permission to create employees' };
             }
         }
@@ -33,15 +149,39 @@ class AdminUsersService {
         const existingUser = await User.findOne({ username });
         if (existingUser) throw { status: 409, message: 'Username already exists' };
 
+        if (email) {
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) throw { status: 409, message: 'Official Email already exists' };
+        }
+
+        if (mobile) {
+            const existingMobile = await User.findOne({ mobile });
+            if (existingMobile) throw { status: 409, message: 'Official Mobile Number already exists' };
+        }
+
         const newUser = new User({
             username, password,
-            fullName: fullName || '',
-            designation: designation || '',
-            email: email || '',
-            mobile: mobile || '',
-            altMobile: altMobile || '',
+            fullName: cleanString(fullName),
+            title: cleanString(title),
+            department: cleanString(department),
+            designation: cleanString(designation),
+            email,
+            mobile,
+            altMobile: cleanString(altMobile),
+            hodName: cleanString(hodName),
+            hodMobile: cleanString(hodMobile),
+            hodEmail: cleanString(hodEmail),
+            hodDesignation: cleanString(hodDesignation),
+            hodImage,
+            reportingToName: cleanString(reportingToName),
+            reportingToMobile: cleanString(reportingToMobile),
+            reportingToEmail: cleanString(reportingToEmail),
+            reportingToDesignation: cleanString(reportingToDesignation),
+            reportingToImage,
+            profileImage,
+            signatureImage,
             role: role || 'employee',
-            status: 'Active',
+            status: status === 'Inactive' ? 'Inactive' : 'Active',
             createdBy: requester.id
         });
 
@@ -55,13 +195,63 @@ class AdminUsersService {
      * Update a user with permission checks.
      */
     async updateAdmin(id, data, requester) {
-        const { username, role, status, password, fullName, designation, email, mobile, altMobile } = data;
+        const {
+            role, status, password, fullName, designation, altMobile,
+            title, department, hodName, hodMobile, hodEmail, hodDesignation,
+            reportingToName, reportingToMobile, reportingToEmail, reportingToDesignation
+        } = data;
+        const username = data.username !== undefined ? cleanString(data.username) : undefined;
+        const email = data.email !== undefined ? cleanString(data.email) : undefined;
+        const mobile = data.mobile !== undefined ? cleanString(data.mobile) : undefined;
+        const hodImage = data.hodImage !== undefined ? cleanOptionalImage(data.hodImage) : undefined;
+        const profileImage = data.profileImage !== undefined ? cleanOptionalImage(data.profileImage) : undefined;
+        const reportingToImage = data.reportingToImage !== undefined ? cleanOptionalImage(data.reportingToImage) : undefined;
+        const signatureImage = data.signatureImage !== undefined ? cleanOptionalImage(data.signatureImage) : undefined;
 
         const userToUpdate = await User.findById(id);
         if (!userToUpdate) throw { status: 404, message: 'User not found' };
+        const previousIdentityNames = [userToUpdate.fullName, userToUpdate.username].filter(Boolean);
 
-        if (requester.role !== 'super-admin' && userToUpdate.createdBy?.toString() !== requester.id) {
-            throw { status: 403, message: 'Unauthorized to update this user' };
+        const reqRole = requester.role;
+        const roleSlug = String(reqRole || '').toLowerCase().replace(/[^a-z]/g, '');
+        const isSuperAdmin = roleSlug === 'superadmin' || roleSlug === 'ihwesuperadministrator';
+        const isSelf = userToUpdate._id.toString() === requester.id;
+        const canManageUsers = await hasUserManagementPermission(requester);
+
+        if (!canManageUsers) {
+            throw { status: 403, message: 'You do not have User ID Management permission' };
+        }
+        if (password && String(password).length < 6) {
+            throw { status: 400, message: 'Password must be at least 6 characters long' };
+        }
+
+        const verifyContactProof = (token, identifier, type) => {
+            try {
+                const proof = jwt.verify(token || '', process.env.JWT_SECRET || 'ihwe_secret_2026');
+                return proof.purpose === 'official-contact-verification'
+                    && proof.type === type
+                    && proof.identifier === identifier;
+            } catch {
+                return false;
+            }
+        };
+
+        if (email !== undefined && email !== userToUpdate.email
+            && !verifyContactProof(data.emailVerificationToken, email, 'email')) {
+            throw { status: 400, message: 'Please verify the new Official Email via OTP' };
+        }
+        if (mobile !== undefined && mobile !== userToUpdate.mobile
+            && !verifyContactProof(data.mobileVerificationToken, mobile, 'phone')) {
+            throw { status: 400, message: 'Please verify the new Official Mobile Number via WhatsApp OTP' };
+        }
+
+        if (isSelf && !isSuperAdmin) {
+            if (role !== undefined && role !== userToUpdate.role) {
+                throw { status: 403, message: 'You cannot change your own role' };
+            }
+            if (status !== undefined && status !== userToUpdate.status) {
+                throw { status: 403, message: 'You cannot change your own account status' };
+            }
         }
 
         if (username && username !== userToUpdate.username) {
@@ -70,36 +260,106 @@ class AdminUsersService {
             userToUpdate.username = username;
         }
 
-        if (role) {
-            if (requester.role !== 'super-admin' && role !== 'employee') {
-                throw { status: 403, message: 'Cannot assign non-employee roles' };
-            }
-            userToUpdate.role = role;
+        if (email && email !== userToUpdate.email) {
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) throw { status: 409, message: 'Official Email already exists' };
+            userToUpdate.email = email;
+        } else if (email === '') {
+            userToUpdate.email = '';
         }
+
+        if (mobile && mobile !== userToUpdate.mobile) {
+            const existingMobile = await User.findOne({ mobile });
+            if (existingMobile) throw { status: 409, message: 'Official Mobile Number already exists' };
+            userToUpdate.mobile = mobile;
+        } else if (mobile === '') {
+            userToUpdate.mobile = '';
+        }
+
+        if (role) userToUpdate.role = role;
 
         if (status) userToUpdate.status = status;
         if (password) userToUpdate.password = password;
-        if (fullName !== undefined) userToUpdate.fullName = fullName;
-        if (designation !== undefined) userToUpdate.designation = designation;
-        if (email !== undefined) userToUpdate.email = email;
-        if (mobile !== undefined) userToUpdate.mobile = mobile;
-        if (altMobile !== undefined) userToUpdate.altMobile = altMobile;
+        if (fullName !== undefined) userToUpdate.fullName = cleanString(fullName);
+        if (title !== undefined) userToUpdate.title = cleanString(title);
+        if (department !== undefined) userToUpdate.department = cleanString(department);
+        if (designation !== undefined) userToUpdate.designation = cleanString(designation);
+        if (altMobile !== undefined) userToUpdate.altMobile = cleanString(altMobile);
+
+        if (hodName !== undefined) userToUpdate.hodName = cleanString(hodName);
+        if (hodMobile !== undefined) userToUpdate.hodMobile = cleanString(hodMobile);
+        if (hodEmail !== undefined) userToUpdate.hodEmail = cleanString(hodEmail);
+        if (hodDesignation !== undefined) userToUpdate.hodDesignation = cleanString(hodDesignation);
+        if (hodImage !== undefined) userToUpdate.hodImage = hodImage;
+
+        if (reportingToName !== undefined) userToUpdate.reportingToName = cleanString(reportingToName);
+        if (reportingToMobile !== undefined) userToUpdate.reportingToMobile = cleanString(reportingToMobile);
+        if (reportingToEmail !== undefined) userToUpdate.reportingToEmail = cleanString(reportingToEmail);
+        if (reportingToDesignation !== undefined) userToUpdate.reportingToDesignation = cleanString(reportingToDesignation);
+        if (reportingToImage !== undefined) userToUpdate.reportingToImage = reportingToImage;
+        if (profileImage !== undefined) userToUpdate.profileImage = profileImage;
+        if (signatureImage !== undefined) userToUpdate.signatureImage = signatureImage;
+        userToUpdate.updatedBy = requester.id;
 
         await userToUpdate.save();
+
+        const linkedSnapshot = {
+            name: userToUpdate.fullName || userToUpdate.username || '',
+            mobile: userToUpdate.mobile || '',
+            email: userToUpdate.email || '',
+            designation: userToUpdate.designation || '',
+            image: userToUpdate.profileImage || ''
+        };
+        await Promise.all([
+            User.updateMany(
+                { _id: { $ne: userToUpdate._id }, hodName: { $in: previousIdentityNames } },
+                {
+                    $set: {
+                        hodName: linkedSnapshot.name,
+                        hodMobile: linkedSnapshot.mobile,
+                        hodEmail: linkedSnapshot.email,
+                        hodDesignation: linkedSnapshot.designation,
+                        hodImage: linkedSnapshot.image
+                    }
+                }
+            ),
+            User.updateMany(
+                { _id: { $ne: userToUpdate._id }, reportingToName: { $in: previousIdentityNames } },
+                {
+                    $set: {
+                        reportingToName: linkedSnapshot.name,
+                        reportingToMobile: linkedSnapshot.mobile,
+                        reportingToEmail: linkedSnapshot.email,
+                        reportingToDesignation: linkedSnapshot.designation,
+                        reportingToImage: linkedSnapshot.image
+                    }
+                }
+            ),
+            Department.updateMany(
+                { hodName: { $in: previousIdentityNames } },
+                { $set: { hodName: linkedSnapshot.name } }
+            ),
+            Designation.updateMany(
+                { reportTo: { $in: previousIdentityNames } },
+                { $set: { reportTo: linkedSnapshot.name } }
+            )
+        ]);
+        await userToUpdate.populate([
+            { path: 'createdBy', select: 'username fullName role' },
+            { path: 'updatedBy', select: 'username fullName role' }
+        ]);
         const userData = userToUpdate.toObject();
         delete userData.password;
         return userData;
     }
-
-    /**
-     * Delete a user with permission checks.
-     */
     async deleteAdmin(id, requester) {
         const userToDelete = await User.findById(id);
         if (!userToDelete) throw { status: 404, message: 'User not found' };
 
+        const reqRole = requester.role;
+
         // Permission check
-        if (requester.role !== 'super-admin' && userToDelete.createdBy?.toString() !== requester.id) {
+        if (reqRole !== 'IHWE–Super Administrator' && userToDelete.createdBy?.toString() !== requester.id) {
             throw { status: 403, message: 'Unauthorized to delete this user' };
         }
 

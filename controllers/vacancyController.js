@@ -54,7 +54,7 @@ exports.createVacancy = async (req, res) => {
 exports.updateVacancy = async (req, res) => {
   try {
     const vacancy = await Vacancy.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
     });
     if (!vacancy)
       return res.status(404).json({ success: false, message: "Not found" });
@@ -72,7 +72,7 @@ exports.updateStatus = async (req, res) => {
     const vacancy = await Vacancy.findByIdAndUpdate(
       req.params.id,
       { status },
-      { new: true }
+      { returnDocument: 'after' }
     );
     await logActivity(req, 'Updated', 'Vacancies', `Changed vacancy ID: ${req.params.id} status to ${status}`);
     res.json({ success: true, data: vacancy });

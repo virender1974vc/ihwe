@@ -1,4 +1,5 @@
 const ActivityLog = require("../../models/activity/activityLogModel");
+const { cleanText, formatDetails } = require("../../utils/activityLogFormatter");
 
 // ➤ Private IP check helper
 const isPrivateIp = (ip) => {
@@ -38,19 +39,19 @@ const createActivityLog = async (req, res) => {
   try {
     const { user_id, user, action, module, details, link } = req.body;
 
-    if (!user_id || !user || !action || !module || !details) {
+    if (!user || !action || !module || !details) {
       return res.status(400).json({
         success: false,
-        message: "user_id, user, action, module and details are required",
+        message: "user, action, module and details are required",
       });
     }
 
     const log = await ActivityLog.create({
       user_id,
-      user,
-      action,
-      module,
-      details,
+      user: cleanText(user, "System"),
+      action: cleanText(action, "Activity"),
+      module: cleanText(module, "System"),
+      details: formatDetails(details),
       link: link || "",
       ip_address: getClientIp(req),
     });
@@ -118,11 +119,18 @@ const getAllActivityLogs = async (req, res) => {
     const logs = await ActivityLog.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(parseInt(limit))
+      .lean();
 
     res.status(200).json({
       success: true,
-      data: logs,
+      data: logs.map((log) => ({
+        ...log,
+        user: cleanText(log.user, "System"),
+        action: cleanText(log.action, "Activity"),
+        module: cleanText(log.module, "System"),
+        details: formatDetails(log.details),
+      })),
       total,
       currentPage: parseInt(page),
       totalPages: Math.ceil(total / parseInt(limit)),
@@ -166,5 +174,4 @@ module.exports = {
   getActivityLogById,
   deleteActivityLog,
 };
-
 

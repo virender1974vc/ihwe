@@ -1,26 +1,29 @@
 const ActivityLog = require("../models/activity/activityLogModel");
+const { cleanText, formatDetails } = require("./activityLogFormatter");
 
-/**
- * Utility to log administrative actions.
- * @param {Object} req - The request object (to extract user and IP)
- * @param {String} action - The action type (Created, Updated, Deleted, Logged In)
- * @param {String} module - The module or section name
- * @param {String} details - Description of the action
- */
 const logActivity = async (req, action, module, details) => {
   try {
     const user_id = req.user?.id || req.user?._id;
-    const user = req.user?.username || "System";
-    
-    // Extract IP address
+    const user = cleanText(
+      req.body?.updated_by ||
+        req.body?.added_by ||
+        req.body?.created_by ||
+        req.body?.userName ||
+        req.body?.user ||
+        req.user?.fullName ||
+        req.user?.user_fullname ||
+        req.user?.name ||
+        req.user?.username,
+      "System",
+    );
     const ip_address = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "";
 
     await ActivityLog.create({
       user_id,
       user,
-      action,
-      module,
-      details,
+      action: cleanText(action, "Activity"),
+      module: cleanText(module, "System"),
+      details: formatDetails(details),
       ip_address,
     });
   } catch (error) {

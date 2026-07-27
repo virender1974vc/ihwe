@@ -27,7 +27,7 @@ class PartnersService {
         const group = await PartnerGroup.findByIdAndUpdate(
             groupId,
             { ...data, updatedAt: Date.now() },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!group) throw { status: 404, message: 'Group not found' };
         return group;

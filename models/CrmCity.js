@@ -13,5 +13,7 @@ const CrmCitySchema = new mongoose.Schema(
   },
   { timestamps: true }, // createdAt और updatedAt अपने आप बनेंगे
 );
+CrmCitySchema.index({ stateCode: 1 });
+CrmCitySchema.index({ name: 1 });
 
 module.exports = secondaryDB.model("CrmCity", CrmCitySchema);

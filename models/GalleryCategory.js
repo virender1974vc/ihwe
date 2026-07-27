@@ -22,8 +22,16 @@ const GalleryCategorySchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["gallery", "media"],
+      enum: ["gallery", "media", "video"],
       default: "gallery",
+    },
+    order: {
+      type: Number,
+      default: 0,
+    },
+    updatedBy: {
+      type: String,
+      default: 'System',
     },
   },
   { timestamps: true }

@@ -5,6 +5,7 @@ const generateRegistrationId = async (type) => {
     corporate: "NGT/IHWE/CV",
     general: "NGT/IHWE/GV",
     healthCamp: "NGT/IHWE/HV",
+    group: "NGT/IHWE/GRP",
   };
 
   const prefix = prefixMap[type];
@@ -14,10 +15,15 @@ const generateRegistrationId = async (type) => {
   const counter = await Counter.findOneAndUpdate(
     { type },
     { $inc: { seq: 1 } },
-    { new: true, upsert: true },
+    { returnDocument: 'after', upsert: true },
   );
-  const paddedSeq = String(counter.seq).padStart(6, '0');
-  return `${prefix}/${paddedSeq}`;
+  // const paddedSeq = String(counter.seq).padStart(6, '0');
+  // return `${prefix}/${paddedSeq}`;
+  const currentYear = new Date().getFullYear().toString().slice(-2);
+  const seriesNum = counter.seq > 100000 ? (counter.seq % 100000) : counter.seq;
+  const paddedSeq = String(seriesNum).padStart(4, '0');
+
+  return `${prefix}/${currentYear}/${paddedSeq}`;
 };
 
 module.exports = { generateRegistrationId };

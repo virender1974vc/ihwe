@@ -35,7 +35,8 @@ const requireAdmin = (req, res, next) => {
     if (!auth?.startsWith('Bearer ')) return res.status(401).json({ success: false, message: 'Unauthorized' });
     try {
         const decoded = jwt.verify(auth.split(' ')[1], process.env.JWT_SECRET || 'fallback_secret_key');
-        if (decoded.role !== 'admin' && decoded.role !== 'super-admin')
+        const role = decoded.role?.toLowerCase().replace(/[–—]/g, '-').replace(/\s+/g, '-');
+        if (!['admin', 'super-admin', 'ihwe-super-administrator'].includes(role))
             return res.status(403).json({ success: false, message: 'Admin access only' });
         req.user = decoded;
         next();
@@ -54,6 +55,7 @@ router.post('/:id/view', ctrl.recordView);
 router.post('/:id/enquiry', ctrl.submitEnquiry);
 
 // Admin Routes
+router.get('/admin/exhibitors-with-products', requireAdmin, ctrl.getExhibitorsWithProductsAdmin);
 router.get('/admin/exhibitor/:exhibitorId', requireAdmin, ctrl.getExhibitorProductsAdmin);
 router.get('/admin/analytics/:exhibitorId', requireAdmin, ctrl.getExhibitorAnalyticsAdmin);
 router.post('/admin/add', requireAdmin, upload.array('images', 8), ctrl.addProductAdmin);

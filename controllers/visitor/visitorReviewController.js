@@ -51,7 +51,7 @@ const updateVisitorReview = async (req, res) => {
     const updated = await VisitorReview.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (!updated) return res.status(404).json({ message: "Not found" });
     await logActivity(req, 'Updated', 'Visitor Reviews', `Updated visitor review ID: ${req.params.id}`);

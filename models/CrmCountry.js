@@ -13,5 +13,6 @@ const CrmCountrySchema = new mongoose.Schema(
   },
   { timestamps: true }, // createdAt और updatedAt अपने आप बनेंगे
 );
+CrmCountrySchema.index({ name: 1 });
 
 module.exports = secondaryDB.model("CrmCountry", CrmCountrySchema);

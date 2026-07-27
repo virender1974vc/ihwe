@@ -3,6 +3,7 @@ const { secondaryDB } = require("../config/secondaryDb");
 const BankListSchema = new mongoose.Schema(
   {
     bankname: { type: String, required: true },
+    accountname: { type: String, required: true },
     bankbranch: { type: String, required: true },
     accountno: { type: String, required: true },
     ifsccode: { type: String, required: true },

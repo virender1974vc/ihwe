@@ -5,6 +5,28 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('cloudinary').v2;
 const jwt = require('jsonwebtoken');
+
+// ─── Server-Side In-Memory Cache ─────────────────────────────────────────────
+// Caches each distinct GET query (page/filters/user scope) for 2 minutes to
+// avoid repeated DB+enrichment queries. Keyed by the full query string so
+// different pages, filters, or users never receive each other's cached data.
+// Auto-invalidates entirely on any write so data stays consistent.
+const _cache = {
+  entries: new Map(),
+  TTL: 2 * 60 * 1000, // 2 minutes
+  keyFor(query) { return JSON.stringify(query); },
+  get(key) {
+    const hit = this.entries.get(key);
+    if (!hit) return null;
+    if ((Date.now() - hit.at) >= this.TTL) { this.entries.delete(key); return null; }
+    return hit.data;
+  },
+  set(key, d) { this.entries.set(key, { data: d, at: Date.now() }); },
+  clear() { this.entries.clear(); }
+};
+// Expose clear so controller can call it after writes
+module.exports._clearRegistrationCache = () => _cache.clear();
+
 const requireAdminAuth = (req, res, next) => {
     const auth = req.headers.authorization;
     if (!auth || !auth.startsWith('Bearer '))
@@ -19,6 +41,7 @@ const requireAdminAuth = (req, res, next) => {
         return res.status(401).json({ success: false, message: 'Invalid token' });
     }
 };
+
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -38,11 +61,70 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-router.get('/', (req, res) => exhibitorRegistrationController.getAllRegistrations(req, res));
+// GET all registrations — served from cache after first hit
+router.get('/', async (req, res) => {
+  const cacheKey = _cache.keyFor(req.query);
+  const cached = _cache.get(cacheKey);
+  if (cached) {
+    // Instant response from memory — no DB hit
+    return res.status(200).json(cached);
+  }
+  // Miss: call controller, intercept response, populate cache
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) _cache.set(cacheKey, body);
+    return originalJson(body);
+  };
+  return exhibitorRegistrationController.getAllRegistrations(req, res);
+});
+
+// Aggregated totals across ALL matching registrations (not just the current page) —
+// powers the stat cards. Must be declared before '/:id' so Express doesn't treat
+// "summary" as an :id param.
+router.get('/summary', async (req, res) => {
+  const cacheKey = 'summary:' + _cache.keyFor(req.query);
+  const cached = _cache.get(cacheKey);
+  if (cached) {
+    return res.status(200).json(cached);
+  }
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) _cache.set(cacheKey, body);
+    return originalJson(body);
+  };
+  return exhibitorRegistrationController.getRegistrationsSummary(req, res);
+});
+
+// Distinct filter dropdown values (industry/source/status), scoped to the user,
+// across ALL of their registrations — not just the current page.
+router.get('/filter-options', async (req, res) => {
+  const cacheKey = 'filter-options:' + _cache.keyFor(req.query);
+  const cached = _cache.get(cacheKey);
+  if (cached) {
+    return res.status(200).json(cached);
+  }
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode === 200) _cache.set(cacheKey, body);
+    return originalJson(body);
+  };
+  return exhibitorRegistrationController.getFilterOptions(req, res);
+});
+
+// Write operations — always invalidate cache so next GET is fresh
+router.post('/', (req, res) => {
+  _cache.clear();
+  exhibitorRegistrationController.addRegistration(req, res);
+});
+router.put('/:id', (req, res) => {
+  _cache.clear();
+  exhibitorRegistrationController.updateRegistration(req, res);
+});
+router.delete('/:id', (req, res) => {
+  _cache.clear();
+  exhibitorRegistrationController.deleteRegistration(req, res);
+});
 router.get('/:id', (req, res) => exhibitorRegistrationController.getRegistrationById(req, res));
-router.post('/', (req, res) => exhibitorRegistrationController.addRegistration(req, res));
-router.put('/:id', (req, res) => exhibitorRegistrationController.updateRegistration(req, res));
-router.delete('/:id', (req, res) => exhibitorRegistrationController.deleteRegistration(req, res));
 
 // Per-field KYC document upload (admin only) — uploads to Cloudinary, saves to THIS registration only
 // Local Storage for Special Documents and KYC to avoid Cloudinary issues
@@ -73,15 +155,26 @@ const kycFields = kycUpload.fields([
 ]);
 
 router.put('/:id/kyc-doc', requireAdminAuth, kycFields, (req, res) => exhibitorRegistrationController.updateKycDocs(req, res));
+router.post('/:id/contact-photo', requireAdminAuth, kycUpload.single('contactPhoto'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+        const photoUrl = req.file.path.replace(/\\/g, '/').replace(/^uploads\//, '/uploads/');
+        res.status(200).json({ success: true, message: 'Contact photo uploaded successfully', photoUrl });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 router.delete('/:id/kyc-doc/:field', requireAdminAuth, (req, res) => exhibitorRegistrationController.deleteKycDoc(req, res));
 router.post('/bulk-cleanup-docs', requireAdminAuth, (req, res) => exhibitorRegistrationController.cleanupAllKycDocs(req, res));
 router.post('/:id/special-docs', kycUpload.single('file'), (req, res) => exhibitorRegistrationController.addSpecialDoc(req, res));
 router.delete('/:id/special-docs/:docId', (req, res) => exhibitorRegistrationController.deleteSpecialDoc(req, res));
-router.post('/upload-receipt', requireAdminAuth, upload.single('receipt'), (req, res) => {
+router.post('/upload-receipt', requireAdminAuth, kycUpload.single('receipt'), (req, res) => {
     if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
-    res.status(200).json({ success: true, url: req.file.path });
+    res.status(200).json({ success: true, url: req.file.path.replace(/\\/g, '/').replace(/^uploads\//, '/uploads/') });
 });
 // MSME Certificate upload (exhibitor or admin)
 const msmeStorage = new CloudinaryStorage({
@@ -100,11 +193,11 @@ const msmeUpload = multer({ storage: msmeStorage });
 router.put('/:id/msme', msmeUpload.single('udyamCertificate'), async (req, res) => {
     try {
         const msmeData = { ...req.body, updatedAt: new Date() };
-        if (req.file) msmeData.udyamCertificateUrl = req.file.path;
+        if (req.file) msmeData.udyamCertificateUrl = req.file.path.replace(/\\/g, '/').replace(/^uploads\//, '/uploads/');
         const updated = await require('../models/ExhibitorRegistration').findByIdAndUpdate(
             req.params.id,
             { msme: msmeData },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!updated) return res.status(404).json({ success: false, message: 'Registration not found' });
         res.json({ success: true, data: updated.msme });

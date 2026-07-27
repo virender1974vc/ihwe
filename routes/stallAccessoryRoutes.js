@@ -51,6 +51,9 @@ const requireExhibitor = (req, res, next) => {
     }
 };
 
+// ── Exhibitor: real complimentary balance for the logged-in exhibitor ────────
+router.get('/my-entitlements', requireExhibitor, ctrl.getMyEntitlements);
+
 // ── Accessories catalog (public read) ────────────────────────────────────────
 router.get('/accessories', ctrl.getAllAccessories);
 router.post('/accessories', upload.single('image'), ctrl.createAccessory);
@@ -63,6 +66,14 @@ router.get('/orders/:id', flexAuth, ctrl.getOrderById);
 router.post('/orders', ctrl.createOrder);           // admin creates order
 router.put('/orders/:id', ctrl.updateOrder);
 router.delete('/orders/:id', ctrl.deleteOrder);
+router.put('/orders/:id/view', flexAuth, async (req, res) => {
+    try {
+        await AccessoryOrder.findByIdAndUpdate(req.params.id, { isViewed: true });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
 
 // ── Exhibitor self-purchase: create Razorpay order ───────────────────────────
 router.post('/create-payment-order', requireExhibitor, async (req, res) => {
@@ -109,6 +120,8 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
         if (!reg)
             return res.status(404).json({ success: false, message: 'Registration not found' });
 
+        await ctrl.assertComplimentaryWithinEntitlement(exhibitorRegistrationId, items);
+
         // Build enriched items
         let subtotal = 0, totalGst = 0;
         const enrichedItems = items.map((item) => {
@@ -154,26 +167,225 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             console.error('Stock update error:', stockErr.message);
         }
 
-        // Generate receipt PDF + send email
+        // Generate receipt PDF + send email/WhatsApp
         try {
             const pdfResult = await pdfGenerator.generateAccessoryReceipt(order, reg);
             if (pdfResult?.cloudUrl) {
                 order.receiptUrl = pdfResult.cloudUrl;
                 await order.save();
             }
-            const email = reg.contact1?.email;
-            if (email) {
-                await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-                order.emailSent = true;
-                await order.save();
+            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+            order.emailSent = !!sent;
+            await order.save();
+            if (!sent) {
+                console.error('Accessory receipt notification failed for order:', order.orderNo);
             }
         } catch (e) {
             console.error('Accessory receipt/email error:', e.message);
         }
 
+        // Emit socket event to admin
+        const io = req.app.get('io');
+        if (io) {
+            io.to('admin_room').emit('accessory_order_placed', {
+                orderNo: order.orderNo,
+                exhibitorName: order.exhibitorName,
+                grandTotal: order.grandTotal,
+                paymentMode: order.paymentMode,
+                timestamp: Date.now()
+            });
+        }
+
         res.json({ success: true, data: order });
     } catch (err) {
         console.error('Accessory verify error:', err);
+        res.status(err.status || 500).json({ success: false, message: err.message });
+    }
+});
+
+// ── Exhibitor self-purchase: submit NEFT details for admin approval ──────────
+router.post('/neft-order', requireExhibitor, upload.single('paymentScreenshot'), async (req, res) => {
+    try {
+        const {
+            exhibitorRegistrationId,
+            notes
+        } = req.body;
+        let items;
+        let bankTransferDetails;
+        try {
+            items = typeof req.body.items === 'string' ? JSON.parse(req.body.items) : req.body.items;
+            bankTransferDetails = typeof req.body.bankTransferDetails === 'string'
+                ? JSON.parse(req.body.bankTransferDetails)
+                : req.body.bankTransferDetails;
+        } catch (parseErr) {
+            return res.status(400).json({ success: false, message: 'Invalid NEFT payment details' });
+        }
+
+        if (!exhibitorRegistrationId) {
+            return res.status(400).json({ success: false, message: 'Registration is required' });
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'No cart items found' });
+        }
+
+        const details = bankTransferDetails || {};
+        const required = [
+            'transactionReferenceNumber',
+            'transactionDate',
+            'transferredAmount',
+            'senderBankName',
+        ];
+        for (const key of required) {
+            if (!details[key]) {
+                return res.status(400).json({ success: false, message: `${key} is required` });
+            }
+        }
+
+        const amount = Number(details.transferredAmount);
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ success: false, message: 'Valid NEFT amount is required' });
+        }
+        if (!String(details.senderAccountHolderName || '').trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Sender account holder name is required'
+            });
+        }
+
+        const reg = await ExhibitorRegistration.findById(exhibitorRegistrationId);
+        if (!reg) {
+            return res.status(404).json({ success: false, message: 'Registration not found' });
+        }
+
+        await ctrl.assertComplimentaryWithinEntitlement(exhibitorRegistrationId, items);
+
+        let subtotal = 0;
+        let totalGst = 0;
+        const enrichedItems = items.map((item) => {
+            const unitPrice = Number(item.unitPrice || 0);
+            const qty = Number(item.qty || 1);
+            const gstPercent = Number(item.gstPercent || 0);
+            const base = unitPrice * qty;
+            const gst = Math.round((base * gstPercent) * 100) / 10000;
+            const total = base + gst;
+            subtotal += base;
+            totalGst += gst;
+            return { ...item, unitPrice, qty, gstPercent, gstAmount: gst, totalPrice: total };
+        });
+
+        const grandTotal = Math.round((subtotal + totalGst) * 100) / 100;
+        if (Math.abs(amount - grandTotal) > 1) {
+            return res.status(400).json({ success: false, message: 'NEFT amount must match cart total' });
+        }
+
+        const orderNo = await AccessoryOrder.generateOrderNo();
+        const order = new AccessoryOrder({
+            exhibitorRegistrationId,
+            registrationId: reg.registrationId,
+            exhibitorName: reg.exhibitorName,
+            stallNo: reg.participation?.stallFor || '',
+            orderNo,
+            items: enrichedItems,
+            subtotal,
+            totalGst,
+            grandTotal,
+            paymentStatus: 'pending',
+            paymentMode: 'neft',
+            transactionId: String(details.transactionReferenceNumber).trim(),
+            bankTransferDetails: {
+                transactionReferenceNumber: String(details.transactionReferenceNumber).trim(),
+                transactionDate: new Date(details.transactionDate),
+                transactionTime: String(details.transactionTime || '').trim(),
+                transferredAmount: amount,
+                senderBankName: String(details.senderBankName).trim(),
+                senderAccountHolderName: String(details.senderAccountHolderName || '').trim(),
+                paymentScreenshotUrl: req.file ? `/uploads/accessories/${req.file.filename}` : '',
+            },
+            paidAt: null,
+            processedBy: reg.exhibitorName,
+            notes: notes || 'NEFT payment submitted by exhibitor. Awaiting admin approval.',
+        });
+
+        await order.save();
+
+        try {
+            for (const item of items) {
+                if (item.accessoryId) {
+                    await StallAccessory.updateOne(
+                        { _id: item.accessoryId },
+                        { $inc: { availableQty: -Math.abs(Number(item.qty || 1)) } }
+                    );
+                }
+            }
+        } catch (stockErr) {
+            console.error('Stock update error:', stockErr.message);
+        }
+
+        // Emit socket event to admin
+        const io = req.app.get('io');
+        if (io) {
+            io.to('admin_room').emit('accessory_order_placed', {
+                orderNo: order.orderNo,
+                exhibitorName: order.exhibitorName,
+                grandTotal: order.grandTotal,
+                paymentMode: order.paymentMode,
+                timestamp: Date.now()
+            });
+        }
+
+        res.status(201).json({ success: true, data: order });
+    } catch (err) {
+        console.error('Accessory NEFT order error:', err);
+        if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// ── Admin: approve pending NEFT payment and generate receipt ─────────────────
+router.put('/orders/:id/approve-neft', flexAuth, async (req, res) => {
+    try {
+        const order = await AccessoryOrder.findById(req.params.id);
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+        if (order.paymentStatus === 'paid') {
+            return res.json({ success: true, data: order, message: 'Order already paid' });
+        }
+        if (order.paymentMode !== 'neft') {
+            return res.status(400).json({ success: false, message: 'Only NEFT orders can be approved here' });
+        }
+
+        const reg = await ExhibitorRegistration.findById(order.exhibitorRegistrationId);
+        if (!reg) {
+            return res.status(404).json({ success: false, message: 'Registration not found' });
+        }
+
+        order.paymentStatus = 'paid';
+        order.paidAt = new Date();
+        order.transactionId = req.body?.transactionId || `NEFT-${Date.now()}`;
+        order.processedBy = req.body?.processedBy || req.user?.name || req.user?.email || 'Admin';
+        if (req.body?.notes) order.notes = req.body.notes;
+        await order.save();
+
+        try {
+            const pdfResult = await pdfGenerator.generateAccessoryReceipt(order, reg);
+            if (pdfResult?.cloudUrl) {
+                order.receiptUrl = pdfResult.cloudUrl;
+                await order.save();
+            }
+            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+            order.emailSent = !!sent;
+            await order.save();
+            if (!sent) {
+                console.error('Accessory NEFT approval notification failed for order:', order.orderNo);
+            }
+        } catch (e) {
+            console.error('Accessory NEFT approval receipt/email error:', e.message);
+        }
+
+        res.json({ success: true, data: order });
+    } catch (err) {
+        console.error('Accessory NEFT approval error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });

@@ -29,6 +29,15 @@ const AccessoryOrderSchema = new mongoose.Schema({
     paymentStatus: { type: String, enum: ['pending', 'paid', 'complimentary'], default: 'pending' },
     paymentMode: { type: String, default: '' },
     transactionId: { type: String, default: '' },
+    bankTransferDetails: {
+        transactionReferenceNumber: { type: String, default: '' },
+        transactionDate: { type: Date },
+        transactionTime: { type: String, default: '' },
+        transferredAmount: { type: Number, default: 0 },
+        senderBankName: { type: String, default: '' },
+        senderAccountHolderName: { type: String, default: '' },
+        paymentScreenshotUrl: { type: String, default: '' },
+    },
     paidAt: { type: Date },
     // Admin who processed
     processedBy: { type: String, default: 'Admin' },
@@ -37,6 +46,8 @@ const AccessoryOrderSchema = new mongoose.Schema({
     receiptUrl: { type: String, default: '' },
     // Email sent
     emailSent: { type: Boolean, default: false },
+    // Notification tracking
+    isViewed: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Auto-generate order number

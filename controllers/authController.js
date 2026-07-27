@@ -35,13 +35,9 @@ class AuthController {
             }
 
             const data = await authService.login(username, password);
-            
-            // Log the login activity
-            // Since req.user isn't set yet by the middleware, we manually pass a dummy req or ensure logActivity handles it.
-            // Actually logActivity uses req.user, so we might need a modified version or set req.user temporarily.
-            req.user = { id: data.admin._id, username: data.admin.username }; 
+            req.user = { id: data.admin._id, username: data.admin.username };
             await logActivity(req, 'Logged In', 'Auth', `Admin logged in: ${username}`);
-            
+
             res.json({
                 success: true,
                 message: 'Login successful',
@@ -91,7 +87,8 @@ class AuthController {
             }
 
             // Security check: only allow users to change their own password (or Super Admin)
-            if (req.user.id !== adminId && req.user.role !== 'super-admin') {
+            const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
+            if (req.user.id !== adminId && userRole !== 'IHWE–Super Administrator') {
                 return res.status(403).json({ success: false, message: 'Unauthorized to change this password' });
             }
 
@@ -107,6 +104,32 @@ class AuthController {
             });
         } catch (error) {
             console.error('Change password error:', error);
+            res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
+        }
+    }
+    async sendChangePasswordOtp(req, res) {
+        try {
+            const adminId = req.body.adminId;
+            const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
+            if (req.user.id !== adminId && userRole !== 'ihwe–super-administrator') {
+                return res.status(403).json({ success: false, message: 'Unauthorized' });
+            }
+            await authService.sendChangePasswordOtp(adminId);
+            res.json({ success: true, message: 'OTP sent to your registered WhatsApp number' });
+        } catch (error) {
+            res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
+        }
+    }
+    async changePasswordWithOtp(req, res) {
+        try {
+            const { adminId, otp, newPassword, newUsername } = req.body;
+            const userRole = req.user.role?.toLowerCase().replace(/\s+/g, '-');
+            if (req.user.id !== adminId && userRole !== 'ihwe–super-administrator') {
+                return res.status(403).json({ success: false, message: 'Unauthorized' });
+            }
+            const data = await authService.changePasswordWithOtp(adminId, otp, newPassword, newUsername);
+            res.json({ success: true, message: 'Password updated successfully', user: data });
+        } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message || 'Server error' });
         }
     }

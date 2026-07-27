@@ -38,6 +38,7 @@ const FreeHealthCampSchema = new mongoose.Schema(
     agreeToUpdates: { type: String },
     specificHealthConcerns: { type: String },
     subscribe: { type: Boolean, default: false },
+    qrCode: { type: String },
     status: { type: String, default: "New Reg." },
     created_by: { type: String, default: null },
     updated_by: { type: String, default: null },

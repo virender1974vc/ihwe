@@ -1,13 +1,9 @@
 const buyerRegistrationService = require('../services/buyerRegistrationService');
 const { logActivity } = require('../utils/logger');
 
-/**
- * Controller to handle Buyer Registration requests.
- */
+
 class BuyerRegistrationController {
-    /**
-     * Create a new registration.
-     */
+
     async createRegistration(req, res) {
         try {
             const files = req.files || {};
@@ -24,9 +20,7 @@ class BuyerRegistrationController {
         }
     }
 
-    /**
-     * Get all registrations.
-     */
+
     async getAllRegistrations(req, res) {
         try {
             const data = await buyerRegistrationService.getAllRegistrations();
@@ -50,9 +44,7 @@ class BuyerRegistrationController {
         }
     }
 
-    /**
-     * Update a registration.
-     */
+
     async updateRegistration(req, res) {
         try {
             const data = await buyerRegistrationService.updateRegistration(req.params.id, req.body);
@@ -64,9 +56,7 @@ class BuyerRegistrationController {
         }
     }
 
-    /**
-     * Delete a registration.
-     */
+
     async deleteRegistration(req, res) {
         try {
             await buyerRegistrationService.deleteRegistration(req.params.id);
@@ -78,9 +68,7 @@ class BuyerRegistrationController {
         }
     }
 
-    /**
-     * Create Razorpay Order
-     */
+
     async createOrder(req, res) {
         try {
             const { amount } = req.body;
@@ -93,9 +81,7 @@ class BuyerRegistrationController {
     }
 
 
-    /**
-     * Verify Payment
-     */
+
     async verifyPayment(req, res) {
         try {
             const { regId, paymentDetails } = req.body;
@@ -107,9 +93,7 @@ class BuyerRegistrationController {
         }
     }
 
-    /**
-     * Buyer Login
-     */
+
     async login(req, res) {
         try {
             const { emailAddress, registrationId } = req.body;
@@ -117,16 +101,13 @@ class BuyerRegistrationController {
             res.json({ success: true, message: 'Login successful', data });
         } catch (err) {
             console.error('Error buyer login:', err);
-            res.status(err.status || 500).json({ 
-                success: false, 
-                message: err.message || 'Login failed. Please check your credentials.' 
+            res.status(err.status || 500).json({
+                success: false,
+                message: err.message || 'Login failed. Please check your credentials.'
             });
         }
     }
 
-    /**
-     * Get Stats
-     */
     async getStats(req, res) {
         try {
             const stats = await buyerRegistrationService.getStats();

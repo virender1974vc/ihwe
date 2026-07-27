@@ -1,12 +1,50 @@
 const mongoose = require("mongoose");
 const { secondaryDB } = require("../config/secondaryDb");
+const piItemSchema = new mongoose.Schema({
+  description: { type: String, required: true },
+  hsn: { type: String, required: true, default: "998596" },
+  qty: { type: Number, required: true },
+  size: { type: Number, required: true },
+  unit: { type: String, required: true },
+  depth: { type: String, default: "" },
+  rate: { type: Number, required: true },
+  amount: { type: Number, required: true },
+  disc: { type: Number, required: true },
+  tax: { type: Number, required: true },
+  gstRate: { type: String, required: true },
+  cgst: { type: String, default: "" },
+  cgst_per: { type: String, default: "9" },
+  igst_per: { type: String, default: "9" },
+  finalAmount: { type: Number, required: true },
+  remarks: { type: String, default: "" },
+});
+
 const PerformaInvoiceSchema = new mongoose.Schema(
   {
-    est_no: { type: String, required: true },
     companyId: { type: String, required: true },
-    pi_no: { type: String, required: true },
+    pi_no: { type: String, required: true, unique: true },
+    gst_no: { type: String, required: true },
+    company_name: { type: String, default: "" },
+    company_addr: { type: String, default: "" },
+    company_gst_no: { type: String, default: "" },
+    event_name: { type: String, default: "" },
+    event_place_of_supply: { type: String, default: "" },
+    event_gst_no: { type: String, default: "" },
+    consignee_name: { type: String, required: true },
+    consignee_addr: { type: String, required: true },
+    consignee_person: { type: String, default: "" },
+    consignee_phone: { type: String, default: "" },
+    country: { type: String, required: true },
+    state: { type: String, required: true },
+    city: { type: String, required: true },
+    pincode: { type: Number, required: true },
+    items: { type: [piItemSchema], required: true },
     finalAmount: { type: Number, required: true },
-    added: { type: Date, required: true },
+    remarks: { type: String, default: "" },
+    terms: { type: String, default: "" },
+    added_by: { type: String },
+    status: { type: String, default: "active" },
+    added: { type: Date, default: Date.now },
     updated: { type: Date, default: null },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
@@ -25,7 +63,11 @@ const getFiscalYear = () => {
 // ✅ Static method: Auto-generate next PI number
 PerformaInvoiceSchema.statics.generateNextPINumber = async function () {
   const fiscalYear = getFiscalYear();
-  const prefix = `NGW/${fiscalYear}/PI/`;
+  // Distinct from Estimate's "NGW/{FY}/PI/" prefix — both are live, independently
+  // numbered "Proforma Invoice" systems, and sharing the same prefix let an
+  // Estimate and a PerformaInvoice show the identical printed number for two
+  // different clients.
+  const prefix = `NGW/${fiscalYear}/PFI/`;
 
   const lastInvoice = await this.findOne({
     pi_no: { $regex: `^${prefix}` },

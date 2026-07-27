@@ -13,5 +13,7 @@ const CrmStateSchema = new mongoose.Schema(
   },
   { timestamps: true }, // createdAt और updatedAt automatically add होंगे
 );
+CrmStateSchema.index({ countryCode: 1 });
+CrmStateSchema.index({ name: 1 });
 
 module.exports = secondaryDB.model("CrmState", CrmStateSchema);

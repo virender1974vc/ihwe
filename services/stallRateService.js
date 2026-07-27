@@ -12,14 +12,14 @@ class StallRateService {
         return await StallRate.findOneAndUpdate(
             { eventId: data.eventId, currency: data.currency, stallType: data.stallType },
             data,
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
     }
     async getRateById(id) {
         return await StallRate.findById(id).populate('eventId');
     }
     async updateRate(id, data) {
-        return await StallRate.findByIdAndUpdate(id, data, { new: true });
+        return await StallRate.findByIdAndUpdate(id, data, { returnDocument: 'after' });
     }
     async deleteRate(id) {
         return await StallRate.findByIdAndDelete(id);

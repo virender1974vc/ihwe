@@ -18,11 +18,9 @@ const bsmMeetingSchema = new mongoose.Schema(
     },
     date: {
       type: Date,
-      required: true,
     },
     timeSlot: {
       type: String,
-      required: true,
     },
     status: {
       type: String,
@@ -57,7 +55,30 @@ const bsmMeetingSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-bsmMeetingSchema.index({ buyerId: 1, date: 1, timeSlot: 1 }, { unique: true });
-bsmMeetingSchema.index({ exhibitorId: 1, date: 1, timeSlot: 1 }, { unique: true });
+
+bsmMeetingSchema.index(
+  { buyerId: 1, date: 1, timeSlot: 1 },
+  { 
+    unique: true, 
+    name: "buyer_slot_unique",
+    partialFilterExpression: { 
+      date: { $type: "date" },
+      timeSlot: { $type: "string" }
+    } 
+  }
+);
+
+bsmMeetingSchema.index(
+  { exhibitorId: 1, date: 1, timeSlot: 1 },
+  { 
+    unique: true, 
+    name: "exhibitor_slot_unique",
+    partialFilterExpression: { 
+      date: { $type: "date" },
+      timeSlot: { $type: "string" }
+    } 
+  }
+);
 
 module.exports = mongoose.model("BSMMeeting", bsmMeetingSchema);
+

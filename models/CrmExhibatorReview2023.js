@@ -1,23 +1,32 @@
 const mongoose = require("mongoose");
 const { secondaryDB } = require("../config/secondaryDb");
+
 const CrmExhibatorReviewSchema = new mongoose.Schema(
   {
     cmpny_id: { type: String, required: true },
     evnt_id: { type: String, default: "1" },
-    status_short: { type: String, required: true },
+    event_name: { type: String },
+    status_short: { type: String },
     reminder_dt: { type: String },
     forward_to: { type: String },
-    re_msg: { type: String, required: true },
-    updated_by: {
+    re_msg: { type: String },
+    type: {
       type: String,
-      default: null,
-      trim: true,
+      enum: ["status", "whatsapp", "call", "email", "email_reply", "log"],
+      default: "status",
     },
+    email_subject: { type: String },
+    email_content: { type: String },
+    attachments: [{ type: String }],
+    call_duration: { type: String },
+    follow_up_date: { type: String },
+    message_id: { type: String },
+    updated_by: { type: String, trim: true },
   },
-  { timestamps: { createdAt: "re_added", updatedAt: "re_updated" } },
+  { timestamps: true }
 );
 
 module.exports = secondaryDB.model(
   "CrmExhibatorReview2023",
-  CrmExhibatorReviewSchema,
+  CrmExhibatorReviewSchema
 );

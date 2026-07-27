@@ -8,6 +8,7 @@ const { logActivity } = require("../../utils/logger");
 const {
   normalizeVisitorMultiSelectFields,
 } = require("../../utils/visitorSelectionNormalizer");
+const qrcode = require('qrcode');
 
 exports.getAllGeneralVisitors = async (req, res) => {
   try {
@@ -34,6 +35,8 @@ exports.createGeneralVisitor = async (req, res) => {
     const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
     const visitor = new GeneralVisitor({ ...normalizedBody, registrationId });
+    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    visitor.qrCode = await qrcode.toDataURL(qrPayload);
     const saved = await visitor.save();
 
     const emailData = {
@@ -48,6 +51,7 @@ exports.createGeneralVisitor = async (req, res) => {
       city: saved.city || 'N/A',
       country: saved.country || 'India',
       registrationId: saved.registrationId,
+      registrationDate: saved.createdAt,
     };
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
@@ -69,7 +73,7 @@ exports.updateGeneralVisitor = async (req, res) => {
     const updated = await GeneralVisitor.findByIdAndUpdate(
       req.params.id,
       normalizedBody,
-      { new: true },
+      { returnDocument: 'after' },
     );
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
     await logActivity(req, 'Updated', 'Visitor Registrations', `Updated general visitor ID: ${req.params.id}`);

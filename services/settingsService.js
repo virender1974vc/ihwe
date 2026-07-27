@@ -7,10 +7,10 @@ class SettingsService {
     /**
      * Get settings, creates default if none exists.
      */
-    async getSettings() {
-        let settings = await Settings.findOne();
+    async getSettings(website = '9th IHWE') {
+        let settings = await Settings.findOne({ website });
         if (!settings) {
-            settings = await new Settings({}).save();
+            settings = await new Settings({ website }).save();
         }
         return settings;
     }
@@ -18,13 +18,28 @@ class SettingsService {
     /**
      * Update settings.
      */
-    async updateSettings(updateData) {
-        let settings = await Settings.findOne();
-        if (!settings) settings = new Settings({});
+    async updateSettings(updateData, website = '9th IHWE') {
+        let settings = await Settings.findOne({ website });
+        if (!settings) settings = new Settings({ website });
 
-        const { logo, emails, phones, addresses, mapIframe, marqueeText, topbarDate, supportDeskText, onlineAdvancePercentage, manualAdvancePercentage, quickLinks, exhibitionLinks } = updateData;
+        const { 
+            logo, exhibitorBrochurePdf, emails, phones, addresses, mapIframe, 
+            marqueeText, topbarDate, supportDeskText, 
+            onlineAdvancePercentage, manualAdvancePercentage, 
+            quickLinks, exhibitionLinks,
+            companyName, companyAddress, companyGst, companyCin,
+            contactPhone, contactEmail, contactWebsite,
+            contactPerson, contactDesignation,
+            fullPaymentDiscount, availableTdsRates,
+            authorizedSignature, companyStamp
+        } = updateData;
 
         if (logo) settings.logo = logo;
+        if (updateData.emailLogo) settings.emailLogo = updateData.emailLogo;
+        if (exhibitorBrochurePdf) settings.exhibitorBrochurePdf = exhibitorBrochurePdf;
+        if (updateData.domesticRegistrationFormPdf) settings.domesticRegistrationFormPdf = updateData.domesticRegistrationFormPdf;
+        if (updateData.internationalRegistrationFormPdf) settings.internationalRegistrationFormPdf = updateData.internationalRegistrationFormPdf;
+        if (updateData.sponsorshipDeckPdf) settings.sponsorshipDeckPdf = updateData.sponsorshipDeckPdf;
         if (emails) settings.emails = emails;
         if (phones) settings.phones = phones;
         if (addresses) settings.addresses = addresses;
@@ -36,6 +51,27 @@ class SettingsService {
         if (supportDeskText !== undefined) settings.supportDeskText = supportDeskText;
         if (onlineAdvancePercentage !== undefined) settings.onlineAdvancePercentage = onlineAdvancePercentage;
         if (manualAdvancePercentage !== undefined) settings.manualAdvancePercentage = manualAdvancePercentage;
+        
+        // Financials
+        if (companyName !== undefined) settings.companyName = companyName;
+        if (companyAddress !== undefined) settings.companyAddress = companyAddress;
+        if (companyGst !== undefined) settings.companyGst = companyGst;
+        if (companyCin !== undefined) settings.companyCin = companyCin;
+        if (contactPhone !== undefined) settings.contactPhone = contactPhone;
+        if (contactEmail !== undefined) settings.contactEmail = contactEmail;
+        if (contactWebsite !== undefined) settings.contactWebsite = contactWebsite;
+        if (contactPerson !== undefined) settings.contactPerson = contactPerson;
+        if (contactDesignation !== undefined) settings.contactDesignation = contactDesignation;
+        if (fullPaymentDiscount !== undefined) settings.fullPaymentDiscount = fullPaymentDiscount;
+        if (availableTdsRates !== undefined) settings.availableTdsRates = availableTdsRates;
+        if (authorizedSignature) settings.authorizedSignature = authorizedSignature;
+        if (companyStamp) settings.companyStamp = companyStamp;
+        if (updateData.downloadBrochurePdf) settings.downloadBrochurePdf = updateData.downloadBrochurePdf;
+        if (updateData.isMsmeLogoActive !== undefined) settings.isMsmeLogoActive = updateData.isMsmeLogoActive;
+        if (updateData.msmeLogos !== undefined) settings.msmeLogos = updateData.msmeLogos;
+        if (updateData.showBrochurePopUp !== undefined) settings.showBrochurePopUp = updateData.showBrochurePopUp;
+        if (updateData.brochurePopUpDelay !== undefined) settings.brochurePopUpDelay = updateData.brochurePopUpDelay;
+        if (updateData.showGovtPmsScheme !== undefined) settings.showGovtPmsScheme = updateData.showGovtPmsScheme;
 
         return await settings.save();
     }

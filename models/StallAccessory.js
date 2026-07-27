@@ -31,6 +31,12 @@ const StallAccessorySchema = new mongoose.Schema({
     // For complimentary
     includedQty: { type: Number, default: 1 },
 
+    // Stall-area-based allocation (auto-scales complimentary qty by exhibitor's stall size)
+    allocationMode: { type: String, enum: ['fixed', 'perArea'], default: 'fixed' },
+    ratioQty: { type: Number, default: 0 },
+    ratioArea: { type: Number, default: 9 },
+    roundingMode: { type: String, enum: ['floor', 'round', 'ceil'], default: 'floor' },
+
     // Organization
     category: { type: String, default: 'General' },
     sortOrder: { type: Number, default: 0 },

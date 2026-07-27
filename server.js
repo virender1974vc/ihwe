@@ -6,9 +6,7 @@ const multer = require('multer');
 const path = require("path");
 const fs = require("fs");
 const cookieParser = require("cookie-parser");
-
-// Ensure required directories exist
-['uploads', 'uploads/marketing', 'temp'].forEach(dir => {
+['uploads', 'uploads/marketing', 'temp', 'uploads/videos', 'uploads/exhibitor-testimonials'].forEach(dir => {
   const dirPath = path.join(__dirname, dir);
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
@@ -17,20 +15,32 @@ const cookieParser = require("cookie-parser");
 });
 const http = require("http");
 const { Server } = require("socket.io");
-require("dotenv").config();
+const jwt = require("jsonwebtoken");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 
 const sidebarRoutes = require("./routes/sidebar");
 const rolesRoutes = require("./routes/roles");
+const departmentRoutes = require("./routes/departments");
+const designationRoutes = require("./routes/designations");
 const heroRoutes = require("./routes/hero");
 const adminUsersRoutes = require("./routes/adminUsers");
+const eventOverviewRoutes = require("./routes/eventOverviewRoutes");
+const aboutOrganizerRoutes = require("./routes/aboutOrganizerRoutes");
+const ourJourneyRoutes = require("./routes/ourJourneyRoutes");
+
 const eventHighlightsRoutes = require("./routes/eventHighlights");
 const aboutRoutes = require("./routes/about");
+const chairmanMessageRoutes = require("./routes/chairmanMessage");
+const hotelStayPartnerRoutes = require("./routes/hotelStayPartner");
+const fabricationPartnerRoutes = require("./routes/fabricationPartner");
+const travelPartnerRoutes = require("./routes/travelPartner");
 const settingsRoutes = require("./routes/settings");
 const downloadPdfRoutes = require("./routes/downloadPdf");
 const marqueeRoutes = require("./routes/marquee");
 const whoWeAreRoutes = require("./routes/whoWeAre");
 const featuredServicesRoutes = require("./routes/featuredServices");
+const healthcareSectorsRoutes = require("./routes/healthcareSectors");
 const faqRoutes = require("./routes/faq");
 const glimpseRoutes = require("./routes/glimpse");
 const clientRoutes = require("./routes/client");
@@ -57,7 +67,9 @@ const exhibitorRegistrationRoutes = require('./routes/exhibitorRegistration');
 const stallRoutes = require('./routes/stalls');
 const eventRoutes = require('./routes/events');
 const stallRateRoutes = require('./routes/stallRates');
+const msmePmsSchemeRoutes = require('./routes/msmePmsSchemeRoutes');
 const termsAndConditionsRoutes = require('./routes/termsAndConditions');
+const sellerRegistrationRoutes = require('./routes/sellerRegistration');
 const dashboardRoutes = require('./routes/dashboard');
 const bankListRoutes = require("./routes/bankListRoutes");
 const bankOptionRoutes = require("./routes/bankOptionRoutes");
@@ -75,25 +87,39 @@ const crmStateRoutes = require("./routes/crmStateRoutes");
 const crmUserRoutes = require("./routes/crmUserRoutes");
 const companyRoutes = require("./routes/companyRoutes");
 const statusOptionRoutes = require("./routes/add_by_admin/statusOptionRoutes");
+const exhibitionRoleRoutes = require("./routes/add_by_admin/exhibitionRoleRoutes");
+const nextActionRoutes = require("./routes/add_by_admin/nextActionRoutes");
 const whatsappMessageRoutes = require("./routes/add_by_admin/CRMwhatsappMessageRoutes");
 const loginRoutes = require("./routes/loginRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const estimateRoutes = require("./routes/estimateRoutes");
 const perInvoiceRoutes = require("./routes/perInvoiceRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
+const deliveryChallanRoutes = require("./routes/deliveryChallanRoutes");
 const creditNoteRoutes = require("./routes/creditNoteRoutes");
+const debitNoteRoutes = require("./routes/debitNoteRoutes");
+const accountDebitNoteRoutes = require("./routes/accountDebitNoteRoutes");
 const activityLogRoutes = require("./routes/activity/activityLogRoutes");
+const exhibitorActivityLogRoutes = require("./routes/exhibitorActivityLogRoutes");
 const corporateVisitorRoutes = require("./routes/visitor/corporateVisitorRoutes");
 const generalVisitorRoutes = require("./routes/visitor/generalVisitorRoutes");
 const freeHealthCampRoutes = require("./routes/visitor/freeHealthCampRoutes");
 const visitorReviewRoutes = require("./routes/visitor/visitorReviewRoutes");
-const serviceDetailRoutes = require("./routes/serviceDetailRoutes");
+const groupVisitorRoutes = require("./routes/visitor/groupVisitorRoutes");
+const attendanceRoutes = require("./routes/attendanceRoutes");
+const serviceDetailRoutes = require("./routes/serviceDetail");
 const bookingRoutes = require("./routes/bookingRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const vacancyRoutes = require("./routes/vacancyRoutes");
 const careerRoutes = require("./routes/careerRoutes");
 const facilityRoutes = require("./routes/facilityRoutes");
 const leadRoutes = require("./routes/leadRoutes");
+const supportedByRoutes = require("./routes/supportedBy");
+const introductionRoutes = require("./routes/introduction");
+const nationalExpoRoutes = require("./routes/nationalExpo");
+const integratedFormatRoutes = require("./routes/integratedFormat");
+const whyParticipateRoutes = require("./routes/whyParticipate");
+const newTestimonialsRoutes = require("./routes/newTestimonials");
 const visitorAuthRoutes = require("./routes/visitor/visitorAuthRoutes");
 const annualTurnoverRoutes = require("./routes/add_by_admin/AnnualTurnoverRoutes");
 const businessTypeRoutes = require("./routes/add_by_admin/BusinessType");
@@ -103,13 +129,30 @@ const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
 const secondaryProductRoutes = require("./routes/add_by_admin/SecondaryProductRoutes");
 const unitRoutes = require("./routes/add_by_admin/UnitRoute");
 const marketingToolkitRoutes = require("./routes/marketingToolkitRoutes");
+const agendaRoutes = require("./routes/agendaRoutes");
+const conferenceTestimonialsRoutes = require("./routes/conferenceTestimonials");
+const exhibitorTestimonialsRoutes = require("./routes/exhibitorTestimonialsRoutes");
+const sellerSubscriptionPlanRoutes = require("./routes/add_by_admin/SellerSubscriptionPlanRoutes");
+const floatingVideoRoutes = require("./routes/floatingVideoRoutes");
+const sponsorshipEnquiryRoutes = require("./routes/sponsorshipEnquiryRoutes");
+const expoSupportEnquiryRoutes = require("./routes/expoSupportEnquiryRoutes");
+const conferenceTrackRoutes = require("./routes/conferenceTrackRoutes");
+const conferenceDayRoutes = require("./routes/conferenceDayRoutes");
+const mediaRegistrationRoutes = require("./routes/mediaRegistration");
+const documentRequirementRoutes = require("./routes/add_by_admin/documentRequirementRoutes");
+const exhibitorHeroSliderRoutes = require("./routes/exhibitorHeroSliderRoutes");
+const clientDocumentRoutes = require("./routes/clientDocumentRoutes");
+const referralRoutes = require("./routes/referralRoutes");
+const previousExhibitionRoutes = require("./routes/previousExhibitionRoutes");
+const estimateTermsConfigRoutes = require("./routes/estimateTermsConfigRoutes");
 
-mongoose
+const databaseReady = mongoose
   .connect(process.env.MONGO_URI_MAIN, {
-    // optional options (remove if not needed)
+    serverSelectionTimeoutMS: 15000,
   })
-  .then(() => console.log("✅ Connected to MAIN MongoDB (default connection)"))
-  .catch((err) => console.error("❌ MAIN DB connection error:", err));
+  .then(() => {
+    console.log("✅ Connected to MAIN MongoDB (default connection)");
+  });
 global.secondaryDB = mongoose;
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -117,10 +160,40 @@ app.use('/api/payment/webhook', require('./routes/payment'));
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json({ limit: "100mb" }));
-app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
+// const allowedOrigins = [
+//   "https://ihwe.in",
+//   "https://www.ihwe.in",
+//   "https://api.ihwe.in",
+//   "https://admin.ihwe.in",
+//   "http://localhost:8080"
+// ];
+
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       // allow requests with no origin (like Postman / mobile apps)
+//       if (!origin) return callback(null, true);
+
+//       if (allowedOrigins.includes(origin)) {
+//         return callback(null, true);
+//       } else {
+//         console.warn(`⚠️ CORS blocked for origin: ${origin}`);
+//         return callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     credentials: true
+//   })
+// );
+
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ limit: "10mb", extended: true }));
 app.use(cookieParser());
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", (req, res, next) => {
+  // Cache images in browser for 24 hours — drastically reduces server requests
+  res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=3600');
+  next();
+}, express.static(path.join(__dirname, "uploads")));
+app.use("/pass-template-images", express.static(path.join(__dirname, "utils", "images")));
 app.use('/temp', express.static('temp', {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -132,12 +205,25 @@ app.use('/temp', express.static('temp', {
 
 // SEO file serving middleware
 app.use("/sitemap.xml", sitemapRoutes);
+app.use("/sitemap/xml", sitemapRoutes);
 app.use(async (req, res, next) => {
   try {
     const SeoFile = require("./models/SeoFile");
     const filename = req.path.substring(1);
     if (filename && !filename.includes("/")) {
-      const seoFile = await SeoFile.findOne({ originalName: filename });
+      let seoFile = await SeoFile.findOne({ originalName: filename });
+
+      // Fallback matching for common SEO files with custom names (e.g. "ihwe robots.txt")
+      if (!seoFile) {
+        if (filename === "robots.txt") {
+          seoFile = await SeoFile.findOne({ originalName: /robots.*\.txt/i }) ||
+            await SeoFile.findOne({ originalName: /robots/i });
+        } else if (filename === "sitemap.xml") {
+          seoFile = await SeoFile.findOne({ originalName: /sitemap.*\.xml/i }) ||
+            await SeoFile.findOne({ originalName: /sitemap/i });
+        }
+      }
+
       if (seoFile) {
         const fs = require("fs");
         const filePath = path.join(
@@ -151,6 +237,13 @@ app.use(async (req, res, next) => {
         }
       }
     }
+
+    // Dynamic fallback for robots.txt when not uploaded yet
+    if (req.path === "/robots.txt") {
+      res.header("Content-Type", "text/plain");
+      return res.send("User-agent: *\nAllow: /");
+    }
+
     next();
   } catch (error) {
     next();
@@ -179,20 +272,39 @@ app.get("/api/test", (req, res) => {
 
 
 const authRoutes = require("./routes/auth");
+
 app.use("/api", authRoutes);
 app.use("/api/sidebar", sidebarRoutes);
 app.use("/api/roles", rolesRoutes);
+app.use("/api/departments", departmentRoutes);
+app.use("/api/designations", designationRoutes);
 app.use("/api/hero", heroRoutes);
 app.use("/api/admin", adminUsersRoutes);
 app.use("/api/event-highlights", eventHighlightsRoutes);
 app.use("/api/about", aboutRoutes);
+app.use("/api/chairman-message", chairmanMessageRoutes);
+app.use("/api/hotel-stay-partner", hotelStayPartnerRoutes);
+app.use("/api/fabrication-partner", fabricationPartnerRoutes);
+app.use("/api/travel-partner", travelPartnerRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/payment-receipt-settings", require("./routes/paymentReceiptSettingsRoutes"));
+app.use("/api/ai-verification-settings", require("./routes/aiVerificationSettingsRoutes"));
 app.use("/api/download-pdf", downloadPdfRoutes);
 app.use("/api/marquee", marqueeRoutes);
 app.use("/api/who-we-are", whoWeAreRoutes);
 app.use("/api/featured-services", featuredServicesRoutes);
+app.use("/api/healthcare-sectors", healthcareSectorsRoutes);
 app.use("/api/faq", faqRoutes);
 app.use("/api/glimpse", glimpseRoutes);
+app.use("/api/client-documents", clientDocumentRoutes);
+app.use("/api/supported-by", supportedByRoutes);
+app.use("/api/introduction", introductionRoutes);
+app.use("/api/national-expo", nationalExpoRoutes);
+app.use("/api/integrated-format", integratedFormatRoutes);
+app.use("/api/why-participate", whyParticipateRoutes);
+app.use("/api/new-testimonials", newTestimonialsRoutes);
+app.use("/api/delegate-config", require("./routes/delegateConfigRoutes"));
+app.use("/api/delegate", require("./routes/delegateRegistrationRoutes"));
 app.use("/api/client", clientRoutes);
 app.use("/api/parallax", parallaxRoutes);
 app.use("/api/testimonials", testimonialsRoutes);
@@ -207,10 +319,17 @@ app.use("/api/why-exhibit-manage", whyExhibitRoutes);
 app.use("/api/seo", require("./routes/seo"));
 app.use("/api/seo-settings", require("./routes/seoSettings.js"));
 app.use("/api/why-exhibit", require("./routes/whyExhibit"));
+app.use("/api/sponsor-comparison", require("./routes/sponsorComparisonRoutes.js"));
+app.use("/api/partner-categories", require("./routes/partnerCategoriesRoutes.js"));
+app.use("/api/logistic-partner", require("./routes/logisticPartnerRoutes.js"));
+app.use("/api/printing-branding-partner", require("./routes/printingBrandingPartnerRoutes.js"));
+app.use("/api/hospitality-partner", require("./routes/hospitalityPartnerRoutes.js"));
 app.use("/api/why-visit", require("./routes/whyVisit"));
 app.use("/api/hero-background", require("./routes/heroBackground"));
 app.use("/api/exhibitor-profile", require("./routes/exhibitorProfile"));
 app.use("/api/e-promotion", require("./routes/ePromotion"));
+app.use("/api/e-promotion-packages", require("./routes/e_promotion/EPromotionRoutes"));
+app.use("/api/bsm-testimonials", require("./routes/buyer_saller_meet/BSMTestimonialRoutes"));
 app.use("/api/stall-vendor", stallVendorRoutes);
 app.use("/api/partners", require("./routes/partners"));
 app.use("/api/exhibitor", exhibitorRoutes);
@@ -219,7 +338,14 @@ app.use("/api/gallery", galleryRoutes);
 app.use("/api/gallery-category", galleryCategoryRoutes);
 app.use("/api/contact-enquiry", contactEnquiryRoutes);
 app.use("/api/speaker-nomination", require("./routes/speakerRoutes"));
+app.use("/api/awards-nomination", require("./routes/awardsNominationRoutes"));
+app.use("/api/award-categories", require("./routes/awardCategoryRoutes"));
+app.use("/api/awards-gallery", require("./routes/awardsGalleryRoutes"));
 app.use("/api/buyer-registration", require("./routes/buyerRegistration"));
+app.use("/api/international-exhibitor", require("./routes/internationalExhibitorRoutes"));
+app.use("/api/international-buyer", require("./routes/internationalBuyerRoutes"));
+app.use("/api/seller-registration", sellerRegistrationRoutes);
+app.use("/api/advisory-nomination", require("./routes/advisoryNomination"));
 app.use("/api/social-media", socialMediaRoutes);
 app.use("/api/travel-accommodation", require("./routes/travelAccommodationRoutes"));
 app.use("/api/verify", require("./routes/verify"));
@@ -228,6 +354,7 @@ app.use("/api/otp", require("./routes/otpRoutes"));
 app.use('/api/exhibitor-registration', exhibitorRegistrationRoutes);
 app.use('/api/exhibitor-auth', require('./routes/exhibitorAuth'));
 app.use('/api/buyer-auth', require('./routes/buyerAuth'));
+app.use('/api/seller-auth', require('./routes/sellerAuth'));
 app.use('/api/stalls', stallRoutes);
 app.use('/api/payment', require('./routes/payment'));
 app.use('/api/registrations', require('./routes/registrations'));
@@ -237,9 +364,24 @@ app.use('/api/terms-and-conditions', termsAndConditionsRoutes);
 app.use('/api/public', require('./routes/publicRoutes'));
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/policies', require('./routes/policyRoutes'));
+app.use('/api/dashboard-banners', require('./routes/dashboardBannerRoutes'));
 app.use('/api/bsm', require('./routes/bsmRoutes'));
+app.use('/api/psm-claim', require('./routes/psmClaimRoutes'));
+app.use('/api/msme-pms-scheme', msmePmsSchemeRoutes);
+app.use('/api/paper-presentation', require('./routes/paperPresentationRoutes'));
+app.use('/api/poster-presentation', require('./routes/posterPresentationRoutes'));
+app.use('/api/abstract-presentation', require('./routes/abstractPresentationRoutes'));
+app.use('/api/certificate-data', require('./routes/certificateDataRoutes'));
+app.use('/api/certificate-recipients', require('./routes/certificateRecipientRoutes'));
+app.use('/api/arogya-certificate-config', require('./routes/arogyaCertificateConfigRoutes'));
+app.use("/api/media-registration", mediaRegistrationRoutes);
+app.use("/api/partner-registration", require("./routes/partnerRegistration"));
+app.use("/api/exhibitor-hero-slider", exhibitorHeroSliderRoutes);
+app.use("/api/upcoming-events", require("./routes/upcomingEventRoutes"));
+app.use("/api/upcoming-brands", require("./routes/upcomingBrands"));
 
 app.use("/api/activity-logs", activityLogRoutes);
+app.use("/api/exhibitor-activity-logs", exhibitorActivityLogRoutes);
 app.use("/api/banks", bankListRoutes);
 app.use("/api/bank-options", bankOptionRoutes);
 app.use("/api/whatsapp", commonWhatsappRoutes);
@@ -255,17 +397,31 @@ app.use("/api/data-source", dataSourceRoutes);
 app.use("/api/crm-states", crmStateRoutes);
 app.use("/api/users", crmUserRoutes);
 app.use("/api/companies", companyRoutes);
+app.use("/api/client-contacts", require('./routes/clientContactRoutes'));
 app.use("/api/status-option", statusOptionRoutes);
+app.use("/api/exhibition-roles", exhibitionRoleRoutes);
+app.use("/api/next-action", nextActionRoutes);
 app.use("/api/crm-messages", whatsappMessageRoutes);
+app.use("/api/estimate-terms-config", estimateTermsConfigRoutes);
 app.use("/api", loginRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/estimates", estimateRoutes);
 app.use("/api/perinvoice", perInvoiceRoutes);
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/delivery-challans", deliveryChallanRoutes);
 app.use("/api/creditnotes", creditNoteRoutes);
+app.use("/api/debitnotes", debitNoteRoutes);
+app.use("/api/account-debit-notes", accountDebitNoteRoutes);
+app.use("/api/account-overview", require("./routes/accountOverviewRoutes"));
+app.use("/api/client-ledger", require("./routes/clientLedgerRoutes"));
+app.use("/api/accounts-receivable", require("./routes/accountsReceivableRoutes"));
+app.use("/api/imprest", require("./routes/imprestRoutes"));
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/general-visitors", generalVisitorRoutes);
+app.use("/api/group-visitors", groupVisitorRoutes);
 app.use("/api/health-camp-visitors", freeHealthCampRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/communications", require("./routes/communicationRoutes"));
 app.use("/api/service-details", serviceDetailRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/contacts", contactRoutes);
@@ -276,11 +432,19 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/visitor-reviews", visitorReviewRoutes);
 app.use("/api/visitor-auth", visitorAuthRoutes);
 app.use("/api/settings", settingsRoutes);
+app.use("/api/floating-videos", floatingVideoRoutes);
+app.use("/api/sponsorship-enquiry", sponsorshipEnquiryRoutes);
+app.use("/api/expo-support-enquiry", expoSupportEnquiryRoutes);
+app.use("/api/referrals", referralRoutes);
+app.use("/api/ownership-transfer", require("./routes/ownershipTransferRoutes"));
+app.use("/api/previous-exhibitions", previousExhibitionRoutes);
+
 app.use("/api/sidebar-theme", require("./routes/sidebarThemeRoutes"));
 app.use("/api/custom-pages", require("./routes/customPageRoutes"));
 app.use("/api/pdf-manager", require("./routes/pdfManagerRoutes"));
 app.use("/api/portfolio-gallery", require("./routes/portfolioGalleryRoutes"));
 app.use("/api/email-logs", require("./routes/emailLogRoutes"));
+app.use("/api/crm-email", require("./routes/crmEmailRoutes"));
 app.use("/api/whatsapp-logs", require("./routes/whatsAppLogRoutes"));
 app.use("/api/message-templates", require("./routes/messageTemplateRoutes"));
 app.use("/api/business-types", businessTypeRoutes);
@@ -291,15 +455,129 @@ app.use("/api/secondary-products", secondaryProductRoutes);
 app.use("/api/stall-accessories", stallAccessoryRoutes);
 app.use("/api/stall-products", require('./routes/stallProductRoutes'));
 app.use("/api/units", unitRoutes);
+app.use("/api/document-requirements", documentRequirementRoutes);
+app.use("/api/client-documents", clientDocumentRoutes);
+app.use("/api/seller-subscription-plans", sellerSubscriptionPlanRoutes);
 app.use("/api/exchange-rate", require('./routes/exchangeRateRoutes'));
 app.use("/api/brochure-leads", require('./routes/brochureLeadRoutes'));
 app.use("/api/chat", require('./routes/chatRoutes'));
+app.use("/api/exhibitor-leads", require('./routes/exhibitorLeadCaptureRoutes'));
+app.use("/api/exhibitor-feedback", require('./routes/exhibitorFeedbackRoutes'));
+app.use("/api/exhibitor-pass-requests", require('./routes/exhibitorPassRequestRoutes'));
+app.use("/api/exhibitor-pass-config", require('./routes/exhibitorPassConfigRoutes'));
+app.use("/api/pass-templates", require('./routes/passTemplateRoutes'));
+app.use("/api/generated-passes", require('./routes/generatedPassRoutes'));
+app.use("/api/calls", require('./routes/callRoutes'));
 app.use("/api/marketing-toolkit", marketingToolkitRoutes);
+app.use("/api/agenda", agendaRoutes);
+app.use("/api/conference-testimonials", conferenceTestimonialsRoutes);
+app.use("/api/exhibitor-testimonials", exhibitorTestimonialsRoutes);
+app.use("/api/seller-portal", require("./routes/sellerPortalRoutes"));
+app.use("/api/event-overview", eventOverviewRoutes);
+app.use("/api/about-organizer", aboutOrganizerRoutes);
+app.use("/api/our-journey", ourJourneyRoutes);
+app.use("/api/penalty", require('./routes/penaltyRoutes'));
+app.use("/api/payment-delay", require('./routes/paymentDelayRoutes'));
+app.use("/api/speaker", require('./routes/speaker'));
+app.use("/api/conference-days", conferenceDayRoutes);
+app.use("/api/conference-tracks", conferenceTrackRoutes);
+app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers'));
+app.use("/api/marketing-materials", require('./routes/marketingMaterialRoutes'));
+app.use("/api/user-targets", require("./routes/userTargetRoutes"));
+app.use("/api/reminders", require("./routes/reminderRoutes"));
+
+// ── Initialize Cron Jobs ──────────────────────────────────────────────────────
+const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
+initPaymentWarningCron();
+const { initReminderCron } = require('./jobs/reminderCron');
+initReminderCron();
+const { initExhibitionReminderCron } = require('./jobs/exhibitionReminderCron');
+initExhibitionReminderCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);
 const io = new Server(httpServer, {
-    cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: '*', methods: ['GET', 'POST'] }
+});
+app.set('io', io);
+
+// Authenticated namespace used only by the attendance-app employee communication module.
+// Identity comes from the signed JWT, never from client-supplied user IDs.
+const communicationIo = io.of('/communications');
+app.set('communicationIo', communicationIo);
+communicationIo.use(async (socket, next) => {
+  try {
+    const raw = socket.handshake.auth?.token || socket.handshake.headers?.authorization || '';
+    const token = String(raw).replace(/^Bearer\s+/i, '');
+    if (!token) return next(new Error('Authentication required.'));
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'ihwe_secret_2026');
+    const id = String(decoded?.id || decoded?._id || '');
+    if (!mongoose.Types.ObjectId.isValid(id)) return next(new Error('Invalid authenticated user.'));
+    const CommunicationUser = require('./models/User');
+    const user = await CommunicationUser.findOne({ _id: id, status: 'Active' })
+      .select('_id username fullName role')
+      .lean();
+    const normalizedRole = String(user?.role || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!user || normalizedRole === 'exhibitor') {
+      return next(new Error('Employee communication access denied.'));
+    }
+    socket.user = { ...decoded, ...user, id: String(user._id), role: user.role };
+    return next();
+  } catch (_) {
+    return next(new Error('Invalid or expired token.'));
+  }
+});
+communicationIo.on('connection', socket => {
+  const id = String(socket.user?.id || socket.user?._id || '');
+  if (!mongoose.Types.ObjectId.isValid(id)) return socket.disconnect(true);
+  socket.join(`user:${id}`);
+  socket.broadcast.emit('presence:changed', { userId: id, online: true, at: new Date() });
+  socket.on('message:delivered', async payload => {
+    try {
+      const CommunicationMessage = require('./models/CommunicationMessage');
+      const CommunicationConversation = require('./models/CommunicationConversation');
+      const messageId = String(payload?.messageId || '');
+      if (!mongoose.Types.ObjectId.isValid(messageId)) return;
+      const message = await CommunicationMessage.findById(messageId);
+      if (!message || String(message.senderId) === id) return;
+      const conversation = await CommunicationConversation.findById(message.conversationId).lean();
+      if (!conversation || ![String(conversation.superAdminId), String(conversation.employeeId)].includes(id)) return;
+      if (!message.deliveredAt) {
+        message.deliveredAt = new Date();
+        await message.save();
+      }
+      const event = {
+        conversationId: conversation._id,
+        messageIds: [message._id],
+        recipientId: id,
+        deliveredAt: message.deliveredAt
+      };
+      communicationIo.to(`user:${conversation.superAdminId}`).emit('message:delivered', event);
+      communicationIo.to(`user:${conversation.employeeId}`).emit('message:delivered', event);
+    } catch (error) {
+      console.error('Communication message delivery acknowledgement failed:', error.message);
+    }
+  });
+  socket.on('call:signal', async payload => {
+    try {
+      const CommunicationCall = require('./models/CommunicationCall');
+      const call = await CommunicationCall.findById(payload?.callId).lean();
+      if (!call || call.status !== 'accepted'
+          || ![String(call.callerId), String(call.calleeId)].includes(id)) return;
+      const recipientId = String(call.callerId) === id ? call.calleeId : call.callerId;
+      communicationIo.to(`user:${recipientId}`).emit('call:signal', {
+        callId: call._id,
+        fromUserId: id,
+        signal: payload.signal
+      });
+    } catch (error) {
+      console.error('Communication call signal failed:', error.message);
+    }
+  });
+  socket.on('disconnect', () => {
+    socket.broadcast.emit('presence:changed', { userId: id, online: false, at: new Date() });
+  });
 });
 
 const ChatMessage = require('./models/ChatMessage');
@@ -311,101 +589,144 @@ const roomSockets = new Map();
 
 io.on('connection', (socket) => {
 
-    // Join a chat room
-    socket.on('join_room', ({ roomId, userId, userType, userName }) => {
-        socket.join(roomId);
-        onlineUsers.set(socket.id, { userId, userType, roomId, userName });
-        if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Set());
-        roomSockets.get(roomId).add(socket.id);
+  // Join a chat room
+  socket.on('join_room', ({ roomId, userId, userType, userName }) => {
+    socket.join(roomId);
+    onlineUsers.set(socket.id, { userId, userType, roomId, userName });
+    if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Set());
+    roomSockets.get(roomId).add(socket.id);
 
-        // Tell everyone in room this user is online
-        io.to(roomId).emit('user_status', { userId, userType, userName, online: true });
-    });
+    // Tell everyone in room this user is online
+    io.to(roomId).emit('user_status', { userId, userType, userName, online: true });
+  });
 
-    // Admin joins global notification room
-    socket.on('join_admin', ({ adminId, adminName } = {}) => {
-        socket.join('admin_room');
-        if (adminName) socket.join(`admin_room_${adminName.toLowerCase()}`);
-        if (adminId) onlineUsers.set(socket.id, { userId: adminId, userType: 'admin', roomId: 'admin_room', userName: adminName || 'Admin' });
-    });
+  // Admin joins global notification room
+  socket.on('join_admin', ({ adminId, adminName } = {}) => {
+    socket.join('admin_room');
+    if (adminName) socket.join(`admin_room_${adminName.toLowerCase()}`);
+    if (adminId) onlineUsers.set(socket.id, { userId: adminId, userType: 'admin', roomId: 'admin_room', userName: adminName || 'Admin' });
+  });
 
-    // Send message
-    socket.on('send_message', async ({ roomId, exhibitorRegistrationId, exhibitorName, senderType, senderId, senderName, message }) => {
-        if (mongoose.connection.readyState !== 1) return;
-        try {
-            // Check if the other party is currently in the room (for instant read)
-            const roomSocketIds = roomSockets.get(roomId) || new Set();
-            const otherOnline = [...roomSocketIds].some(sid => {
-                const u = onlineUsers.get(sid);
-                return u && u.userId !== senderId;
-            });
+  // Lightweight room used for app-wide exhibitor operational notifications.
+  socket.on('join_exhibitor', ({ exhibitorId, token } = {}) => {
+    try {
+      const decoded = jwt.verify(String(token || ''), process.env.JWT_SECRET);
+      const authenticatedId = String(decoded.id || decoded._id || '');
+      if (decoded.role === 'exhibitor'
+        && authenticatedId === String(exhibitorId)
+        && mongoose.Types.ObjectId.isValid(authenticatedId)) {
+        socket.join(`exhibitor:${authenticatedId}`);
+      }
+    } catch (_) {
+      // Invalid clients are not allowed into exhibitor operational rooms.
+    }
+  });
 
-            const msg = await ChatMessage.create({
-                roomId, exhibitorRegistrationId, exhibitorName,
-                senderType, senderId, senderName, message,
-                readByExhibitor: senderType === 'exhibitor' || otherOnline,
-                readByAdmin: senderType === 'admin' || otherOnline,
-            });
+  // Send message
+  socket.on('send_message', async ({ roomId, exhibitorRegistrationId, exhibitorName, buyerRegistrationId, buyerName, senderType, senderId, senderName, message }) => {
+    if (mongoose.connection.readyState !== 1) return;
+    try {
+      const roomSocketIds = roomSockets.get(roomId) || new Set();
+      const otherOnline = [...roomSocketIds].some(sid => {
+        const u = onlineUsers.get(sid);
+        return u && u.userId !== senderId;
+      });
 
-            // Broadcast to room
-            io.to(roomId).emit('receive_message', msg);
+      const msg = await ChatMessage.create({
+        roomId,
+        exhibitorRegistrationId, exhibitorName,
+        buyerRegistrationId, buyerName,
+        senderType, senderId, senderName, message,
+        readByExhibitor: senderType === 'exhibitor' || otherOnline,
+        readByBuyer: senderType === 'buyer' || otherOnline,
+        readByAdmin: senderType === 'admin' || otherOnline,
+      });
 
-            // If other party is online, send seen_update back to sender
-            if (otherOnline) {
-                io.to(roomId).emit('messages_seen', { roomId, seenBy: senderType === 'admin' ? 'exhibitor' : 'admin' });
-            }
+      io.to(roomId).emit('receive_message', msg);
 
-            // Notify specific admin sidebar
-            const ExhibitorRegistration = require('./models/ExhibitorRegistration');
-            const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
-            const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
+      if (otherOnline) {
+        io.to(roomId).emit('messages_seen', { roomId, seenBy: senderType });
+      }
 
-            io.to(targetRoom).emit('room_updated', {
-                roomId, exhibitorName, lastMessage: message,
-                lastMessageAt: msg.createdAt, lastSenderType: senderType,
-                unreadIncrement: senderType === 'exhibitor' && !otherOnline ? 1 : 0,
-                spokenWith: exhibitor?.spokenWith || ''
-            });
-        } catch (err) {
-            console.error('Chat save error:', err.message);
+      // Notification logic
+      if (senderType === 'exhibitor') {
+        const ExhibitorRegistration = require('./models/ExhibitorRegistration');
+        const exhibitor = await ExhibitorRegistration.findById(exhibitorRegistrationId).select('spokenWith');
+        const targetRoom = (exhibitor && exhibitor.spokenWith) ? `admin_room_${exhibitor.spokenWith.toLowerCase()}` : 'admin_room';
+
+        const payload = {
+          roomId, exhibitorName, lastMessage: message,
+          lastMessageAt: msg.createdAt, lastSenderType: senderType,
+          unreadIncrement: !otherOnline ? 1 : 0,
+          spokenWith: exhibitor?.spokenWith || ''
+        };
+
+        io.to(targetRoom).emit('room_updated', payload);
+        if (targetRoom !== 'admin_room') {
+          io.to('admin_room').emit('room_updated', payload);
         }
-    });
+      } else if (senderType === 'buyer') {
+        // Buyer notification to admin
+        io.to('admin_room').emit('room_updated', {
+          roomId, buyerName, lastMessage: message,
+          lastMessageAt: msg.createdAt, lastSenderType: senderType,
+          unreadIncrement: !otherOnline ? 1 : 0,
+          isBuyer: true
+        });
+      }
+    } catch (err) {
+      console.error('Chat save error:', err.message);
+    }
+  });
 
-    // Mark messages as read — emit seen update to room
-    socket.on('mark_read', async ({ roomId, readerType }) => {
-        // Wait for DB to be ready (readyState 1 = connected)
-        if (mongoose.connection.readyState !== 1) return;
-        try {
-            if (readerType === 'admin') {
-                await ChatMessage.updateMany({ roomId, senderType: 'exhibitor', readByAdmin: false }, { readByAdmin: true });
-            } else {
-                await ChatMessage.updateMany({ roomId, senderType: 'admin', readByExhibitor: false }, { readByExhibitor: true });
-            }
-            io.to(roomId).emit('messages_seen', { roomId, seenBy: readerType });
-        } catch (err) {
-            console.error('mark_read error:', err.message);
-        }
-    });
+  // Mark messages as read
+  socket.on('mark_read', async ({ roomId, readerType }) => {
+    if (mongoose.connection.readyState !== 1) return;
+    try {
+      if (readerType === 'admin') {
+        await ChatMessage.updateMany({ roomId, senderType: { $in: ['exhibitor', 'buyer'] }, readByAdmin: false }, { readByAdmin: true });
+      } else if (readerType === 'exhibitor') {
+        await ChatMessage.updateMany({ roomId, senderType: 'admin', readByExhibitor: false }, { readByExhibitor: true });
+      } else if (readerType === 'buyer') {
+        await ChatMessage.updateMany({ roomId, senderType: 'admin', readByBuyer: false }, { readByBuyer: true });
+      }
+      io.to(roomId).emit('messages_seen', { roomId, seenBy: readerType });
+    } catch (err) {
+      console.error('mark_read error:', err.message);
+    }
+  });
 
-    // Typing — room-scoped, only to others in room
-    socket.on('typing', ({ roomId, senderType, senderName }) => {
-        socket.to(roomId).emit('typing', { senderType, senderName, roomId });
-    });
-    socket.on('stop_typing', ({ roomId }) => {
-        socket.to(roomId).emit('stop_typing', { roomId });
-    });
+  socket.on('typing', ({ roomId, senderType, senderName }) => {
+    socket.to(roomId).emit('typing', { senderType, senderName, roomId });
+  });
+  socket.on('stop_typing', ({ roomId }) => {
+    socket.to(roomId).emit('stop_typing', { roomId });
+  });
 
-    socket.on('disconnect', () => {
-        const user = onlineUsers.get(socket.id);
-        if (user && user.roomId !== 'admin_room') {
-            io.to(user.roomId).emit('user_status', { userId: user.userId, userType: user.userType, online: false });
-            const rs = roomSockets.get(user.roomId);
-            if (rs) { rs.delete(socket.id); if (rs.size === 0) roomSockets.delete(user.roomId); }
-        }
-        onlineUsers.delete(socket.id);
-    });
+  socket.on('disconnect', () => {
+    const user = onlineUsers.get(socket.id);
+    if (user && user.roomId !== 'admin_room') {
+      io.to(user.roomId).emit('user_status', { userId: user.userId, userType: user.userType, online: false });
+      const rs = roomSockets.get(user.roomId);
+      if (rs) { rs.delete(socket.id); if (rs.size === 0) roomSockets.delete(user.roomId); }
+    }
+    onlineUsers.delete(socket.id);
+  });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT} with Socket.io`);
-});
+databaseReady
+  .then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT} with Socket.io`);
+
+      // Start background services only after MongoDB is ready.
+      const { initCommunicationCallCron } = require('./jobs/communicationCallCron');
+      initCommunicationCallCron(communicationIo);
+      const { startImapPoller } = require("./services/imapPollerService");
+      startImapPoller();
+    });
+  })
+  .catch((error) => {
+    console.error("❌ MongoDB connection failed. Server was not started:", error.message);
+    process.exitCode = 1;
+  });

@@ -10,8 +10,8 @@ class GalleryController {
      */
     async getAllItems(req, res) {
         try {
-            const { category, title } = req.query;
-            const data = await galleryService.getAllItems(category, title);
+            const { category, title, galleryCategoryId } = req.query;
+            const data = await galleryService.getAllItems(category, title, galleryCategoryId);
             res.json({ success: true, data });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -54,6 +54,20 @@ class GalleryController {
             res.json({ success: true, message: "Item deleted successfully" });
         } catch (error) {
             res.status(error.status || 500).json({ success: false, message: error.message });
+        }
+    }
+
+    /**
+     * Delete gallery items by title.
+     */
+    async deleteByTitle(req, res) {
+        try {
+            const { title } = req.params;
+            await galleryService.deleteByTitle(title);
+            await logActivity(req, 'Deleted', 'Gallery', `Deleted grouped gallery with title: ${title}`);
+            res.json({ success: true, message: "Gallery grouped items deleted successfully" });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 

@@ -1,4 +1,25 @@
 const CreditNote = require("../models/CreditNote");
+const { logActivity } = require("../utils/logger");
+const { getAccountNameById } = require("../utils/accountActivityDetails");
+const { attachSignatorySignatures, attachSignatorySignaturesToMany } = require("../utils/signatorySignatures");
+
+const calculateCreditNoteAmount = (items = []) =>
+  items.reduce((sum, item) => sum + ((parseFloat(item.cn_amount) || 0) * (parseFloat(item.quantity) || 1)), 0);
+
+// Admin submits preparedBy/reviewedBy as a JSON string when the request is
+// multipart/form-data (FormData can't carry nested objects) — parse it back
+// into a real {name, designation} object so it doesn't get saved as a literal
+// string (which is unreadable by anything expecting note.preparedBy.name).
+const parseNamedPerson = (value) => {
+  if (value && typeof value === "object") return { name: value.name || "", designation: value.designation || "" };
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return { name: parsed?.name || "", designation: parsed?.designation || "" };
+  } catch {
+    return undefined;
+  }
+};
 
 // Fiscal Year Function
 const getFiscalYear = () => {
@@ -40,15 +61,29 @@ const generateCreditNoteNo = async () => {
 // CREATE CREDIT NOTE
 const createCreditNote = async (req, res) => {
   try {
+    // Parse nested objects if they come as strings from FormData
+    if (typeof req.body.items === 'string') req.body.items = JSON.parse(req.body.items);
+    if (typeof req.body.adjusted_invoices === 'string') req.body.adjusted_invoices = JSON.parse(req.body.adjusted_invoices);
+    if (req.body.preparedBy !== undefined) req.body.preparedBy = parseNamedPerson(req.body.preparedBy);
+    if (req.body.reviewedBy !== undefined) req.body.reviewedBy = parseNamedPerson(req.body.reviewedBy);
+
     const creditNo = await generateCreditNoteNo();
 
     const creditNote = new CreditNote({
       ...req.body,
       create_note_no: creditNo,
       updated_date: new Date(),
+      attachment: req.file ? `/uploads/${req.file.filename}` : "",
     });
 
     await creditNote.save();
+    const accountName = await getAccountNameById(creditNote.companyId, "account");
+    await logActivity(
+      req,
+      "Created",
+      "Accounts",
+      `Created Credit Note for ${accountName}. Amount: ₹${calculateCreditNoteAmount(creditNote.items)}`,
+    );
 
     res.status(201).json({
       success: true,
@@ -56,6 +91,13 @@ const createCreditNote = async (req, res) => {
       data: creditNote,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Conflict: Credit Note number already exists",
+        error: error.message,
+      });
+    }
     res.status(500).json({
       success: false,
       message: "Error creating credit note",
@@ -67,8 +109,32 @@ const createCreditNote = async (req, res) => {
 // GET ALL CREDIT NOTES
 const getCreditNotes = async (req, res) => {
   try {
-    const notes = await CreditNote.find().sort({ created_at: -1 });
-    res.json(notes);
+    const notes = await CreditNote.find().sort({ created_at: -1 }).lean();
+    
+    const companyIds = [...new Set(notes.map(n => String(n.companyId)).filter(Boolean))];
+    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+    const exhibitors = await ExhibitorRegistration.find({
+      $or: [
+        { _id: { $in: companyIds } },
+        { clientId: { $in: companyIds } }
+      ]
+    }, "clientId eventId").lean();
+    
+    const eventMap = {};
+    exhibitors.forEach(e => {
+      if (e.eventId) {
+        eventMap[e._id.toString()] = e.eventId;
+        if (e.clientId) eventMap[String(e.clientId)] = e.eventId;
+      }
+    });
+
+    const populatedNotes = notes.map(n => ({
+      ...n,
+      eventId: eventMap[String(n.companyId)] || null
+    }));
+
+    const withSignatures = await attachSignatorySignaturesToMany(populatedNotes);
+    res.json(withSignatures);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching credit notes",
@@ -86,7 +152,8 @@ const getCreditNoteById = async (req, res) => {
       return res.status(404).json({ message: "Credit note not found" });
     }
 
-    res.json(note);
+    const withSignatures = await attachSignatorySignatures(note.toObject());
+    res.json(withSignatures);
   } catch (error) {
     res.status(500).json({
       message: "Error fetching credit note",
@@ -98,13 +165,34 @@ const getCreditNoteById = async (req, res) => {
 // UPDATE CREDIT NOTE
 const updateCreditNote = async (req, res) => {
   try {
+    // Parse nested objects if they come as strings from FormData
+    if (typeof req.body.items === 'string') req.body.items = JSON.parse(req.body.items);
+    if (typeof req.body.adjusted_invoices === 'string') req.body.adjusted_invoices = JSON.parse(req.body.adjusted_invoices);
+    if (req.body.preparedBy !== undefined) req.body.preparedBy = parseNamedPerson(req.body.preparedBy);
+    if (req.body.reviewedBy !== undefined) req.body.reviewedBy = parseNamedPerson(req.body.reviewedBy);
+
+    const updateData = {
+      ...req.body,
+      updated_date: new Date(),
+    };
+    if (req.file) {
+      updateData.attachment = `/uploads/${req.file.filename}`;
+    }
+
     const updated = await CreditNote.findByIdAndUpdate(
       req.params.id,
-      {
-        ...req.body,
-        updated_date: new Date(),
-      },
-      { new: true },
+      updateData,
+      { returnDocument: 'after' },
+    );
+    if (!updated) {
+      return res.status(404).json({ message: "Credit note not found" });
+    }
+    const accountName = await getAccountNameById(updated.companyId, "account");
+    await logActivity(
+      req,
+      "Updated",
+      "Accounts",
+      `Updated Credit Note for ${accountName}. Amount: ₹${calculateCreditNoteAmount(updated.items)}`,
     );
 
     res.json(updated);
@@ -119,7 +207,17 @@ const updateCreditNote = async (req, res) => {
 // DELETE CREDIT NOTE
 const deleteCreditNote = async (req, res) => {
   try {
-    await CreditNote.findByIdAndDelete(req.params.id);
+    const deleted = await CreditNote.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Credit note not found" });
+    }
+    const accountName = await getAccountNameById(deleted.companyId, "account");
+    await logActivity(
+      req,
+      "Deleted",
+      "Accounts",
+      `Deleted Credit Note for ${accountName}. Amount: ₹${calculateCreditNoteAmount(deleted.items)}`,
+    );
     res.json({ message: "Credit Note Deleted" });
   } catch (error) {
     res.status(500).json({

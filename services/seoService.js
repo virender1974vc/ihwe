@@ -11,7 +11,7 @@ class SeoService {
         return await Seo.findOneAndUpdate(
             { page },
             updateData,
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         );
     }
 
@@ -26,7 +26,7 @@ class SeoService {
      * Update SEO by ID.
      */
     async updateSeo(id, updateData) {
-        return await Seo.findByIdAndUpdate(id, updateData, { new: true });
+        return await Seo.findByIdAndUpdate(id, updateData, { returnDocument: 'after' });
     }
 
     /**

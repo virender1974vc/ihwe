@@ -9,12 +9,20 @@ const blogSchema = new mongoose.Schema({
     category: { type: String, required: true },
     categoryIcon: { type: String, default: 'Layers' }, // Store icon name
     readTime: { type: String, default: '5 min read' },
-    image: { type: String, required: true }, // Main blog image
+    image: { type: String, required: true },
     imageAlt: { type: String },
     status: { type: String, enum: ['published', 'draft', 'archived'], default: 'draft' },
-    featured: { type: Boolean, default: false }, // "Add to home page"
+    featured: { type: Boolean, default: false },
+    isTrending: { type: Boolean, default: false },
+    viewsCount: { type: Number, default: 0 },
+    author: {
+        name: { type: String, default: 'IHWE Editorial Team' },
+        role: { type: String, default: 'Health Journalist' },
+        image: { type: String }
+    },
+    tags: [{ type: String }],
     date: { type: Date, default: Date.now },
-    
+
     // SEO Metadata
     metaTitle: { type: String },
     metaDescription: { type: String },
@@ -22,7 +30,7 @@ const blogSchema = new mongoose.Schema({
     canonicalTag: { type: String },
     schemaMarkup: { type: String },
     openGraphTags: { type: String },
-    
+
     // Social Sharing
     ogTitle: { type: String },
     ogDescription: { type: String },

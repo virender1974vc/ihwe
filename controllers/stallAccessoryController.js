@@ -3,6 +3,53 @@ const AccessoryOrder = require('../models/AccessoryOrder');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
+const { computeEntitlement, getExhibitorStallArea } = require('../utils/entitlementCalculator');
+
+// ─── COMPLIMENTARY ENTITLEMENT HELPERS ───────────────────────────────────────
+
+const getUsedComplimentaryQty = async (exhibitorRegistrationId, accessoryId) => {
+    const orders = await AccessoryOrder.find({
+        exhibitorRegistrationId,
+        'items.accessoryId': accessoryId,
+        paymentStatus: { $ne: 'failed' },
+    }).select('items');
+    let used = 0;
+    for (const order of orders) {
+        for (const item of order.items) {
+            if (item.type === 'complimentary' && String(item.accessoryId) === String(accessoryId)) {
+                used += Number(item.qty) || 0;
+            }
+        }
+    }
+    return used;
+};
+
+// Validates every complimentary line item against the exhibitor's stall-area-based
+// entitlement, minus whatever complimentary qty they've already claimed. Throws with
+// a user-facing message if any line item exceeds the remaining balance.
+const assertComplimentaryWithinEntitlement = async (exhibitorRegistrationId, items) => {
+    const stallArea = await getExhibitorStallArea(exhibitorRegistrationId);
+    for (const item of items) {
+        if (item.type !== 'complimentary' || !item.accessoryId) continue;
+        const accessory = await StallAccessory.findById(item.accessoryId);
+        if (!accessory) continue;
+        const entitled = computeEntitlement({
+            allocationMode: accessory.allocationMode,
+            ratioQty: accessory.ratioQty,
+            ratioArea: accessory.ratioArea,
+            roundingMode: accessory.roundingMode,
+            fixedQty: accessory.includedQty,
+        }, stallArea);
+        const used = await getUsedComplimentaryQty(exhibitorRegistrationId, item.accessoryId);
+        const remaining = Math.max(0, entitled - used);
+        const requestedQty = Number(item.qty) || 0;
+        if (requestedQty > remaining) {
+            const err = new Error(`Complimentary limit exceeded for "${accessory.name}" — only ${remaining} remaining`);
+            err.status = 400;
+            throw err;
+        }
+    }
+};
 
 // ─── STALL ACCESSORIES (Admin CRUD) ──────────────────────────────────────────
 
@@ -21,13 +68,15 @@ const createAccessory = async (req, res) => {
         if (req.file) {
             data.imageUrl = `/uploads/accessories/${req.file.filename}`;
         }
-        
+
         // Handle numeric/boolean fields that might come as strings from FormData
         if (data.price) data.price = Number(data.price);
         if (data.gstPercent) data.gstPercent = Number(data.gstPercent);
         if (data.includedQty) data.includedQty = Number(data.includedQty);
         if (data.availableQty) data.availableQty = Number(data.availableQty);
         if (data.sortOrder) data.sortOrder = Number(data.sortOrder);
+        if (data.ratioQty !== undefined) data.ratioQty = Number(data.ratioQty);
+        if (data.ratioArea !== undefined) data.ratioArea = Number(data.ratioArea);
         if (data.isActive !== undefined) data.isActive = data.isActive === 'true' || data.isActive === true;
 
         const item = new StallAccessory(data);
@@ -51,9 +100,11 @@ const updateAccessory = async (req, res) => {
         if (data.includedQty) data.includedQty = Number(data.includedQty);
         if (data.availableQty) data.availableQty = Number(data.availableQty);
         if (data.sortOrder) data.sortOrder = Number(data.sortOrder);
+        if (data.ratioQty !== undefined) data.ratioQty = Number(data.ratioQty);
+        if (data.ratioArea !== undefined) data.ratioArea = Number(data.ratioArea);
         if (data.isActive !== undefined) data.isActive = data.isActive === 'true' || data.isActive === true;
 
-        const item = await StallAccessory.findByIdAndUpdate(req.params.id, data, { new: true });
+        const item = await StallAccessory.findByIdAndUpdate(req.params.id, data, { returnDocument: 'after' });
         if (!item) return res.status(404).json({ success: false, message: 'Not found' });
         res.json({ success: true, data: item });
     } catch (err) {
@@ -102,6 +153,8 @@ const createOrder = async (req, res) => {
 
         const reg = await ExhibitorRegistration.findById(exhibitorRegistrationId);
         if (!reg) return res.status(404).json({ success: false, message: 'Exhibitor registration not found' });
+
+        await assertComplimentaryWithinEntitlement(exhibitorRegistrationId, items);
 
         // Enrich items with pricing
         let subtotal = 0, totalGst = 0;
@@ -165,15 +218,26 @@ const createOrder = async (req, res) => {
                 await order.save();
             }
 
-            // Send email
-            const email = reg.contact1?.email;
-            if (email) {
-                await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-                order.emailSent = true;
-                await order.save();
+            // Send email/WhatsApp notification using saved exhibitor contact details.
+            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
+            order.emailSent = !!sent;
+            await order.save();
+            if (!sent) {
+                console.error('Accessory order notification failed for order:', order.orderNo);
             }
         } catch (emailErr) {
             console.error('Accessory receipt/email error:', emailErr.message);
+        }
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to('admin_room').emit('accessory_order_placed', {
+                orderNo: order.orderNo,
+                exhibitorName: order.exhibitorName,
+                grandTotal: order.grandTotal,
+                paymentMode: order.paymentMode,
+                timestamp: Date.now()
+            });
         }
 
         res.status(201).json({ success: true, data: order });
@@ -184,7 +248,7 @@ const createOrder = async (req, res) => {
 
 const updateOrder = async (req, res) => {
     try {
-        const order = await AccessoryOrder.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const order = await AccessoryOrder.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
         if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
         res.json({ success: true, data: order });
     } catch (err) {
@@ -200,8 +264,44 @@ const deleteOrder = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
+const getMyEntitlements = async (req, res) => {
+    try {
+        const exhibitorRegistrationId = req.user.id;
+        const stallArea = await getExhibitorStallArea(exhibitorRegistrationId);
+        const accessories = await StallAccessory.find({ isActive: true }).sort({ category: 1, sortOrder: 1 });
+
+        const data = await Promise.all(accessories.map(async (accessory) => {
+            const entitledQty = accessory.type === 'complimentary'
+                ? computeEntitlement({
+                    allocationMode: accessory.allocationMode,
+                    ratioQty: accessory.ratioQty,
+                    ratioArea: accessory.ratioArea,
+                    roundingMode: accessory.roundingMode,
+                    fixedQty: accessory.includedQty,
+                }, stallArea)
+                : 0;
+            return {
+                accessoryId: accessory._id,
+                name: accessory.name,
+                type: accessory.type,
+                unit: accessory.unit,
+                imageUrl: accessory.imageUrl,
+                entitledQty,
+                allocatedQty: entitledQty,
+                allocationStatus: entitledQty > 0 ? 'included' : 'not-included',
+                usedQty: 0,
+                remainingQty: entitledQty,
+            };
+        }));
+
+        res.json({ success: true, data, stallArea });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
 
 module.exports = {
     getAllAccessories, createAccessory, updateAccessory, deleteAccessory,
     getAllOrders, getOrderById, createOrder, updateOrder, deleteOrder,
+    getMyEntitlements, assertComplimentaryWithinEntitlement,
 };

@@ -42,7 +42,7 @@ const createEvent = async (req, res) => {
 const updateEvent = async (req, res) => {
   try {
     const event = await CrmEvent.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
     });
     if (!event) return res.status(404).json({ message: "Event not found" });
     res.json(event);

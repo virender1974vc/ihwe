@@ -27,7 +27,18 @@ const storage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        const prefix = file.fieldname === 'logo' ? 'logo' : 'brochure';
+        let prefix = 'asset';
+        if (file.fieldname === 'logo') prefix = 'logo';
+        else if (file.fieldname === 'emailLogo') prefix = 'email-logo';
+        else if (file.fieldname === 'exhibitorBrochurePdf') prefix = 'brochure';
+        else if (file.fieldname === 'domesticRegistrationFormPdf') prefix = 'domestic-form';
+        else if (file.fieldname === 'internationalRegistrationFormPdf') prefix = 'international-form';
+        else if (file.fieldname === 'sponsorshipDeckPdf') prefix = 'sponsorship-deck';
+        else if (file.fieldname === 'authorizedSignature') prefix = 'signature';
+        else if (file.fieldname === 'companyStamp') prefix = 'stamp';
+        else if (file.fieldname === 'msmeLogo') prefix = 'msme';
+        else if (file.fieldname === 'msmeLogoFile') prefix = 'msme-logo';
+        else if (file.fieldname === 'downloadBrochurePdf') prefix = 'download-brochure';
         cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
@@ -40,6 +51,18 @@ router.get('/', (req, res) => settingsController.getSettings(req, res));
 
 // @route   PUT /api/settings
 // @desc    Update system settings
-router.put('/', verifyToken, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'exhibitorBrochurePdf', maxCount: 1 }]), (req, res) => settingsController.updateSettings(req, res));
+router.put('/', verifyToken, upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'emailLogo', maxCount: 1 },
+    { name: 'msmeLogo', maxCount: 1 },
+    { name: 'msmeLogoFile', maxCount: 1 },
+    { name: 'exhibitorBrochurePdf', maxCount: 1 },
+    { name: 'domesticRegistrationFormPdf', maxCount: 1 },
+    { name: 'internationalRegistrationFormPdf', maxCount: 1 },
+    { name: 'sponsorshipDeckPdf', maxCount: 1 },
+    { name: 'authorizedSignature', maxCount: 1 },
+    { name: 'companyStamp', maxCount: 1 },
+    { name: 'downloadBrochurePdf', maxCount: 1 }
+]), (req, res) => settingsController.updateSettings(req, res));
 
 module.exports = router;

@@ -1,17 +1,15 @@
 const Otp = require('../models/Otp');
 const emailService = require('../utils/emailService');
 const whatsapp = require('../utils/whatsapp');
-
-/**
- * Controller for handling OTP generation and verification
- */
+const jwt = require('jsonwebtoken');
 class OtpController {
     /**
      * Request OTP for email or phone
      */
     async requestOtp(req, res) {
         try {
-            const { identifier, type, name } = req.body; // identifier: email address or phone number
+            const { identifier, type, name, source } = req.body; // identifier: email address or phone number
+            const context = source || 'BUYER';
 
             if (!identifier || !type) {
                 return res.status(400).json({ success: false, message: 'Identifier and type are required' });
@@ -24,14 +22,14 @@ class OtpController {
             await Otp.findOneAndUpdate(
                 { identifier, type },
                 { otp: otpCode, createdAt: new Date() },
-                { upsert: true, new: true }
+                { upsert: true, returnDocument: 'after' }
             );
 
             // Send via appropriate channel
             if (type === 'email') {
-                await emailService.sendOtpEmail(identifier, otpCode, name || 'Buyer', 'BUYER');
+                await emailService.sendOtpEmail(identifier, otpCode, name || 'User', context);
             } else if (type === 'phone') {
-                await whatsapp.sendWhatsAppOTP(identifier, otpCode, 'BUYER');
+                await whatsapp.sendWhatsAppOTP(identifier, otpCode, context, name || 'User');
             }
 
             res.json({ success: true, message: `OTP sent to ${identifier}` });
@@ -61,7 +59,13 @@ class OtpController {
             // OTP is valid, delete it
             await Otp.deleteOne({ _id: otpRecord._id });
 
-            res.json({ success: true, message: 'OTP verified successfully' });
+            const verificationToken = jwt.sign(
+                { purpose: 'official-contact-verification', identifier, type },
+                process.env.JWT_SECRET || 'ihwe_secret_2026',
+                { expiresIn: '10m' }
+            );
+
+            res.json({ success: true, message: 'OTP verified successfully', verificationToken });
         } catch (error) {
             console.error('Error verifying OTP:', error);
             res.status(500).json({ success: false, message: 'Verification failed' });

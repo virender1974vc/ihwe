@@ -35,7 +35,7 @@ class HeroBackgroundController {
      */
     async createHeroBackground(req, res) {
         try {
-            const { pageName, imageAltText, title, heading, shortDescription, status } = req.body;
+            const { pageName, imageAltText, subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, heading, shortDescription, descriptionFontSize, button1Text, button1Link, button2Text, button2Link, infoBar1, infoBar2, infoBar3, status } = req.body;
             
             if (!req.file) {
                 return res.status(400).json({ success: false, message: 'Please upload a background image' });
@@ -45,9 +45,22 @@ class HeroBackgroundController {
                 pageName,
                 backgroundImage: `/uploads/hero-bg/${req.file.filename}`,
                 imageAltText,
+                subtitle,
+                subtitleFontSize,
                 title,
+                titleFontSize,
+                title2,
+                title2FontSize,
                 heading,
                 shortDescription,
+                descriptionFontSize,
+                button1Text,
+                button1Link,
+                button2Text,
+                button2Link,
+                infoBar1,
+                infoBar2,
+                infoBar3,
                 status: status || 'Active'
             };
 
@@ -65,8 +78,8 @@ class HeroBackgroundController {
      */
     async updateHeroBackground(req, res) {
         try {
-            const { pageName, imageAltText, title, heading, shortDescription, status } = req.body;
-            const updateData = { pageName, imageAltText, title, heading, shortDescription, status };
+            const { pageName, imageAltText, subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, heading, shortDescription, descriptionFontSize, button1Text, button1Link, button2Text, button2Link, infoBar1, infoBar2, infoBar3, status } = req.body;
+            const updateData = { pageName, imageAltText, subtitle, subtitleFontSize, title, titleFontSize, title2, title2FontSize, heading, shortDescription, descriptionFontSize, button1Text, button1Link, button2Text, button2Link, infoBar1, infoBar2, infoBar3, status };
 
             if (req.file) {
                 updateData.backgroundImage = `/uploads/hero-bg/${req.file.filename}`;

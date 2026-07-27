@@ -26,7 +26,7 @@ const getTravelAccommodation = async (req, res) => {
 
 const updateHeadings = async (req, res) => {
     try {
-        const update = await TravelAccommodation.findOneAndUpdate({}, req.body, { upsert: true, new: true });
+        const update = await TravelAccommodation.findOneAndUpdate({}, req.body, { upsert: true, returnDocument: 'after' });
         await logActivity(req, 'Updated', 'Travel & Accommodation', 'Updated Travel & Accommodation headings');
         res.json({ success: true, data: update });
     } catch (error) {

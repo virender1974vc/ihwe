@@ -27,7 +27,7 @@ exports.getTheme = async (req, res) => {
 exports.updateTheme = async (req, res) => {
   try {
     const theme = await SidebarTheme.findOneAndUpdate({}, req.body, {
-      new: true,
+      returnDocument: 'after',
       upsert: true,
     });
     res.json({ success: true, data: theme });
