@@ -185,10 +185,14 @@ const ensureReferenceTemplate = async () => {
     return template;
 };
 
-router.get('/', authMiddleware, async (_req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
     try {
         await ensureReferenceTemplate();
-        const templates = await PassTemplate.find().sort({ isDefault: -1, updatedAt: -1 });
+        // A template is usable for an event if it's global (no eventId) OR scoped to
+        // that specific event — so the shared reference template always shows up
+        // alongside any event-specific ones.
+        const query = req.query.eventId ? { $or: [{ eventId: null }, { eventId: req.query.eventId }] } : {};
+        const templates = await PassTemplate.find(query).sort({ isDefault: -1, updatedAt: -1 });
         res.json({ success: true, data: templates });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

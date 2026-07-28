@@ -4,8 +4,9 @@
  */
 
 const getBuyerRegistrationAlertTemplate = (data) => {
-    const registrationDate = new Date().toLocaleDateString('en-GB');
-    const registrationTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const createdAt = data.createdAt ? new Date(data.createdAt) : new Date();
+    const registrationDate = createdAt.toLocaleDateString('en-GB');
+    const registrationTime = createdAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
     // Formatting multi-select array fields
     const formatArray = (arr) => {
@@ -13,6 +14,38 @@ const getBuyerRegistrationAlertTemplate = (data) => {
         if (Array.isArray(arr)) return arr.length > 0 ? arr.join(', ') : 'N/A';
         return arr;
     };
+
+    const displayValue = (...values) => {
+        const value = values.find((item) => {
+            if (item === null || item === undefined) return false;
+            if (Array.isArray(item)) return item.length > 0;
+            const normalized = String(item).trim().toLowerCase();
+            return normalized && normalized !== 'undefined' && normalized !== 'null';
+        });
+
+        return value === undefined ? 'N/A' : formatArray(value);
+    };
+
+    const fullName = displayValue(data.fullName, data.name, data.companyName);
+    const businessType = displayValue(data.businessType, data.basicBusinessType, data.natureOfBusiness);
+    const yearsInOperation = displayValue(data.yearsInBusiness, data.yearOfEstablishment);
+    const keyProductsServices = displayValue(
+        data.keyProductsServices,
+        data.specificProductRequirements,
+        data.primaryProductInterest,
+        data.buyerIndustry
+    );
+    const budgetRange = displayValue(
+        data.budgetRange,
+        data.estimatedAnnualPurchaseValue,
+        data.estimatedPurchaseVolume
+    );
+    const buyingFrequency = displayValue(data.buyingFrequency, data.purchaseFrequency);
+    const meetingSchedule = displayValue(
+        data.preferredMeetingDate,
+        data.preferredMeetingDay,
+        data.preferredTimeSlot
+    );
 
     return `
 <!DOCTYPE html>
@@ -39,7 +72,7 @@ const getBuyerRegistrationAlertTemplate = (data) => {
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); 
         }
         .header { 
-            background: linear-gradient(135deg, #23471d 0%, #3d6b33 100%);
+            background-color: #23471d;
             padding: 25px 20px; 
             text-align: center; 
             color: #ffffff; 
@@ -182,13 +215,17 @@ const getBuyerRegistrationAlertTemplate = (data) => {
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>New Buyer Registration Alert</h1>
-            <p>ID: ${data.registrationId}</p>
-        </div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#23471d" style="width:100%;border-collapse:collapse;background-color:#23471d;">
+            <tr>
+                <td align="center" bgcolor="#23471d" style="padding:35px 30px;text-align:center;background-color:#23471d;font-family:Arial,sans-serif;color:#ffffff;">
+                    <h1 style="margin:0;font-size:24px;line-height:34px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ffffff;">New Buyer Registration Alert</h1>
+                    <p style="margin:8px 0 0;font-size:14px;line-height:20px;font-weight:500;color:#ffffff;">ID: ${displayValue(data.registrationId)}</p>
+                </td>
+            </tr>
+        </table>
         
-        <div class="status-badge">
-            Payment Status: <strong>${data.paymentStatus || 'Pending'}</strong>
+        <div class="status-badge" style="background-color:${data.paymentStatus === 'Completed' ? '#dcfce7' : '#fee2e2'};color:${data.paymentStatus === 'Completed' ? '#166534' : '#991b1b'};padding:8px 20px;text-align:center;font-weight:700;font-size:13px;border-bottom:2px solid ${data.paymentStatus === 'Completed' ? '#bbf7d0' : '#fecaca'};text-transform:uppercase;letter-spacing:0.5px;">
+            Payment Status: <strong>${displayValue(data.paymentStatus, 'Pending')}</strong>
         </div>
 
         <div class="content">
@@ -199,27 +236,27 @@ const getBuyerRegistrationAlertTemplate = (data) => {
             <div class="details-section">
                 <div class="details-row">
                     <span class="details-label">Full Name</span>
-                    <span class="details-value highlight">${data.companyName}</span>
+                    <span class="details-value highlight">${fullName}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Designation</span>
-                    <span class="details-value">${data.designation}</span>
+                    <span class="details-value">${displayValue(data.designation)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Company Name</span>
-                    <span class="details-value">${data.companyName}</span>
+                    <span class="details-value">${displayValue(data.companyName, data.companyFirmName)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Email ID</span>
-                    <span class="details-value">${data.emailAddress}</span>
+                    <span class="details-value">${displayValue(data.emailAddress, data.email)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Mobile Number</span>
-                    <span class="details-value">${data.mobileNumber}</span>
+                    <span class="details-value">${displayValue(data.mobileNumber, data.mobile, data.phone)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Location</span>
-                    <span class="details-value">${data.city}, ${data.stateProvince}, ${data.country || 'India'}</span>
+                    <span class="details-value">${[data.city, data.stateProvince, data.country || 'India'].filter(Boolean).join(', ') || 'N/A'}</span>
                 </div>
             </div>
 
@@ -227,19 +264,19 @@ const getBuyerRegistrationAlertTemplate = (data) => {
             <div class="details-section">
                 <div class="details-row">
                     <span class="details-label">Business Type</span>
-                    <span class="details-value">${data.businessType}</span>
+                    <span class="details-value">${businessType}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Years in Operation</span>
-                    <span class="details-value">${data.yearsInOperation}</span>
+                    <span class="details-value">${yearsInOperation}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Annual Turnover</span>
-                    <span class="details-value">${data.annualTurnover}</span>
+                    <span class="details-value">${displayValue(data.annualTurnover)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Key Products/Services</span>
-                    <span class="details-value">${data.keyProductsServices}</span>
+                    <span class="details-value">${keyProductsServices}</span>
                 </div>
             </div>
 
@@ -247,7 +284,7 @@ const getBuyerRegistrationAlertTemplate = (data) => {
             <div class="details-section">
                 <div class="details-row">
                     <span class="details-label">Primary Product Interest</span>
-                    <span class="details-value highlight">${data.primaryProductInterest}</span>
+                    <span class="details-value highlight">${displayValue(data.primaryProductInterest, data.buyerIndustry)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Secondary Categories</span>
@@ -255,15 +292,15 @@ const getBuyerRegistrationAlertTemplate = (data) => {
                 </div>
                 <div class="details-row">
                     <span class="details-label">Budget Range</span>
-                    <span class="details-value">${data.budgetRange || 'N/A'}</span>
+                    <span class="details-value">${budgetRange}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Buying Frequency</span>
-                    <span class="details-value">${data.buyingFrequency}</span>
+                    <span class="details-value">${buyingFrequency}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Purchase Timeline</span>
-                    <span class="details-value">${data.purchaseTimeline}</span>
+                    <span class="details-value">${displayValue(data.purchaseTimeline)}</span>
                 </div>
             </div>
 
@@ -271,23 +308,23 @@ const getBuyerRegistrationAlertTemplate = (data) => {
             <div class="details-section">
                 <div class="details-row">
                     <span class="details-label">Category</span>
-                    <span class="details-value">${data.registrationCategory}</span>
+                    <span class="details-value">${displayValue(data.registrationCategory)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Fee Amount</span>
-                    <span class="details-value">${data.registrationFee || 'N/A'}</span>
+                    <span class="details-value">${displayValue(data.registrationFee)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Preferred Meeting Date</span>
-                    <span class="details-value">${data.preferredMeetingDate}</span>
+                    <span class="details-value">${meetingSchedule}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Priority Level</span>
-                    <span class="details-value">${data.meetingPriorityLevel}</span>
+                    <span class="details-value">${displayValue(data.meetingPriorityLevel)}</span>
                 </div>
                 <div class="details-row">
                     <span class="details-label">Transaction ID</span>
-                    <span class="details-value">${data.transactionId || 'N/A'}</span>
+                    <span class="details-value">${displayValue(data.transactionId, data.razorpayPaymentId)}</span>
                 </div>
             </div>
 

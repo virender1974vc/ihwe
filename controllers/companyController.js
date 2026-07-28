@@ -5,6 +5,21 @@ const { logActivity } = require("../utils/logger");
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Safely AND together multiple independent $or blocks on the same query
+// (e.g. event scope, authorization, search) without one overwriting another.
+const mergeOrCondition = (query, orArray) => {
+  if (!orArray || orArray.length === 0) return;
+  const block = { $or: orArray };
+  if (query.$and) {
+    query.$and.push(block);
+  } else if (query.$or) {
+    query.$and = [{ $or: query.$or }, block];
+    delete query.$or;
+  } else {
+    query.$or = orArray;
+  }
+};
+
 // ➤ Add new company
 const addCompany = async (req, res) => {
   try {
@@ -58,9 +73,18 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const { search, status, source, industry, page, limit, countOnly, dashboard, username, role, startDate, endDate, forwardTo } = req.query;
+    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, forwardTo, eventId } = req.query;
 
     let query = {};
+
+    // Scope to a single event when one is selected (multi-event support).
+    // A company matches if it was created for this event (legacy `eventId`)
+    // OR has been assigned to it via the newer `events` set.
+    // No eventId means "all events" — this is what Master Data uses to show
+    // every company regardless of event.
+    if (eventId) {
+      mergeOrCondition(query, [{ eventId }, { events: eventId }]);
+    }
 
     // Authorization filter
     const lowerUsername = username ? username.toLowerCase() : null;
@@ -77,14 +101,15 @@ const getCompanies = async (req, res) => {
         }
       } catch (e) { console.error(e); }
 
-      query.$or = [
+      const authOr = [
         { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
         { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
       ];
       if (lowerFullName !== lowerUsername) {
-        query.$or.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-        query.$or.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        authOr.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        authOr.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
       }
+      mergeOrCondition(query, authOr);
     }
 
     if (dashboard === 'true') {
@@ -126,12 +151,14 @@ const getCompanies = async (req, res) => {
         { "contacts.name": searchRegex }
       ];
 
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, { $or: searchOr }];
-        delete query.$or;
-      } else {
-        query.$or = searchOr;
-      }
+      mergeOrCondition(query, searchOr);
+    }
+
+    // Just the matching ids — powers "select all N leads matching filters"
+    // in Master Data's bulk-assign toolbar, without shipping full documents.
+    if (idsOnly === 'true') {
+      const rows = await Company.find(query).select('_id').limit(5000).lean();
+      return res.status(200).json({ ids: rows.map((r) => r._id) });
     }
 
     if (countOnly === 'true') {
@@ -194,7 +221,129 @@ const getCompanyById = async (req, res) => {
   }
 };
 
+// ➤ Re-engage a company from master data for a NEW event.
+// Instead of the admin re-typing GST/PAN/address/contacts from scratch, this copies
+// the profile fields from any of that company's past records into a fresh lead row
+// scoped to the target event, with the sales pipeline reset to "New Lead".
+// Idempotent: if a row for this company already exists in the target event, that's
+// returned instead of creating a duplicate.
+const PROFILE_FIELDS = [
+  'companyName', 'category', 'businessNature', 'address', 'country', 'state', 'city',
+  'clientType', 'pincode', 'website', 'landline', 'email', 'udyamNumber', 'gstNumber',
+  'panNo', 'exhibitorCategory', 'companyLogo', 'companyDescription', 'contacts',
+];
+
+const addCompanyToEvent = async (req, res) => {
+  try {
+    const { eventId } = req.body;
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: 'eventId is required' });
+    }
+
+    const source = await Company.findById(req.params.id);
+    if (!source) {
+      return res.status(404).json({ success: false, message: 'Company not found' });
+    }
+
+    // Already has a lead in this event (by GST/PAN/email — the same identity signals
+    // used elsewhere for dedup)? Reuse it instead of creating a duplicate.
+    const identityOr = [];
+    if (source.gstNumber) identityOr.push({ gstNumber: source.gstNumber });
+    if (source.panNo) identityOr.push({ panNo: source.panNo });
+    if (source.email) identityOr.push({ email: { $regex: new RegExp(`^${escapeRegex(source.email)}$`, 'i') } });
+    const existing = identityOr.length
+      ? await Company.findOne({ eventId, $or: identityOr })
+      : null;
+    if (existing) {
+      return res.status(200).json({ success: true, data: existing, reused: true });
+    }
+
+    const profileData = {};
+    PROFILE_FIELDS.forEach((field) => {
+      if (source[field] !== undefined) profileData[field] = source[field];
+    });
+
+    const newCompany = new Company({
+      ...profileData,
+      eventId,
+      companyStatus: 'New Lead',
+      dataSource: 'Master Data Re-engagement',
+      forwardTo: undefined,
+      followUpDate: undefined,
+      reminder: undefined,
+      exhibitorRegistrationId: null,
+    });
+    await newCompany.save();
+
+    await logActivity(req, 'Created', 'Client Data', `Re-engaged "${source.companyName}" for a new event from master data`);
+
+    res.status(201).json({ success: true, data: newCompany, reused: false });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error adding company to event', error: error.message });
+  }
+};
+
 // ➤ Lookup Company or Exhibitor Registration by ID (to avoid frontend 404 fallback errors)
+// ➤ Assign one or more events to a single company. Adds to the `events` set
+// (doesn't remove existing assignments) so a company already tagged to
+// IHWE 2026 can also be tagged to Organic 2027 without losing the first one.
+const assignEventsToCompany = async (req, res) => {
+  try {
+    const { eventIds } = req.body;
+    if (!Array.isArray(eventIds) || eventIds.length === 0) {
+      return res.status(400).json({ success: false, message: "eventIds (non-empty array) is required" });
+    }
+
+    const updated = await Company.findByIdAndUpdate(
+      req.params.id,
+      { $addToSet: { events: { $each: eventIds } } },
+      { new: true },
+    );
+    if (!updated) return res.status(404).json({ success: false, message: "Company not found" });
+
+    await logActivity(req, "Updated", "Client Data", `Assigned ${eventIds.length} event(s) to "${updated.companyName}"`);
+    res.status(200).json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error assigning events", error: error.message });
+  }
+};
+
+// ➤ Bulk-assign events and/or a handling person ("forwardTo") to many
+// companies at once — used by Master Data's row-selection toolbar.
+const bulkAssignCompanies = async (req, res) => {
+  try {
+    const { companyIds, eventIds, forwardTo } = req.body;
+    if (!Array.isArray(companyIds) || companyIds.length === 0) {
+      return res.status(400).json({ success: false, message: "companyIds (non-empty array) is required" });
+    }
+
+    const hasEvents = Array.isArray(eventIds) && eventIds.length > 0;
+    const hasForwardTo = typeof forwardTo === "string" && forwardTo.trim().length > 0;
+    if (!hasEvents && !hasForwardTo) {
+      return res.status(400).json({ success: false, message: "Provide eventIds and/or forwardTo to assign" });
+    }
+
+    const update = {};
+    if (hasEvents) update.$addToSet = { events: { $each: eventIds } };
+    if (hasForwardTo) update.$set = { forwardTo: forwardTo.trim() };
+
+    const result = await Company.updateMany({ _id: { $in: companyIds } }, update);
+
+    await logActivity(
+      req,
+      "Updated",
+      "Client Data",
+      `Bulk-assigned ${companyIds.length} compan${companyIds.length === 1 ? "y" : "ies"}` +
+        (hasEvents ? ` to ${eventIds.length} event(s)` : "") +
+        (hasForwardTo ? ` and forwarded to "${forwardTo.trim()}"` : ""),
+    );
+
+    res.status(200).json({ success: true, matched: result.matchedCount, modified: result.modifiedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error bulk-assigning companies", error: error.message });
+  }
+};
+
 const lookupCompanyOrExhibitor = async (req, res) => {
   try {
     let client = await Company.findById(req.params.id);
@@ -726,6 +875,9 @@ module.exports = {
   addCompany,
   getCompanies,
   getCompanyById,
+  addCompanyToEvent,
+  assignEventsToCompany,
+  bulkAssignCompanies,
   lookupCompanyOrExhibitor,
   updateCompany,
   deleteCompany,

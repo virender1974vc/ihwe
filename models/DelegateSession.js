@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const delegateSessionSchema = new mongoose.Schema({
+    // Multi-event support: mirrors the parent DelegateDay's eventId so sessions can be
+    // filtered directly without a join. Nullable for backward compatibility.
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
     dayId: { type: mongoose.Schema.Types.ObjectId, ref: 'DelegateDay', required: true },
     number: { type: String, required: true },
     time: { type: String, required: true },

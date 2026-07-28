@@ -62,7 +62,7 @@ const updateCategory = async (req, res) => {
     if (!category)
       return res.status(404).json({ message: "Category not found" });
 
-    const allowedFields = ["cat_id", "cat_name", "cat_status", "updated_by", "parent_category", "cat_description", "display_order", "applicable_for", "icon_name", "icon_data_url"];
+    const allowedFields = ["cat_id", "cat_name", "cat_status", "updated_by", "parent_category", "business_nature", "cat_description", "display_order", "applicable_for", "icon_name", "icon_data_url"];
     allowedFields.forEach((key) => {
       if (updates[key] !== undefined) category[key] = updates[key];
     });
