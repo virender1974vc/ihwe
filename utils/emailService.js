@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const EmailLog = require('../models/EmailLog');
+const whatsapp = require('./whatsapp');
 const { emailShell } = require('./emailTemplates/emailShell');
 const templateEngineMethods = require('./emailComponents/templateEngine');
 const visitorEmailMethods = require('./emailComponents/visitorEmails');
