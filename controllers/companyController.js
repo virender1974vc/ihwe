@@ -4,9 +4,6 @@ const Company = require("../models/Company.js");
 const { logActivity } = require("../utils/logger");
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// Safely AND together multiple independent $or blocks on the same query
-// (e.g. event scope, authorization, search) without one overwriting another.
 const mergeOrCondition = (query, orArray) => {
   if (!orArray || orArray.length === 0) return;
   const block = { $or: orArray };
@@ -77,20 +74,49 @@ const addCompany = async (req, res) => {
     if (orConditions.length > 0) {
       const existing = await Company.findOne({ $or: orConditions });
       if (existing) {
+        const incomingName = String(req.body.companyName || "").trim().toLowerCase();
+        const existingName = String(existing.companyName || "").trim().toLowerCase();
+        if (incomingName && existingName && incomingName !== existingName) {
+          return res.status(409).json({
+            success: false,
+            message: `The entered email or mobile is already used by ${existing.companyName}. Please use the existing Master Data client or correct the contact details.`,
+            conflictingClientId: existing._id,
+          });
+        }
         const eventId = req.body.eventId;
         if (eventId) {
+          const existingAssignment = (existing.eventAssignments || []).find(
+            (item) => String(item.eventId) === String(eventId),
+          );
+          if (existingAssignment) {
+            return res.status(409).json({
+              success: false,
+              message: `${existing.companyName} already exists in this exhibition as ${existingAssignment.status || "New Lead"}.`,
+              data: withEventLifecycle(existing.toObject(), eventId),
+              duplicateInEvent: true,
+            });
+          }
           const assignment = buildEventAssignment(req.body, eventId);
-          await Company.updateOne(
+          const linked = await Company.findOneAndUpdate(
             { _id: existing._id, "eventAssignments.eventId": { $ne: eventId } },
             {
               $addToSet: { events: eventId },
               $push: { eventAssignments: assignment },
             },
+            { new: true, runValidators: true },
           );
-          const linked = await Company.findById(existing._id).lean();
+          if (!linked || !(linked.eventAssignments || []).some(
+            (item) => String(item.eventId) === String(eventId),
+          )) {
+            return res.status(409).json({
+              success: false,
+              message: "Client exists in Master Data, but could not be assigned to this exhibition. Please refresh and try again.",
+            });
+          }
           return res.status(200).json({
+            success: true,
             message: "Existing master client added to this exhibition",
-            data: withEventLifecycle(linked, eventId),
+            data: withEventLifecycle(linked.toObject(), eventId),
             reusedMasterClient: true,
           });
         }
@@ -119,12 +145,22 @@ const addCompany = async (req, res) => {
     }
     const newCompany = new Company(companyPayload);
     await newCompany.save();
+    if (companyPayload.eventId && !(newCompany.eventAssignments || []).some(
+      (item) => String(item.eventId) === String(companyPayload.eventId),
+    )) {
+      await Company.deleteOne({ _id: newCompany._id });
+      return res.status(500).json({
+        success: false,
+        message: "Company was not saved because its exhibition assignment could not be verified.",
+      });
+    }
 
     await logActivity(req, "Created", "Client Data", `Added new company: ${req.body.companyName}`);
 
     res.status(201).json({
+      success: true,
       message: "Company added successfully",
-      data: newCompany,
+      data: withEventLifecycle(newCompany.toObject(), companyPayload.eventId),
     });
   } catch (error) {
     res.status(500).json({
@@ -182,24 +218,24 @@ const getCompanies = async (req, res) => {
             { added_by: { $in: userRegexes } },
             eventId
               ? {
-                  eventAssignments: {
-                    $elemMatch: {
-                      eventId,
-                      $or: [
-                        { forwardTo: { $exists: false } },
-                        { forwardTo: null },
-                        { forwardTo: "" },
-                      ],
-                    },
+                eventAssignments: {
+                  $elemMatch: {
+                    eventId,
+                    $or: [
+                      { forwardTo: { $exists: false } },
+                      { forwardTo: null },
+                      { forwardTo: "" },
+                    ],
                   },
-                }
-              : {
-                  $or: [
-                    { forwardTo: { $exists: false } },
-                    { forwardTo: null },
-                    { forwardTo: "" },
-                  ],
                 },
+              }
+              : {
+                $or: [
+                  { forwardTo: { $exists: false } },
+                  { forwardTo: null },
+                  { forwardTo: "" },
+                ],
+              },
           ]
         }
       ];
@@ -363,24 +399,24 @@ const getCompanyStatsSummary = async (req, res) => {
             { added_by: { $in: userRegexes } },
             eventId
               ? {
-                  eventAssignments: {
-                    $elemMatch: {
-                      eventId,
-                      $or: [
-                        { forwardTo: { $exists: false } },
-                        { forwardTo: null },
-                        { forwardTo: "" },
-                      ],
-                    },
+                eventAssignments: {
+                  $elemMatch: {
+                    eventId,
+                    $or: [
+                      { forwardTo: { $exists: false } },
+                      { forwardTo: null },
+                      { forwardTo: "" },
+                    ],
                   },
-                }
-              : {
-                  $or: [
-                    { forwardTo: { $exists: false } },
-                    { forwardTo: null },
-                    { forwardTo: "" },
-                  ],
                 },
+              }
+              : {
+                $or: [
+                  { forwardTo: { $exists: false } },
+                  { forwardTo: null },
+                  { forwardTo: "" },
+                ],
+              },
           ]
         }
       ];
