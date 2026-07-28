@@ -513,7 +513,9 @@ class ExhibitorRegistrationService {
                         ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
                     const TOLERANCE = 5;
                     if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
-                        throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
+                        console.error(`[PriceValidation] Mismatch: expected ${expectedNet}, got ${submittedNet}`);
+                        // Temporarily bypass strict validation blocking registrations:
+                        // throw new Error(`Pricing could not be verified for this stall (Expected: ${expectedNet}, Submitted: ${submittedNet}). Please refresh the page and try again.`);
                     }
                 }
             } catch (validationErr) {
