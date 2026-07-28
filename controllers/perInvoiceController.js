@@ -54,7 +54,8 @@ const createPerformaInvoice = async (req, res) => {
 // ✅ Get all PROFORMA Invoices
 const getAllPerformaInvoices = async (req, res) => {
   try {
-    const invoices = await PerformaInvoice.find().sort({ added: -1 });
+    const query = req.query.eventId ? { eventId: req.query.eventId } : {};
+    const invoices = await PerformaInvoice.find(query).sort({ added: -1 });
 
     res.json(invoices);
   } catch (error) {

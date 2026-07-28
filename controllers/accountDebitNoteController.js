@@ -219,6 +219,7 @@ const createAccountDebitNote = async (req, res) => {
 
     const payload = {
       companyId: req.body.companyId,
+      eventId: null,
       debit_note_no,
       debit_note_date: req.body.debit_note_date,
       debitNoteType: req.body.debitNoteType || "additional_charges",
@@ -239,6 +240,16 @@ const createAccountDebitNote = async (req, res) => {
       status: req.body.status === "draft" ? "draft" : "active",
       added_by: req.body.added_by || "Admin",
     };
+    const allocatedInvoiceIds = parsedAllocations.map((item) => item.invoiceId).filter(Boolean);
+    const allocatedInvoices = await Invoice.find({ _id: { $in: allocatedInvoiceIds } }).select("eventId").lean();
+    const allocatedEventIds = [...new Set(allocatedInvoices.map((item) => String(item.eventId || "")).filter(Boolean))];
+    if (allocatedEventIds.length !== 1) {
+      return res.status(400).json({
+        success: false,
+        message: "All debit-note allocations must belong to one exhibition event.",
+      });
+    }
+    payload.eventId = allocatedEventIds[0];
 
     if (req.file) {
       payload.attachmentUrl = `/uploads/account_debit_notes/${req.file.filename}`;
@@ -303,6 +314,7 @@ const getAccountDebitNotes = async (req, res) => {
       ].filter(Boolean);
       filter = { companyId: { $in: [...new Set(linkedIds)] } };
     }
+    if (req.query.eventId) filter.eventId = req.query.eventId;
     const notes = await AccountDebitNote.find(filter).sort({ added: -1 }).lean();
     const enriched = await enrichWithSettlementStatus(notes);
 

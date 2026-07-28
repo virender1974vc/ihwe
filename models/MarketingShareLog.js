@@ -8,6 +8,11 @@ const marketingShareLogSchema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+    eventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CrmEvent",
+      default: null,
+    },
     clientName: { type: String },
     clientMobile: { type: String },
     clientEmail: { type: String },
@@ -38,5 +43,7 @@ const marketingShareLogSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+marketingShareLogSchema.index({ eventId: 1, createdAt: -1 });
 
 module.exports = secondaryDB.model("MarketingShareLog", marketingShareLogSchema);

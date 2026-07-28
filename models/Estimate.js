@@ -24,6 +24,11 @@ const estimateSchema = new mongoose.Schema(
   {
     est_type: { type: String },
     companyId: { type: String, required: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null },
+    crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null },
+    exhibitorRegistrationId: { type: mongoose.Schema.Types.ObjectId, ref: "ExhibitorRegistration", default: null },
+    revisionOf: { type: mongoose.Schema.Types.ObjectId, ref: "Estimate", default: null },
+    version: { type: Number, default: 1 },
     est_no: { type: String, required: true, unique: true },
     gst_no: { type: String },
     company_name: { type: String, default: "" },
@@ -80,5 +85,8 @@ estimateSchema.statics.generateNextEstimateNo = async function () {
   const padded = String(nextSeq).padStart(3, "0");
   return `${prefix}${padded}`;
 };
+
+estimateSchema.index({ companyId: 1, eventId: 1, status: 1, added: -1 });
+estimateSchema.index({ exhibitorRegistrationId: 1 });
 
 module.exports = secondaryDB.model("Estimate", estimateSchema);

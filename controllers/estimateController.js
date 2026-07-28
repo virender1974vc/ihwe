@@ -57,12 +57,43 @@ const generateNextProformaNo = async () => {
 // Add estimate
 const addEstimate = async (req, res) => {
   try {
+    const estimateBody = { ...req.body };
+    const company = await Company.findById(estimateBody.companyId)
+      .select("eventAssignments")
+      .lean();
+    const assignments = Array.isArray(company?.eventAssignments)
+      ? company.eventAssignments.filter((assignment) => assignment?.registrationEventId)
+      : [];
+    let assignment = null;
+
+    if (estimateBody.eventId) {
+      assignment = assignments.find(
+        (item) => String(item.registrationEventId?._id || item.registrationEventId) === String(estimateBody.eventId)
+      );
+    } else if (estimateBody.crmEventId) {
+      assignment = assignments.find(
+        (item) => String(item.eventId?._id || item.eventId) === String(estimateBody.crmEventId)
+      );
+      estimateBody.eventId = assignment?.registrationEventId?._id || assignment?.registrationEventId || null;
+    } else if (assignments.length === 1) {
+      assignment = assignments[0];
+      estimateBody.eventId = assignment.registrationEventId?._id || assignment.registrationEventId;
+    }
+
+    if (!estimateBody.eventId) {
+      return res.status(400).json({
+        message: "Exhibition is required. Open Accounts from the required exhibition Client Profile.",
+      });
+    }
+    estimateBody.crmEventId =
+      estimateBody.crmEventId
+      || assignment?.eventId?._id
+      || assignment?.eventId
+      || null;
+
     const newEstimateNo = await generateNextProformaNo();
 
-    const estimateBody = {
-      ...req.body,
-      est_no: newEstimateNo,
-    };
+    estimateBody.est_no = newEstimateNo;
 
     const estimate = new Estimate(estimateBody);
     await estimate.save();
@@ -167,6 +198,11 @@ const getGroupedEstimateData = async (req, res) => {
         $project: {
           _id: 1,
           companyId: 1,
+          eventId: 1,
+          crmEventId: 1,
+          exhibitorRegistrationId: 1,
+          revisionOf: 1,
+          version: 1,
           est_no: 1,
           est_type: 1,
           gst_no: 1,

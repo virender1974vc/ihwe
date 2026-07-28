@@ -22,6 +22,7 @@ const piItemSchema = new mongoose.Schema({
 const PerformaInvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, index: true },
     pi_no: { type: String, required: true, unique: true },
     gst_no: { type: String, required: true },
     company_name: { type: String, default: "" },

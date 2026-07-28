@@ -38,6 +38,11 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    registrationSource: {
+        type: String,
+        enum: ['website', 'admin', 'migration', 'api'],
+        default: 'website'
+    },
     registrationId: { type: String, unique: true, sparse: true },
     exhibitorName: { type: String, required: true },
     exhibitorStatus: {

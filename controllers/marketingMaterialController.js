@@ -291,6 +291,7 @@ exports.shareMaterials = async (req, res) => {
     // Create Log
     const log = await MarketingShareLog.create({
       cmpny_id,
+      eventId: requestEventId || null,
       materials: materials.map((m) => ({ material_id: m._id, title: m.title, category: m.category })),
       sentVia,
       sentBy: sentBy || "Admin",
@@ -319,7 +320,8 @@ exports.getShareHistory = async (req, res) => {
 
 exports.getAllShareHistory = async (req, res) => {
   try {
-    const history = await MarketingShareLog.find()
+    const query = req.query.eventId ? { eventId: req.query.eventId } : {};
+    const history = await MarketingShareLog.find(query)
       .populate("cmpny_id", "companyName exhibitorName email mobile companyEmail companyMobile contacts category dataSource")
       .populate("materials.material_id", "fileType")
       .sort({ createdAt: -1 });

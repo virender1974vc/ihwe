@@ -11,11 +11,13 @@ const {
   addCompanyToEvent,
   assignEventsToCompany,
   bulkAssignCompanies,
+  updateEventLifecycle,
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,
   uploadContactPhoto,
   uploadCompanies,
+  getConvertedCompanies,
 } = require("../controllers/companyController.js");
 
 const router = express.Router();
@@ -85,12 +87,17 @@ router.get("/", async (req, res) => {
 router.get("/achievement-revenue", require("../controllers/companyController.js").getAchievementRevenue);
 router.get("/leaderboard", require("../controllers/companyController.js").getSalesLeaderboard);
 router.get("/stats-summary", getCompanyStatsSummary);
+router.get("/converted", getConvertedCompanies);
 router.get("/lookup/:id", require("../controllers/companyController.js").lookupCompanyOrExhibitor);
 router.get("/:id", getCompanyById);
 
 // Write routes — always clear cache so next GET reflects latest data
 router.post("/", (req, res) => { clearCompaniesCache(); addCompany(req, res); });
 router.put("/:id", (req, res) => { clearCompaniesCache(); updateCompany(req, res); });
+router.put("/:id/events/:eventId/lifecycle", (req, res) => {
+  clearCompaniesCache();
+  updateEventLifecycle(req, res);
+});
 router.delete("/:id", (req, res) => { clearCompaniesCache(); deleteCompany(req, res); });
 router.post("/:id/add-to-event", (req, res) => { clearCompaniesCache(); addCompanyToEvent(req, res); });
 router.post("/:id/assign-events", (req, res) => { clearCompaniesCache(); assignEventsToCompany(req, res); });

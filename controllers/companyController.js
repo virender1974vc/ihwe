@@ -4,9 +4,6 @@ const Company = require("../models/Company.js");
 const { logActivity } = require("../utils/logger");
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// Safely AND together multiple independent $or blocks on the same query
-// (e.g. event scope, authorization, search) without one overwriting another.
 const mergeOrCondition = (query, orArray) => {
   if (!orArray || orArray.length === 0) return;
   const block = { $or: orArray };
@@ -18,6 +15,42 @@ const mergeOrCondition = (query, orArray) => {
   } else {
     query.$or = orArray;
   }
+};
+
+const buildEventAssignment = (payload, eventId) => ({
+  eventId,
+  forwardTo: payload.forwardTo || "",
+  status: payload.companyStatus || "New Lead",
+  dataSource: payload.dataSource || "",
+  socialMediaType: payload.socialMediaType || "",
+  referralName: payload.referralName || "",
+  referralMobile: payload.referralMobile || "",
+  reminder: payload.reminder || null,
+  followUpDate: payload.followUpDate || null,
+  lastRemark: "",
+  updatedAt: new Date(),
+});
+
+const withEventLifecycle = (company, eventId) => {
+  if (!company || !eventId) return company;
+  const assignment = (company.eventAssignments || []).find(
+    (item) => String(item.eventId) === String(eventId),
+  );
+  if (!assignment) return company;
+  return {
+    ...company,
+    companyStatus: assignment.status || company.companyStatus,
+    dataSource: assignment.dataSource || company.dataSource,
+    socialMediaType: assignment.socialMediaType || company.socialMediaType,
+    referralName: assignment.referralName || company.referralName,
+    referralMobile: assignment.referralMobile || company.referralMobile,
+    reminder: assignment.reminder || company.reminder,
+    followUpDate: assignment.followUpDate || company.followUpDate,
+    forwardTo: assignment.forwardTo || company.forwardTo,
+    exhibitorRegistrationId: assignment.exhibitorRegistrationId || company.exhibitorRegistrationId,
+    activeEventId: assignment.eventId,
+    eventLifecycle: assignment,
+  };
 };
 
 // ➤ Add new company
@@ -41,6 +74,52 @@ const addCompany = async (req, res) => {
     if (orConditions.length > 0) {
       const existing = await Company.findOne({ $or: orConditions });
       if (existing) {
+        const incomingName = String(req.body.companyName || "").trim().toLowerCase();
+        const existingName = String(existing.companyName || "").trim().toLowerCase();
+        if (incomingName && existingName && incomingName !== existingName) {
+          return res.status(409).json({
+            success: false,
+            message: `The entered email or mobile is already used by ${existing.companyName}. Please use the existing Master Data client or correct the contact details.`,
+            conflictingClientId: existing._id,
+          });
+        }
+        const eventId = req.body.eventId;
+        if (eventId) {
+          const existingAssignment = (existing.eventAssignments || []).find(
+            (item) => String(item.eventId) === String(eventId),
+          );
+          if (existingAssignment) {
+            return res.status(409).json({
+              success: false,
+              message: `${existing.companyName} already exists in this exhibition as ${existingAssignment.status || "New Lead"}.`,
+              data: withEventLifecycle(existing.toObject(), eventId),
+              duplicateInEvent: true,
+            });
+          }
+          const assignment = buildEventAssignment(req.body, eventId);
+          const linked = await Company.findOneAndUpdate(
+            { _id: existing._id, "eventAssignments.eventId": { $ne: eventId } },
+            {
+              $addToSet: { events: eventId },
+              $push: { eventAssignments: assignment },
+            },
+            { new: true, runValidators: true },
+          );
+          if (!linked || !(linked.eventAssignments || []).some(
+            (item) => String(item.eventId) === String(eventId),
+          )) {
+            return res.status(409).json({
+              success: false,
+              message: "Client exists in Master Data, but could not be assigned to this exhibition. Please refresh and try again.",
+            });
+          }
+          return res.status(200).json({
+            success: true,
+            message: "Existing master client added to this exhibition",
+            data: withEventLifecycle(linked.toObject(), eventId),
+            reusedMasterClient: true,
+          });
+        }
         let errMsg = "Duplicate record found.";
         if (req.body.companyName && existing.companyName.toLowerCase() === req.body.companyName.toLowerCase()) {
           errMsg = "Company Name already exists.";
@@ -53,14 +132,35 @@ const addCompany = async (req, res) => {
       }
     }
 
-    const newCompany = new Company(req.body);
+    const companyPayload = { ...req.body };
+    if (companyPayload.eventId) {
+      companyPayload.events = Array.from(new Set([
+        ...(companyPayload.events || []).map(String),
+        String(companyPayload.eventId),
+      ]));
+      companyPayload.eventAssignments = [
+        ...(companyPayload.eventAssignments || []),
+        buildEventAssignment(companyPayload, companyPayload.eventId),
+      ];
+    }
+    const newCompany = new Company(companyPayload);
     await newCompany.save();
+    if (companyPayload.eventId && !(newCompany.eventAssignments || []).some(
+      (item) => String(item.eventId) === String(companyPayload.eventId),
+    )) {
+      await Company.deleteOne({ _id: newCompany._id });
+      return res.status(500).json({
+        success: false,
+        message: "Company was not saved because its exhibition assignment could not be verified.",
+      });
+    }
 
     await logActivity(req, "Created", "Client Data", `Added new company: ${req.body.companyName}`);
 
     res.status(201).json({
+      success: true,
       message: "Company added successfully",
-      data: newCompany,
+      data: withEventLifecycle(newCompany.toObject(), companyPayload.eventId),
     });
   } catch (error) {
     res.status(500).json({
@@ -83,13 +183,13 @@ const getCompanies = async (req, res) => {
     // No eventId means "all events" — this is what Master Data uses to show
     // every company regardless of event.
     if (eventId) {
-      mergeOrCondition(query, [{ eventId }, { events: eventId }]);
+      query["eventAssignments.eventId"] = eventId;
     }
 
     // Authorization filter
     const lowerUsername = username ? username.toLowerCase() : null;
     const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
-    const isSuperAdmin = cleanRole === 'superadmin';
+    const isSuperAdmin = cleanRole.includes('superadmin');
 
     if (lowerUsername && !isSuperAdmin) {
       let lowerFullName = lowerUsername;
@@ -101,34 +201,78 @@ const getCompanies = async (req, res) => {
         }
       } catch (e) { console.error(e); }
 
-      const authOr = [
-        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-      ];
+      const userIdentities = [lowerUsername];
       if (lowerFullName !== lowerUsername) {
-        authOr.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-        authOr.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        userIdentities.push(lowerFullName);
       }
+
+      const userRegexes = userIdentities.map(id => new RegExp(`^${escapeRegex(id)}$`, 'i'));
+
+      const scopedAssigneeCondition = eventId
+        ? { eventAssignments: { $elemMatch: { eventId, forwardTo: { $in: userRegexes } } } }
+        : { forwardTo: { $in: userRegexes } };
+      const authOr = [
+        scopedAssigneeCondition,
+        {
+          $and: [
+            { added_by: { $in: userRegexes } },
+            eventId
+              ? {
+                eventAssignments: {
+                  $elemMatch: {
+                    eventId,
+                    $or: [
+                      { forwardTo: { $exists: false } },
+                      { forwardTo: null },
+                      { forwardTo: "" },
+                    ],
+                  },
+                },
+              }
+              : {
+                $or: [
+                  { forwardTo: { $exists: false } },
+                  { forwardTo: null },
+                  { forwardTo: "" },
+                ],
+              },
+          ]
+        }
+      ];
       mergeOrCondition(query, authOr);
     }
 
     if (dashboard === 'true') {
       const companies = await Company.find(query)
-        .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote')
+        .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote eventAssignments')
         .sort({ createdAt: -1 })
         .limit(3000)
         .lean();
-      return res.status(200).json(companies);
+      return res.status(200).json(companies.map((company) => withEventLifecycle(company, eventId)));
     }
 
     // Filters
     if (status) {
       const statuses = status.split(',').map(s => new RegExp(`^${escapeRegex(s.trim())}$`, 'i'));
-      query.companyStatus = { $in: statuses };
+      if (eventId) {
+        query.eventAssignments = { $elemMatch: { eventId, status: { $in: statuses } } };
+      } else {
+        query.companyStatus = { $in: statuses };
+      }
     }
-    if (source) query.dataSource = { $regex: new RegExp(`^${escapeRegex(source)}$`, 'i') };
+    if (source) {
+      const sourceRegex = new RegExp(`^${escapeRegex(source)}$`, 'i');
+      if (eventId) {
+        query.eventAssignments = { $elemMatch: { eventId, dataSource: sourceRegex } };
+      } else query.dataSource = sourceRegex;
+    }
     if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
-    if (forwardTo) query.forwardTo = { $regex: new RegExp(`^${escapeRegex(forwardTo)}$`, 'i') };
+    if (forwardTo) {
+      const assigneeRegex = new RegExp(`^${escapeRegex(forwardTo)}$`, 'i');
+      if (eventId) {
+        query.eventAssignments = { $elemMatch: { eventId, forwardTo: assigneeRegex } };
+      } else query.forwardTo = assigneeRegex;
+    }
     // state/city come from the CrmState/CrmCity reference lists (state_id /
     // city_id backed dropdowns) — matched by name since Company itself still
     // stores free text, so this stays exact (anchored, case-insensitive).
@@ -185,7 +329,7 @@ const getCompanies = async (req, res) => {
         .lean();
 
       return res.status(200).json({
-        data: companies,
+        data: companies.map((company) => withEventLifecycle(company, eventId)),
         pagination: {
           total,
           page: pageNum,
@@ -196,7 +340,7 @@ const getCompanies = async (req, res) => {
     }
 
     const companies = await Company.find(query).sort({ createdAt: -1 }).limit(3000).lean();
-    res.status(200).json(companies);
+    res.status(200).json(companies.map((company) => withEventLifecycle(company, eventId)));
   } catch (error) {
     res.status(500).json({
       message: "Error fetching companies",
@@ -204,34 +348,29 @@ const getCompanies = async (req, res) => {
     });
   }
 };
-
-// ➤ Lightweight, accurate stats summary — total + per-status counts via
-// aggregation, instead of the "dashboard=true" raw-doc fetch which is capped
-// at 3000 rows and goes wrong once the collection grows past that (Master
-// Data showed a stale/capped "Total Leads" count once the DB passed 30k+ rows).
 const getCompanyStatsSummary = async (req, res) => {
   try {
     const { eventId, username, role, status } = req.query;
     let query = {};
 
     if (eventId) {
-      mergeOrCondition(query, [{ eventId }, { events: eventId }]);
+      query["eventAssignments.eventId"] = eventId;
     }
-
-    // Comma-separated, matched as a SUBSTRING of companyStatus (not anchored)
-    // to mirror the messy real-world status text (e.g. "On Hold", "Not
-    // Interested - lost deal") the way each list page's own client-side
-    // `status.includes(...)` categorization already does.
     if (status) {
       const parts = status.split(',').map((s) => s.trim()).filter(Boolean);
       if (parts.length > 0) {
-        mergeOrCondition(query, parts.map((p) => ({ companyStatus: { $regex: new RegExp(escapeRegex(p), 'i') } })));
+        const statusRegexes = parts.map((p) => new RegExp(escapeRegex(p), 'i'));
+        if (eventId) {
+          query.eventAssignments = { $elemMatch: { eventId, status: { $in: statusRegexes } } };
+        } else {
+          query.companyStatus = { $in: statusRegexes };
+        }
       }
     }
 
     const lowerUsername = username ? username.toLowerCase() : null;
     const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
-    const isSuperAdmin = cleanRole === 'superadmin';
+    const isSuperAdmin = cleanRole.includes('superadmin');
 
     if (lowerUsername && !isSuperAdmin) {
       let lowerFullName = lowerUsername;
@@ -243,20 +382,75 @@ const getCompanyStatsSummary = async (req, res) => {
         }
       } catch (e) { console.error(e); }
 
-      const authOr = [
-        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-      ];
+      const userIdentities = [lowerUsername];
       if (lowerFullName !== lowerUsername) {
-        authOr.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-        authOr.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        userIdentities.push(lowerFullName);
       }
+
+      const userRegexes = userIdentities.map(id => new RegExp(`^${escapeRegex(id)}$`, 'i'));
+
+      const scopedAssigneeCondition = eventId
+        ? { eventAssignments: { $elemMatch: { eventId, forwardTo: { $in: userRegexes } } } }
+        : { forwardTo: { $in: userRegexes } };
+      const authOr = [
+        scopedAssigneeCondition,
+        {
+          $and: [
+            { added_by: { $in: userRegexes } },
+            eventId
+              ? {
+                eventAssignments: {
+                  $elemMatch: {
+                    eventId,
+                    $or: [
+                      { forwardTo: { $exists: false } },
+                      { forwardTo: null },
+                      { forwardTo: "" },
+                    ],
+                  },
+                },
+              }
+              : {
+                $or: [
+                  { forwardTo: { $exists: false } },
+                  { forwardTo: null },
+                  { forwardTo: "" },
+                ],
+              },
+          ]
+        }
+      ];
       mergeOrCondition(query, authOr);
     }
 
+    const statusPipeline = [{ $match: query }];
+    if (eventId) {
+      statusPipeline.push({
+        $set: {
+          _activeEventAssignment: {
+            $first: {
+              $filter: {
+                input: "$eventAssignments",
+                as: "assignment",
+                cond: { $eq: ["$$assignment.eventId", { $toObjectId: eventId }] },
+              },
+            },
+          },
+        },
+      });
+      statusPipeline.push({
+        $set: {
+          _effectiveStatus: { $ifNull: ["$_activeEventAssignment.status", "$companyStatus"] },
+        },
+      });
+    }
+    statusPipeline.push({
+      $group: { _id: eventId ? "$_effectiveStatus" : "$companyStatus", count: { $sum: 1 } },
+    });
+
     const [total, statusAgg] = await Promise.all([
       Company.countDocuments(query),
-      Company.aggregate([{ $match: query }, { $group: { _id: "$companyStatus", count: { $sum: 1 } } }]),
+      Company.aggregate(statusPipeline),
     ]);
 
     const statusCounts = {};
@@ -280,7 +474,13 @@ const getCompanyById = async (req, res) => {
       }
       return res.status(404).json({ message: "Company not found" });
     }
-    res.status(200).json(company);
+    const plain = company.toObject();
+    if (req.query.eventId && !(plain.eventAssignments || []).some(
+      (assignment) => String(assignment.eventId) === String(req.query.eventId),
+    )) {
+      return res.status(404).json({ message: "Company is not assigned to this exhibition" });
+    }
+    res.status(200).json(withEventLifecycle(plain, req.query.eventId));
   } catch (error) {
     res.status(500).json({
       message: "Error fetching company",
@@ -295,12 +495,6 @@ const getCompanyById = async (req, res) => {
 // scoped to the target event, with the sales pipeline reset to "New Lead".
 // Idempotent: if a row for this company already exists in the target event, that's
 // returned instead of creating a duplicate.
-const PROFILE_FIELDS = [
-  'companyName', 'category', 'businessNature', 'address', 'country', 'state', 'city',
-  'clientType', 'pincode', 'website', 'landline', 'email', 'udyamNumber', 'gstNumber',
-  'panNo', 'exhibitorCategory', 'companyLogo', 'companyDescription', 'contacts',
-];
-
 const addCompanyToEvent = async (req, res) => {
   try {
     const { eventId } = req.body;
@@ -315,37 +509,35 @@ const addCompanyToEvent = async (req, res) => {
 
     // Already has a lead in this event (by GST/PAN/email — the same identity signals
     // used elsewhere for dedup)? Reuse it instead of creating a duplicate.
-    const identityOr = [];
-    if (source.gstNumber) identityOr.push({ gstNumber: source.gstNumber });
-    if (source.panNo) identityOr.push({ panNo: source.panNo });
-    if (source.email) identityOr.push({ email: { $regex: new RegExp(`^${escapeRegex(source.email)}$`, 'i') } });
-    const existing = identityOr.length
-      ? await Company.findOne({ eventId, $or: identityOr })
-      : null;
-    if (existing) {
-      return res.status(200).json({ success: true, data: existing, reused: true });
+    const existingAssignment = (source.eventAssignments || []).find(
+      (assignment) => String(assignment.eventId) === String(eventId),
+    );
+    if (!existingAssignment) {
+      await Company.updateOne(
+        { _id: source._id },
+        {
+          $addToSet: { events: eventId },
+          $push: {
+            eventAssignments: {
+              eventId,
+              status: 'New Lead',
+              dataSource: 'Master Data Re-engagement',
+              forwardTo: '',
+              updatedAt: new Date(),
+            },
+          },
+        },
+      );
     }
-
-    const profileData = {};
-    PROFILE_FIELDS.forEach((field) => {
-      if (source[field] !== undefined) profileData[field] = source[field];
-    });
-
-    const newCompany = new Company({
-      ...profileData,
-      eventId,
-      companyStatus: 'New Lead',
-      dataSource: 'Master Data Re-engagement',
-      forwardTo: undefined,
-      followUpDate: undefined,
-      reminder: undefined,
-      exhibitorRegistrationId: null,
-    });
-    await newCompany.save();
+    const updated = await Company.findById(source._id).lean();
 
     await logActivity(req, 'Created', 'Client Data', `Re-engaged "${source.companyName}" for a new event from master data`);
 
-    res.status(201).json({ success: true, data: newCompany, reused: false });
+    res.status(existingAssignment ? 200 : 201).json({
+      success: true,
+      data: withEventLifecycle(updated, eventId),
+      reused: Boolean(existingAssignment),
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error adding company to event', error: error.message });
   }
@@ -357,14 +549,87 @@ const addCompanyToEvent = async (req, res) => {
 // person for Organic Expo 2027 never touches an existing IHWE Expo 2026 entry.
 const upsertEventAssignments = async (companyIds, eventIds, forwardTo) => {
   for (const eventId of eventIds) {
-    await Company.updateMany(
-      { _id: { $in: companyIds }, "eventAssignments.eventId": eventId },
-      { $set: { "eventAssignments.$.forwardTo": forwardTo } },
-    );
+    if (typeof forwardTo === "string" && forwardTo.trim()) {
+      await Company.updateMany(
+        { _id: { $in: companyIds }, "eventAssignments.eventId": eventId },
+        {
+          $set: {
+            "eventAssignments.$.forwardTo": forwardTo.trim(),
+            "eventAssignments.$.updatedAt": new Date(),
+          },
+        },
+      );
+    }
     await Company.updateMany(
       { _id: { $in: companyIds }, "eventAssignments.eventId": { $ne: eventId } },
-      { $push: { eventAssignments: { eventId, forwardTo } } },
+      {
+        $push: {
+          eventAssignments: {
+            eventId,
+            forwardTo: typeof forwardTo === "string" ? forwardTo.trim() : "",
+            status: "New Lead",
+            updatedAt: new Date(),
+          },
+        },
+      },
     );
+  }
+};
+
+// Update the sales lifecycle for one client in one exhibition without
+// overwriting the same client's state in any other exhibition.
+const updateEventLifecycle = async (req, res) => {
+  try {
+    const { id, eventId } = req.params;
+    const allowed = [
+      "status", "forwardTo", "dataSource", "socialMediaType", "referralName",
+      "referralMobile", "reminder", "followUpDate", "lastRemark",
+      "exhibitorRegistrationId", "registrationEventId", "convertedAt",
+    ];
+    const setFields = { "eventAssignments.$.updatedAt": new Date() };
+    allowed.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        setFields[`eventAssignments.$.${field}`] = req.body[field] || null;
+      }
+    });
+
+    let company = await Company.findOneAndUpdate(
+      { _id: id, "eventAssignments.eventId": eventId },
+      {
+        $set: setFields,
+        $addToSet: { events: eventId },
+      },
+      { returnDocument: "after" },
+    ).lean();
+
+    if (!company) {
+      const exists = await Company.exists({ _id: id });
+      if (!exists) return res.status(404).json({ success: false, message: "Company not found" });
+      const assignment = buildEventAssignment({
+        companyStatus: req.body.status,
+        ...req.body,
+      }, eventId);
+      company = await Company.findByIdAndUpdate(
+        id,
+        {
+          $addToSet: { events: eventId },
+          $push: { eventAssignments: assignment },
+        },
+        { returnDocument: "after" },
+      ).lean();
+    }
+
+    await logActivity(req, "Updated", "Client Data", `Updated exhibition lifecycle for "${company.companyName}"`);
+    return res.status(200).json({
+      success: true,
+      data: withEventLifecycle(company, eventId),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error updating exhibition lifecycle",
+      error: error.message,
+    });
   }
 };
 
@@ -384,9 +649,7 @@ const assignEventsToCompany = async (req, res) => {
 
     await Company.findByIdAndUpdate(req.params.id, { $addToSet: { events: { $each: eventIds } } });
 
-    if (typeof forwardTo === "string" && forwardTo.trim().length > 0) {
-      await upsertEventAssignments([req.params.id], eventIds, forwardTo.trim());
-    }
+    await upsertEventAssignments([req.params.id], eventIds, forwardTo);
 
     const updated = await Company.findById(req.params.id);
     if (!updated) return res.status(404).json({ success: false, message: "Company not found" });
@@ -424,11 +687,10 @@ const bulkAssignCompanies = async (req, res) => {
         { _id: { $in: companyIds } },
         { $addToSet: { events: { $each: eventIds } } },
       );
+      await upsertEventAssignments(companyIds, eventIds, hasForwardTo ? forwardTo : "");
     }
 
-    if (hasForwardTo && hasEvents) {
-      await upsertEventAssignments(companyIds, eventIds, forwardTo.trim());
-    } else if (hasForwardTo) {
+    if (hasForwardTo && !hasEvents) {
       result = await Company.updateMany({ _id: { $in: companyIds } }, { $set: { forwardTo: forwardTo.trim() } });
     }
 
@@ -437,8 +699,8 @@ const bulkAssignCompanies = async (req, res) => {
       "Updated",
       "Client Data",
       `Bulk-assigned ${companyIds.length} compan${companyIds.length === 1 ? "y" : "ies"}` +
-        (hasEvents ? ` to ${eventIds.length} event(s)` : "") +
-        (hasForwardTo ? ` and forwarded to "${forwardTo.trim()}"` : ""),
+      (hasEvents ? ` to ${eventIds.length} event(s)` : "") +
+      (hasForwardTo ? ` and forwarded to "${forwardTo.trim()}"` : ""),
     );
 
     res.status(200).json({ success: true, matched: result.matchedCount, modified: result.modifiedCount });
@@ -933,7 +1195,7 @@ const getSalesLeaderboard = async (req, res) => {
 
     // 3. Fetch converted registrations first
     const allConverted = await ExhibitorRegistration.find(query).select('clientId financeBreakdown participation amountPaid');
-    
+
     // 4. Extract unique clientIds and fetch ONLY those companies to map them to admins
     const uniqueClientIds = [...new Set(allConverted.map(reg => reg.clientId).filter(Boolean))];
     const relevantCompanies = await Company.find({ _id: { $in: uniqueClientIds } }).select('_id forwardTo added_by');
@@ -941,7 +1203,7 @@ const getSalesLeaderboard = async (req, res) => {
     const leaderboard = admins.map(admin => {
       const u = admin.username.toLowerCase();
       const f = admin.fullName ? admin.fullName.toLowerCase() : u;
-      
+
       // Find companies belonging to this admin
       const adminCompanyIds = relevantCompanies
         .filter(c =>
@@ -974,6 +1236,59 @@ const getSalesLeaderboard = async (req, res) => {
   }
 };
 
+// Exhibition-scoped conversion view. A conversion is a CRM lifecycle state,
+// not merely the existence of an exhibitor registration.
+const getConvertedCompanies = async (req, res) => {
+  try {
+    const { eventId, username = "", role = "" } = req.query;
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: "eventId is required" });
+    }
+
+    const elemMatch = { eventId, status: { $regex: /^Closed\s*-\s*Won$/i } };
+    const normalizedRole = role.toLowerCase().replace(/[^a-z]/g, "");
+    if (username && !["superadmin", "admin"].includes(normalizedRole)) {
+      elemMatch.forwardTo = { $regex: new RegExp(`^${escapeRegex(username)}$`, "i") };
+    }
+
+    const companies = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
+    const registrationIds = companies
+      .map((company) => (company.eventAssignments || []).find(
+        (item) => String(item.eventId) === String(eventId) && /^Closed\s*-\s*Won$/i.test(item.status || ""),
+      )?.exhibitorRegistrationId)
+      .filter(Boolean);
+
+    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+    const registrations = await ExhibitorRegistration.find({ _id: { $in: registrationIds } }).lean();
+    const registrationById = new Map(registrations.map((item) => [String(item._id), item]));
+
+    const data = companies.map((company) => {
+      const assignment = (company.eventAssignments || []).find(
+        (item) => String(item.eventId) === String(eventId) && /^Closed\s*-\s*Won$/i.test(item.status || ""),
+      );
+      const registration = assignment?.exhibitorRegistrationId
+        ? registrationById.get(String(assignment.exhibitorRegistrationId))
+        : null;
+      return {
+        ...company,
+        ...(registration || {}),
+        _id: registration?._id || company._id,
+        clientId: company._id,
+        companyId: company._id,
+        companyName: company.companyName,
+        exhibitorName: registration?.exhibitorName || company.companyName,
+        status: "Converted",
+        eventLifecycle: assignment,
+      };
+    });
+
+    return res.status(200).json({ success: true, data, total: data.length });
+  } catch (error) {
+    console.error("Error fetching converted companies:", error);
+    return res.status(500).json({ success: false, message: "Error fetching converted companies" });
+  }
+};
+
 module.exports = {
   addCompany,
   getCompanies,
@@ -982,6 +1297,7 @@ module.exports = {
   addCompanyToEvent,
   assignEventsToCompany,
   bulkAssignCompanies,
+  updateEventLifecycle,
   lookupCompanyOrExhibitor,
   updateCompany,
   deleteCompany,
@@ -990,4 +1306,5 @@ module.exports = {
   uploadCompanies,
   getAchievementRevenue,
   getSalesLeaderboard,
+  getConvertedCompanies,
 };

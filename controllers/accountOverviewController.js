@@ -83,19 +83,30 @@ const EXHIBITOR_STATUS_LABELS = {
   "payment-failed": { label: "Payment Failed", color: "red" },
 };
 
-const buildAccountOverview = async (companyId, company, exhibitor) => {
+const buildAccountOverview = async (companyId, company, exhibitor, eventId = "") => {
+    const normalizedEventId = String(eventId || "").trim();
+    if (
+      normalizedEventId
+      && String(exhibitor?.eventId || exhibitor?.event?._id || exhibitor?.event || "") !== normalizedEventId
+    ) {
+      // A registration belongs to one exhibition. Never use another exhibition's
+      // booking/payment fallback while viewing an event-scoped account.
+      exhibitor = null;
+    }
+    const eventMatch = normalizedEventId ? { eventId: normalizedEventId } : {};
     const lookupIds = Array.from(
       new Set(
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
       )
     );
     const [invoices, proformaInvoices, creditNotes, debitNotes, accountDebitNotes, deliveryChallans] = await Promise.all([
-      Invoice.find({ companyId: { $in: lookupIds } }).lean(),
-      Estimate.find({ companyId: { $in: lookupIds } }).lean(),
-      CreditNote.find({ companyId: { $in: lookupIds } }).lean(),
-      DebitNote.find({ companyId: { $in: lookupIds } }).lean(),
-      AccountDebitNote.find({ companyId: { $in: lookupIds }, status: "active" }).lean(),
+      Invoice.find({ companyId: { $in: lookupIds }, ...eventMatch }).lean(),
+      Estimate.find({ companyId: { $in: lookupIds }, ...eventMatch }).lean(),
+      CreditNote.find({ companyId: { $in: lookupIds }, ...eventMatch }).lean(),
+      DebitNote.find({ companyId: { $in: lookupIds }, ...eventMatch }).lean(),
+      AccountDebitNote.find({ companyId: { $in: lookupIds }, status: "active", ...eventMatch }).lean(),
       DeliveryChallan.find({
+        ...eventMatch,
         $or: [
           { companyId: { $in: lookupIds } },
           { account_ref_id: { $in: lookupIds } },
@@ -670,7 +681,7 @@ const getAccountOverview = async (req, res) => {
       return res.status(404).json({ message: "Company not found" });
     }
 
-    const data = await buildAccountOverview(companyId, company, exhibitor);
+    const data = await buildAccountOverview(companyId, company, exhibitor, req.query.eventId);
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Error in getAccountOverview:", error);
