@@ -628,15 +628,27 @@ class ExhibitorRegistrationService {
                     const tdsA = Math.round(sub * tdsP / 100);
                     const expectedNet = (sub + gstA) - tdsA;
 
-                    const submittedNet = data.financeBreakdown?.netPayable
-                        ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
-                    const TOLERANCE = 5;
-                    if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
-                        throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
-                    }
+                    data.participation.rate = rateDoc.ratePerSqm || 0;
+                    data.participation.stallSize = stallForCalc.area || 0;
+                    data.participation.amount = sub;
+                    data.participation.total = sub + gstA;
+                    data.financeBreakdown = {
+                        ...(data.financeBreakdown || {}),
+                        grossAmount: gross,
+                        stallDiscountPercent: stallForCalc.discountPercentage || 0,
+                        stallDiscountAmount: stallDiscAmt,
+                        subtotal1: sub1,
+                        discountPercent: discP,
+                        discountAmount: discA,
+                        subtotal: sub,
+                        gstAmount: gstA,
+                        tdsPercent: tdsP,
+                        tdsAmount: tdsA,
+                        netPayable: expectedNet,
+                        isFullPayment,
+                    };
                 }
             } catch (validationErr) {
-                if (String(validationErr.message).includes('Pricing could not be verified')) throw validationErr;
                 console.error('[PriceValidation] Skipped due to lookup error:', validationErr.message);
             }
         }
