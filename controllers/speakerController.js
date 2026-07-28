@@ -68,7 +68,9 @@ exports.createSpeaker = async (req, res) => {
             expertise: Array.isArray(newSpeaker.expertise) ? newSpeaker.expertise.join(', ') : newSpeaker.expertise,
             designation: newSpeaker.designation,
             organization: newSpeaker.organization,
-            city: newSpeaker.city
+            city: newSpeaker.city,
+            linkedinUrl: newSpeaker.linkedin,
+            biography: newSpeaker.briefProfile
         }).catch(err => {
             console.error('Speaker registration notification failed:', err.message);
         });

@@ -46,6 +46,11 @@ class VerifyService {
             contextDescription = 'registering as a Visitor';
             dashboardText = 'IHWE Visitor Portal';
             contextGreeting = 'Visitor';
+        } else if (context === 'CONTACT' || context.includes('contact')) {
+            contextTitle = 'Contact Enquiry';
+            contextDescription = 'submitting an enquiry';
+            dashboardText = 'IHWE Contact Desk';
+            contextGreeting = 'Visitor';
         } else if (context === 'SPEAKER' || context.includes('speaker')) {
             contextTitle = 'Speaker Registration';
             contextDescription = 'registering as a Speaker';

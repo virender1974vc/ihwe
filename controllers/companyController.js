@@ -73,7 +73,7 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, forwardTo, eventId } = req.query;
+    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, forwardTo, eventId, state, city } = req.query;
 
     let query = {};
 
@@ -129,6 +129,11 @@ const getCompanies = async (req, res) => {
     if (source) query.dataSource = { $regex: new RegExp(`^${escapeRegex(source)}$`, 'i') };
     if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
     if (forwardTo) query.forwardTo = { $regex: new RegExp(`^${escapeRegex(forwardTo)}$`, 'i') };
+    // state/city come from the CrmState/CrmCity reference lists (state_id /
+    // city_id backed dropdowns) — matched by name since Company itself still
+    // stores free text, so this stays exact (anchored, case-insensitive).
+    if (state) query.state = { $regex: new RegExp(`^${escapeRegex(state)}$`, 'i') };
+    if (city) query.city = { $regex: new RegExp(`^${escapeRegex(city)}$`, 'i') };
 
     // Date Range Filter (using createdAt)
     if (startDate || endDate) {
@@ -197,6 +202,69 @@ const getCompanies = async (req, res) => {
       message: "Error fetching companies",
       error: error.message,
     });
+  }
+};
+
+// ➤ Lightweight, accurate stats summary — total + per-status counts via
+// aggregation, instead of the "dashboard=true" raw-doc fetch which is capped
+// at 3000 rows and goes wrong once the collection grows past that (Master
+// Data showed a stale/capped "Total Leads" count once the DB passed 30k+ rows).
+const getCompanyStatsSummary = async (req, res) => {
+  try {
+    const { eventId, username, role, status } = req.query;
+    let query = {};
+
+    if (eventId) {
+      mergeOrCondition(query, [{ eventId }, { events: eventId }]);
+    }
+
+    // Comma-separated, matched as a SUBSTRING of companyStatus (not anchored)
+    // to mirror the messy real-world status text (e.g. "On Hold", "Not
+    // Interested - lost deal") the way each list page's own client-side
+    // `status.includes(...)` categorization already does.
+    if (status) {
+      const parts = status.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        mergeOrCondition(query, parts.map((p) => ({ companyStatus: { $regex: new RegExp(escapeRegex(p), 'i') } })));
+      }
+    }
+
+    const lowerUsername = username ? username.toLowerCase() : null;
+    const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
+    const isSuperAdmin = cleanRole === 'superadmin';
+
+    if (lowerUsername && !isSuperAdmin) {
+      let lowerFullName = lowerUsername;
+      try {
+        const User = require('../models/User');
+        const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } });
+        if (adminUser && adminUser.fullName) {
+          lowerFullName = adminUser.fullName.toLowerCase();
+        }
+      } catch (e) { console.error(e); }
+
+      const authOr = [
+        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
+        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
+      ];
+      if (lowerFullName !== lowerUsername) {
+        authOr.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        authOr.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+      }
+      mergeOrCondition(query, authOr);
+    }
+
+    const [total, statusAgg] = await Promise.all([
+      Company.countDocuments(query),
+      Company.aggregate([{ $match: query }, { $group: { _id: "$companyStatus", count: { $sum: 1 } } }]),
+    ]);
+
+    const statusCounts = {};
+    statusAgg.forEach((s) => { statusCounts[s._id || "New Lead"] = s.count; });
+
+    res.status(200).json({ success: true, total, statusCounts });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching stats summary", error: error.message });
   }
 };
 
@@ -283,22 +351,44 @@ const addCompanyToEvent = async (req, res) => {
   }
 };
 
+// For each eventId, sets eventAssignments.forwardTo on companies that already
+// have an entry for that event, and pushes a fresh entry for companies that
+// don't — across `companyIds`. Scoped strictly to `eventIds`, so assigning a
+// person for Organic Expo 2027 never touches an existing IHWE Expo 2026 entry.
+const upsertEventAssignments = async (companyIds, eventIds, forwardTo) => {
+  for (const eventId of eventIds) {
+    await Company.updateMany(
+      { _id: { $in: companyIds }, "eventAssignments.eventId": eventId },
+      { $set: { "eventAssignments.$.forwardTo": forwardTo } },
+    );
+    await Company.updateMany(
+      { _id: { $in: companyIds }, "eventAssignments.eventId": { $ne: eventId } },
+      { $push: { eventAssignments: { eventId, forwardTo } } },
+    );
+  }
+};
+
 // ➤ Lookup Company or Exhibitor Registration by ID (to avoid frontend 404 fallback errors)
 // ➤ Assign one or more events to a single company. Adds to the `events` set
 // (doesn't remove existing assignments) so a company already tagged to
 // IHWE 2026 can also be tagged to Organic 2027 without losing the first one.
+// An optional `forwardTo` is scoped to just these `eventIds` via
+// `eventAssignments` — it never overwrites the person assigned to a
+// different, already-assigned event on the same company.
 const assignEventsToCompany = async (req, res) => {
   try {
-    const { eventIds } = req.body;
+    const { eventIds, forwardTo } = req.body;
     if (!Array.isArray(eventIds) || eventIds.length === 0) {
       return res.status(400).json({ success: false, message: "eventIds (non-empty array) is required" });
     }
 
-    const updated = await Company.findByIdAndUpdate(
-      req.params.id,
-      { $addToSet: { events: { $each: eventIds } } },
-      { new: true },
-    );
+    await Company.findByIdAndUpdate(req.params.id, { $addToSet: { events: { $each: eventIds } } });
+
+    if (typeof forwardTo === "string" && forwardTo.trim().length > 0) {
+      await upsertEventAssignments([req.params.id], eventIds, forwardTo.trim());
+    }
+
+    const updated = await Company.findById(req.params.id);
     if (!updated) return res.status(404).json({ success: false, message: "Company not found" });
 
     await logActivity(req, "Updated", "Client Data", `Assigned ${eventIds.length} event(s) to "${updated.companyName}"`);
@@ -310,6 +400,10 @@ const assignEventsToCompany = async (req, res) => {
 
 // ➤ Bulk-assign events and/or a handling person ("forwardTo") to many
 // companies at once — used by Master Data's row-selection toolbar.
+// When both an event and a person are given together, the person is scoped
+// to that event only (via `eventAssignments`) — it does NOT overwrite who's
+// assigned on any other event the company already belongs to. `forwardTo`
+// with no `eventIds` falls back to the old flat, event-agnostic reassignment.
 const bulkAssignCompanies = async (req, res) => {
   try {
     const { companyIds, eventIds, forwardTo } = req.body;
@@ -323,11 +417,20 @@ const bulkAssignCompanies = async (req, res) => {
       return res.status(400).json({ success: false, message: "Provide eventIds and/or forwardTo to assign" });
     }
 
-    const update = {};
-    if (hasEvents) update.$addToSet = { events: { $each: eventIds } };
-    if (hasForwardTo) update.$set = { forwardTo: forwardTo.trim() };
+    let result = { matchedCount: companyIds.length, modifiedCount: 0 };
 
-    const result = await Company.updateMany({ _id: { $in: companyIds } }, update);
+    if (hasEvents) {
+      result = await Company.updateMany(
+        { _id: { $in: companyIds } },
+        { $addToSet: { events: { $each: eventIds } } },
+      );
+    }
+
+    if (hasForwardTo && hasEvents) {
+      await upsertEventAssignments(companyIds, eventIds, forwardTo.trim());
+    } else if (hasForwardTo) {
+      result = await Company.updateMany({ _id: { $in: companyIds } }, { $set: { forwardTo: forwardTo.trim() } });
+    }
 
     await logActivity(
       req,
@@ -874,6 +977,7 @@ const getSalesLeaderboard = async (req, res) => {
 module.exports = {
   addCompany,
   getCompanies,
+  getCompanyStatsSummary,
   getCompanyById,
   addCompanyToEvent,
   assignEventsToCompany,

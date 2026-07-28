@@ -46,7 +46,7 @@ async function sendSponsorshipConfirmation(data) {
             }
 
 
-            await this.notifyAdmin('sponsorship-enquiry', data, subject, 'CONTACT');
+            await this.sendSponsorshipAdminNotification(data);
 
             return true;
         } catch (error) {

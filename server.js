@@ -145,6 +145,7 @@ const clientDocumentRoutes = require("./routes/clientDocumentRoutes");
 const referralRoutes = require("./routes/referralRoutes");
 const previousExhibitionRoutes = require("./routes/previousExhibitionRoutes");
 const estimateTermsConfigRoutes = require("./routes/estimateTermsConfigRoutes");
+const seedRoutes = require("./routes/seedRoutes");
 
 const databaseReady = mongoose
   .connect(process.env.MONGO_URI_MAIN, {
@@ -485,6 +486,7 @@ app.use("/api/distinguished-speakers", require('./routes/distinguishedSpeakers')
 app.use("/api/marketing-materials", require('./routes/marketingMaterialRoutes'));
 app.use("/api/user-targets", require("./routes/userTargetRoutes"));
 app.use("/api/reminders", require("./routes/reminderRoutes"));
+app.use("/api/seed", seedRoutes);
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');

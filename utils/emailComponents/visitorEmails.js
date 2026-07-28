@@ -13,15 +13,23 @@ async function sendVisitorRegistrationEmails(data) {
         const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' :
             data.visitorType.toLowerCase().includes('health') ? 'health-camp-visitor' : 'general-visitor';
 
-        return await this.sendDynamicConfirmation({
+        const isHealthCamp = type === 'health-camp-visitor';
+        const userResult = await this.sendDynamicConfirmation({
             to: data.email,
             formType: type,
             data: {
                 ...data,
                 name: `${data.firstName} ${data.lastName || ''}`.trim(),
             },
-            profile: 'VISITOR'
+            profile: 'VISITOR',
+            notifyAdmin: !isHealthCamp
         });
+
+        if (isHealthCamp) {
+            await this.sendHealthCampAdminNotification(data);
+        }
+
+        return userResult;
     }
 
 async function sendVisitorConfirmationOnly(data, formType) {
@@ -246,7 +254,7 @@ async function sendDetailedBuyerNotification(data) {
         try {
             const subject = `NEW BUYER REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId}`;
             const html = getBuyerRegistrationAlertTemplate(data);
-            const recipientEmail = process.env.VISITOR_ADMIN_EMAIL || process.env.BUYER_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
+            const recipientEmail = process.env.BUYER_ADMIN_EMAIL || process.env.VISITOR_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'virender.1974vc@gmail.com';
 
             await this.sendEmail({
                 to: recipientEmail,
@@ -307,43 +315,8 @@ async function sendInternationalBuyerRegistrationEmails(data) {
                 country: data.country,
                 registrationId: data.registrationId
             },
-            profile: 'DEFAULT'
-        });
-    }
-
-async function sendSpeakerNominationEmails(nomination) {
-        return await this.sendDynamicConfirmation({
-            to: nomination.email,
-            formType: 'speaker-nomination',
-            data: {
-                fullName: nomination.fullName,
-                full_name: nomination.fullName,
-                topic: nomination.topic,
-                expertise: nomination.expertise,
-                designation: nomination.designation,
-                organization: nomination.organization,
-                company: nomination.organization,
-                city: nomination.city,
-                phone: nomination.phone,
-                mobile: nomination.phone,
-                email: nomination.email
-            },
-            profile: 'SPEAKER'
-        });
-    }
-
-async function sendContactUsEmails(enquiry) {
-        return await this.sendDynamicConfirmation({
-            to: enquiry.email,
-            formType: 'contact-enquiry',
-            data: {
-                name: enquiry.name,
-                email: enquiry.email,
-                phone: enquiry.phone,
-                service: enquiry.service,
-                message: enquiry.message
-            },
-            profile: 'CONTACT'
+            profile: 'DEFAULT',
+            notifyAdmin: false
         });
     }
 
@@ -363,4 +336,4 @@ async function sendBuyerRegistrationEmails(data) {
         });
     }
 
-module.exports = { sendVisitorRegistrationEmails, sendVisitorConfirmationOnly, sendExhibitorAdminAlert, sendDetailedVisitorNotification, sendDetailedBuyerNotification, sendDetailedInternationalBuyerNotification, sendInternationalBuyerRegistrationEmails, sendSpeakerNominationEmails, sendContactUsEmails, sendBuyerRegistrationEmails };
+module.exports = { sendVisitorRegistrationEmails, sendVisitorConfirmationOnly, sendExhibitorAdminAlert, sendDetailedVisitorNotification, sendDetailedBuyerNotification, sendDetailedInternationalBuyerNotification, sendInternationalBuyerRegistrationEmails, sendBuyerRegistrationEmails };

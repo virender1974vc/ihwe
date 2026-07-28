@@ -49,6 +49,15 @@ const CompanySchema = new mongoose.Schema(
     // still used by per-event pages); `events` is the new assignable set shown
     // together in Master Data.
     events: [{ type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" }],
+    // Who handles this company FOR A GIVEN EVENT. Kept separate from the flat
+    // `forwardTo` below because a company can belong to several events with a
+    // different person responsible for each — e.g. Vansh owns it for IHWE
+    // Expo 2026 while Manish owns it for Organic Expo 2027 at the same time.
+    // Assigning one event's person must never overwrite another event's entry.
+    eventAssignments: [{
+      eventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" },
+      forwardTo: { type: String },
+    }],
     reminder: { type: Date },
     companyStatus: { type: String, default: "New Lead" },
     added_by: { type: String, trim: true },

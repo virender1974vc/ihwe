@@ -2,6 +2,7 @@ const PartnerRegistration = require("../models/PartnerRegistration");
 const emailService = require("../utils/emailService");
 const whatsapp = require("../utils/whatsapp");
 const { logActivity } = require("../utils/logger");
+const { getServicePartnerRegistrationAdminAlertTemplate } = require("../utils/emailTemplates/servicePartnerRegistrationAdminAlert");
 
 class PartnerRegistrationController {
   /**
@@ -135,6 +136,24 @@ class PartnerRegistrationController {
       html: this.getEmailTemplate(emailData),
       profile: "DEFAULT",
     });
+
+    const adminEmail = process.env.CONTACT_ADMIN_EMAIL || process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      await emailService.sendEmail({
+        to: adminEmail,
+        subject: `NEW SERVICE PARTNER REGISTRATION ALERT | IHWE 2026 | ${partner.registrationId}`,
+        html: getServicePartnerRegistrationAdminAlertTemplate(partner),
+        profile: "CONTACT",
+        logData: {
+          name: partner.fullName,
+          phone: partner.mobile,
+          message: "Service Partner Registration Admin Alert",
+          companyName: partner.companyName,
+        },
+      });
+    } else {
+      console.warn("[ServicePartnerAdminAlert] No CONTACT_ADMIN_EMAIL or ADMIN_EMAIL configured.");
+    }
 
     // Send WhatsApp to Partner
     const whatsappMsg = `Namo Gange Namaskar!\n\nDear ${partner.fullName},\n\nThank you for registering as an Official Service Partner for the *9th International Health & Wellness Expo 2026 (IHWE)* on behalf of *${partner.companyName}*.\n\n*Registration ID:* ${partner.registrationId}\n\nOur team will review your application details and get in touch with you soon.\n\nBest Regards,\nTeam IHWE\nNamo Gange Wellness Pvt. Ltd.`;
