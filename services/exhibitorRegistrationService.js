@@ -101,11 +101,16 @@ class ExhibitorRegistrationService {
 
     // Shared filter builder used by both the paginated list and the summary
     // aggregation, so "what matches" is defined in exactly one place.
-    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '' } = {}) {
+    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '', validBooking = false } = {}) {
         const query = {};
         const orGroups = [];
         if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
             query.eventId = new mongoose.Types.ObjectId(eventId);
+        }
+        if (validBooking === true || validBooking === 'true') {
+            query['participation.stallNo'] = { $nin: [null, ''] };
+            query['participation.stallSize'] = { $gt: 0 };
+            query['participation.total'] = { $gt: 0 };
         }
 
         if (status) {
@@ -116,10 +121,6 @@ class ExhibitorRegistrationService {
             query.referredBy = { $regex: new RegExp(`^${esc}$`, 'i') };
         }
         if (industry) {
-            // Must mirror the exact "natureOfBusiness || industrySector || typeOfBusiness"
-            // priority chain the UI displays under the company name — otherwise a row can
-            // match the filter on one field while showing a DIFFERENT field's value,
-            // making the filter look broken.
             const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const exact = new RegExp(`^${esc}$`, 'i');
             const isEmpty = (field) => ({ $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }] });
@@ -442,14 +443,30 @@ class ExhibitorRegistrationService {
             const hasContactDetails = (contact) => Boolean(
                 contact?.firstName || contact?.lastName || contact?.name || contact?.mobile || contact?.email
             );
+            const linkedCompany = companyById.get(String(doc.clientId || ''));
+            const companyContact =
+                linkedCompany?.contacts?.find((contact) => contact.isPrimary)
+                || linkedCompany?.contacts?.[0];
+
+            if (!doc.contact1?.firstName && !doc.contact1?.name && companyContact) {
+                const currentContact = doc.contact1?.toObject ? doc.contact1.toObject() : (doc.contact1 || {});
+                doc.contact1 = {
+                    ...currentContact,
+                    title: currentContact.title || companyContact.title || '',
+                    firstName: companyContact.firstName || companyContact.name || '',
+                    lastName: currentContact.lastName || companyContact.surname || '',
+                    designation: currentContact.designation || companyContact.designation || '',
+                    email: currentContact.email || companyContact.email || '',
+                    mobile: currentContact.mobile || companyContact.mobile || '',
+                    photoUrl: currentContact.photoUrl || companyContact.photoUrl || companyContact.photo || '',
+                };
+                doc._isEnriched = true;
+            }
+
             if (!hasContactDetails(doc.contact1)) {
                 const primaryTeamMember = doc.teamMembers?.find((member) =>
                     member.isPrimary || /primary contact/i.test(member.roleAtExhibition || '')
                 );
-                const linkedCompany = companyById.get(String(doc.clientId || ''));
-                const companyContact =
-                    linkedCompany?.contacts?.find((contact) => contact.isPrimary)
-                    || linkedCompany?.contacts?.[0];
 
                 if (primaryTeamMember) {
                     doc.contact1 = {
@@ -486,6 +503,16 @@ class ExhibitorRegistrationService {
 
         // ── Registrant type validation ──────────────────────────────────────────
         const registrantType = data.registrantType || 'registered';
+        if (data.registrationSource === 'admin') {
+            const participation = data.participation || {};
+            if (!data.eventId) throw new Error('Please select the registration event.');
+            if (!participation.stallNo || !participation.stallFor) {
+                throw new Error('Please select a valid stall before creating the exhibitor registration.');
+            }
+            if (Number(participation.stallSize || 0) <= 0 || Number(participation.total || 0) <= 0) {
+                throw new Error('Stall area and booking amount must be greater than zero.');
+            }
+        }
         if (registrantType === 'registered') {
             if (!data.gstNo || data.gstNo.trim() === '') {
                 throw new Error('GST Number (GSTIN) is required for Registered Exhibitors.');
@@ -735,7 +762,11 @@ class ExhibitorRegistrationService {
             const newRegistration = new ExhibitorRegistration(data);
             saved = await newRegistration.save();
         }
-        const isCommittedRegistration = data.status !== 'payment-failed';
+        const isCommittedRegistration =
+            data.status !== 'payment-failed'
+            && Boolean(data.participation?.stallNo)
+            && Number(data.participation?.stallSize || 0) > 0
+            && Number(data.participation?.total || 0) > 0;
 
         if (data.clientId) {
             try {

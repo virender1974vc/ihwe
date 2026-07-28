@@ -12,7 +12,7 @@ const toPublicUploadPath = (filePath = '') => {
 class ExhibitorRegistrationController {
     async getAllRegistrations(req, res) {
         try {
-            const { page = 1, limit = 20, search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '' } = req.query;
+            const { page = 1, limit = 20, search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '', validBooking = false } = req.query;
             const result = await exhibitorRegistrationService.getAllRegistrations({
                 page: Number(page),
                 limit: Number(limit),
@@ -23,6 +23,7 @@ class ExhibitorRegistrationController {
                 username,
                 role,
                 eventId,
+                validBooking,
             });
             res.status(200).json({
                 success: true,
@@ -39,9 +40,9 @@ class ExhibitorRegistrationController {
 
     async getRegistrationsSummary(req, res) {
         try {
-            const { search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '' } = req.query;
+            const { search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '', validBooking = false } = req.query;
             const summary = await exhibitorRegistrationService.getRegistrationsSummary({
-                search, status, referredBy, industry, username, role, eventId,
+                search, status, referredBy, industry, username, role, eventId, validBooking,
             });
             res.status(200).json({ success: true, data: summary });
         } catch (error) {
