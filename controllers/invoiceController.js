@@ -143,7 +143,8 @@ const validateInvoiceItemsAgainstEstimate = async (payload, excludeInvoiceId = n
 // 📍 GET all invoices
 const getAllInvoices = async (req, res) => {
   try {
-    const invoices = await Invoice.find().sort({ added: -1 }).lean();
+    const invoiceQuery = req.query.eventId ? { eventId: req.query.eventId } : {};
+    const invoices = await Invoice.find(invoiceQuery).sort({ added: -1 }).lean();
     
     // Inject eventId
     const companyIds = [...new Set(invoices.map(i => String(i.companyId)).filter(Boolean))];
@@ -164,7 +165,7 @@ const getAllInvoices = async (req, res) => {
     const populatedInvoices = invoices.map(inv => {
       return {
         ...inv,
-        eventId: eventMap[String(inv.companyId)] || null
+        eventId: inv.eventId || eventMap[String(inv.companyId)] || null
       };
     });
 
@@ -247,8 +248,20 @@ const createInvoice = async (req, res) => {
     // Generate invoice number
     const invoice_no = await Invoice.generateNextInvoiceNumber();
 
+    const sourceEstimate = req.body.source_estimate_id
+      ? await Estimate.findById(req.body.source_estimate_id).select("eventId companyId").lean()
+      : null;
+    if (sourceEstimate?.eventId && req.body.eventId && String(sourceEstimate.eventId) !== String(req.body.eventId)) {
+      return res.status(400).json({ message: "Invoice event does not match the selected proforma invoice." });
+    }
+    const resolvedEventId = sourceEstimate?.eventId || req.body.eventId || null;
+    if (!resolvedEventId) {
+      return res.status(400).json({ message: "Invoice must be linked to an exhibition event." });
+    }
+
     const newInvoice = new Invoice({
       ...req.body,
+      eventId: resolvedEventId,
       delivery_challan_ids: challanResult.ids,
       delivery_challans: challanResult.snapshots,
       invoice_no,

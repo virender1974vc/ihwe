@@ -32,6 +32,7 @@ const deliveryChallanSchema = new mongoose.Schema(
     challan_date: { type: String, required: true },
 
     companyId: { type: String, required: true, index: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, index: true },
     account_ref_id: { type: String, default: "", index: true },
 
     source_estimate_id: { type: String, required: true, index: true },
