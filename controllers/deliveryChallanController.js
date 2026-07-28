@@ -273,6 +273,7 @@ const validatePayload = async (payload, excludeId) => {
 exports.getChallans = async (req, res) => {
   try {
     const query = {};
+    if (req.query.eventId) query.eventId = req.query.eventId;
     if (req.query.companyId) {
       query.$or = [{ companyId: req.query.companyId }, { account_ref_id: req.query.companyId }];
     }
@@ -371,6 +372,7 @@ exports.createChallan = async (req, res) => {
     if (result.error) return res.status(400).json({ message: result.error });
     const challan = await DeliveryChallan.create({
       ...req.body,
+      eventId: result.estimate.eventId || req.body.eventId || null,
       estimate_no: result.estimate.est_no,
       challan_no: await DeliveryChallan.generateNextNumber(),
     });

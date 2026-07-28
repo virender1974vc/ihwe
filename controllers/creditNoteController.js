@@ -1,4 +1,5 @@
 const CreditNote = require("../models/CreditNote");
+const Invoice = require("../models/Invoice");
 const { logActivity } = require("../utils/logger");
 const { getAccountNameById } = require("../utils/accountActivityDetails");
 const { attachSignatorySignatures, attachSignatorySignaturesToMany } = require("../utils/signatorySignatures");
@@ -68,9 +69,13 @@ const createCreditNote = async (req, res) => {
     if (req.body.reviewedBy !== undefined) req.body.reviewedBy = parseNamedPerson(req.body.reviewedBy);
 
     const creditNo = await generateCreditNoteNo();
+    const sourceInvoice = req.body.reference_invoice_no
+      ? await Invoice.findOne({ invoice_no: req.body.reference_invoice_no }).select("eventId companyId").lean()
+      : null;
 
     const creditNote = new CreditNote({
       ...req.body,
+      eventId: sourceInvoice?.eventId || req.body.eventId || null,
       create_note_no: creditNo,
       updated_date: new Date(),
       attachment: req.file ? `/uploads/${req.file.filename}` : "",
@@ -109,7 +114,8 @@ const createCreditNote = async (req, res) => {
 // GET ALL CREDIT NOTES
 const getCreditNotes = async (req, res) => {
   try {
-    const notes = await CreditNote.find().sort({ created_at: -1 }).lean();
+    const query = req.query.eventId ? { eventId: req.query.eventId } : {};
+    const notes = await CreditNote.find(query).sort({ created_at: -1 }).lean();
     
     const companyIds = [...new Set(notes.map(n => String(n.companyId)).filter(Boolean))];
     const ExhibitorRegistration = require("../models/ExhibitorRegistration");

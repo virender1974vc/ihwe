@@ -1,4 +1,5 @@
 const DebitNote = require("../models/DebitNote");
+const Invoice = require("../models/Invoice");
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 
@@ -69,6 +70,13 @@ const createDebitNote = async (req, res) => {
       igstAmount: toNumber(req.body.igstAmount),
       totalAmount: toNumber(req.body.totalAmount),
     };
+    if (req.body.toInvoiceId) {
+      const sourceInvoice = await Invoice.findById(req.body.toInvoiceId).select("eventId companyId").lean();
+      if (!sourceInvoice) {
+        return res.status(400).json({ success: false, message: "Reference invoice not found" });
+      }
+      payload.eventId = sourceInvoice.eventId || req.body.eventId || null;
+    }
 
     if (req.file) {
       payload.attachmentUrl = `/uploads/debit_notes/${req.file.filename}`;
@@ -108,7 +116,9 @@ const createDebitNote = async (req, res) => {
 // GET ALL DEBIT NOTES (optionally filtered by companyId)
 const getDebitNotes = async (req, res) => {
   try {
-    const filter = req.query.companyId ? { companyId: req.query.companyId } : {};
+    const filter = {};
+    if (req.query.companyId) filter.companyId = req.query.companyId;
+    if (req.query.eventId) filter.eventId = req.query.eventId;
     const notes = await DebitNote.find(filter).sort({ added: -1 });
     res.json({ success: true, data: notes });
   } catch (error) {
