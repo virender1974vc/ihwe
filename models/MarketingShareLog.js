@@ -44,4 +44,6 @@ const marketingShareLogSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+marketingShareLogSchema.index({ eventId: 1, createdAt: -1 });
+
 module.exports = secondaryDB.model("MarketingShareLog", marketingShareLogSchema);
