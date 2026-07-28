@@ -255,7 +255,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Registration",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "display_order": 7,
       "business_nature": "Institution",
@@ -413,7 +413,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -429,7 +429,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -445,7 +445,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -461,7 +461,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -477,7 +477,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -493,7 +493,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -509,7 +509,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     },
@@ -525,7 +525,7 @@ exports.seedMasterData = async (req, res) => {
         "Exhibitor Lead",
         "Buyer Lead",
         "Sponsor Lead",
-        "General Lead"
+        "Visitor Lead"
       ],
       "updated_by": "Vansh Chaudhary"
     }

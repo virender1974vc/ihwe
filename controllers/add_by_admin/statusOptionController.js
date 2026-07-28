@@ -1,14 +1,21 @@
 const StatusOption = require("../../models/add_by_admin/StatusOption");
+const { resequenceDisplayOrder } = require("../../utils/displayOrder");
 
 // ➤ Create new status option
 const createStatusOption = async (req, res) => {
   try {
     const newStatus = new StatusOption(req.body);
     await newStatus.save();
+    await resequenceDisplayOrder(
+      StatusOption,
+      newStatus._id,
+      req.body.display_order,
+    );
+    const savedStatus = await StatusOption.findById(newStatus._id);
 
     res.status(201).json({
       message: "Status option created successfully",
-      data: newStatus,
+      data: savedStatus,
     });
   } catch (error) {
     res.status(500).json({
@@ -21,7 +28,7 @@ const createStatusOption = async (req, res) => {
 // ➤ Get all status options
 const getStatusOptions = async (req, res) => {
   try {
-    const statuses = await StatusOption.find();
+    const statuses = await StatusOption.find().sort({ display_order: 1, name: 1 });
     res.status(200).json(statuses);
   } catch (error) {
     res.status(500).json({
@@ -66,9 +73,19 @@ const updateStatusOption = async (req, res) => {
       });
     }
 
+    if (req.body.display_order !== undefined) {
+      await resequenceDisplayOrder(
+        StatusOption,
+        updated._id,
+        req.body.display_order,
+      );
+    }
+
+    const savedStatus = await StatusOption.findById(updated._id);
+
     res.status(200).json({
       message: "Status option updated",
-      data: updated,
+      data: savedStatus,
     });
   } catch (error) {
     res.status(500).json({
