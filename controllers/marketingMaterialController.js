@@ -291,6 +291,7 @@ exports.shareMaterials = async (req, res) => {
     // Create Log
     const log = await MarketingShareLog.create({
       cmpny_id,
+      eventId: requestEventId || null,
       materials: materials.map((m) => ({ material_id: m._id, title: m.title, category: m.category })),
       sentVia,
       sentBy: sentBy || "Admin",

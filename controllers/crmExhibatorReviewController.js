@@ -16,7 +16,9 @@ const getAllReviews = async (req, res) => {
 // GET review by ID
 const getReviewById = async (req, res) => {
   try {
-    let query = CrmExhibatorReview2023.find({ cmpny_id: req.params.id }).sort({ createdAt: -1 });
+    const filter = { cmpny_id: req.params.id };
+    if (req.query.eventId) filter.evnt_id = String(req.query.eventId);
+    let query = CrmExhibatorReview2023.find(filter).sort({ createdAt: -1 });
     if (req.query.limit) {
       query = query.limit(parseInt(req.query.limit, 10));
     }

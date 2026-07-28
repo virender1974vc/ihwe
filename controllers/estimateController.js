@@ -167,6 +167,11 @@ const getGroupedEstimateData = async (req, res) => {
         $project: {
           _id: 1,
           companyId: 1,
+          eventId: 1,
+          crmEventId: 1,
+          exhibitorRegistrationId: 1,
+          revisionOf: 1,
+          version: 1,
           est_no: 1,
           est_type: 1,
           gst_no: 1,
