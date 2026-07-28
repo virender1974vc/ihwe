@@ -1053,9 +1053,18 @@ class ExhibitorRegistrationService {
                 }
 
                 if (estData.items.length > 0) {
+                    const eventIdentity = [
+                        { eventId: data.eventId }
+                    ];
+                    if (estData.crmEventId) {
+                        eventIdentity.push({
+                            eventId: null,
+                            crmEventId: estData.crmEventId
+                        });
+                    }
                     const existingEstimate = await Estimate.findOne({
                         companyId: String(saved.clientId),
-                        eventId: data.eventId,
+                        $or: eventIdentity,
                         status: { $in: ['active', 'draft', 'sent'] }
                     }).sort({ added: -1 });
 
