@@ -89,7 +89,7 @@ const getCompanies = async (req, res) => {
     // Authorization filter
     const lowerUsername = username ? username.toLowerCase() : null;
     const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
-    const isSuperAdmin = cleanRole === 'superadmin';
+    const isSuperAdmin = cleanRole.includes('superadmin');
 
     if (lowerUsername && !isSuperAdmin) {
       let lowerFullName = lowerUsername;
@@ -101,14 +101,27 @@ const getCompanies = async (req, res) => {
         }
       } catch (e) { console.error(e); }
 
-      const authOr = [
-        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-      ];
+      const userIdentities = [lowerUsername];
       if (lowerFullName !== lowerUsername) {
-        authOr.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-        authOr.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        userIdentities.push(lowerFullName);
       }
+      
+      const userRegexes = userIdentities.map(id => new RegExp(`^${escapeRegex(id)}$`, 'i'));
+
+      const authOr = [
+        { forwardTo: { $in: userRegexes } },
+        {
+          $and: [
+            { added_by: { $in: userRegexes } },
+            { $or: [
+                { forwardTo: { $exists: false } },
+                { forwardTo: null },
+                { forwardTo: "" }
+              ] 
+            }
+          ]
+        }
+      ];
       mergeOrCondition(query, authOr);
     }
 
@@ -231,7 +244,7 @@ const getCompanyStatsSummary = async (req, res) => {
 
     const lowerUsername = username ? username.toLowerCase() : null;
     const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, '') : '';
-    const isSuperAdmin = cleanRole === 'superadmin';
+    const isSuperAdmin = cleanRole.includes('superadmin');
 
     if (lowerUsername && !isSuperAdmin) {
       let lowerFullName = lowerUsername;
@@ -243,14 +256,27 @@ const getCompanyStatsSummary = async (req, res) => {
         }
       } catch (e) { console.error(e); }
 
-      const authOr = [
-        { forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-        { added_by: { $regex: new RegExp(`^${escapeRegex(lowerUsername)}$`, 'i') } },
-      ];
+      const userIdentities = [lowerUsername];
       if (lowerFullName !== lowerUsername) {
-        authOr.push({ forwardTo: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
-        authOr.push({ added_by: { $regex: new RegExp(`^${escapeRegex(lowerFullName)}$`, 'i') } });
+        userIdentities.push(lowerFullName);
       }
+      
+      const userRegexes = userIdentities.map(id => new RegExp(`^${escapeRegex(id)}$`, 'i'));
+
+      const authOr = [
+        { forwardTo: { $in: userRegexes } },
+        {
+          $and: [
+            { added_by: { $in: userRegexes } },
+            { $or: [
+                { forwardTo: { $exists: false } },
+                { forwardTo: null },
+                { forwardTo: "" }
+              ] 
+            }
+          ]
+        }
+      ];
       mergeOrCondition(query, authOr);
     }
 
