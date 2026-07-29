@@ -27,6 +27,8 @@ const buildEventAssignment = (payload, eventId) => ({
   referralMobile: payload.referralMobile || "",
   reminder: payload.reminder || null,
   followUpDate: payload.followUpDate || null,
+  exhibitorRegistrationId: payload.exhibitorRegistrationId || null,
+  registrationEventId: payload.registrationEventId || null,
   lastRemark: "",
   updatedAt: new Date(),
 });
@@ -1245,7 +1247,7 @@ const getConvertedCompanies = async (req, res) => {
       return res.status(400).json({ success: false, message: "eventId is required" });
     }
 
-    const elemMatch = { eventId, status: { $regex: /^Closed\s*-\s*Won$/i } };
+    const elemMatch = { eventId, status: { $regex: /^(Closed\s*-\s*Won|Booking\s*Confirmed)$/i } };
     const normalizedRole = role.toLowerCase().replace(/[^a-z]/g, "");
     if (username && !["superadmin", "admin"].includes(normalizedRole)) {
       elemMatch.forwardTo = { $regex: new RegExp(`^${escapeRegex(username)}$`, "i") };
@@ -1254,7 +1256,7 @@ const getConvertedCompanies = async (req, res) => {
     const companies = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
     const registrationIds = companies
       .map((company) => (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId) && /^Closed\s*-\s*Won$/i.test(item.status || ""),
+        (item) => String(item.eventId) === String(eventId) && /^(Closed\s*-\s*Won|Booking\s*Confirmed)$/i.test(item.status || ""),
       )?.exhibitorRegistrationId)
       .filter(Boolean);
 
@@ -1264,7 +1266,7 @@ const getConvertedCompanies = async (req, res) => {
 
     const data = companies.map((company) => {
       const assignment = (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId) && /^Closed\s*-\s*Won$/i.test(item.status || ""),
+        (item) => String(item.eventId) === String(eventId) && /^(Closed\s*-\s*Won|Booking\s*Confirmed)$/i.test(item.status || ""),
       );
       const registration = assignment?.exhibitorRegistrationId
         ? registrationById.get(String(assignment.exhibitorRegistrationId))
