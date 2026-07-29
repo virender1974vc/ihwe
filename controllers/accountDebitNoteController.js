@@ -220,6 +220,7 @@ const createAccountDebitNote = async (req, res) => {
     const payload = {
       companyId: req.body.companyId,
       eventId: null,
+      crmEventId: null,
       debit_note_no,
       debit_note_date: req.body.debit_note_date,
       debitNoteType: req.body.debitNoteType || "additional_charges",
@@ -241,7 +242,7 @@ const createAccountDebitNote = async (req, res) => {
       added_by: req.body.added_by || "Admin",
     };
     const allocatedInvoiceIds = parsedAllocations.map((item) => item.invoiceId).filter(Boolean);
-    const allocatedInvoices = await Invoice.find({ _id: { $in: allocatedInvoiceIds } }).select("eventId").lean();
+    const allocatedInvoices = await Invoice.find({ _id: { $in: allocatedInvoiceIds } }).select("eventId crmEventId").lean();
     const allocatedEventIds = [...new Set(allocatedInvoices.map((item) => String(item.eventId || "")).filter(Boolean))];
     if (allocatedEventIds.length !== 1) {
       return res.status(400).json({
@@ -250,6 +251,13 @@ const createAccountDebitNote = async (req, res) => {
       });
     }
     payload.eventId = allocatedEventIds[0];
+    // CrmEvent scoping — best-effort, not hard-required like eventId above:
+    // invoices raised before crmEventId existed won't have one, and that
+    // shouldn't block an otherwise-valid debit note.
+    const allocatedCrmEventIds = [...new Set(allocatedInvoices.map((item) => String(item.crmEventId || "")).filter(Boolean))];
+    if (allocatedCrmEventIds.length === 1) {
+      payload.crmEventId = allocatedCrmEventIds[0];
+    }
 
     if (req.file) {
       payload.attachmentUrl = `/uploads/account_debit_notes/${req.file.filename}`;

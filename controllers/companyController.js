@@ -244,15 +244,6 @@ const getCompanies = async (req, res) => {
       mergeOrCondition(query, authOr);
     }
 
-    if (dashboard === 'true') {
-      const companies = await Company.find(query)
-        .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote eventAssignments')
-        .sort({ createdAt: -1 })
-        .limit(3000)
-        .lean();
-      return res.status(200).json(companies.map((company) => withEventLifecycle(company, eventId)));
-    }
-
     // Filters
     if (status) {
       const statuses = status.split(',').map(s => new RegExp(`^${escapeRegex(s.trim())}$`, 'i'));
@@ -303,6 +294,19 @@ const getCompanies = async (req, res) => {
       ];
 
       mergeOrCondition(query, searchOr);
+    }
+
+    // Dashboard sample — scoped by the same status/event/source/etc filters as
+    // the list itself (e.g. New Leads only pulls companyStatus "New Lead" for
+    // the selected event), instead of the top 3000 across every status/event.
+    // Keeps the raw-doc payload small; exact totals still come from stats-summary.
+    if (dashboard === 'true') {
+      const companies = await Company.find(query)
+        .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote eventAssignments')
+        .sort({ createdAt: -1 })
+        .limit(3000)
+        .lean();
+      return res.status(200).json(companies.map((company) => withEventLifecycle(company, eventId)));
     }
 
     // Just the matching ids — powers "select all N leads matching filters"
@@ -1240,6 +1244,12 @@ const getSalesLeaderboard = async (req, res) => {
 
 // Exhibition-scoped conversion view. A conversion is a CRM lifecycle state,
 // not merely the existence of an exhibitor registration.
+// A company is "Converted" once money has actually come in — status alone
+// ("Payment Pending" = something paid, balance due; "Completed" = paid in
+// full) isn't trusted on its own, since it can be set by hand without a real
+// Payment ever being logged. Both conditions must hold.
+const CONVERTED_STATUS_REGEX = /^(Payment\s*Pending|Completed)$/i;
+
 const getConvertedCompanies = async (req, res) => {
   try {
     const { eventId, username = "", role = "" } = req.query;
@@ -1247,16 +1257,30 @@ const getConvertedCompanies = async (req, res) => {
       return res.status(400).json({ success: false, message: "eventId is required" });
     }
 
-    const elemMatch = { eventId, status: { $regex: /^(Closed\s*-\s*Won|Booking\s*Confirmed)$/i } };
+    const elemMatch = { eventId, status: { $regex: CONVERTED_STATUS_REGEX } };
     const normalizedRole = role.toLowerCase().replace(/[^a-z]/g, "");
     if (username && !["superadmin", "admin"].includes(normalizedRole)) {
       elemMatch.forwardTo = { $regex: new RegExp(`^${escapeRegex(username)}$`, "i") };
     }
 
-    const companies = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
+    const statusMatchedCompanies = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
+
+    // Require an actual Payment record for the company — scoped to this event
+    // when the payment has a resolvable crmEventId, but not excluded when it
+    // doesn't (older payments predate that field; see companyStatusSync.js /
+    // paymentController.js for the same lenient pattern).
+    const Payment = require("../models/Payment");
+    const candidateIds = statusMatchedCompanies.map((company) => String(company._id));
+    const payments = await Payment.find({
+      companyId: { $in: candidateIds },
+      $or: [{ crmEventId: eventId }, { crmEventId: null }, { crmEventId: { $exists: false } }],
+    }).select("companyId").lean();
+    const paidCompanyIds = new Set(payments.map((payment) => String(payment.companyId)));
+
+    const companies = statusMatchedCompanies.filter((company) => paidCompanyIds.has(String(company._id)));
     const registrationIds = companies
       .map((company) => (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId) && /^(Closed\s*-\s*Won|Booking\s*Confirmed)$/i.test(item.status || ""),
+        (item) => String(item.eventId) === String(eventId) && CONVERTED_STATUS_REGEX.test(item.status || ""),
       )?.exhibitorRegistrationId)
       .filter(Boolean);
 
@@ -1266,7 +1290,7 @@ const getConvertedCompanies = async (req, res) => {
 
     const data = companies.map((company) => {
       const assignment = (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId) && /^(Closed\s*-\s*Won|Booking\s*Confirmed)$/i.test(item.status || ""),
+        (item) => String(item.eventId) === String(eventId) && CONVERTED_STATUS_REGEX.test(item.status || ""),
       );
       const registration = assignment?.exhibitorRegistrationId
         ? registrationById.get(String(assignment.exhibitorRegistrationId))

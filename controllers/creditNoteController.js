@@ -70,12 +70,13 @@ const createCreditNote = async (req, res) => {
 
     const creditNo = await generateCreditNoteNo();
     const sourceInvoice = req.body.reference_invoice_no
-      ? await Invoice.findOne({ invoice_no: req.body.reference_invoice_no }).select("eventId companyId").lean()
+      ? await Invoice.findOne({ invoice_no: req.body.reference_invoice_no }).select("eventId companyId crmEventId").lean()
       : null;
 
     const creditNote = new CreditNote({
       ...req.body,
       eventId: sourceInvoice?.eventId || req.body.eventId || null,
+      crmEventId: sourceInvoice?.crmEventId || req.body.crmEventId || null,
       create_note_no: creditNo,
       updated_date: new Date(),
       attachment: req.file ? `/uploads/${req.file.filename}` : "",

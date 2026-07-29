@@ -33,6 +33,7 @@ const deliveryChallanSchema = new mongoose.Schema(
 
     companyId: { type: String, required: true, index: true },
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, index: true },
+    crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, index: true },
     account_ref_id: { type: String, default: "", index: true },
 
     source_estimate_id: { type: String, required: true, index: true },

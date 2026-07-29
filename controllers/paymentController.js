@@ -438,6 +438,12 @@ const addPayment = async (req, res) => {
     if (req.file) {
       payload.proofUrl = `/uploads/payment_proofs/${req.file.filename}`;
     }
+    // Best-effort — inherit which CrmEvent this payment belongs to from the
+    // Invoice/Estimate/PerformaInvoice it's paying against.
+    if (!payload.crmEventId && payload.invoice_id && mongoose.Types.ObjectId.isValid(payload.invoice_id)) {
+      const sourceDoc = await resolvePaymentDocument(payload);
+      if (sourceDoc?.crmEventId) payload.crmEventId = sourceDoc.crmEventId;
+    }
     if (!payload.receipt_no) {
       payload.receipt_no = await Payment.generateNextReceiptNo(payload.payment_date);
     }
