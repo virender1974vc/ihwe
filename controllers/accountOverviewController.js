@@ -35,7 +35,7 @@ const getProformaCommunicationStatus = (estimate) => {
   return "Sent";
 };
 
-const resolveCompanyAndExhibitor = async (companyId) => {
+const resolveCompanyAndExhibitor = async (companyId, crmEventId = "") => {
   let company = null;
   let exhibitor = null;
 
@@ -46,8 +46,20 @@ const resolveCompanyAndExhibitor = async (companyId) => {
     ]);
   }
 
-  if (company && !exhibitor && isValidId(company.exhibitorRegistrationId)) {
-    exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId).lean();
+  if (company && !exhibitor) {
+    // A company can now have a different registration per event (see
+    // eventAssignments[].exhibitorRegistrationId — the "Booked"/multi-event
+    // architecture), so prefer the one linked to the event actually being
+    // viewed. The legacy top-level company.exhibitorRegistrationId is often
+    // left null once a company has per-event assignments; only fall back to
+    // it when there's no matching (or no) event-scoped link.
+    const scopedAssignment = crmEventId
+      ? (company.eventAssignments || []).find((a) => String(a.eventId) === String(crmEventId))
+      : null;
+    const registrationId = scopedAssignment?.exhibitorRegistrationId || company.exhibitorRegistrationId;
+    if (isValidId(registrationId)) {
+      exhibitor = await ExhibitorRegistration.findById(registrationId).lean();
+    }
   }
 
   if (exhibitor && !company && isValidId(exhibitor.clientId)) {
@@ -83,8 +95,9 @@ const EXHIBITOR_STATUS_LABELS = {
   "payment-failed": { label: "Payment Failed", color: "red" },
 };
 
-const buildAccountOverview = async (companyId, company, exhibitor, eventId = "") => {
+const buildAccountOverview = async (companyId, company, exhibitor, eventId = "", crmEventId = "") => {
     const normalizedEventId = String(eventId || "").trim();
+    const normalizedCrmEventId = String(crmEventId || "").trim();
     if (
       normalizedEventId
       && String(exhibitor?.eventId || exhibitor?.event?._id || exhibitor?.event || "") !== normalizedEventId
@@ -93,7 +106,16 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "")
       // booking/payment fallback while viewing an event-scoped account.
       exhibitor = null;
     }
-    const eventMatch = normalizedEventId ? { eventId: normalizedEventId } : {};
+    // Documents created through the newer CRM flows (Estimate/Invoice/Credit
+    // Note/Debit Note/Delivery Challan) are tagged with crmEventId, not the
+    // legacy eventId — some don't carry an eventId at all (e.g. Estimates
+    // created from the Account tab never get one). Match on either so this
+    // page doesn't show an account as empty just because its documents only
+    // have the newer field set.
+    const eventMatchConditions = [];
+    if (normalizedEventId) eventMatchConditions.push({ eventId: normalizedEventId });
+    if (normalizedCrmEventId) eventMatchConditions.push({ crmEventId: normalizedCrmEventId });
+    const eventMatch = eventMatchConditions.length ? { $or: eventMatchConditions } : {};
     const lookupIds = Array.from(
       new Set(
         [companyId, company?._id?.toString(), exhibitor?._id?.toString()].filter(Boolean)
@@ -106,10 +128,12 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "")
       DebitNote.find({ companyId: { $in: lookupIds }, ...eventMatch }).lean(),
       AccountDebitNote.find({ companyId: { $in: lookupIds }, status: "active", ...eventMatch }).lean(),
       DeliveryChallan.find({
-        ...eventMatch,
-        $or: [
-          { companyId: { $in: lookupIds } },
-          { account_ref_id: { $in: lookupIds } },
+        // eventMatch may itself be a `$or` (eventId vs crmEventId) — combine
+        // via `$and` rather than spreading, which would silently overwrite
+        // this query's own `$or` (companyId vs account_ref_id) instead.
+        $and: [
+          eventMatch,
+          { $or: [{ companyId: { $in: lookupIds } }, { account_ref_id: { $in: lookupIds } }] },
         ],
       }).lean(),
     ]);
@@ -665,13 +689,13 @@ const getAccountOverview = async (req, res) => {
   try {
     const { companyId } = req.params;
 
-    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId);
+    const { company, exhibitor } = await resolveCompanyAndExhibitor(companyId, req.query.crmEventId);
 
     if (!company && !exhibitor) {
       return res.status(404).json({ message: "Company not found" });
     }
 
-    const data = await buildAccountOverview(companyId, company, exhibitor, req.query.eventId);
+    const data = await buildAccountOverview(companyId, company, exhibitor, req.query.eventId, req.query.crmEventId);
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error("Error in getAccountOverview:", error);

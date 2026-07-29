@@ -998,7 +998,19 @@ class ExhibitorRegistrationService {
             const hasAssignedTeamMember =
                 assignedTeamMember
                 && !/^(direct|no one|none|unassigned)$/i.test(assignedTeamMember);
-            if (saved.clientId && hasAssignedTeamMember) {
+            // Re-verify saved.clientId actually resolves to a real Company — the
+            // exact one just inserted or matched above — rather than trusting it
+            // blindly. This guarantees the Estimate's companyId can never end up
+            // being the ExhibitorRegistration's own _id (or any other stray id)
+            // even if something upstream ever passed a bad clientId.
+            const Company = require('../models/Company');
+            const linkedCompany = saved.clientId
+                ? await Company.findById(saved.clientId).select('_id').lean()
+                : null;
+            if (saved.clientId && !linkedCompany) {
+                console.error('Skipping Estimate auto-generation: clientId does not match a real Company:', saved.clientId);
+            }
+            if (linkedCompany && hasAssignedTeamMember) {
                 const Estimate = require('../models/Estimate');
                 const nextEstNo = await Estimate.generateNextEstimateNo();
 
@@ -1013,7 +1025,7 @@ class ExhibitorRegistrationService {
                 }
 
                 const estData = {
-                    companyId: saved.clientId,
+                    companyId: String(linkedCompany._id),
                     eventId: data.eventId || null,
                     crmEventId: (await resolveCrmEventForRegistration(data.eventId))?._id || null,
                     exhibitorRegistrationId: saved._id,
@@ -1069,7 +1081,7 @@ class ExhibitorRegistrationService {
 
                 if (estData.items.length > 0) {
                     const existingEstimate = await Estimate.findOne({
-                        companyId: String(saved.clientId),
+                        companyId: String(linkedCompany._id),
                         eventId: data.eventId,
                         status: { $in: ['active', 'draft', 'sent'] }
                     }).sort({ added: -1 });
