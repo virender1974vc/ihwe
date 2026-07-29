@@ -780,15 +780,23 @@ class ExhibitorRegistrationService {
             && Number(data.participation?.stallSize || 0) > 0
             && Number(data.participation?.total || 0) > 0;
 
+        // Admin-created registrations (Book A Stand) never auto-generate an
+        // Estimate/PI and always land the company on "Booked" — it moves to
+        // Converted once a real Payment is recorded (see getConvertedCompanies/
+        // getBookedCompanies in companyController.js). Website self-registration
+        // keeps its original behavior untouched.
+        const isAdminRegistration = data.registrationSource === 'admin';
+        const boundStatus = isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'New Lead');
+
         if (data.clientId) {
             try {
                 const Company = require('../models/Company');
                 const crmEvent = await resolveCrmEventForRegistration(data.eventId);
                 const companyUpdate = crmEvent?._id
                     ? {}
-                    : (isCommittedRegistration ? {
+                    : ((isAdminRegistration || isCommittedRegistration) ? {
                         exhibitorRegistrationId: saved._id,
-                        companyStatus: 'Closed - Won'
+                        companyStatus: boundStatus
                     } : {});
 
                 if (data.exhibitorName) companyUpdate.companyName = data.exhibitorName;
@@ -844,7 +852,7 @@ class ExhibitorRegistrationService {
                         const lifecycle = {
                             eventId: crmEvent._id,
                             registrationEventId: data.eventId,
-                            status: isCommittedRegistration ? 'Closed - Won' : 'New Lead',
+                            status: boundStatus,
                             forwardTo: data.spokenWith || data.filledByFullName || '',
                             dataSource: data.referredBy || '',
                             exhibitorRegistrationId: saved._id,
@@ -879,10 +887,12 @@ class ExhibitorRegistrationService {
                 const adminName = data.spokenWith || data.filledByFullName || 'System Admin';
                 await CrmExhibatorReview2023.create({
                     cmpny_id: data.clientId,
-                    status_short: isCommittedRegistration ? 'Closed - Won' : 'Registration Initiated',
-                    re_msg: isCommittedRegistration
-                        ? `Lead successfully converted to confirmed Exhibitor Registration. Stall booked: ${data.participation?.stallFor || 'N/A'}.`
-                        : 'Website registration initiated; awaiting successful payment before conversion.',
+                    status_short: isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'Registration Initiated'),
+                    re_msg: isAdminRegistration
+                        ? `Stall booked via Admin Registration: ${data.participation?.stallFor || 'N/A'}. Awaiting payment.`
+                        : (isCommittedRegistration
+                            ? `Lead successfully converted to confirmed Exhibitor Registration. Stall booked: ${data.participation?.stallFor || 'N/A'}.`
+                            : 'Website registration initiated; awaiting successful payment before conversion.'),
                     type: 'status',
                     updated_by: adminName
                 });
@@ -894,7 +904,6 @@ class ExhibitorRegistrationService {
             try {
                 const Company = require('../models/Company');
                 const crmEvent = await resolveCrmEventForRegistration(data.eventId);
-                const isAdminRegistration = data.registrationSource === 'admin';
                 const adminName = data.spokenWith || data.filledByFullName || (isAdminRegistration ? 'System Admin' : 'Website Direct Booking');
 
                 const newCompanyData = {
@@ -912,7 +921,7 @@ class ExhibitorRegistrationService {
                     category: data.typeOfBusiness || '',
                     businessNature: data.natureOfBusiness || '',
                     exhibitorCategory: (data.participation && data.participation.stallCategory) ? data.participation.stallCategory : "General Category",
-                    companyStatus: isCommittedRegistration ? 'Closed - Won' : 'New Lead',
+                    companyStatus: boundStatus,
                     exhibitorRegistrationId: saved._id,
                     added_by: adminName,
                     forwardTo: adminName,
@@ -921,7 +930,7 @@ class ExhibitorRegistrationService {
                     eventAssignments: crmEvent?._id ? [{
                         eventId: crmEvent._id,
                         registrationEventId: data.eventId,
-                        status: isCommittedRegistration ? 'Closed - Won' : 'New Lead',
+                        status: boundStatus,
                         forwardTo: adminName,
                         dataSource: data.referredBy || (isAdminRegistration ? 'Admin Registration' : 'Direct Website'),
                         exhibitorRegistrationId: saved._id,
@@ -963,12 +972,14 @@ class ExhibitorRegistrationService {
                 const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
                 await CrmExhibatorReview2023.create({
                     cmpny_id: newCompany._id,
-                    status_short: isCommittedRegistration ? 'Closed - Won' : 'Registration Initiated',
+                    status_short: isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'Registration Initiated'),
                     evnt_id: crmEvent?._id ? String(crmEvent._id) : '',
                     event_name: crmEvent?.event_fullName || crmEvent?.event_name || '',
-                    re_msg: isCommittedRegistration
-                        ? `Lead successfully created and converted to confirmed Exhibitor Registration from ${isAdminRegistration ? 'Admin Registration' : 'Website'}. Stall booked: ${data.participation?.stallFor || 'N/A'}.`
-                        : 'Website registration initiated; awaiting successful payment before conversion.',
+                    re_msg: isAdminRegistration
+                        ? `Stall booked via Admin Registration: ${data.participation?.stallFor || 'N/A'}. Awaiting payment.`
+                        : (isCommittedRegistration
+                            ? `Lead successfully created and converted to confirmed Exhibitor Registration from Website. Stall booked: ${data.participation?.stallFor || 'N/A'}.`
+                            : 'Website registration initiated; awaiting successful payment before conversion.'),
                     type: 'status',
                     updated_by: adminName
                 });
@@ -978,6 +989,10 @@ class ExhibitorRegistrationService {
         }
 
         // ── Auto-Generate Estimate (instead of PROFORMA Invoice) ──
+        // Admin-created (Book A Stand) registrations skip this entirely — no
+        // PI/Estimate is auto-generated for them, only website self-registration
+        // keeps this behavior.
+        if (!isAdminRegistration) {
         try {
             const assignedTeamMember = String(data.spokenWith || '').trim();
             const hasAssignedTeamMember =
@@ -1107,6 +1122,7 @@ class ExhibitorRegistrationService {
             }
         } catch (err) {
             console.error('Failed to auto-generate Estimate:', err);
+        }
         }
 
         // Only book stall and send emails if payment is NOT failed

@@ -1244,12 +1244,65 @@ const getSalesLeaderboard = async (req, res) => {
 
 // Exhibition-scoped conversion view. A conversion is a CRM lifecycle state,
 // not merely the existence of an exhibitor registration.
-// A company is "Converted" once money has actually come in — status alone
-// ("Payment Pending" = something paid, balance due; "Completed" = paid in
-// full) isn't trusted on its own, since it can be set by hand without a real
-// Payment ever being logged. Both conditions must hold.
-const CONVERTED_STATUS_REGEX = /^(Payment\s*Pending|Completed)$/i;
+// Companies with a real Payment record for this event — scoped to the event
+// when the payment has a resolvable crmEventId, but not excluded when it
+// doesn't (older payments predate that field, so they're taken on trust).
+const getPaidCompanyIdSet = async (companyIds, eventId) => {
+  const Payment = require("../models/Payment");
+  const payments = await Payment.find({
+    companyId: { $in: companyIds },
+    $or: [{ crmEventId: eventId }, { crmEventId: null }, { crmEventId: { $exists: false } }],
+  }).select("companyId").lean();
+  return new Set(payments.map((payment) => String(payment.companyId)));
+};
 
+// Shared shape for both "Converted" and "Booked": a Company matched by its
+// per-event assignment, merged with whatever ExhibitorRegistration it links
+// to (so the existing exhibitor-registration-shaped table UI keeps working).
+const buildEventCompanyResponse = async (companies, eventId, statusMatcher, resolvedStatusLabel) => {
+  const registrationIds = companies
+    .map((company) => (company.eventAssignments || []).find(
+      (item) => String(item.eventId) === String(eventId) && statusMatcher(item.status || ""),
+    )?.exhibitorRegistrationId)
+    .filter(Boolean);
+
+  const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+  const registrations = await ExhibitorRegistration.find({ _id: { $in: registrationIds } }).lean();
+  const registrationById = new Map(registrations.map((item) => [String(item._id), item]));
+
+  return companies.map((company) => {
+    const assignment = (company.eventAssignments || []).find(
+      (item) => String(item.eventId) === String(eventId) && statusMatcher(item.status || ""),
+    );
+    const registration = assignment?.exhibitorRegistrationId
+      ? registrationById.get(String(assignment.exhibitorRegistrationId))
+      : null;
+    return {
+      ...company,
+      ...(registration || {}),
+      _id: registration?._id || company._id,
+      clientId: company._id,
+      companyId: company._id,
+      companyName: company.companyName,
+      exhibitorName: registration?.exhibitorName || company.companyName,
+      status: resolvedStatusLabel,
+      eventLifecycle: assignment,
+    };
+  });
+};
+
+const buildRoleScopedElemMatch = (eventId, username, role) => {
+  const elemMatch = { eventId };
+  const normalizedRole = role.toLowerCase().replace(/[^a-z]/g, "");
+  if (username && !["superadmin", "admin"].includes(normalizedRole)) {
+    elemMatch.forwardTo = { $regex: new RegExp(`^${escapeRegex(username)}$`, "i") };
+  }
+  return elemMatch;
+};
+
+// "Converted" = a Payment has actually come in for this event — status is
+// irrelevant (it can be set by hand without a real Payment ever being
+// logged, so it isn't trusted on its own).
 const getConvertedCompanies = async (req, res) => {
   try {
     const { eventId, username = "", role = "" } = req.query;
@@ -1257,61 +1310,48 @@ const getConvertedCompanies = async (req, res) => {
       return res.status(400).json({ success: false, message: "eventId is required" });
     }
 
-    const elemMatch = { eventId, status: { $regex: CONVERTED_STATUS_REGEX } };
-    const normalizedRole = role.toLowerCase().replace(/[^a-z]/g, "");
-    if (username && !["superadmin", "admin"].includes(normalizedRole)) {
-      elemMatch.forwardTo = { $regex: new RegExp(`^${escapeRegex(username)}$`, "i") };
-    }
+    const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
+    const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
+    const paidCompanyIds = await getPaidCompanyIdSet(candidates.map((company) => String(company._id)), eventId);
+    const companies = candidates.filter((company) => paidCompanyIds.has(String(company._id)));
 
-    const statusMatchedCompanies = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
-
-    // Require an actual Payment record for the company — scoped to this event
-    // when the payment has a resolvable crmEventId, but not excluded when it
-    // doesn't (older payments predate that field; see companyStatusSync.js /
-    // paymentController.js for the same lenient pattern).
-    const Payment = require("../models/Payment");
-    const candidateIds = statusMatchedCompanies.map((company) => String(company._id));
-    const payments = await Payment.find({
-      companyId: { $in: candidateIds },
-      $or: [{ crmEventId: eventId }, { crmEventId: null }, { crmEventId: { $exists: false } }],
-    }).select("companyId").lean();
-    const paidCompanyIds = new Set(payments.map((payment) => String(payment.companyId)));
-
-    const companies = statusMatchedCompanies.filter((company) => paidCompanyIds.has(String(company._id)));
-    const registrationIds = companies
-      .map((company) => (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId) && CONVERTED_STATUS_REGEX.test(item.status || ""),
-      )?.exhibitorRegistrationId)
-      .filter(Boolean);
-
-    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
-    const registrations = await ExhibitorRegistration.find({ _id: { $in: registrationIds } }).lean();
-    const registrationById = new Map(registrations.map((item) => [String(item._id), item]));
-
-    const data = companies.map((company) => {
-      const assignment = (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId) && CONVERTED_STATUS_REGEX.test(item.status || ""),
-      );
-      const registration = assignment?.exhibitorRegistrationId
-        ? registrationById.get(String(assignment.exhibitorRegistrationId))
-        : null;
-      return {
-        ...company,
-        ...(registration || {}),
-        _id: registration?._id || company._id,
-        clientId: company._id,
-        companyId: company._id,
-        companyName: company.companyName,
-        exhibitorName: registration?.exhibitorName || company.companyName,
-        status: "Converted",
-        eventLifecycle: assignment,
-      };
-    });
-
+    const data = await buildEventCompanyResponse(companies, eventId, () => true, "Converted");
     return res.status(200).json({ success: true, data, total: data.length });
   } catch (error) {
     console.error("Error fetching converted companies:", error);
     return res.status(500).json({ success: false, message: "Error fetching converted companies" });
+  }
+};
+
+// "Booked" = eventAssignments.status is "Booked" for this event AND no
+// Payment has come in yet. The moment a Payment appears, a company leaves
+// this list and starts showing up in Converted instead — both are live
+// queries, so there's no explicit "move" step.
+const BOOKED_STATUS_REGEX = /^Booked$/i;
+
+const getBookedCompanies = async (req, res) => {
+  try {
+    const { eventId, username = "", role = "" } = req.query;
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: "eventId is required" });
+    }
+
+    const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
+    elemMatch.status = { $regex: BOOKED_STATUS_REGEX };
+    const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
+    const paidCompanyIds = await getPaidCompanyIdSet(candidates.map((company) => String(company._id)), eventId);
+    const companies = candidates.filter((company) => !paidCompanyIds.has(String(company._id)));
+
+    const data = await buildEventCompanyResponse(
+      companies,
+      eventId,
+      (status) => BOOKED_STATUS_REGEX.test(status),
+      "Booked",
+    );
+    return res.status(200).json({ success: true, data, total: data.length });
+  } catch (error) {
+    console.error("Error fetching booked companies:", error);
+    return res.status(500).json({ success: false, message: "Error fetching booked companies" });
   }
 };
 
@@ -1333,4 +1373,5 @@ module.exports = {
   getAchievementRevenue,
   getSalesLeaderboard,
   getConvertedCompanies,
+  getBookedCompanies,
 };
