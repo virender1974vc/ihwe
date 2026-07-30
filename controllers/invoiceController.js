@@ -145,7 +145,7 @@ const getAllInvoices = async (req, res) => {
   try {
     const invoiceQuery = req.query.eventId ? { eventId: req.query.eventId } : {};
     const invoices = await Invoice.find(invoiceQuery).sort({ added: -1 }).lean();
-    
+
     // Inject eventId
     const companyIds = [...new Set(invoices.map(i => String(i.companyId)).filter(Boolean))];
     const exhibitors = await ExhibitorRegistration.find({
@@ -249,7 +249,7 @@ const createInvoice = async (req, res) => {
     const invoice_no = await Invoice.generateNextInvoiceNumber();
 
     const sourceEstimate = req.body.source_estimate_id
-      ? await Estimate.findById(req.body.source_estimate_id).select("eventId companyId").lean()
+      ? await Estimate.findById(req.body.source_estimate_id).select("eventId companyId crmEventId").lean()
       : null;
     if (sourceEstimate?.eventId && req.body.eventId && String(sourceEstimate.eventId) !== String(req.body.eventId)) {
       return res.status(400).json({ message: "Invoice event does not match the selected proforma invoice." });
@@ -258,10 +258,16 @@ const createInvoice = async (req, res) => {
     if (!resolvedEventId) {
       return res.status(400).json({ message: "Invoice must be linked to an exhibition event." });
     }
+    // CrmEvent scoping (which Organic Expo 2026 / IHW Expo 2026 ... this
+    // Invoice belongs to) — best-effort, not required like eventId above,
+    // since Estimates created before this field existed won't have one and
+    // invoicing against them must keep working.
+    const resolvedCrmEventId = sourceEstimate?.crmEventId || req.body.crmEventId || null;
 
     const newInvoice = new Invoice({
       ...req.body,
       eventId: resolvedEventId,
+      crmEventId: resolvedCrmEventId,
       delivery_challan_ids: challanResult.ids,
       delivery_challans: challanResult.snapshots,
       invoice_no,
@@ -626,95 +632,96 @@ const sendWhatsAppInvoice = async (req, res) => {
     const { customPhone, customMessage, customTemplateParams } = req.body;
     const invoice = await Invoice.findById(req.params.id);
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
-    
+
     let phone = customPhone;
     let message = customMessage;
     let templateParams = customTemplateParams;
 
     if (!phone || !message) {
-        if (!phone) {
-          let company = await Company.findById(invoice.companyId);
-          if (!company) {
-            company = await ExhibitorRegistration.findById(invoice.companyId);
-          }
-          phone = company?.contact1?.mobile || company?.contacts?.[0]?.mobile || company?.mobile || company?.contact2?.mobile || company?.contact1?.phone || company?.contact2?.phone;
+      if (!phone) {
+        let company = await Company.findById(invoice.companyId);
+        if (!company) {
+          company = await ExhibitorRegistration.findById(invoice.companyId);
         }
-        if (!phone) return res.status(400).json({ message: "Phone number is required and not found in company data" });
+        phone = company?.contact1?.mobile || company?.contacts?.[0]?.mobile || company?.mobile || company?.contact2?.mobile || company?.contact1?.phone || company?.contact2?.phone;
+      }
+      if (!phone) return res.status(400).json({ message: "Phone number is required and not found in company data" });
 
-        const dateStr = invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+      const dateStr = invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
 
-        const totalTaxable = invoice.items?.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || parseFloat(item.amount) || 0), 0).toFixed(2);
+      const totalTaxable = invoice.items?.reduce((sum, item) => sum + (parseFloat(item.taxableValue) || parseFloat(item.amount) || 0), 0).toFixed(2);
 
-        let itemsText = invoice.items.map((i, index) => {
-          let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
-            `      Qty: ${i.qty} ${i.unit} | Rate: ₹${i.rate}\n` +
-            `      Amount: ₹${i.amount}\n`;
+      let itemsText = invoice.items.map((i, index) => {
+        let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
+          `      Qty: ${i.qty} ${i.unit} | Rate: ₹${i.rate}\n` +
+          `      Amount: ₹${i.amount}\n`;
 
-          if (i.discountPct > 0) itemStr += `      Discount: ${i.discountPct}%\n`;
-          if (i.taxableValue > 0) itemStr += `      Taxable Value: ₹${i.taxableValue}\n`;
+        if (i.discountPct > 0) itemStr += `      Discount: ${i.discountPct}%\n`;
+        if (i.taxableValue > 0) itemStr += `      Taxable Value: ₹${i.taxableValue}\n`;
 
-          if (i.gstPct && i.gstPct.includes('IGST')) {
-            itemStr += `      IGST: ₹${i.gstAmount} (${i.gstPct})\n`;
-          } else if (i.gstPct) {
-            const halfTax = (parseFloat(i.gstAmount) / 2).toFixed(2);
-            itemStr += `      CGST: ₹${halfTax} | SGST: ₹${halfTax}\n`;
-          } else if (i.gstAmount > 0) {
-            itemStr += `      Tax: ₹${i.gstAmount}\n`;
-          }
+        if (i.gstPct && i.gstPct.includes('IGST')) {
+          itemStr += `      IGST: ₹${i.gstAmount} (${i.gstPct})\n`;
+        } else if (i.gstPct) {
+          const halfTax = (parseFloat(i.gstAmount) / 2).toFixed(2);
+          itemStr += `      CGST: ₹${halfTax} | SGST: ₹${halfTax}\n`;
+        } else if (i.gstAmount > 0) {
+          itemStr += `      Tax: ₹${i.gstAmount}\n`;
+        }
 
-          itemStr += `      *Item Total: ₹${i.total}*`;
-          return itemStr;
-        }).join('\n\n');
+        itemStr += `      *Item Total: ₹${i.total}*`;
+        return itemStr;
+      }).join('\n\n');
 
-        let totalsText = ``;
-        totalsText += `      *Total Taxable Value:* ₹${totalTaxable}\n`;
+      let totalsText = ``;
+      totalsText += `      *Total Taxable Value:* ₹${totalTaxable}\n`;
 
-        // Assuming we calculate total IGST/CGST/SGST by checking place_of_supply or looking at gstPct
-        // For simplicity we just show gstAmount sum since this is a quick whatsapp summary
-        const totalGst = invoice.items?.reduce((sum, item) => sum + (parseFloat(item.gstAmount) || 0), 0).toFixed(2);
-        totalsText += `      *Total GST:* ₹${totalGst}\n`;
+      // Assuming we calculate total IGST/CGST/SGST by checking place_of_supply or looking at gstPct
+      // For simplicity we just show gstAmount sum since this is a quick whatsapp summary
+      const totalGst = invoice.items?.reduce((sum, item) => sum + (parseFloat(item.gstAmount) || 0), 0).toFixed(2);
+      totalsText += `      *Total GST:* ₹${totalGst}\n`;
 
-        message = `✨ *INVOICE DETAILS* ✨\n\n`
-          + `Namo Gange Namaskar! 🙏\n\n`
-          + `Dear *${(invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition')) ? (invoice.company_name || invoice.consignee_name) : invoice.consignee_name || 'Client'}*,\n\n`
-          + `Thank you for choosing *International Health & Wellness Expo*. We are pleased to share the details of your Invoice.\n\n`
-          + `📄 *Invoice No:* ${invoice.invoice_no}\n`
-          + `📅 *Date:* ${dateStr}\n`
-          + `🏢 *Company:* ${(invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition')) ? (invoice.company_name || invoice.consignee_name) : invoice.consignee_name}\n`
-          + `📍 *Location:* ${invoice.city || 'N/A'}, ${invoice.state || 'N/A'}\n`
-          + `📝 *GSTIN:* ${invoice.gst_no || 'N/A'}\n\n`
-          + `📋 *ITEM DETAILS:*\n`
-          + `-------------------------------\n`
-          + `${itemsText}\n`
-          + `-------------------------------\n\n`
-          + `📊 *INVOICE SUMMARY:*\n`
-          + `${totalsText}\n`
-          + `💰 *GRAND TOTAL:* *₹${invoice.finalAmount}*\n\n`
-          + `If you have any queries or require further clarification, please feel free to reach out to us. We look forward to a successful collaboration! 🤝\n\n`
-          + `🌐 *Website:* https://www.ihwe.in\n`
-          + `📧 *Email:* info@ihwe.in\n`
-          + `📞 *Contact:* +91 9654900525\n\n`
-          + `Warm Regards,\n`
-          + `*Namo Gange Wellness Pvt. Ltd.* 🌿`;
+      message = `✨ *INVOICE DETAILS* ✨\n\n`
+        + `Namo Gange Namaskar! 🙏\n\n`
+        + `Dear *${(invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition')) ? (invoice.company_name || invoice.consignee_name) : invoice.consignee_name || 'Client'}*,\n\n`
+        + `Thank you for choosing *International Health & Wellness Expo*. We are pleased to share the details of your Invoice.\n\n`
+        + `📄 *Invoice No:* ${invoice.invoice_no}\n`
+        + `📅 *Date:* ${dateStr}\n`
+        + `🏢 *Company:* ${(invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition')) ? (invoice.company_name || invoice.consignee_name) : invoice.consignee_name}\n`
+        + `📍 *Location:* ${invoice.city || 'N/A'}, ${invoice.state || 'N/A'}\n`
+        + `📝 *GSTIN:* ${invoice.gst_no || 'N/A'}\n\n`
+        + `📋 *ITEM DETAILS:*\n`
+        + `-------------------------------\n`
+        + `${itemsText}\n`
+        + `-------------------------------\n\n`
+        + `📊 *INVOICE SUMMARY:*\n`
+        + `${totalsText}\n`
+        + `💰 *GRAND TOTAL:* *₹${invoice.finalAmount}*\n\n`
+        + `If you have any queries or require further clarification, please feel free to reach out to us. We look forward to a successful collaboration! 🤝\n\n`
+        + `🌐 *Website:* https://www.ihwe.in\n`
+        + `📧 *Email:* info@ihwe.in\n`
+        + `📞 *Contact:* +91 9654900525\n\n`
+        + `Warm Regards,\n`
+        + `*Namo Gange Wellness Pvt. Ltd.* 🌿`;
 
-        templateParams = [
-          (invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition') ? invoice.company_name : invoice.consignee_name) || 'Client',
-          invoice.invoice_no || 'N/A',
-          dateStr,
-          (invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition') ? invoice.company_name : invoice.consignee_name) || 'Company',
-          `${invoice.city || 'N/A'}, ${invoice.state || 'N/A'}`,
-          itemsText,
-          totalsText,
-          String(invoice.finalAmount || 0)
-        ];
+      templateParams = [
+        (invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition') ? invoice.company_name : invoice.consignee_name) || 'Client',
+        invoice.invoice_no || 'N/A',
+        dateStr,
+        (invoice.consignee_name && invoice.consignee_name.toLowerCase().includes('9th edition') ? invoice.company_name : invoice.consignee_name) || 'Company',
+        `${invoice.city || 'N/A'}, ${invoice.state || 'N/A'}`,
+        itemsText,
+        totalsText,
+        String(invoice.finalAmount || 0)
+      ];
     }
 
+    const whatsappLogOptions = { companyId: invoice.companyId, eventId: invoice.crmEventId };
     let result;
     if (customMessage) {
-        const { sendWhatsAppMessage } = require('../utils/whatsapp');
-        result = await sendWhatsAppMessage(phone, message, invoice.consignee_name);
+      const { sendWhatsAppMessage } = require('../utils/whatsapp');
+      result = await sendWhatsAppMessage(phone, message, invoice.consignee_name, whatsappLogOptions);
     } else {
-        result = await sendTaxInvoiceWhatsApp(phone, message, invoice.consignee_name, templateParams);
+      result = await sendTaxInvoiceWhatsApp(phone, message, invoice.consignee_name, templateParams, whatsappLogOptions);
     }
 
     if (result.success) {
@@ -916,38 +923,38 @@ const sendEmailInvoice = async (req, res) => {
     if (!invoice) return res.status(404).json({ message: "Invoice not found" });
 
     if (!email || !htmlContent) {
-        if (!email) {
-          let company = await Company.findById(invoice.companyId);
-          if (!company) {
-            company = await ExhibitorRegistration.findById(invoice.companyId);
-          }
-          email = company?.contact1?.email || company?.contacts?.[0]?.email || company?.companyEmail || company?.email;
+      if (!email) {
+        let company = await Company.findById(invoice.companyId);
+        if (!company) {
+          company = await ExhibitorRegistration.findById(invoice.companyId);
         }
-        if (!email) return res.status(400).json({ message: "Email is required and not found in company data" });
+        email = company?.contact1?.email || company?.contacts?.[0]?.email || company?.companyEmail || company?.email;
+      }
+      if (!email) return res.status(400).json({ message: "Email is required and not found in company data" });
 
-        const dateStr = invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
+      const dateStr = invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
 
-        let totalTaxable = 0;
-        let totalCgst = 0;
-        let totalSgst = 0;
-        let totalIgst = 0;
+      let totalTaxable = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
 
-        let itemsHtml = invoice.items.map((i, index) => {
-          const qty = parseFloat(i.qty) || 1;
-          const rate = parseFloat(i.rate) || 0;
-          const taxable = parseFloat(i.taxableValue) || 0;
+      let itemsHtml = invoice.items.map((i, index) => {
+        const qty = parseFloat(i.qty) || 1;
+        const rate = parseFloat(i.rate) || 0;
+        const taxable = parseFloat(i.taxableValue) || 0;
 
-          totalTaxable += taxable;
+        totalTaxable += taxable;
 
-          const gstAmt = parseFloat(i.gstAmount) || 0;
-          if (i.gstPct && i.gstPct.includes('IGST')) {
-            totalIgst += gstAmt;
-          } else {
-            totalCgst += (gstAmt / 2);
-            totalSgst += (gstAmt / 2);
-          }
+        const gstAmt = parseFloat(i.gstAmount) || 0;
+        if (i.gstPct && i.gstPct.includes('IGST')) {
+          totalIgst += gstAmt;
+        } else {
+          totalCgst += (gstAmt / 2);
+          totalSgst += (gstAmt / 2);
+        }
 
-          return `
+        return `
                 <tr>
                     <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: center; color: #475569; font-size: 13px;">${index + 1}</td>
                     <td style="padding: 12px 10px; border-bottom: 1px solid #eee;">
@@ -960,39 +967,39 @@ const sendEmailInvoice = async (req, res) => {
                     <td style="padding: 12px 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold; color: #1e293b; font-size: 13px;">₹${parseFloat(i.total || 0).toFixed(2)}</td>
                 </tr>
                 `;
-        }).join('');
+      }).join('');
 
-        let totalsHtml = `
+      let totalsHtml = `
                 <tr>
                     <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>Total Taxable Value:</strong></td>
                     <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalTaxable.toFixed(2)}</td>
                 </tr>
             `;
 
-        if (totalIgst > 0) {
-          totalsHtml += `
+      if (totalIgst > 0) {
+        totalsHtml += `
                 <tr>
                     <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>IGST:</strong></td>
                     <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalIgst.toFixed(2)}</td>
                 </tr>`;
-        } else {
-          if (totalCgst > 0) {
-            totalsHtml += `
+      } else {
+        if (totalCgst > 0) {
+          totalsHtml += `
                     <tr>
                         <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>CGST:</strong></td>
                         <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalCgst.toFixed(2)}</td>
                     </tr>`;
-          }
-          if (totalSgst > 0) {
-            totalsHtml += `
+        }
+        if (totalSgst > 0) {
+          totalsHtml += `
                     <tr>
                         <td colspan="5" style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;"><strong>SGST:</strong></td>
                         <td style="padding: 10px 15px; text-align: right; border-bottom: 1px solid #eee; color: #555;">₹${totalSgst.toFixed(2)}</td>
                     </tr>`;
-          }
         }
+      }
 
-        htmlContent = `
+      htmlContent = `
                 <div style="font-family: Arial, sans-serif; background-color: #f4f7f6; padding: 20px 10px;">
                     <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 700px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
                         
@@ -1089,7 +1096,8 @@ const sendEmailInvoice = async (req, res) => {
       to: email,
       subject: subject,
       html: htmlContent,
-      profile: 'DEFAULT'
+      profile: 'DEFAULT',
+      logData: { companyId: invoice.companyId, eventId: invoice.crmEventId },
     });
 
     res.status(200).json({ message: "Email sent successfully" });

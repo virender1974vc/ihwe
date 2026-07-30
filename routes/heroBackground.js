@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const heroBackgroundController = require('../controllers/heroBackgroundController');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 
 // JWT middleware
 const verifyToken = (req, res, next) => {
@@ -45,16 +47,16 @@ const upload = multer({
 });
 
 // GET /api/hero-background — Get all
-router.get('/', (req, res) => heroBackgroundController.getAllHeroBackgrounds(req, res));
+router.get('/', cacheControl(60), (req, res) => heroBackgroundController.getAllHeroBackgrounds(req, res));
 
 // GET /api/hero-background/:id — Get by ID
-router.get('/:id', (req, res) => heroBackgroundController.getHeroBackgroundById(req, res));
+router.get('/:id', cacheControl(60), (req, res) => heroBackgroundController.getHeroBackgroundById(req, res));
 
 // POST /api/hero-background/create
-router.post('/create', verifyToken, upload.single('backgroundImage'), (req, res) => heroBackgroundController.createHeroBackground(req, res));
+router.post('/create', verifyToken, upload.single('backgroundImage'), optimizeImage, (req, res) => heroBackgroundController.createHeroBackground(req, res));
 
 // PUT /api/hero-background/update/:id
-router.put('/update/:id', verifyToken, upload.single('backgroundImage'), (req, res) => heroBackgroundController.updateHeroBackground(req, res));
+router.put('/update/:id', verifyToken, upload.single('backgroundImage'), optimizeImage, (req, res) => heroBackgroundController.updateHeroBackground(req, res));
 
 // DELETE /api/hero-background/delete/:id
 router.delete('/delete/:id', verifyToken, (req, res) => heroBackgroundController.deleteHeroBackground(req, res));

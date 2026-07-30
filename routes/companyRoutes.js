@@ -18,6 +18,7 @@ const {
   uploadContactPhoto,
   uploadCompanies,
   getConvertedCompanies,
+  getBookedCompanies,
 } = require("../controllers/companyController.js");
 
 const router = express.Router();
@@ -88,6 +89,7 @@ router.get("/achievement-revenue", require("../controllers/companyController.js"
 router.get("/leaderboard", require("../controllers/companyController.js").getSalesLeaderboard);
 router.get("/stats-summary", getCompanyStatsSummary);
 router.get("/converted", getConvertedCompanies);
+router.get("/booked", getBookedCompanies);
 router.get("/lookup/:id", require("../controllers/companyController.js").lookupCompanyOrExhibitor);
 router.get("/:id", getCompanyById);
 

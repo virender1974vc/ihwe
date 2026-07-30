@@ -5,6 +5,7 @@ const serviceDetailController = require('../controllers/serviceDetailController'
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const optimizeImage = require('../middleware/optimizeImage');
 
 // JWT middleware
 const verifyToken = (req, res, next) => {
@@ -41,7 +42,7 @@ router.post('/save', verifyToken, serviceDetailController.save);
 router.delete('/:id', verifyToken, serviceDetailController.delete);
 
 // Image upload
-router.post('/upload', verifyToken, upload.single('image'), (req, res) => {
+router.post('/upload', verifyToken, upload.single('image'), optimizeImage, (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
     const imageUrl = `/uploads/service-pages/${req.file.filename}`;
     res.json({ success: true, imageUrl });

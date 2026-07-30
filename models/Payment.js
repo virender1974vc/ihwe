@@ -14,6 +14,7 @@ const paymentSchema = new mongoose.Schema(
     ex_no: { type: String, default: "" },
     receipt_no: { type: String, default: "" },
     companyId: { type: String, default: "" },
+    crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, index: true },
     invoice_id: { type: String, required: true },
     f_amount: { type: String, required: true },
     amount_text: { type: String, required: true },

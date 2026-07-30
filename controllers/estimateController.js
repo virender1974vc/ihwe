@@ -12,6 +12,7 @@ const { sendWhatsAppMessage, sendProformaInvoiceWhatsApp } = require('../utils/w
 const emailService = require('../utils/emailService');
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
+const { markCompanyHotLead } = require("../utils/companyStatusSync");
 
 const getFiscalYear = () => {
   const date = new Date();
@@ -57,39 +58,15 @@ const generateNextProformaNo = async () => {
 // Add estimate
 const addEstimate = async (req, res) => {
   try {
-    const estimateBody = { ...req.body };
-    const company = await Company.findById(estimateBody.companyId)
-      .select("eventAssignments")
-      .lean();
-    const assignments = Array.isArray(company?.eventAssignments)
-      ? company.eventAssignments.filter((assignment) => assignment?.registrationEventId)
-      : [];
-    let assignment = null;
-
-    if (estimateBody.eventId) {
-      assignment = assignments.find(
-        (item) => String(item.registrationEventId?._id || item.registrationEventId) === String(estimateBody.eventId)
-      );
-    } else if (estimateBody.crmEventId) {
-      assignment = assignments.find(
-        (item) => String(item.eventId?._id || item.eventId) === String(estimateBody.crmEventId)
-      );
-      estimateBody.eventId = assignment?.registrationEventId?._id || assignment?.registrationEventId || null;
-    } else if (assignments.length === 1) {
-      assignment = assignments[0];
-      estimateBody.eventId = assignment.registrationEventId?._id || assignment.registrationEventId;
-    }
-
-    if (!estimateBody.eventId) {
+    // A company can be assigned to more than one CrmEvent (e.g. Organic Expo
+    // 2026 and IHW Expo 2026 both), each able to get its own Estimate — so
+    // every Estimate must record which event it was raised under rather than
+    // leaving it ambiguous.
+    if (!req.body.crmEventId) {
       return res.status(400).json({
-        message: "Exhibition is required. Open Accounts from the required exhibition Client Profile.",
+        message: "crmEventId is required — open this client from a specific event's list to create an Estimate.",
       });
     }
-    estimateBody.crmEventId =
-      estimateBody.crmEventId
-      || assignment?.eventId?._id
-      || assignment?.eventId
-      || null;
 
     const newEstimateNo = await generateNextProformaNo();
 
@@ -97,6 +74,7 @@ const addEstimate = async (req, res) => {
 
     const estimate = new Estimate(estimateBody);
     await estimate.save();
+    await markCompanyHotLead(estimate.companyId, estimate.crmEventId);
     const accountName = await getDocumentAccountName(estimate, "account");
     await logActivity(
       req,
@@ -824,12 +802,13 @@ const sendWhatsAppEstimate = async (req, res) => {
       ];
     }
 
+    const whatsappLogOptions = { companyId: estimate.companyId, eventId: estimate.crmEventId };
     let result;
     if (customMessage) {
       const { sendWhatsAppMessage } = require('../utils/whatsapp');
-      result = await sendWhatsAppMessage(phone, message, estimate.consignee_name);
+      result = await sendWhatsAppMessage(phone, message, estimate.consignee_name, whatsappLogOptions);
     } else {
-      result = await sendProformaInvoiceWhatsApp(phone, message, estimate.consignee_name, templateParams);
+      result = await sendProformaInvoiceWhatsApp(phone, message, estimate.consignee_name, templateParams, whatsappLogOptions);
     }
 
     if (result.success) {
@@ -1239,7 +1218,8 @@ const sendEmailEstimate = async (req, res) => {
       to: email,
       subject: subject,
       html: htmlContent,
-      profile: 'DEFAULT'
+      profile: 'DEFAULT',
+      logData: { companyId: estimate.companyId, eventId: estimate.crmEventId },
     });
 
     estimate.emailSent = true;

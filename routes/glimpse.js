@@ -6,6 +6,8 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const { logActivity } = require('../utils/logger');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -38,7 +40,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Get all glimpse data
-router.get('/', async (req, res) => {
+router.get('/', cacheControl(120), async (req, res) => {
   try {
     let glimpse = await Glimpse.findOne();
     if (!glimpse) {
@@ -218,7 +220,7 @@ router.delete('/counters/:counterId', verifyToken, async (req, res) => {
 
 
 // Image upload
-router.post('/upload', upload.single('image'), (req, res) => {
+router.post('/upload', upload.single('image'), optimizeImage, (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No file uploaded" });

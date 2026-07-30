@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const marqueeController = require('../controllers/marqueeController');
+const cacheControl = require('../middleware/cacheControl');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -18,7 +19,7 @@ const verifyToken = (req, res, next) => {
 
 // @route   GET /api/marquee
 // @desc    Get marquee settings
-router.get('/', (req, res) => marqueeController.getMarquee(req, res));
+router.get('/', cacheControl(120), (req, res) => marqueeController.getMarquee(req, res));
 
 // @route   POST /api/marquee
 // @desc    Update marquee settings

@@ -1,4 +1,5 @@
 const seoService = require('../services/seoService');
+const { resolveOg } = require('../services/ogResolverService');
 const { logActivity } = require('../utils/logger');
 
 /**
@@ -10,8 +11,8 @@ class SeoController {
      */
     async createOrUpdateSeo(req, res) {
         try {
-            const { page, metaTitle, metaKeywords, metaDescription, openGraphTags, schemaMarkup, canonicalTag, isActive } = req.body;
-            
+            const { page, metaTitle, metaKeywords, metaDescription, openGraphTags, schemaMarkup, canonicalTag, ogTitle, ogDescription, isActive } = req.body;
+
             const updateData = {
                 page,
                 metaTitle,
@@ -20,6 +21,8 @@ class SeoController {
                 openGraphTags,
                 schemaMarkup,
                 canonicalTag,
+                ogTitle,
+                ogDescription,
                 isActive: isActive === 'true' || isActive === true,
                 updatedBy: req.user?.username || 'SYSTEM'
             };
@@ -55,8 +58,8 @@ class SeoController {
      */
     async updateSeo(req, res) {
         try {
-            const { metaTitle, metaKeywords, metaDescription, openGraphTags, schemaMarkup, canonicalTag, isActive } = req.body;
-            
+            const { metaTitle, metaKeywords, metaDescription, openGraphTags, schemaMarkup, canonicalTag, ogTitle, ogDescription, isActive } = req.body;
+
             const updateData = {
                 metaTitle,
                 metaKeywords,
@@ -64,6 +67,8 @@ class SeoController {
                 openGraphTags,
                 schemaMarkup,
                 canonicalTag,
+                ogTitle,
+                ogDescription,
                 isActive: isActive === 'true' || isActive === true,
                 updatedBy: req.user?.username || 'SYSTEM'
             };
@@ -109,7 +114,7 @@ class SeoController {
                 return res.status(400).json({ success: false, message: 'Path is required' });
             }
 
-            const data = await seoService.getSeoByPage(path);
+            const data = await resolveOg(path);
             res.json({ success: true, data });
         } catch (error) {
             console.error('SEO Fetch error:', error);

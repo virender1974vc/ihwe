@@ -52,6 +52,7 @@ const accountDebitNoteSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, index: true },
+    crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, index: true },
     debit_note_no: { type: String, required: true, unique: true },
     debit_note_date: { type: String },
 

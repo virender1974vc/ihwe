@@ -68,15 +68,16 @@ const InvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, index: true },
+    crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, index: true },
     source_estimate_id: { type: String, default: "" },
     estimate_no: { type: String, default: "" }, // Optional now
-    invoice_no: { type: String, required: true, unique: true }, 
+    invoice_no: { type: String, required: true, unique: true },
     type_of_invoice: { type: String, required: true },
     invoice_date: { type: String },
     due_date: { type: String },
     po_no: { type: String },
     currency: { type: String },
-    
+
     gst_no: { type: String },
     supply_date: { type: String }, // Can be used as invoice date if not separate
 
@@ -86,7 +87,7 @@ const InvoiceSchema = new mongoose.Schema(
     event_name: { type: String },
     event_place_of_supply: { type: String },
     event_gst_no: { type: String },
-    
+
     consignee_name: { type: String, required: true },
     consignee_addr: { type: String }, // Shipping
     consignee_person: { type: String, default: "" },
@@ -94,14 +95,14 @@ const InvoiceSchema = new mongoose.Schema(
     billing_address: { type: String },
     billing_state: { type: String },
     billing_pincode: { type: String },
-    
+
     country: { type: String },
     state: { type: String },
     city: { type: String },
     pincode: { type: String },
     place_of_supply: { type: String },
     stateCode: { type: String },
-    
+
     items: { type: [invoiceItemSchema], required: true },
     finalAmount: { type: Number, required: true },
     delivery_challan_ids: { type: [String], default: [] },
@@ -111,7 +112,7 @@ const InvoiceSchema = new mongoose.Schema(
     revision_no: { type: Number, default: 0 },
     revised_at: { type: Date, default: null },
     revisions: { type: [invoiceRevisionSchema], default: [] },
-    
+
     added_by: { type: String },
     status: { type: String, default: "active" },
     added: { type: Date, default: Date.now },
