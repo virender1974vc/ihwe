@@ -1,6 +1,7 @@
 const nodemailer = require("nodemailer");
 const { secondaryDB } = require("../config/secondaryDb");
 const EmailLog = require("../models/EmailLog");
+const { resolveEventId } = require("../utils/whatsapp");
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -14,7 +15,7 @@ const transporter = nodemailer.createTransport({
 
 const sendCrmEmail = async (req, res) => {
   try {
-    const { to, subject, content, companyName, sentBy, senderId, senderName, cmpny_id } = req.body;
+    const { to, subject, content, companyName, sentBy, senderId, senderName, cmpny_id, eventId: requestEventId } = req.body;
 
     if (!to || !subject || !content) {
       return res.status(400).json({ success: false, message: "to, subject and content are required" });
@@ -77,6 +78,7 @@ const sendCrmEmail = async (req, res) => {
     }
 
     try {
+      const eventId = await resolveEventId({ companyId: cmpny_id, eventId: requestEventId });
       await EmailLog.create({
         recipient: to,
         subject: subject,
@@ -85,7 +87,8 @@ const sendCrmEmail = async (req, res) => {
         senderId: senderId || null,
         senderName: senderName || sentBy || null,
         companyId: cmpny_id || null,
-        companyName: companyName || null
+        companyName: companyName || null,
+        eventId
       });
     } catch (e) {
       console.error("[CRM Email] Failed to save EmailLog:", e.message);

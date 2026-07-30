@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const Stall = require('../models/Stall');
 const pdfGenerator = require('../utils/pdfGenerator');
@@ -5,12 +6,112 @@ const emailService = require('../utils/emailService');
 const path = require('path');
 const qrcode = require('qrcode');
 
+const resolveCrmEventForRegistration = async (registrationEventId) => {
+    if (!registrationEventId) return null;
+    const CrmEvent = require('../models/CrmEvent');
+    const Event = require('../models/Event');
+    let crmEvent = await CrmEvent.findOne({ registrationEventId }).lean();
+    if (crmEvent) return crmEvent;
+
+    const operationalEvent = await Event.findById(registrationEventId).lean();
+    if (!operationalEvent) return null;
+    const date = operationalEvent.startDate ? new Date(operationalEvent.startDate) : null;
+    if (date && !Number.isNaN(date.getTime())) {
+        const dayStart = new Date(date);
+        dayStart.setUTCHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+        crmEvent = await CrmEvent.findOne({
+            event_fromDate: { $gte: dayStart, $lt: dayEnd },
+        }).lean();
+    }
+    if (!crmEvent && operationalEvent.name) {
+        const escaped = operationalEvent.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        crmEvent = await CrmEvent.findOne({
+            $or: [
+                { event_name: { $regex: new RegExp(escaped, 'i') } },
+                { event_fullName: { $regex: new RegExp(escaped, 'i') } },
+            ],
+        }).lean();
+    }
+    if (crmEvent && !crmEvent.registrationEventId) {
+        await CrmEvent.updateOne(
+            { _id: crmEvent._id, registrationEventId: null },
+            { $set: { registrationEventId } },
+        );
+    }
+    return crmEvent;
+};
+
 class ExhibitorRegistrationService {
+    async _markRegistrationConverted(registration) {
+        if (!registration?.clientId || !registration?.eventId) return;
+
+        const crmEvent = await resolveCrmEventForRegistration(registration.eventId);
+        if (!crmEvent?._id) return;
+
+        const Company = require('../models/Company');
+        const now = new Date();
+        const lifecycleUpdate = await Company.updateOne(
+            { _id: registration.clientId, 'eventAssignments.eventId': crmEvent._id },
+            {
+                $set: {
+                    'eventAssignments.$.status': 'Closed - Won',
+                    'eventAssignments.$.registrationEventId': registration.eventId,
+                    'eventAssignments.$.exhibitorRegistrationId': registration._id,
+                    'eventAssignments.$.convertedAt': now,
+                    'eventAssignments.$.updatedAt': now,
+                },
+                $addToSet: { events: crmEvent._id },
+            },
+        );
+
+        if (!lifecycleUpdate.matchedCount) {
+            await Company.updateOne(
+                { _id: registration.clientId },
+                {
+                    $addToSet: { events: crmEvent._id },
+                    $push: {
+                        eventAssignments: {
+                            eventId: crmEvent._id,
+                            registrationEventId: registration.eventId,
+                            status: 'Closed - Won',
+                            forwardTo: registration.spokenWith || registration.filledByFullName || '',
+                            dataSource: registration.referredBy || '',
+                            exhibitorRegistrationId: registration._id,
+                            convertedAt: now,
+                            updatedAt: now,
+                        },
+                    },
+                },
+            );
+        }
+
+        const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
+        await CrmExhibatorReview2023.create({
+            cmpny_id: registration.clientId,
+            evnt_id: String(crmEvent._id),
+            event_name: crmEvent.event_fullName || crmEvent.event_name || '',
+            status_short: 'Closed - Won',
+            re_msg: `Registration payment completed and lead converted. Stall: ${registration.participation?.stallFor || 'N/A'}.`,
+            type: 'status',
+            updated_by: registration.spokenWith || registration.filledByFullName || 'System Admin',
+        });
+    }
+
     // Shared filter builder used by both the paginated list and the summary
     // aggregation, so "what matches" is defined in exactly one place.
-    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '' } = {}) {
+    async _buildRegistrationsQuery({ search = '', status = '', referredBy = '', industry = '', username = '', role = '', eventId = '', validBooking = false } = {}) {
         const query = {};
-        const orGroups = []; // each entry ANDed together; each entry itself is an $or list
+        const orGroups = [];
+        if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
+            query.eventId = new mongoose.Types.ObjectId(eventId);
+        }
+        if (validBooking === true || validBooking === 'true') {
+            query['participation.stallNo'] = { $nin: [null, ''] };
+            query['participation.stallSize'] = { $gt: 0 };
+            query['participation.total'] = { $gt: 0 };
+        }
 
         if (status) {
             query.status = status;
@@ -20,10 +121,6 @@ class ExhibitorRegistrationService {
             query.referredBy = { $regex: new RegExp(`^${esc}$`, 'i') };
         }
         if (industry) {
-            // Must mirror the exact "natureOfBusiness || industrySector || typeOfBusiness"
-            // priority chain the UI displays under the company name — otherwise a row can
-            // match the filter on one field while showing a DIFFERENT field's value,
-            // making the filter look broken.
             const esc = industry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const exact = new RegExp(`^${esc}$`, 'i');
             const isEmpty = (field) => ({ $or: [{ [field]: { $exists: false } }, { [field]: null }, { [field]: '' }] });
@@ -119,10 +216,12 @@ class ExhibitorRegistrationService {
                     _revenueValue: {
                         $cond: [
                             { $gt: [{ $ifNull: ['$financeBreakdown.netPayable', 0] }, 0] }, '$financeBreakdown.netPayable',
-                            { $cond: [
-                                { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
-                                { $ifNull: ['$amountPaid', 0] },
-                            ] },
+                            {
+                                $cond: [
+                                    { $gt: [{ $ifNull: ['$participation.total', 0] }, 0] }, '$participation.total',
+                                    { $ifNull: ['$amountPaid', 0] },
+                                ]
+                            },
                         ],
                     },
                     _paymentValue: {
@@ -167,8 +266,8 @@ class ExhibitorRegistrationService {
     // Distinct filter dropdown values scoped to the user (same scoping as the list),
     // computed across ALL of that user's registrations — not just the current page.
     async getFilterOptions(options = {}) {
-        const { username = '', role = '' } = options;
-        const query = await this._buildRegistrationsQuery({ username, role });
+        const { username = '', role = '', eventId = '' } = options;
+        const query = await this._buildRegistrationsQuery({ username, role, eventId });
 
         const isNonEmpty = (field) => ({ $and: [{ $ne: [field, null] }, { $ne: [field, ''] }] });
 
@@ -344,14 +443,30 @@ class ExhibitorRegistrationService {
             const hasContactDetails = (contact) => Boolean(
                 contact?.firstName || contact?.lastName || contact?.name || contact?.mobile || contact?.email
             );
+            const linkedCompany = companyById.get(String(doc.clientId || ''));
+            const companyContact =
+                linkedCompany?.contacts?.find((contact) => contact.isPrimary)
+                || linkedCompany?.contacts?.[0];
+
+            if (!doc.contact1?.firstName && !doc.contact1?.name && companyContact) {
+                const currentContact = doc.contact1?.toObject ? doc.contact1.toObject() : (doc.contact1 || {});
+                doc.contact1 = {
+                    ...currentContact,
+                    title: currentContact.title || companyContact.title || '',
+                    firstName: companyContact.firstName || companyContact.name || '',
+                    lastName: currentContact.lastName || companyContact.surname || '',
+                    designation: currentContact.designation || companyContact.designation || '',
+                    email: currentContact.email || companyContact.email || '',
+                    mobile: currentContact.mobile || companyContact.mobile || '',
+                    photoUrl: currentContact.photoUrl || companyContact.photoUrl || companyContact.photo || '',
+                };
+                doc._isEnriched = true;
+            }
+
             if (!hasContactDetails(doc.contact1)) {
                 const primaryTeamMember = doc.teamMembers?.find((member) =>
                     member.isPrimary || /primary contact/i.test(member.roleAtExhibition || '')
                 );
-                const linkedCompany = companyById.get(String(doc.clientId || ''));
-                const companyContact =
-                    linkedCompany?.contacts?.find((contact) => contact.isPrimary)
-                    || linkedCompany?.contacts?.[0];
 
                 if (primaryTeamMember) {
                     doc.contact1 = {
@@ -388,6 +503,16 @@ class ExhibitorRegistrationService {
 
         // ── Registrant type validation ──────────────────────────────────────────
         const registrantType = data.registrantType || 'registered';
+        if (data.registrationSource === 'admin') {
+            const participation = data.participation || {};
+            if (!data.eventId) throw new Error('Please select the registration event.');
+            if (!participation.stallNo || !participation.stallFor) {
+                throw new Error('Please select a valid stall before creating the exhibitor registration.');
+            }
+            if (Number(participation.stallSize || 0) <= 0 || Number(participation.total || 0) <= 0) {
+                throw new Error('Stall area and booking amount must be greater than zero.');
+            }
+        }
         if (registrantType === 'registered') {
             if (!data.gstNo || data.gstNo.trim() === '') {
                 throw new Error('GST Number (GSTIN) is required for Registered Exhibitors.');
@@ -503,15 +628,27 @@ class ExhibitorRegistrationService {
                     const tdsA = Math.round(sub * tdsP / 100);
                     const expectedNet = (sub + gstA) - tdsA;
 
-                    const submittedNet = data.financeBreakdown?.netPayable
-                        ?? ((data.participation?.total || 0) - (data.financeBreakdown?.tdsAmount || 0));
-                    const TOLERANCE = 5;
-                    if (Math.abs(submittedNet - expectedNet) > TOLERANCE) {
-                        throw new Error('Pricing could not be verified for this stall. Please refresh the page and try again.');
-                    }
+                    data.participation.rate = rateDoc.ratePerSqm || 0;
+                    data.participation.stallSize = stallForCalc.area || 0;
+                    data.participation.amount = sub;
+                    data.participation.total = sub + gstA;
+                    data.financeBreakdown = {
+                        ...(data.financeBreakdown || {}),
+                        grossAmount: gross,
+                        stallDiscountPercent: stallForCalc.discountPercentage || 0,
+                        stallDiscountAmount: stallDiscAmt,
+                        subtotal1: sub1,
+                        discountPercent: discP,
+                        discountAmount: discA,
+                        subtotal: sub,
+                        gstAmount: gstA,
+                        tdsPercent: tdsP,
+                        tdsAmount: tdsA,
+                        netPayable: expectedNet,
+                        isFullPayment,
+                    };
                 }
             } catch (validationErr) {
-                if (String(validationErr.message).includes('Pricing could not be verified')) throw validationErr;
                 console.error('[PriceValidation] Skipped due to lookup error:', validationErr.message);
             }
         }
@@ -637,14 +774,30 @@ class ExhibitorRegistrationService {
             const newRegistration = new ExhibitorRegistration(data);
             saved = await newRegistration.save();
         }
+        const isCommittedRegistration =
+            data.status !== 'payment-failed'
+            && Boolean(data.participation?.stallNo)
+            && Number(data.participation?.stallSize || 0) > 0
+            && Number(data.participation?.total || 0) > 0;
+
+        // Admin-created registrations (Book A Stand) never auto-generate an
+        // Estimate/PI and always land the company on "Booked" — it moves to
+        // Converted once a real Payment is recorded (see getConvertedCompanies/
+        // getBookedCompanies in companyController.js). Website self-registration
+        // keeps its original behavior untouched.
+        const isAdminRegistration = data.registrationSource === 'admin';
+        const boundStatus = isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'New Lead');
 
         if (data.clientId) {
             try {
                 const Company = require('../models/Company');
-                const companyUpdate = {
-                    exhibitorRegistrationId: saved._id,
-                    companyStatus: 'Closed - Won'
-                };
+                const crmEvent = await resolveCrmEventForRegistration(data.eventId);
+                const companyUpdate = crmEvent?._id
+                    ? {}
+                    : ((isAdminRegistration || isCommittedRegistration) ? {
+                        exhibitorRegistrationId: saved._id,
+                        companyStatus: boundStatus
+                    } : {});
 
                 if (data.exhibitorName) companyUpdate.companyName = data.exhibitorName;
                 if (data.website) companyUpdate.website = data.website;
@@ -695,13 +848,51 @@ class ExhibitorRegistrationService {
 
                 if (existingCompany) {
                     await Company.findByIdAndUpdate(data.clientId, companyUpdate);
+                    if (crmEvent?._id) {
+                        const lifecycle = {
+                            eventId: crmEvent._id,
+                            registrationEventId: data.eventId,
+                            status: boundStatus,
+                            forwardTo: data.spokenWith || data.filledByFullName || '',
+                            dataSource: data.referredBy || '',
+                            exhibitorRegistrationId: saved._id,
+                            convertedAt: isCommittedRegistration ? new Date() : null,
+                            updatedAt: new Date()
+                        };
+                        const lifecycleUpdated = await Company.updateOne(
+                            { _id: data.clientId, 'eventAssignments.eventId': crmEvent._id },
+                            {
+                                $set: {
+                                    'eventAssignments.$.status': lifecycle.status,
+                                    'eventAssignments.$.registrationEventId': lifecycle.registrationEventId,
+                                    'eventAssignments.$.exhibitorRegistrationId': lifecycle.exhibitorRegistrationId,
+                                    'eventAssignments.$.convertedAt': lifecycle.convertedAt,
+                                    'eventAssignments.$.updatedAt': lifecycle.updatedAt
+                                },
+                                $addToSet: { events: crmEvent._id }
+                            }
+                        );
+                        if (!lifecycleUpdated.matchedCount) {
+                            await Company.updateOne(
+                                { _id: data.clientId },
+                                {
+                                    $addToSet: { events: crmEvent._id },
+                                    $push: { eventAssignments: lifecycle }
+                                }
+                            );
+                        }
+                    }
                 }
                 const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
                 const adminName = data.spokenWith || data.filledByFullName || 'System Admin';
                 await CrmExhibatorReview2023.create({
                     cmpny_id: data.clientId,
-                    status_short: 'Closed - Won',
-                    re_msg: `Lead successfully converted to confirmed Exhibitor Registration. Stall booked: ${data.participation?.stallFor || 'N/A'}.`,
+                    status_short: isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'Registration Initiated'),
+                    re_msg: isAdminRegistration
+                        ? `Stall booked via Admin Registration: ${data.participation?.stallFor || 'N/A'}. Awaiting payment.`
+                        : (isCommittedRegistration
+                            ? `Lead successfully converted to confirmed Exhibitor Registration. Stall booked: ${data.participation?.stallFor || 'N/A'}.`
+                            : 'Website registration initiated; awaiting successful payment before conversion.'),
                     type: 'status',
                     updated_by: adminName
                 });
@@ -712,7 +903,8 @@ class ExhibitorRegistrationService {
         } else {
             try {
                 const Company = require('../models/Company');
-                const adminName = data.spokenWith || data.filledByFullName || 'Website Direct Booking';
+                const crmEvent = await resolveCrmEventForRegistration(data.eventId);
+                const adminName = data.spokenWith || data.filledByFullName || (isAdminRegistration ? 'System Admin' : 'Website Direct Booking');
 
                 const newCompanyData = {
                     companyName: data.exhibitorName || 'Unknown Company',
@@ -729,10 +921,22 @@ class ExhibitorRegistrationService {
                     category: data.typeOfBusiness || '',
                     businessNature: data.natureOfBusiness || '',
                     exhibitorCategory: (data.participation && data.participation.stallCategory) ? data.participation.stallCategory : "General Category",
-                    companyStatus: 'Closed - Won',
+                    companyStatus: boundStatus,
                     exhibitorRegistrationId: saved._id,
                     added_by: adminName,
                     forwardTo: adminName,
+                    eventId: crmEvent?._id || null,
+                    events: crmEvent?._id ? [crmEvent._id] : [],
+                    eventAssignments: crmEvent?._id ? [{
+                        eventId: crmEvent._id,
+                        registrationEventId: data.eventId,
+                        status: boundStatus,
+                        forwardTo: adminName,
+                        dataSource: data.referredBy || (isAdminRegistration ? 'Admin Registration' : 'Direct Website'),
+                        exhibitorRegistrationId: saved._id,
+                        convertedAt: isCommittedRegistration ? new Date() : null,
+                        updatedAt: new Date()
+                    }] : [],
                     contacts: []
                 };
 
@@ -768,8 +972,14 @@ class ExhibitorRegistrationService {
                 const CrmExhibatorReview2023 = require('../models/CrmExhibatorReview2023');
                 await CrmExhibatorReview2023.create({
                     cmpny_id: newCompany._id,
-                    status_short: 'Closed - Won',
-                    re_msg: `Lead successfully created and converted to confirmed Exhibitor Registration from Website. Stall booked: ${data.participation?.stallFor || 'N/A'}.`,
+                    status_short: isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'Registration Initiated'),
+                    evnt_id: crmEvent?._id ? String(crmEvent._id) : '',
+                    event_name: crmEvent?.event_fullName || crmEvent?.event_name || '',
+                    re_msg: isAdminRegistration
+                        ? `Stall booked via Admin Registration: ${data.participation?.stallFor || 'N/A'}. Awaiting payment.`
+                        : (isCommittedRegistration
+                            ? `Lead successfully created and converted to confirmed Exhibitor Registration from Website. Stall booked: ${data.participation?.stallFor || 'N/A'}.`
+                            : 'Website registration initiated; awaiting successful payment before conversion.'),
                     type: 'status',
                     updated_by: adminName
                 });
@@ -779,8 +989,28 @@ class ExhibitorRegistrationService {
         }
 
         // ── Auto-Generate Estimate (instead of PROFORMA Invoice) ──
+        // Admin-created (Book A Stand) registrations skip this entirely — no
+        // PI/Estimate is auto-generated for them, only website self-registration
+        // keeps this behavior.
+        if (!isAdminRegistration) {
         try {
-            if (saved.clientId) {
+            const assignedTeamMember = String(data.spokenWith || '').trim();
+            const hasAssignedTeamMember =
+                assignedTeamMember
+                && !/^(direct|no one|none|unassigned)$/i.test(assignedTeamMember);
+            // Re-verify saved.clientId actually resolves to a real Company — the
+            // exact one just inserted or matched above — rather than trusting it
+            // blindly. This guarantees the Estimate's companyId can never end up
+            // being the ExhibitorRegistration's own _id (or any other stray id)
+            // even if something upstream ever passed a bad clientId.
+            const Company = require('../models/Company');
+            const linkedCompany = saved.clientId
+                ? await Company.findById(saved.clientId).select('_id').lean()
+                : null;
+            if (saved.clientId && !linkedCompany) {
+                console.error('Skipping Estimate auto-generation: clientId does not match a real Company:', saved.clientId);
+            }
+            if (linkedCompany && hasAssignedTeamMember) {
                 const Estimate = require('../models/Estimate');
                 const nextEstNo = await Estimate.generateNextEstimateNo();
 
@@ -795,7 +1025,10 @@ class ExhibitorRegistrationService {
                 }
 
                 const estData = {
-                    companyId: saved.clientId,
+                    companyId: String(linkedCompany._id),
+                    eventId: data.eventId || null,
+                    crmEventId: (await resolveCrmEventForRegistration(data.eventId))?._id || null,
+                    exhibitorRegistrationId: saved._id,
                     est_no: nextEstNo,
                     gst_no: data.gstNo || "N/A",
                     supply_date: new Date().toISOString().split('T')[0],
@@ -847,11 +1080,61 @@ class ExhibitorRegistrationService {
                 }
 
                 if (estData.items.length > 0) {
-                    await Estimate.create(estData);
+                    const existingEstimate = await Estimate.findOne({
+                        companyId: String(linkedCompany._id),
+                        eventId: data.eventId,
+                        status: { $in: ['active', 'draft', 'sent'] }
+                    }).sort({ added: -1 });
+
+                    if (existingEstimate) {
+                        const oldItem = existingEstimate.items?.[0];
+                        const newItem = estData.items[0];
+                        const sameCommercials =
+                            Number(existingEstimate.finalAmount || 0) === Number(estData.finalAmount || 0)
+                            && Number(oldItem?.rate || 0) === Number(newItem?.rate || 0)
+                            && Number(oldItem?.size || 0) === Number(newItem?.size || 0)
+                            && String(oldItem?.description || '') === String(newItem?.description || '');
+                        const wasSent = existingEstimate.emailSent || existingEstimate.whatsappSent || existingEstimate.status === 'sent';
+
+                        const proformaAction = String(data.proformaAction || '').toLowerCase();
+                        if (proformaAction === 'new' || proformaAction === 'revision') {
+                            await Estimate.findByIdAndUpdate(existingEstimate._id, { status: 'superseded' });
+                            await Estimate.create({
+                                ...estData,
+                                revisionOf: existingEstimate._id,
+                                version: Number(existingEstimate.version || 1) + 1,
+                                status: 'active'
+                            });
+                        } else if (proformaAction === 'reuse') {
+                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                exhibitorRegistrationId: saved._id
+                            });
+                        } else if (!wasSent) {
+                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                ...estData,
+                                est_no: existingEstimate.est_no,
+                                version: existingEstimate.version || 1,
+                                status: 'active'
+                            });
+                        } else if (sameCommercials) {
+                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                exhibitorRegistrationId: saved._id
+                            });
+                        } else {
+                            // Preserve/link an existing sent proforma unless the
+                            // caller explicitly chose to create a revision.
+                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                exhibitorRegistrationId: saved._id
+                            });
+                        }
+                    } else {
+                        await Estimate.create(estData);
+                    }
                 }
             }
         } catch (err) {
             console.error('Failed to auto-generate Estimate:', err);
+        }
         }
 
         // Only book stall and send emails if payment is NOT failed
@@ -1154,6 +1437,11 @@ class ExhibitorRegistrationService {
 
         if (statusJustActivated) {
             await this.activateRegistration(id);
+            try {
+                await this._markRegistrationConverted(updated);
+            } catch (err) {
+                console.error('Failed to convert CRM lifecycle after registration activation:', err);
+            }
         }
 
         if (updated.status === 'payment-failed' && current.status !== 'payment-failed') {

@@ -273,6 +273,7 @@ const validatePayload = async (payload, excludeId) => {
 exports.getChallans = async (req, res) => {
   try {
     const query = {};
+    if (req.query.eventId) query.eventId = req.query.eventId;
     if (req.query.companyId) {
       query.$or = [{ companyId: req.query.companyId }, { account_ref_id: req.query.companyId }];
     }
@@ -371,6 +372,8 @@ exports.createChallan = async (req, res) => {
     if (result.error) return res.status(400).json({ message: result.error });
     const challan = await DeliveryChallan.create({
       ...req.body,
+      eventId: result.estimate.eventId || req.body.eventId || null,
+      crmEventId: result.estimate.crmEventId || req.body.crmEventId || null,
       estimate_no: result.estimate.est_no,
       challan_no: await DeliveryChallan.generateNextNumber(),
     });
@@ -429,7 +432,7 @@ exports.sendWhatsApp = async (req, res) => {
     const recipient = await resolveRecipient(challan);
     const phone = req.body.customPhone || recipient.phone;
     if (!phone) return res.status(400).json({ message: "Phone number is required." });
-    const result = await sendWhatsAppMessage(phone, req.body.customMessage || buildWhatsAppMessage(challan), challan.company_name);
+    const result = await sendWhatsAppMessage(phone, req.body.customMessage || buildWhatsAppMessage(challan), challan.company_name, { companyId: challan.companyId, eventId: challan.crmEventId });
     if (!result?.success) return res.status(500).json({ message: "Failed to send WhatsApp", error: result?.error });
     challan.whatsappSent = true;
     challan.whatsappSentAt = new Date();
@@ -463,6 +466,7 @@ exports.sendEmail = async (req, res) => {
       to: email,
       subject: `Delivery Challan ${challan.challan_no} | IHWE`,
       html: req.body.customHtmlContent || buildEmailHtml(challan),
+      logData: { companyId: challan.companyId, eventId: challan.crmEventId },
     });
     challan.emailSent = true;
     challan.emailSentAt = new Date();

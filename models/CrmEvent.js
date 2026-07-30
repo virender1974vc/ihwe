@@ -13,6 +13,11 @@ const CrmEventSchema = new mongoose.Schema(
     event_pincode: { type: String, required: true },
     event_status: { type: String, required: true },
     added_by: { type: String, required: true },
+    registrationEventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Event",
+      default: null,
+    },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },
 );

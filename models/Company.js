@@ -42,6 +42,25 @@ const CompanySchema = new mongoose.Schema(
     referralName: { type: String },
     referralMobile: { type: String },
     eventName: { type: String },
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    events: [{ type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" }],
+    eventAssignments: [{
+      eventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" },
+      forwardTo: { type: String },
+      status: { type: String, default: "New Lead" },
+      dataSource: { type: String, default: "" },
+      socialMediaType: { type: String, default: "" },
+      referralName: { type: String, default: "" },
+      referralMobile: { type: String, default: "" },
+      reminder: { type: Date, default: null },
+      followUpDate: { type: Date, default: null },
+      exhibitorRegistrationId: { type: mongoose.Schema.Types.ObjectId, ref: "ExhibitorRegistration", default: null },
+      registrationEventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null },
+      lastRemark: { type: String, default: "" },
+      convertedAt: { type: Date, default: null },
+      createdAt: { type: Date, default: Date.now },
+      updatedAt: { type: Date, default: Date.now },
+    }],
     reminder: { type: Date },
     companyStatus: { type: String, default: "New Lead" },
     added_by: { type: String, trim: true },
@@ -70,5 +89,8 @@ CompanySchema.index({ companyStatus: 1, createdAt: -1 });
 CompanySchema.index({ "contacts.mobile": 1 });
 CompanySchema.index({ email: 1 });
 CompanySchema.index({ companyName: 1 });
+CompanySchema.index({ eventId: 1 });
+CompanySchema.index({ events: 1 });
+CompanySchema.index({ "eventAssignments.eventId": 1, "eventAssignments.status": 1 });
 
 module.exports = secondaryDB.model("Company", CompanySchema);

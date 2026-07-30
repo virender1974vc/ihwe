@@ -1,10 +1,13 @@
 const CrmExhibitorCategory = require("../models/CrmExhibitorCategory.js");
 const CrmUser = require("../models/CrmUser.js");
+const { resequenceDisplayOrder } = require("../utils/displayOrder");
 
 // GET all categories
 const getAllCategories = async (req, res) => {
   try {
-    const categories = await CrmExhibitorCategory.find().lean();
+    const categories = await CrmExhibitorCategory.find()
+      .sort({ display_order: 1, cat_name: 1 })
+      .lean();
     
     // Fetch all users to map username to full name
     const users = await CrmUser.find({}, 'user_name user_fullname').lean();
@@ -46,7 +49,13 @@ const createCategory = async (req, res) => {
   try {
     const newCategory = new CrmExhibitorCategory(req.body);
     const savedCategory = await newCategory.save();
-    res.status(201).json(savedCategory);
+    await resequenceDisplayOrder(
+      CrmExhibitorCategory,
+      savedCategory._id,
+      req.body.display_order,
+    );
+    const orderedCategory = await CrmExhibitorCategory.findById(savedCategory._id);
+    res.status(201).json(orderedCategory);
   } catch (err) {
     res
       .status(500)
@@ -62,14 +71,22 @@ const updateCategory = async (req, res) => {
     if (!category)
       return res.status(404).json({ message: "Category not found" });
 
-    const allowedFields = ["cat_id", "cat_name", "cat_status", "updated_by", "parent_category", "cat_description", "display_order", "applicable_for", "icon_name", "icon_data_url"];
+    const allowedFields = ["cat_id", "cat_name", "cat_status", "updated_by", "parent_category", "business_nature", "cat_description", "display_order", "applicable_for", "icon_name", "icon_data_url"];
     allowedFields.forEach((key) => {
       if (updates[key] !== undefined) category[key] = updates[key];
     });
 
     category.cat_updated = new Date();
     const savedCategory = await category.save();
-    res.json(savedCategory);
+    if (updates.display_order !== undefined) {
+      await resequenceDisplayOrder(
+        CrmExhibitorCategory,
+        savedCategory._id,
+        updates.display_order,
+      );
+    }
+    const orderedCategory = await CrmExhibitorCategory.findById(savedCategory._id);
+    res.json(orderedCategory);
   } catch (err) {
     res
       .status(500)

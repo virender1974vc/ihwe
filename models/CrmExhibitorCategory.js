@@ -12,6 +12,7 @@ const CrmExhibitorCategorySchema = new mongoose.Schema(
       trim: true,
     },
     parent_category: { type: String, default: null },
+    business_nature: { type: String, default: "" },
     cat_description: { type: String },
     display_order: { type: Number },
     applicable_for: { type: [String] },

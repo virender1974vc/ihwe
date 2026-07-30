@@ -3,6 +3,7 @@ const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Company = require("../models/Company");
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
+const { markCompanyHotLead } = require("../utils/companyStatusSync");
 
 // ✅ Create new PROFORMA Invoice
 const createPerformaInvoice = async (req, res) => {
@@ -25,6 +26,7 @@ const createPerformaInvoice = async (req, res) => {
     });
 
     await invoice.save();
+    await markCompanyHotLead(invoice.companyId, invoice.crmEventId);
     const accountName = await getDocumentAccountName(invoice, "account");
     await logActivity(
       req,
@@ -54,7 +56,8 @@ const createPerformaInvoice = async (req, res) => {
 // ✅ Get all PROFORMA Invoices
 const getAllPerformaInvoices = async (req, res) => {
   try {
-    const invoices = await PerformaInvoice.find().sort({ added: -1 });
+    const query = req.query.eventId ? { eventId: req.query.eventId } : {};
+    const invoices = await PerformaInvoice.find(query).sort({ added: -1 });
 
     res.json(invoices);
   } catch (error) {

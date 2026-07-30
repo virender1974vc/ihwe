@@ -6,12 +6,19 @@ const uploadMiddleware = require("../middlewares/upload.js");
 const {
   addCompany,
   getCompanies,
+  getCompanyStatsSummary,
   getCompanyById,
+  addCompanyToEvent,
+  assignEventsToCompany,
+  bulkAssignCompanies,
+  updateEventLifecycle,
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,
   uploadContactPhoto,
   uploadCompanies,
+  getConvertedCompanies,
+  getBookedCompanies,
 } = require("../controllers/companyController.js");
 
 const router = express.Router();
@@ -23,8 +30,8 @@ const _companiesCache = new Map();
 const COMPANIES_TTL = 90 * 1000; // 90 seconds
 
 const getCompanyCacheKey = (req) => {
-  const { username = '', role = '', dashboard = '' } = req.query;
-  return `${username.toLowerCase()}:${role.toLowerCase()}:${dashboard}`;
+  const { username = '', role = '', dashboard = '', eventId = '' } = req.query;
+  return `${username.toLowerCase()}:${role.toLowerCase()}:${dashboard}:${eventId}`;
 };
 const clearCompaniesCache = () => _companiesCache.clear();
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,13 +87,23 @@ router.get("/", async (req, res) => {
 
 router.get("/achievement-revenue", require("../controllers/companyController.js").getAchievementRevenue);
 router.get("/leaderboard", require("../controllers/companyController.js").getSalesLeaderboard);
+router.get("/stats-summary", getCompanyStatsSummary);
+router.get("/converted", getConvertedCompanies);
+router.get("/booked", getBookedCompanies);
 router.get("/lookup/:id", require("../controllers/companyController.js").lookupCompanyOrExhibitor);
 router.get("/:id", getCompanyById);
 
 // Write routes — always clear cache so next GET reflects latest data
 router.post("/", (req, res) => { clearCompaniesCache(); addCompany(req, res); });
 router.put("/:id", (req, res) => { clearCompaniesCache(); updateCompany(req, res); });
+router.put("/:id/events/:eventId/lifecycle", (req, res) => {
+  clearCompaniesCache();
+  updateEventLifecycle(req, res);
+});
 router.delete("/:id", (req, res) => { clearCompaniesCache(); deleteCompany(req, res); });
+router.post("/:id/add-to-event", (req, res) => { clearCompaniesCache(); addCompanyToEvent(req, res); });
+router.post("/:id/assign-events", (req, res) => { clearCompaniesCache(); assignEventsToCompany(req, res); });
+router.post("/bulk-assign", (req, res) => { clearCompaniesCache(); bulkAssignCompanies(req, res); });
 router.post("/:id/logo", upload.single("companyLogo"), (req, res) => { clearCompaniesCache(); uploadCompanyLogo(req, res); });
 router.post("/:id/contact-photo", contactUpload.single("contactPhoto"), uploadContactPhoto);
 router.post(

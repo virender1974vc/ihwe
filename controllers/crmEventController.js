@@ -28,6 +28,12 @@ const getEventById = async (req, res) => {
 // 📍 CREATE Event
 const createEvent = async (req, res) => {
   try {
+    if (req.body.registrationEventId) {
+      const existingLink = await CrmEvent.findOne({ registrationEventId: req.body.registrationEventId });
+      if (existingLink) {
+        return res.status(409).json({ message: `This Registration Event is already linked with ${existingLink.event_fullName || existingLink.event_name}.` });
+      }
+    }
     const newEvent = new CrmEvent(req.body);
     const savedEvent = await newEvent.save();
     res.status(201).json(savedEvent);
@@ -41,6 +47,15 @@ const createEvent = async (req, res) => {
 // 📍 UPDATE Event
 const updateEvent = async (req, res) => {
   try {
+    if (req.body.registrationEventId) {
+      const existingLink = await CrmEvent.findOne({
+        _id: { $ne: req.params.id },
+        registrationEventId: req.body.registrationEventId,
+      });
+      if (existingLink) {
+        return res.status(409).json({ message: `This Registration Event is already linked with ${existingLink.event_fullName || existingLink.event_name}.` });
+      }
+    }
     const event = await CrmEvent.findByIdAndUpdate(req.params.id, req.body, {
       returnDocument: 'after',
     });

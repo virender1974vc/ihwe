@@ -17,16 +17,16 @@ const memoryUpload = multer({
     }
 });
 
-router.use(authMiddleware, adminMiddleware);
+router.use(authMiddleware);
 
 // @route   GET /api/ai-verification-settings
-router.get('/', (req, res) => controller.getSettings(req, res));
+router.get('/', adminMiddleware, (req, res) => controller.getSettings(req, res));
 
 // @route   PUT /api/ai-verification-settings
-router.put('/', (req, res) => controller.updateSettings(req, res));
+router.put('/', adminMiddleware, (req, res) => controller.updateSettings(req, res));
 
 // @route   POST /api/ai-verification-settings/test
-router.post('/test', (req, res) => controller.testConnection(req, res));
+router.post('/test', adminMiddleware, (req, res) => controller.testConnection(req, res));
 
 // @route   POST /api/ai-verification-settings/test-document
 router.post('/test-document', (req, res, next) => {

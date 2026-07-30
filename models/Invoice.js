@@ -67,6 +67,8 @@ const invoiceRevisionSchema = new mongoose.Schema(
 const InvoiceSchema = new mongoose.Schema(
   {
     companyId: { type: String, required: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, index: true },
+    crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, index: true },
     source_estimate_id: { type: String, default: "" },
     estimate_no: { type: String, default: "" }, // Optional now
     invoice_no: { type: String, required: true, unique: true }, 

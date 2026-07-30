@@ -1,0 +1,1666 @@
+{
+  "StatusOption": [
+    {
+      "_id": "68f705c4d536324068f0e61f",
+      "name": "Completed",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:02:12.669Z",
+      "updated": "2026-07-27T06:17:42.108Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 8,
+      "description": "Full payment received and process completed",
+      "status_code": ""
+    },
+    {
+      "_id": "68f70503d536324068f0e605",
+      "name": "Contacted",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T03:58:59.844Z",
+      "updated": "2026-07-27T06:12:49.844Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 2,
+      "description": "First call or email done",
+      "status_code": ""
+    },
+    {
+      "_id": "68f7058dd536324068f0e619",
+      "name": "Booking Confirmed",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:01:17.268Z",
+      "updated": "2026-07-27T06:16:21.824Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 6,
+      "description": "Advance received and stall booked",
+      "status_code": ""
+    },
+    {
+      "_id": "68f704cad536324068f0e5ff",
+      "name": "New Lead",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T03:58:02.817Z",
+      "updated": "2026-07-27T06:11:32.352Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 1,
+      "description": "New enquiry received",
+      "status_code": ""
+    },
+    {
+      "_id": "68f7051bd536324068f0e608",
+      "name": "Follow-up",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T03:59:23.258Z",
+      "updated": "2026-07-27T06:13:49.516Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 3,
+      "description": "Follow-up scheduled",
+      "status_code": ""
+    },
+    {
+      "_id": "68f70577d536324068f0e616",
+      "name": "Negotiation",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:00:55.722Z",
+      "updated": "2026-07-27T06:15:24.642Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 5,
+      "description": "Price or terms under discussion",
+      "status_code": ""
+    },
+    {
+      "_id": "68f705b9d536324068f0e61c",
+      "name": "Payment Pending",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:02:01.709Z",
+      "updated": "2026-07-27T06:17:02.643Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 7,
+      "description": "Booking confirmed, balance payment pending",
+      "status_code": ""
+    },
+    {
+      "_id": "68f70601d536324068f0e625",
+      "name": "Not Interested",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:03:13.064Z",
+      "updated": "2026-07-27T06:19:06.284Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 10,
+      "description": "Lead closed - client is not interested",
+      "status_code": ""
+    },
+    {
+      "_id": "68f7055dd536324068f0e613",
+      "name": "Proposal Sent",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:00:29.559Z",
+      "updated": "2026-07-27T06:14:40.466Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 4,
+      "description": "Quotation / Proposal shared",
+      "status_code": ""
+    },
+    {
+      "_id": "68f705e4d536324068f0e622",
+      "name": "On Hold",
+      "status": "active",
+      "user": 1,
+      "updated_by": "Vansh Chaudhary",
+      "added": "2025-10-21T04:02:44.640Z",
+      "updated": "2026-07-27T06:18:18.586Z",
+      "__v": 1,
+      "applicable_for": [
+        "All"
+      ],
+      "color": "#2563eb",
+      "display_order": 9,
+      "description": "Client requested to wait",
+      "status_code": ""
+    }
+  ],
+  "NatureOfBusiness": [
+    {
+      "_id": "6a670566504cc6e44412c2bf",
+      "nature_id": 1,
+      "nature_name": "Manufacturer",
+      "nature_description": "Entity involved in manufacturing of products.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:15:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c0",
+      "nature_id": 2,
+      "nature_name": "Importer",
+      "nature_description": "Entity importing products from other countries.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:16:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c1",
+      "nature_id": 3,
+      "nature_name": "Exporter",
+      "nature_description": "Entity exporting products to other countries.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:17:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c2",
+      "nature_id": 4,
+      "nature_name": "Distributor",
+      "nature_description": "Entity distributing products to dealers/retailers.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:18:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c3",
+      "nature_id": 5,
+      "nature_name": "Dealer",
+      "nature_description": "Entity dealing in sale of products to end users.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:19:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c4",
+      "nature_id": 6,
+      "nature_name": "Retailer",
+      "nature_description": "Entity selling products directly to end customers.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:19:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c5",
+      "nature_id": 7,
+      "nature_name": "Service Provider",
+      "nature_description": "Entity providing services to customers.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:20:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c6",
+      "nature_id": 8,
+      "nature_name": "Startup",
+      "nature_description": "Newly established innovative business.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:20:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c7",
+      "nature_id": 9,
+      "nature_name": "NGO / Trust",
+      "nature_description": "Non-profit organization / trust.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:21:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c8",
+      "nature_id": 10,
+      "nature_name": "Government",
+      "nature_description": "Government department / public entity.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:21:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2c9",
+      "nature_id": 11,
+      "nature_name": "Institution",
+      "nature_description": "Educational or research institution.",
+      "nature_status": "Active",
+      "nature_added": "2026-04-11T09:22:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    },
+    {
+      "_id": "6a670566504cc6e44412c2ca",
+      "nature_id": 12,
+      "nature_name": "Others",
+      "nature_description": "Any other type of business nature.",
+      "nature_status": "Inactive",
+      "nature_added": "2026-04-11T09:22:00+05:30",
+      "updated_by": "Vijay Sharma (Admin)"
+    }
+  ],
+  "CrmExhibitorCategory": [
+    {
+      "_id": "68e5fa1e4a003437871a22d1",
+      "cat_id": 11,
+      "cat_name": "Hospitals & Healthcare Institutions",
+      "cat_status": "Active",
+      "cat_added": "2025-10-07T10:00:00Z",
+      "__v": 2,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "cat_updated": "2026-07-27T06:50:35.462Z",
+      "display_order": 7,
+      "business_nature": "Institution",
+      "icon_data_url": "",
+      "icon_name": "",
+      "parent_category": "Healthcare",
+      "updated_by": "Vansh Chaudhary"
+    },
+    {
+      "_id": "6a66ffd6343fcabce72133b8",
+      "cat_id": 12,
+      "cat_name": "Medical Equipment Manufacturers",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:51:02.078Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Medical Devices",
+      "business_nature": "Manufacturer",
+      "display_order": 8,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:51:02.078Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a670012343fcabce72133c7",
+      "cat_id": 13,
+      "cat_name": "Pharmaceutical Companies",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:52:02.596Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Pharma & Biotechnology",
+      "business_nature": "Manufacturer",
+      "display_order": 9,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:52:02.596Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67003a343fcabce72133d1",
+      "cat_id": 14,
+      "cat_name": "Ayurveda & Herbal Products",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:52:42.587Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "AYUSH",
+      "business_nature": "Manufacturer",
+      "display_order": 10,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:52:42.587Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a670089343fcabce72133e3",
+      "cat_id": 15,
+      "cat_name": "Wellness & Fitness Centers",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:54:01.761Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Wellness & Fitness",
+      "business_nature": "Service Provider",
+      "display_order": 11,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:54:01.761Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a6700f4343fcabce72133f9",
+      "cat_id": 16,
+      "cat_name": "Organic Food Products",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:55:48.460Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Organic & Natural",
+      "business_nature": "Manufacturer",
+      "display_order": 12,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:55:48.460Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a670129343fcabce7213405",
+      "cat_id": 17,
+      "cat_name": "Cosmetics & Personal Care",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:56:41.736Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Beauty & Personal Care",
+      "business_nature": "Manufacturer",
+      "display_order": 13,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:56:41.736Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a670170343fcabce721343c",
+      "cat_id": 18,
+      "cat_name": "Healthcare Software",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:57:52.573Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Digital Health",
+      "business_nature": "Service Provider",
+      "display_order": 14,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:57:52.573Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67019f343fcabce7213448",
+      "cat_id": 19,
+      "cat_name": "Medical Tourism",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:58:39.228Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Medical Tourism",
+      "business_nature": "Service Provider",
+      "display_order": 15,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:58:39.228Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a6701ca343fcabce7213454",
+      "cat_id": 20,
+      "cat_name": "Packaging Solutions",
+      "cat_status": "Active",
+      "cat_added": "2026-07-27T06:59:22.844Z",
+      "updated_by": "Vansh Chaudhary",
+      "parent_category": "Packaging & Manufacturing",
+      "business_nature": "Manufacturer",
+      "display_order": 16,
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Exhibitor Registration"
+      ],
+      "icon_name": "",
+      "icon_data_url": "",
+      "cat_updated": "2026-07-27T06:59:22.844Z",
+      "__v": 0
+    }
+  ],
+  "NextAction": [
+    {
+      "_id": "6a670729504cc6e44412c2db",
+      "name": "Call",
+      "action_code": "CALL",
+      "description": "Call the lead for follow-up.",
+      "display_order": 1,
+      "action_type": "Call",
+      "follow_up_days": 1,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2dc",
+      "name": "Email Needed",
+      "action_code": "EMAIL",
+      "description": "Send an email to the lead.",
+      "display_order": 2,
+      "action_type": "Email",
+      "follow_up_days": 2,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2dd",
+      "name": "Send Proposal",
+      "action_code": "PROPOSAL",
+      "description": "Send a proposal to the lead.",
+      "display_order": 3,
+      "action_type": "Proposal",
+      "follow_up_days": 3,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2de",
+      "name": "Meeting",
+      "action_code": "MEET",
+      "description": "Schedule or conduct a meeting.",
+      "display_order": 4,
+      "action_type": "Meeting",
+      "follow_up_days": 1,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2df",
+      "name": "Follow Up",
+      "action_code": "FOLLOWUP",
+      "description": "Follow up with the lead.",
+      "display_order": 5,
+      "action_type": "Follow Up",
+      "follow_up_days": 2,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2e0",
+      "name": "Site Visit",
+      "action_code": "SITEVISIT",
+      "description": "Plan or schedule a site visit.",
+      "display_order": 6,
+      "action_type": "Visit",
+      "follow_up_days": 4,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2e1",
+      "name": "Send Quotation",
+      "action_code": "QUOTATION",
+      "description": "Send a quotation to the lead.",
+      "display_order": 7,
+      "action_type": "Quotation",
+      "follow_up_days": 2,
+      "status": "active",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    },
+    {
+      "_id": "6a670729504cc6e44412c2e2",
+      "name": "Document Sharing",
+      "action_code": "DOCSHARE",
+      "description": "Share required documents with the lead.",
+      "display_order": 8,
+      "action_type": "Document",
+      "follow_up_days": 2,
+      "status": "inactive",
+      "applicable_for": [
+        "Exhibitor Lead",
+        "Buyer Lead",
+        "Sponsor Lead",
+        "General Lead"
+      ],
+      "updated_by": "Vansh Chaudhary",
+      "createdAt": "2026-06-03T15:50:20+05:30",
+      "updatedAt": "2026-06-03T15:50:20+05:30"
+    }
+  ],
+  "CrmEvent": [
+    {
+      "_id": "68ff46097debd52c00738036",
+      "event_name": "IHWE Expo 2026",
+      "event_fullName": "IHWE Expo 2026",
+      "event_fromDate": "2026-08-21T00:00:00.000Z",
+      "event_toDate": "2026-08-23T00:00:00.000Z",
+      "event_address": "Hall No. 12, Pragati Maidain",
+      "event_country": "India",
+      "event_state": "Delhi",
+      "event_city": "New Delhi",
+      "event_pincode": "560002",
+      "event_handleBy": "Rohit Kumar",
+      "event_status": "active",
+      "added_by": "System",
+      "updated_by": "Rohit Kumar",
+      "added": "2025-10-27T10:14:33.130Z",
+      "updated": "2026-07-27T08:23:13.148Z",
+      "__v": 0
+    },
+    {
+      "_id": "69d62146935536541095adf2",
+      "event_name": "Organic Expo 2027",
+      "event_fullName": "Organic Expo 2027",
+      "event_fromDate": "2027-03-17T00:00:00.000Z",
+      "event_toDate": "2027-03-20T00:00:00.000Z",
+      "event_address": "Hall No. 12, Pragati Maidain",
+      "event_country": "India",
+      "event_state": "Delhi",
+      "event_city": "New Delhi",
+      "event_pincode": "121015",
+      "event_status": "active",
+      "added_by": "System",
+      "added": "2026-04-08T09:35:02.571Z",
+      "updated": "2026-07-27T08:24:20.663Z",
+      "__v": 0
+    },
+    {
+      "_id": "69d8bea62ff577d9a542bf72",
+      "event_name": "Organic Expo",
+      "event_fullName": "Organic Expo 2026",
+      "event_fromDate": "2026-03-20T00:00:00.000Z",
+      "event_toDate": "2026-03-22T00:00:00.000Z",
+      "event_address": "Hall No. 12, Pragati Maidain",
+      "event_country": "India",
+      "event_state": "Delhi",
+      "event_city": "New Delhi",
+      "event_pincode": "121015",
+      "event_status": "active",
+      "added_by": "System",
+      "added": "2026-04-10T09:11:02.525Z",
+      "updated": "2026-07-27T08:21:19.750Z",
+      "__v": 0
+    }
+  ],
+  "PrimaryProductInterest": [
+    {
+      "_id": "69ddd669f94ac178a0426876",
+      "primary_product_interest": "AYUSH & Traditional Medicine",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": "69c65a953c974a6e14960028",
+      "added": "2026-04-14T05:53:45.362Z",
+      "updated": "2026-04-18T07:25:30.342Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b099",
+      "primary_product_interest": "Organic & Natural Products",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.346Z",
+      "updated": "2026-07-27T09:08:42.346Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b09c",
+      "primary_product_interest": "Wellness & Lifestyle",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.409Z",
+      "updated": "2026-07-27T09:08:42.409Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b09f",
+      "primary_product_interest": "Beauty & Personal Care",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.474Z",
+      "updated": "2026-07-27T09:08:42.474Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b0a2",
+      "primary_product_interest": "Fitness & Nutrition",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.540Z",
+      "updated": "2026-07-27T09:08:42.540Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b0a5",
+      "primary_product_interest": "Medical & Healthcare",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.612Z",
+      "updated": "2026-07-27T09:08:42.612Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b0a8",
+      "primary_product_interest": "Pharmaceuticals",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.676Z",
+      "updated": "2026-07-27T09:08:42.676Z",
+      "__v": 0
+    }
+  ],
+  "SecondaryProduct": [
+    {
+      "_id": "6a67201a8dd71d1b18f0b0ac",
+      "secondary_product_categories": "Ayurveda",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.777Z",
+      "updated": "2026-07-27T09:08:42.777Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b0af",
+      "secondary_product_categories": "Organic",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.840Z",
+      "updated": "2026-07-27T09:08:42.840Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b0b2",
+      "secondary_product_categories": "Wellness",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.904Z",
+      "updated": "2026-07-27T09:08:42.904Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b0b5",
+      "secondary_product_categories": "Pharma",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.968Z",
+      "updated": "2026-07-27T09:08:42.968Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0b8",
+      "secondary_product_categories": "Cosmetics",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.031Z",
+      "updated": "2026-07-27T09:08:43.031Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0bb",
+      "secondary_product_categories": "Nutraceuticals",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.092Z",
+      "updated": "2026-07-27T09:08:43.092Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0be",
+      "secondary_product_categories": "Herbal",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.154Z",
+      "updated": "2026-07-27T09:08:43.154Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0c1",
+      "secondary_product_categories": "Skincare",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.464Z",
+      "updated": "2026-07-27T09:08:43.464Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0c4",
+      "secondary_product_categories": "Medical Devices",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.528Z",
+      "updated": "2026-07-27T09:08:43.528Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0c7",
+      "secondary_product_categories": "HealthTech",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.591Z",
+      "updated": "2026-07-27T09:08:43.591Z",
+      "__v": 0
+    }
+  ],
+  "MeetingPriorityLevel": [
+    {
+      "_id": "69ddeb506c84379268be8bf4",
+      "meeting_priority_level": "test2",
+      "status": "Inactive",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-14T07:22:56.686Z",
+      "updated": "2026-04-14T07:22:56.686Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0cb",
+      "meeting_priority_level": "Low Priority",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.686Z",
+      "updated": "2026-07-27T09:08:43.686Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0ce",
+      "meeting_priority_level": "Medium Priority",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.747Z",
+      "updated": "2026-07-27T09:08:43.747Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0d1",
+      "meeting_priority_level": "High Priority",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.808Z",
+      "updated": "2026-07-27T09:08:43.808Z",
+      "__v": 0
+    }
+  ],
+  "Unit": [
+    {
+      "_id": "6a67201b8dd71d1b18f0b0d5",
+      "unit": "Nos.",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.900Z",
+      "updated": "2026-07-27T09:08:43.900Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201b8dd71d1b18f0b0d8",
+      "unit": "Piece",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:43.964Z",
+      "updated": "2026-07-27T09:08:43.964Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0db",
+      "unit": "Set",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.029Z",
+      "updated": "2026-07-27T09:08:44.029Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0de",
+      "unit": "Pair",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.091Z",
+      "updated": "2026-07-27T09:08:44.091Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0e1",
+      "unit": "Pack",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.150Z",
+      "updated": "2026-07-27T09:08:44.150Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0e4",
+      "unit": "Box",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.210Z",
+      "updated": "2026-07-27T09:08:44.210Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0e7",
+      "unit": "Carton",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.270Z",
+      "updated": "2026-07-27T09:08:44.270Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0ea",
+      "unit": "Kg",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.331Z",
+      "updated": "2026-07-27T09:08:44.331Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0ed",
+      "unit": "Gram",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.393Z",
+      "updated": "2026-07-27T09:08:44.393Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0f0",
+      "unit": "Litre",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.456Z",
+      "updated": "2026-07-27T09:08:44.456Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0f3",
+      "unit": "Millilitre",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.520Z",
+      "updated": "2026-07-27T09:08:44.520Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0f6",
+      "unit": "Meter",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.583Z",
+      "updated": "2026-07-27T09:08:44.583Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0f9",
+      "unit": "Running Meter",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.644Z",
+      "updated": "2026-07-27T09:08:44.644Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0fc",
+      "unit": "Square Meter",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.705Z",
+      "updated": "2026-07-27T09:08:44.705Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b0ff",
+      "unit": "Day",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.767Z",
+      "updated": "2026-07-27T09:08:44.767Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201c8dd71d1b18f0b102",
+      "unit": "Hour",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:44.828Z",
+      "updated": "2026-07-27T09:08:44.828Z",
+      "__v": 0
+    }
+  ],
+  "AnnualTurnover": [
+    {
+      "_id": "6a67201a8dd71d1b18f0b08b",
+      "annual_turnover": "Below 50 Lakhs",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.031Z",
+      "updated": "2026-07-27T09:08:42.031Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b08e",
+      "annual_turnover": "50L – 2 Cr",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.096Z",
+      "updated": "2026-07-27T09:08:42.096Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b091",
+      "annual_turnover": "2 – 10 Cr",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.158Z",
+      "updated": "2026-07-27T09:08:42.158Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a67201a8dd71d1b18f0b094",
+      "annual_turnover": "10 Cr+",
+      "status": "Active",
+      "added_by": "Admin",
+      "updated_by": null,
+      "added": "2026-07-27T09:08:42.222Z",
+      "updated": "2026-07-27T09:08:42.222Z",
+      "__v": 0
+    }
+  ],
+  "BusinessType": [
+    {
+      "_id": "69db9051c164c0bfc89e934c",
+      "nature_id": "BT-1776145592517",
+      "business_type": "Importer",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": "69c65a953c974a6e14960028",
+      "added": "2026-04-12T12:30:09.208Z",
+      "updated": "2026-04-14T05:46:32.659Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e082ad0339f04829eeb179",
+      "nature_id": "BT-1776321197177",
+      "business_type": "Manufacturer",
+      "status": "Active",
+      "added_by": "69ae89eb9078d35adbe72d51",
+      "updated_by": null,
+      "added": "2026-04-16T06:33:17.197Z",
+      "updated": "2026-04-16T06:33:17.197Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9260ab90172f123d1f0",
+      "nature_id": "BT-1776593190426",
+      "business_type": "Distributor",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:06:30.463Z",
+      "updated": "2026-04-19T10:06:30.463Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9360ab90172f123d1f8",
+      "nature_id": "BT-1776593206148",
+      "business_type": "Super Distributor",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:06:46.157Z",
+      "updated": "2026-04-19T10:06:46.157Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9400ab90172f123d1fc",
+      "nature_id": "BT-1776593216190",
+      "business_type": "Wholesaler",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:06:56.205Z",
+      "updated": "2026-04-19T10:06:56.205Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9500ab90172f123d204",
+      "nature_id": "BT-1776593232367",
+      "business_type": "Retailer (Single Store)",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:07:12.381Z",
+      "updated": "2026-04-19T10:07:12.381Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9590ab90172f123d208",
+      "nature_id": "BT-1776593241596",
+      "business_type": "Retail Chain / Multi-Store",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:07:21.604Z",
+      "updated": "2026-04-19T10:07:21.604Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9640ab90172f123d20c",
+      "nature_id": "BT-1776593252879",
+      "business_type": "Modern Trade Buyer",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:07:32.898Z",
+      "updated": "2026-04-19T10:07:32.898Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9780ab90172f123d214",
+      "nature_id": "BT-1776593272261",
+      "business_type": "Private Label Buyer",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:07:52.269Z",
+      "updated": "2026-04-19T10:07:52.269Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9830ab90172f123d218",
+      "nature_id": "BT-1776593283006",
+      "business_type": "Franchise Seeker",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:08:03.018Z",
+      "updated": "2026-04-19T10:08:03.018Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a98f0ab90172f123d21c",
+      "nature_id": "BT-1776593295547",
+      "business_type": "Investor",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:08:15.562Z",
+      "updated": "2026-04-19T10:08:15.562Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9980ab90172f123d220",
+      "nature_id": "BT-1776593304977",
+      "business_type": "Importer",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:08:24.985Z",
+      "updated": "2026-04-19T10:08:24.985Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9a20ab90172f123d224",
+      "nature_id": "BT-1776593314670",
+      "business_type": "Exporter",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:08:34.683Z",
+      "updated": "2026-04-19T10:08:34.683Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9ac0ab90172f123d228",
+      "nature_id": "BT-1776593324159",
+      "business_type": "International Buying Agent",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:08:44.175Z",
+      "updated": "2026-04-19T10:08:44.175Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9b80ab90172f123d22c",
+      "nature_id": "BT-1776593336729",
+      "business_type": "E-commerce Seller",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:08:56.746Z",
+      "updated": "2026-04-19T10:08:56.746Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9c10ab90172f123d230",
+      "nature_id": "BT-1776593345854",
+      "business_type": "2. D2C Brand Owner",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:09:05.863Z",
+      "updated": "2026-04-19T10:09:05.863Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9ce0ab90172f123d234",
+      "nature_id": "BT-1776593358026",
+      "business_type": "Hospital / Clinic",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:09:18.034Z",
+      "updated": "2026-04-19T10:09:18.034Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9d70ab90172f123d238",
+      "nature_id": "BT-1776593367387",
+      "business_type": "Doctor / Medical Practitioner",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:09:27.397Z",
+      "updated": "2026-04-19T10:09:27.397Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9e60ab90172f123d23c",
+      "nature_id": "BT-1776593382409",
+      "business_type": "Pharmacy / Chemist",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:09:42.417Z",
+      "updated": "2026-04-19T10:09:42.417Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9ee0ab90172f123d240",
+      "nature_id": "BT-1776593390940",
+      "business_type": "Diagnostic Center",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:09:50.949Z",
+      "updated": "2026-04-19T10:09:50.949Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4a9fa0ab90172f123d244",
+      "nature_id": "BT-1776593402788",
+      "business_type": "Spa / Salon Owner",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:10:02.799Z",
+      "updated": "2026-04-19T10:10:02.799Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa050ab90172f123d248",
+      "nature_id": "BT-1776593413042",
+      "business_type": "Wellness Center",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:10:13.055Z",
+      "updated": "2026-04-19T10:10:13.055Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa0d0ab90172f123d24c",
+      "nature_id": "BT-1776593421824",
+      "business_type": "Gym / Fitness Center",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:10:21.839Z",
+      "updated": "2026-04-19T10:10:21.839Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa160ab90172f123d250",
+      "nature_id": "BT-1776593430282",
+      "business_type": "Yoga Studio",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:10:30.301Z",
+      "updated": "2026-04-19T10:10:30.301Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa220ab90172f123d254",
+      "nature_id": "BT-1776593442819",
+      "business_type": "Nutritionist / Dietician",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:10:42.827Z",
+      "updated": "2026-04-19T10:10:42.827Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa3a0ab90172f123d258",
+      "nature_id": "BT-1776593466661",
+      "business_type": "Wellness Resort / Hospitality",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:06.676Z",
+      "updated": "2026-04-19T10:11:06.676Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa440ab90172f123d25c",
+      "nature_id": "BT-1776593476587",
+      "business_type": "Hotel / Resort",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:16.596Z",
+      "updated": "2026-04-19T10:11:16.596Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa4e0ab90172f123d260",
+      "nature_id": "BT-1776593486497",
+      "business_type": "Corporate Buyer (Procurement / HR)",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:26.512Z",
+      "updated": "2026-04-19T10:11:26.512Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa570ab90172f123d264",
+      "nature_id": "BT-1776593495172",
+      "business_type": "Government / PSU",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:35.185Z",
+      "updated": "2026-04-19T10:11:35.185Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa5e0ab90172f123d268",
+      "nature_id": "BT-1776593502802",
+      "business_type": "NGO / Trust",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:42.810Z",
+      "updated": "2026-04-19T10:11:42.810Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa670ab90172f123d26c",
+      "nature_id": "BT-1776593511749",
+      "business_type": "Consultant / Advisor",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:51.759Z",
+      "updated": "2026-04-19T10:11:51.759Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa6f0ab90172f123d270",
+      "nature_id": "BT-1776593519865",
+      "business_type": "Startup Founder",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:11:59.883Z",
+      "updated": "2026-04-19T10:11:59.883Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa790ab90172f123d274",
+      "nature_id": "BT-1776593529675",
+      "business_type": "Student / Researcher",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:12:09.689Z",
+      "updated": "2026-04-19T10:12:09.689Z",
+      "__v": 0
+    },
+    {
+      "_id": "69e4aa820ab90172f123d278",
+      "nature_id": "BT-1776593538165",
+      "business_type": "Other (Please Specify)",
+      "status": "Active",
+      "added_by": "69c65a953c974a6e14960028",
+      "updated_by": null,
+      "added": "2026-04-19T10:12:18.173Z",
+      "updated": "2026-04-19T10:12:18.173Z",
+      "__v": 0
+    }
+  ],
+  "PreviousExhibition": [
+    {
+      "_id": "6a40e173529971af7c42bc85",
+      "name": "Bharat Development & Schemes Expo",
+      "year": 2016,
+      "edition": "1st Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:55:15.072Z",
+      "updatedAt": "2026-06-28T08:55:15.072Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e18b529971af7c42bc8a",
+      "name": "Agritech Innovate India",
+      "year": 2017,
+      "edition": "2nd Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:55:39.357Z",
+      "updatedAt": "2026-06-28T08:55:39.357Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e1cc529971af7c42bc92",
+      "name": "The Yogshala Expo",
+      "year": 2018,
+      "edition": "3rd Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:56:44.293Z",
+      "updatedAt": "2026-06-28T08:56:44.293Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e1dc529971af7c42bc9a",
+      "name": "Punjab Health & Wellness Expo",
+      "year": 2019,
+      "edition": "4th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:57:00.812Z",
+      "updatedAt": "2026-06-28T08:58:37.792Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e1ee529971af7c42bc9f",
+      "name": "MP Development Expo",
+      "year": 2020,
+      "edition": "5th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:57:18.611Z",
+      "updatedAt": "2026-06-28T08:58:50.325Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e200529971af7c42bca4",
+      "name": "Global Eco Tech Health Expo",
+      "year": 2021,
+      "edition": "6th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:57:36.970Z",
+      "updatedAt": "2026-06-28T08:59:02.910Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e213529971af7c42bca9",
+      "name": "Indo Himalayan Expo",
+      "year": 2022,
+      "edition": "7th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:57:55.677Z",
+      "updatedAt": "2026-06-28T08:59:14.610Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e285529971af7c42bcc2",
+      "name": "Bharat Organic Expo",
+      "year": 2023,
+      "edition": "8th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T08:59:49.895Z",
+      "updatedAt": "2026-06-28T08:59:49.895Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e29e529971af7c42bcc8",
+      "name": "The Organic Expo",
+      "year": 2024,
+      "edition": "9th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T09:00:14.170Z",
+      "updatedAt": "2026-06-28T09:00:14.170Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a40e2b2529971af7c42bccd",
+      "name": "International Health & Wellness Expo (IHWE)",
+      "year": 2025,
+      "edition": "10th Edition",
+      "status": "Active",
+      "createdBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "updatedBy": {
+        "userId": "6a0ea4156bc03faa4dd70900",
+        "username": "vansh"
+      },
+      "createdAt": "2026-06-28T09:00:34.295Z",
+      "updatedAt": "2026-06-28T09:00:34.295Z",
+      "__v": 0
+    }
+  ]
+}
