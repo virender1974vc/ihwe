@@ -80,7 +80,8 @@ const createHealthCampVisitor = async (req, res) => {
       visitorType: 'Health Camp Participant',
       registrationId: saved.registrationId,
       purposeOfVisit: 'Free Health Checkup',
-      areaOfInterest: 'Healthcare Services'
+      areaOfInterest: 'Healthcare Services',
+      created_by: saved.created_by,
     };
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert

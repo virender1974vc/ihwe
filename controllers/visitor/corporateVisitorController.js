@@ -71,6 +71,7 @@ const createCorporateVisitor = async (req, res) => {
       designation: saved.designation || 'N/A',
       companyName: saved.companyName || 'N/A',
       registrationDate: saved.createdAt,
+      created_by: saved.created_by,
     };
     emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
