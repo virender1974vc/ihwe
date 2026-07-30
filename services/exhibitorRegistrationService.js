@@ -905,7 +905,6 @@ class ExhibitorRegistrationService {
                 const Company = require('../models/Company');
                 const crmEvent = await resolveCrmEventForRegistration(data.eventId);
                 const isAdminRegistration = data.registrationSource === 'admin';
-                const crmEvent = await resolveCrmEventForRegistration(data.eventId);
                 const adminName = data.spokenWith || data.filledByFullName || (isAdminRegistration ? 'System Admin' : (isAdminRegistration ? 'System Admin' : 'Website Direct Booking'));
 
                 const newCompanyData = {
