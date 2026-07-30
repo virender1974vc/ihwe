@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const clientController = require('../controllers/clientController');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 
 // Storage for images
 const storage = multer.diskStorage({
@@ -22,7 +24,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Get all client data
-router.get('/', (req, res) => clientController.getClientData(req, res));
+router.get('/', cacheControl(120), (req, res) => clientController.getClientData(req, res));
 
 // Update headings
 router.post('/headings', (req, res) => clientController.updateHeadings(req, res));
@@ -37,6 +39,6 @@ router.put('/images/:imageId', (req, res) => clientController.updateImage(req, r
 router.delete('/images/:imageId', (req, res) => clientController.deleteImage(req, res));
 
 // Image upload
-router.post('/upload', upload.single('image'), (req, res) => clientController.uploadImage(req, res));
+router.post('/upload', upload.single('image'), optimizeImage, (req, res) => clientController.uploadImage(req, res));
 
 module.exports = router;

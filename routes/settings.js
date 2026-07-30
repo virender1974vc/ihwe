@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const settingsController = require('../controllers/settingsController');
+const cacheControl = require('../middleware/cacheControl');
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -47,7 +48,7 @@ const upload = multer({ storage });
 
 // @route   GET /api/settings
 // @desc    Get system settings
-router.get('/', (req, res) => settingsController.getSettings(req, res));
+router.get('/', cacheControl(120), (req, res) => settingsController.getSettings(req, res));
 
 // @route   PUT /api/settings
 // @desc    Update system settings

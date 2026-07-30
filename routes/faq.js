@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const faqController = require('../controllers/faqController');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 
 // JWT middleware
 const verifyToken = (req, res, next) => {
@@ -45,7 +47,7 @@ const upload = multer({
 });
 
 // GET /api/faq — public
-router.get('/', (req, res) => faqController.getFAQ(req, res));
+router.get('/', cacheControl(120), (req, res) => faqController.getFAQ(req, res));
 
 // POST /api/faq/headings — update section headings
 router.post('/headings', verifyToken, (req, res) => faqController.updateHeadings(req, res));
@@ -60,6 +62,6 @@ router.put('/items/:itemId', verifyToken, (req, res) => faqController.updateItem
 router.delete('/items/:itemId', verifyToken, (req, res) => faqController.deleteItem(req, res));
 
 // POST /api/faq/image — upload image
-router.post('/image', verifyToken, upload.single('image'), (req, res) => faqController.uploadImage(req, res));
+router.post('/image', verifyToken, upload.single('image'), optimizeImage, (req, res) => faqController.uploadImage(req, res));
 
 module.exports = router;

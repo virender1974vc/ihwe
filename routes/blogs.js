@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const blogsController = require('../controllers/blogsController');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 const createStorage = (destPath) => multer.diskStorage({
     destination: (req, file, cb) => {
         if (!fs.existsSync(destPath)) {
@@ -28,17 +30,17 @@ const mediaUpload = multer({ storage: createStorage('uploads/media') }).single('
 /**
  * Public Routes
  */
-router.get('/', (req, res) => blogsController.getAllBlogs(req, res));
-router.get('/expert-insights', (req, res) => blogsController.getExpertInsights(req, res));
-router.get('/media-resources', (req, res) => blogsController.getMediaResources(req, res));
-router.get('/settings', (req, res) => blogsController.getSettings(req, res));
-router.get('/:idOrSlug', (req, res) => blogsController.getBlogByIdOrSlug(req, res));
+router.get('/', cacheControl(60), (req, res) => blogsController.getAllBlogs(req, res));
+router.get('/expert-insights', cacheControl(120), (req, res) => blogsController.getExpertInsights(req, res));
+router.get('/media-resources', cacheControl(120), (req, res) => blogsController.getMediaResources(req, res));
+router.get('/settings', cacheControl(120), (req, res) => blogsController.getSettings(req, res));
+router.get('/:idOrSlug', cacheControl(120), (req, res) => blogsController.getBlogByIdOrSlug(req, res));
 router.post('/subscribe', (req, res) => blogsController.subscribeToNewsletter(req, res));
-router.post('/', blogUpload, (req, res) => blogsController.createBlog(req, res));
-router.patch('/:id', blogUpload, (req, res) => blogsController.updateBlog(req, res));
+router.post('/', blogUpload, optimizeImage, (req, res) => blogsController.createBlog(req, res));
+router.patch('/:id', blogUpload, optimizeImage, (req, res) => blogsController.updateBlog(req, res));
 router.delete('/:id', (req, res) => blogsController.deleteBlog(req, res));
-router.post('/experts', expertUpload, (req, res) => blogsController.createExpertInsight(req, res));
-router.patch('/experts/:id', expertUpload, (req, res) => blogsController.updateExpertInsight(req, res));
+router.post('/experts', expertUpload, optimizeImage, (req, res) => blogsController.createExpertInsight(req, res));
+router.patch('/experts/:id', expertUpload, optimizeImage, (req, res) => blogsController.updateExpertInsight(req, res));
 router.delete('/experts/:id', (req, res) => blogsController.deleteExpertInsight(req, res));
 
 // Media Resources CRUD

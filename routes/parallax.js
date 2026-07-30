@@ -4,6 +4,8 @@ const Parallax = require('../models/Parallax');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 
 // Storage for images
 const storage = multer.diskStorage({
@@ -22,7 +24,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Get parallax data
-router.get('/', async (req, res) => {
+router.get('/', cacheControl(120), async (req, res) => {
   try {
     let parallax = await Parallax.findOne();
     if (!parallax) {
@@ -61,7 +63,7 @@ router.post('/', async (req, res) => {
 });
 
 // Image upload
-router.post('/upload', upload.single('image'), (req, res) => {
+router.post('/upload', upload.single('image'), optimizeImage, (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No file uploaded" });

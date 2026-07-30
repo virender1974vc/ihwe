@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const countersController = require('../controllers/countersController');
+const optimizeImage = require('../middleware/optimizeImage');
+const cacheControl = require('../middleware/cacheControl');
 
 // Multer Storage Configuration
 const storage = multer.diskStorage({
@@ -22,13 +24,13 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // GET all counters
-router.get('/', (req, res) => countersController.getAllCounters(req, res));
+router.get('/', cacheControl(120), (req, res) => countersController.getAllCounters(req, res));
 
 // POST new counter
-router.post('/', upload.single('image'), (req, res) => countersController.createCounter(req, res));
+router.post('/', upload.single('image'), optimizeImage, (req, res) => countersController.createCounter(req, res));
 
 // PUT update counter
-router.put('/:id', upload.single('image'), (req, res) => countersController.updateCounter(req, res));
+router.put('/:id', upload.single('image'), optimizeImage, (req, res) => countersController.updateCounter(req, res));
 
 // CLEANUP blank counters
 router.get('/cleanup', (req, res) => countersController.cleanupBlankCounters(req, res));

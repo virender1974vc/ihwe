@@ -30,6 +30,14 @@ const seoSchema = new mongoose.Schema({
     ogImage: {
         type: String
     },
+    ogTitle: {
+        type: String,
+        trim: true
+    },
+    ogDescription: {
+        type: String,
+        trim: true
+    },
     isActive: {
         type: Boolean,
         default: true
