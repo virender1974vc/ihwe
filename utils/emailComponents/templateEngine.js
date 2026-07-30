@@ -350,14 +350,18 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
     }
 
 async function notifyAdmin(formType, data, originalSubject, profile) {
+        // Website (public) registrations never send created_by; admin-panel-entered
+        // registrations always do (see generalVisitorSlice.js etc.) — use that to
+        // tag the admin alert subject with where the registration came from.
+        const registrationSource = data.created_by ? 'Portal' : 'Web';
         const dedicatedAlerts = {
             'general-visitor': {
                 html: () => getGeneralVisitorAdminAlertTemplate(data),
-                subject: `NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`
+                subject: `${registrationSource} | NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`
             },
             'corporate-visitor': {
                 html: () => getCorporateVisitorAdminAlertTemplate(data),
-                subject: `NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`
+                subject: `${registrationSource} | NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`
             },
             'contact-enquiry': {
                 html: () => getGeneralEnquiryAdminAlertTemplate(data),

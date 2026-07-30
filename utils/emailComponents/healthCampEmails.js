@@ -10,7 +10,8 @@ async function sendHealthCampAdminNotification(data) {
             return false;
         }
 
-        const subject = `NEW HEALTH CAMP REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`;
+        const registrationSource = data.created_by ? 'Portal' : 'Web';
+        const subject = `${registrationSource} | NEW HEALTH CAMP REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId || 'N/A'}`;
 
         await this.sendEmail({
             to: recipientEmail,

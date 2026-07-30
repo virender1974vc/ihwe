@@ -220,9 +220,12 @@ async function sendDetailedVisitorNotification(data, recipientType = 'admin') {
             } else {
 
                 const isCorporateVisitor = String(data.visitorType || '').toLowerCase().includes('corporate');
+                // Website (public) registrations never send created_by; admin-panel-entered
+                // registrations always do (see generalVisitorSlice.js etc.).
+                const registrationSource = data.created_by ? 'Portal' : 'Web';
                 subject = isCorporateVisitor
-                    ? `NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`
-                    : `NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                    ? `${registrationSource} | NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`
+                    : `${registrationSource} | NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
                 html = isCorporateVisitor
                     ? getCorporateVisitorAdminAlertTemplate(data)
                     : getGeneralVisitorAdminAlertTemplate(data);
