@@ -63,7 +63,8 @@ class SettingsController {
                 msmeLogoTitle: msmeLogoTitle || undefined,
                 showBrochurePopUp: showBrochurePopUp === 'true' || showBrochurePopUp === true,
                 brochurePopUpDelay: brochurePopUpDelay ? Number(brochurePopUpDelay) : undefined,
-                showGovtPmsScheme: showGovtPmsScheme === 'true' || showGovtPmsScheme === true
+                showGovtPmsScheme: showGovtPmsScheme === 'true' || showGovtPmsScheme === true,
+                requireOtpForVisitorRegistration: req.body.requireOtpForVisitorRegistration !== undefined ? (req.body.requireOtpForVisitorRegistration === 'true' || req.body.requireOtpForVisitorRegistration === true) : true
             };
 
             // Handle file uploads

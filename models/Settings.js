@@ -183,6 +183,10 @@ const settingsSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     },
+    requireOtpForVisitorRegistration: {
+        type: Boolean,
+        default: true
+    },
     downloadBrochurePdf: {
         type: String,
         default: ""
