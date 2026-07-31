@@ -50,7 +50,8 @@ const createCorporateVisitor = async (req, res) => {
       registrationId,
     });
 
-    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+    const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
     visitor.qrCode = await qrcode.toDataURL(qrPayload);
 
     const saved = await visitor.save();
@@ -234,7 +235,8 @@ const uploadCorporateVisitors = async (req, res) => {
       }
 
       const registrationId = await generateRegistrationId("corporate");
-      const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+      const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+      const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
       const qrCode = await qrcode.toDataURL(qrPayload);
 
       const visitorData = {

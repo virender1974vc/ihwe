@@ -44,7 +44,8 @@ const createHealthCampVisitor = async (req, res) => {
       registrationId,
     });
 
-    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+    const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
     visitor.qrCode = await qrcode.toDataURL(qrPayload);
 
     const saved = await visitor.save();
@@ -142,12 +143,12 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
     if (!visitorIds || !Array.isArray(visitorIds) || visitorIds.length === 0) {
       return res.status(400).json({ success: false, message: 'No visitor IDs provided.' });
     }
-    
+
     const sendEmail = types && types.includes('email');
     const sendWhatsapp = types ? types.includes('whatsapp') : true;
 
     const visitors = await FreeHealthCamp.find({ _id: { $in: visitorIds } });
-    
+
     let sentCount = 0;
     for (const saved of visitors) {
       const visitorData = {
@@ -189,7 +190,7 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
           console.error('Error resending visitor email:', err);
         });
       }
-      
+
       sentCount++;
     }
 

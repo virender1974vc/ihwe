@@ -35,7 +35,8 @@ exports.createGeneralVisitor = async (req, res) => {
     const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
     const visitor = new GeneralVisitor({ ...normalizedBody, registrationId });
-    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+    const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
     visitor.qrCode = await qrcode.toDataURL(qrPayload);
     const saved = await visitor.save();
 
