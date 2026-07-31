@@ -102,12 +102,12 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
     if (!visitorIds || !Array.isArray(visitorIds) || visitorIds.length === 0) {
       return res.status(400).json({ success: false, message: "No visitor IDs provided." });
     }
-    
+
     const sendEmail = types && types.includes('email');
     const sendWhatsapp = types ? types.includes('whatsapp') : true;
 
     const visitors = await GeneralVisitor.find({ _id: { $in: visitorIds } });
-    
+
     let sentCount = 0;
     for (const saved of visitors) {
       const emailData = {
@@ -128,11 +128,14 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
       };
 
       if (sendEmail || sendWhatsapp) {
-        emailService.sendVisitorRegistrationEmails(emailData).catch(err => {
+        try {
+          await emailService.sendVisitorRegistrationEmails(emailData);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
           console.error("Error resending visitor email:", err);
-        });
+        }
       }
-      
+
       sentCount++;
     }
 

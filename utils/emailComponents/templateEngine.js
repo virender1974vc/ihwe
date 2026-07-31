@@ -279,7 +279,9 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             // Do not fallback to legacy opus WhatsApp for visitor form types
             const isVisitor = formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'health-camp-visitor' || formType === 'buyer-registration';
             
-            if (!result.success && !isVisitor) {
+            if (result.success) {
+                console.log(`[WhatsApp] Sent successfully via AiSensy to ${mobile} for ${formType}`);
+            } else if (!isVisitor) {
                 return whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Dynamic: ${formType}`);
             }
             return result;

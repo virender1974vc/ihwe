@@ -179,9 +179,12 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
       };
 
       if (sendEmail || sendWhatsapp) {
-        emailService.sendVisitorRegistrationEmails(emailData).catch(err => {
+        try {
+          await emailService.sendVisitorRegistrationEmails(emailData);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
           console.error("Error resending visitor messages:", err);
-        });
+        }
       }
       sentCount++;
     }

@@ -187,9 +187,12 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
       };
 
       if (sendEmail || sendWhatsapp) {
-        emailService.sendVisitorRegistrationEmails(visitorData).catch(err => {
+        try {
+          await emailService.sendVisitorRegistrationEmails(visitorData);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
           console.error('Error resending visitor email:', err);
-        });
+        }
       }
 
       sentCount++;
