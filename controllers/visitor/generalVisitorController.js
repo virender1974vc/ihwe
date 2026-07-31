@@ -124,6 +124,7 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
         registrationId: saved.registrationId,
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
+        isResend: true,
       };
 
       if (sendEmail || sendWhatsapp) {

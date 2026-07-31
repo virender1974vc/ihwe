@@ -183,6 +183,7 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
         purposeOfVisit: 'Free Health Checkup',
         areaOfInterest: 'Healthcare Services',
         created_by: saved.created_by,
+        isResend: true,
       };
 
       if (sendEmail || sendWhatsapp) {

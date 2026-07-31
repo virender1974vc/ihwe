@@ -22,10 +22,10 @@ async function sendVisitorRegistrationEmails(data) {
                 name: `${data.firstName} ${data.lastName || ''}`.trim(),
             },
             profile: 'VISITOR',
-            notifyAdmin: !isHealthCamp
+            notifyAdmin: !isHealthCamp && !data.isResend
         });
 
-        if (isHealthCamp) {
+        if (isHealthCamp && !data.isResend) {
             await this.sendHealthCampAdminNotification(data);
         }
 
@@ -64,7 +64,7 @@ async function sendVisitorConfirmationOnly(data, formType) {
                 bodyContent += smallLogoHtml;
             }
 
-            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration') && data.registrationId) {
+            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
                     const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';

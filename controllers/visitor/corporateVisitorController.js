@@ -175,6 +175,7 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
         companyName: saved.companyName || 'N/A',
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
+        isResend: true,
       };
 
       if (sendEmail || sendWhatsapp) {
