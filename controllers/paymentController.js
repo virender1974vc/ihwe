@@ -376,59 +376,83 @@ const resolvePaymentAccount = async (payment) => {
 };
 
 const syncExhibitorFromAccountPayments = async (companyId) => {
-  if (!companyId) return;
+  if (!companyId || !mongoose.Types.ObjectId.isValid(companyId)) return;
 
-  const Company = require("../models/Company");
-  let company = mongoose.Types.ObjectId.isValid(companyId)
-    ? await Company.findById(companyId).lean()
-    : null;
-  let exhibitor = mongoose.Types.ObjectId.isValid(companyId)
-    ? await ExhibitorRegistration.findById(companyId).select("+password")
-    : null;
-
-  if (!exhibitor && company?.exhibitorRegistrationId) {
-    exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId).select("+password");
+  let company = await Company.findById(companyId).lean();
+  const directExhibitor = await ExhibitorRegistration.findById(companyId).select("_id clientId").lean();
+  if (!company && directExhibitor?.clientId && mongoose.Types.ObjectId.isValid(directExhibitor.clientId)) {
+    company = await Company.findById(directExhibitor.clientId).lean();
   }
-  if (!company && exhibitor?.clientId && mongoose.Types.ObjectId.isValid(exhibitor.clientId)) {
-    company = await Company.findById(exhibitor.clientId).lean();
+  const targets = [];
+  if (directExhibitor) targets.push({ exhibitorRegistrationId: directExhibitor._id, eventId: null });
+  if (company?.exhibitorRegistrationId && mongoose.Types.ObjectId.isValid(company.exhibitorRegistrationId)) {
+    targets.push({ exhibitorRegistrationId: company.exhibitorRegistrationId, eventId: null });
   }
-  if (!exhibitor) return;
+  for (const assignment of company?.eventAssignments || []) {
+    if (assignment.exhibitorRegistrationId) {
+      targets.push({ exhibitorRegistrationId: assignment.exhibitorRegistrationId, eventId: assignment.eventId || null });
+    }
+  }
+  const uniqueTargets = [...new Map(targets.map((t) => [String(t.exhibitorRegistrationId), t])).values()];
+  if (uniqueTargets.length === 0) return;
 
   const linkedIds = [...new Set([
     String(companyId),
     company?._id?.toString(),
-    exhibitor._id.toString(),
+    ...uniqueTargets.map((t) => String(t.exhibitorRegistrationId)),
   ].filter(Boolean))];
   const accountPayments = await Payment.find({ companyId: { $in: linkedIds } }).sort({ added: 1 }).lean();
-  const nonAccountHistory = (exhibitor.paymentHistory || []).filter(
-    (entry) => !entry.accountPaymentId
-  );
-  const syncedHistory = accountPayments.map((payment) => ({
-    accountPaymentId: String(payment._id),
-    amount: Number(payment.amount_text) || 0,
-    paymentType: payment.pymnt_type || "invoice",
-    paymentMode: "manual",
-    method: payment.payment_mode || "Manual",
-    transactionId: payment.utr_no || payment.cheque_no || payment.receipt_no || "",
-    notes: `Account receipt ${payment.receipt_no || payment.ex_no || ""}`.trim(),
-    paidAt: payment.payment_date ? new Date(payment.payment_date) : payment.added,
-  }));
-  const paymentHistory = [...nonAccountHistory, ...syncedHistory];
-  const amountPaid = paymentHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
-  const netPayable = Number(exhibitor.financeBreakdown?.netPayable)
-    || Math.max(0, Number(exhibitor.participation?.total || 0) - Number(exhibitor.financeBreakdown?.tdsAmount || 0));
-  const balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
 
-  exhibitor.paymentHistory = paymentHistory;
-  exhibitor.amountPaid = amountPaid;
-  exhibitor.balanceAmount = balanceAmount;
-  exhibitor.totalPayable = balanceAmount + Number(exhibitor.penaltyAmount || 0);
-  if (amountPaid > 0) {
-    exhibitor.status = balanceAmount <= 0 ? "paid" : "advance-paid";
-  } else if (["paid", "advance-paid"].includes(exhibitor.status)) {
-    exhibitor.status = "pending";
+  for (const target of uniqueTargets) {
+    const exhibitor = await ExhibitorRegistration.findById(target.exhibitorRegistrationId).select("+password");
+    if (!exhibitor) continue;
+
+    // A company can be pursued for a second exhibition (an eventAssignment
+    // still at "Hot Lead", with no ExhibitorRegistration of its own yet)
+    // while already booked into another — accountPayments above pulls in
+    // both events' payments since they share the same companyId. A payment
+    // explicitly tagged with a *different* CrmEvent than this registration's
+    // own must not inflate this registration's amountPaid just because
+    // there was nowhere else in `uniqueTargets` for it to land. Untagged
+    // (crmEventId-less) payments predate that scoping and keep being
+    // attributed here, same as before.
+    const targetEventId = target.eventId || exhibitor.eventId || null;
+    const scopedPayments = accountPayments.filter((p) => {
+      if (!p.crmEventId) return true;
+      if (!targetEventId) return true;
+      return String(p.crmEventId) === String(targetEventId);
+    });
+
+    const nonAccountHistory = (exhibitor.paymentHistory || []).filter(
+      (entry) => !entry.accountPaymentId
+    );
+    const syncedHistory = scopedPayments.map((payment) => ({
+      accountPaymentId: String(payment._id),
+      amount: Number(payment.amount_text) || 0,
+      paymentType: payment.pymnt_type || "invoice",
+      paymentMode: "manual",
+      method: payment.payment_mode || "Manual",
+      transactionId: payment.utr_no || payment.cheque_no || payment.receipt_no || "",
+      notes: `Account receipt ${payment.receipt_no || payment.ex_no || ""}`.trim(),
+      paidAt: payment.payment_date ? new Date(payment.payment_date) : payment.added,
+    }));
+    const paymentHistory = [...nonAccountHistory, ...syncedHistory];
+    const amountPaid = paymentHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+    const netPayable = Number(exhibitor.financeBreakdown?.netPayable)
+      || Math.max(0, Number(exhibitor.participation?.total || 0) - Number(exhibitor.financeBreakdown?.tdsAmount || 0));
+    const balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
+
+    exhibitor.paymentHistory = paymentHistory;
+    exhibitor.amountPaid = amountPaid;
+    exhibitor.balanceAmount = balanceAmount;
+    exhibitor.totalPayable = balanceAmount + Number(exhibitor.penaltyAmount || 0);
+    if (amountPaid > 0) {
+      exhibitor.status = balanceAmount <= 0 ? "paid" : "advance-paid";
+    } else if (["paid", "advance-paid"].includes(exhibitor.status)) {
+      exhibitor.status = "pending";
+    }
+    await exhibitor.save();
   }
-  await exhibitor.save();
 };
 
 // ➤ Add a new payment
@@ -843,4 +867,5 @@ module.exports = {
   deletePayment,
   sendPaymentReceipt,
   downloadPaymentReceipt,
+  syncExhibitorFromAccountPayments,
 };
