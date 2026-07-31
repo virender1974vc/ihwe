@@ -35,7 +35,8 @@ exports.createGeneralVisitor = async (req, res) => {
     const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
     const visitor = new GeneralVisitor({ ...normalizedBody, registrationId });
-    const qrPayload = JSON.stringify({ type: 'visitor', registrationId });
+    const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+    const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
     visitor.qrCode = await qrcode.toDataURL(qrPayload);
     const saved = await visitor.save();
 
@@ -92,5 +93,56 @@ exports.deleteGeneralVisitor = async (req, res) => {
     res.json({ message: "Deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+};
+
+exports.bulkResendGeneralVisitorMessages = async (req, res) => {
+  try {
+    const { visitorIds, types } = req.body;
+    if (!visitorIds || !Array.isArray(visitorIds) || visitorIds.length === 0) {
+      return res.status(400).json({ success: false, message: "No visitor IDs provided." });
+    }
+
+    const sendEmail = types && types.includes('email');
+    const sendWhatsapp = types ? types.includes('whatsapp') : true;
+
+    const visitors = await GeneralVisitor.find({ _id: { $in: visitorIds } });
+
+    let sentCount = 0;
+    for (const saved of visitors) {
+      const emailData = {
+        firstName: saved.firstName,
+        lastName: saved.lastName,
+        email: saved.email,
+        mobileNo: saved.mobile,
+        mobile: saved.mobile,
+        visitorType: 'General Visitor',
+        purposeOfVisit: saved.purposeOfVisit?.length ? saved.purposeOfVisit : ['General Interest'],
+        areaOfInterest: saved.areaOfInterest?.length ? saved.areaOfInterest : ['General'],
+        city: saved.city || 'N/A',
+        country: saved.country || 'India',
+        registrationId: saved.registrationId,
+        registrationDate: saved.createdAt,
+        created_by: saved.created_by,
+        isResend: true,
+      };
+
+      if (sendEmail || sendWhatsapp) {
+        try {
+          await emailService.sendVisitorRegistrationEmails(emailData);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (err) {
+          console.error("Error resending visitor email:", err);
+        }
+      }
+
+      sentCount++;
+    }
+
+    await logActivity(req, 'Action', 'Visitor Registrations', `Bulk resent messages to ${sentCount} general visitors.`);
+    res.json({ success: true, message: `Successfully queued messages for ${sentCount} visitors.` });
+  } catch (err) {
+    console.error("Bulk resend error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };

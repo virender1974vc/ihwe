@@ -72,11 +72,23 @@ const createCreditNote = async (req, res) => {
     const sourceInvoice = req.body.reference_invoice_no
       ? await Invoice.findOne({ invoice_no: req.body.reference_invoice_no }).select("eventId companyId crmEventId").lean()
       : null;
+    const resolvedEventId = sourceInvoice?.eventId || req.body.eventId || null;
+    if (!resolvedEventId) {
+      return res.status(400).json({
+        message: "eventId is required — open this client from a specific event's list to create a Credit Note.",
+      });
+    }
+    const resolvedCrmEventId = sourceInvoice?.crmEventId || req.body.crmEventId || null;
+    if (!resolvedCrmEventId && !sourceInvoice) {
+      return res.status(400).json({
+        message: "crmEventId is required — open this client from a specific event's list to create a Credit Note.",
+      });
+    }
 
     const creditNote = new CreditNote({
       ...req.body,
-      eventId: sourceInvoice?.eventId || req.body.eventId || null,
-      crmEventId: sourceInvoice?.crmEventId || req.body.crmEventId || null,
+      eventId: resolvedEventId,
+      crmEventId: resolvedCrmEventId,
       create_note_no: creditNo,
       updated_date: new Date(),
       attachment: req.file ? `/uploads/${req.file.filename}` : "",

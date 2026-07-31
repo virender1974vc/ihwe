@@ -72,6 +72,7 @@ class SettingsService {
         if (updateData.showBrochurePopUp !== undefined) settings.showBrochurePopUp = updateData.showBrochurePopUp;
         if (updateData.brochurePopUpDelay !== undefined) settings.brochurePopUpDelay = updateData.brochurePopUpDelay;
         if (updateData.showGovtPmsScheme !== undefined) settings.showGovtPmsScheme = updateData.showGovtPmsScheme;
+        if (updateData.requireOtpForVisitorRegistration !== undefined) settings.requireOtpForVisitorRegistration = updateData.requireOtpForVisitorRegistration;
 
         return await settings.save();
     }

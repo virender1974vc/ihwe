@@ -369,8 +369,6 @@ router.post('/verify-payment', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
-
-// 3. Get Payment Summary for Exhibitor
 router.get('/summary/:registrationId', async (req, res) => {
     try {
         const { registrationId } = req.params;
@@ -390,7 +388,6 @@ router.get('/summary/:registrationId', async (req, res) => {
             event: registration.eventId,
             stall: registration.participation,
             finance: {
-                // Full breakdown for detailed display
                 grossAmount: registration.financeBreakdown?.grossAmount || 0,
                 stallDiscountPercent: registration.financeBreakdown?.stallDiscountPercent || 0,
                 stallDiscountAmount: registration.financeBreakdown?.stallDiscountAmount || 0,

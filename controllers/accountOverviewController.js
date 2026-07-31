@@ -418,42 +418,29 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
     id: pmt._id,
     timestamp: pmt.added || new Date(),
   }));
-
-  allPayments.forEach((pmt) => recentDocs.push({
-    documentType: "Payment",
-    documentNo: pmt.ex_no || pmt.payment_no || 'Payment',
-    date: pmt.payment_date || pmt.added,
-    amount: parseFloat(pmt.amount_text) || 0,
-    status: "Received",
-    id: pmt._id,
-    timestamp: pmt.added || new Date(),
-  }));
   let recentDocsUnallocated = onlinePaidAmount;
-  recentDocs = recentDocs.map((doc) => {
-    if (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") {
-      if (doc.cancelled) return doc;
-      const relatedIds = paymentIdsForDocument({
-        id: doc.id,
-        type: doc.documentType,
-      });
-      const docPayments = payments.filter((p) => relatedIds.has(String(p.invoice_id)));
-      let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
-      docPaid += creditedByInvoiceId[String(doc.id)] || 0;
+  const payableDocs = recentDocs
+    .filter((doc) => (doc.documentType === "Invoice" || doc.documentType === "Proforma Invoice") && !doc.cancelled)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  payableDocs.forEach((doc) => {
+    const relatedIds = paymentIdsForDocument({
+      id: doc.id,
+      type: doc.documentType,
+    });
+    const docPayments = payments.filter((p) => relatedIds.has(String(p.invoice_id)));
+    let docPaid = docPayments.reduce((acc, curr) => acc + (parseFloat(curr.amount_text) || 0), 0);
+    docPaid += creditedByInvoiceId[String(doc.id)] || 0;
 
-      let docRemaining = Math.max(0, parseFloat(doc.amount) - docPaid);
-      if (docRemaining > 0 && recentDocsUnallocated > 0) {
-        const allocation = Math.min(docRemaining, recentDocsUnallocated);
-        docPaid += allocation;
-        recentDocsUnallocated -= allocation;
-      }
-
-      if (doc.documentType === "Invoice") {
-        if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
-        else if (docPaid > 0) doc.status = "Partial";
-        else doc.status = "Unpaid";
-      }
+    let docRemaining = Math.max(0, parseFloat(doc.amount) - docPaid);
+    if (docRemaining > 0 && recentDocsUnallocated > 0) {
+      const allocation = Math.min(docRemaining, recentDocsUnallocated);
+      docPaid += allocation;
+      recentDocsUnallocated -= allocation;
     }
-    return doc;
+
+    if (docPaid >= parseFloat(doc.amount) && parseFloat(doc.amount) > 0) doc.status = "Paid";
+    else if (docPaid > 0) doc.status = "Partial";
+    else if (doc.documentType === "Invoice") doc.status = "Unpaid";
   });
   recentDocs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   // recentDocs = recentDocs.slice(0, 5); // User requested all documents to be shown
