@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const testimonialsController = require('../controllers/testimonialsController');
+const cacheControl = require('../middleware/cacheControl');
 
 // GET all testimonials data
-router.get('/', (req, res) => testimonialsController.getTestimonials(req, res));
+router.get('/', cacheControl(120), (req, res) => testimonialsController.getTestimonials(req, res));
 
 // POST update headings
 router.post('/headings', (req, res) => testimonialsController.updateHeadings(req, res));

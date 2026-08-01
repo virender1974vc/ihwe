@@ -5,13 +5,12 @@ const {
   createGeneralVisitor,
   updateGeneralVisitor,
   deleteGeneralVisitor,
+  bulkResendGeneralVisitorMessages,
 } = require("../../controllers/visitor/generalVisitorController.js");
 
 const GeneralVisitor = require("../../models/visitor/GeneralVisitorModel");
 
 const router = express.Router();
-
-// ➤ Public: lookup visitor by registrationId (for QR scan)
 router.get("/scan/:registrationId", async (req, res) => {
   try {
     const visitor = await GeneralVisitor.findOne({
@@ -26,6 +25,7 @@ router.get("/scan/:registrationId", async (req, res) => {
 
 router.get("/", getAllGeneralVisitors);
 router.get("/:id", getGeneralVisitorById);
+router.post("/bulk-resend", bulkResendGeneralVisitorMessages);
 router.post("/", createGeneralVisitor);
 router.put("/:id", updateGeneralVisitor);
 router.delete("/:id", deleteGeneralVisitor);

@@ -1244,16 +1244,45 @@ const getSalesLeaderboard = async (req, res) => {
 
 // Exhibition-scoped conversion view. A conversion is a CRM lifecycle state,
 // not merely the existence of an exhibitor registration.
-// Companies with a real Payment record for this event — scoped to the event
-// when the payment has a resolvable crmEventId, but not excluded when it
-// doesn't (older payments predate that field, so they're taken on trust).
-const getPaidCompanyIdSet = async (companyIds, eventId) => {
+// "Paid" has two independent sources that never sync with each other:
+//  1. A real Payment record for this event (Accounts-module manual entries).
+//  2. The exhibitor's own ExhibitorRegistration, whose status/amountPaid is
+//     set directly by the online Razorpay checkout — that flow never writes
+//     a Payment row, so relying on Payment alone silently misses every
+//     online-paid exhibitor.
+// Takes full company docs (not just ids) because #2 needs each company's
+// event-scoped exhibitorRegistrationId to know *which* registration to check.
+const PAID_REGISTRATION_STATUSES = ["confirmed", "paid", "advance-paid"];
+
+const getPaidCompanyIdSet = async (companies, eventId) => {
   const Payment = require("../models/Payment");
-  const payments = await Payment.find({
-    companyId: { $in: companyIds },
-    $or: [{ crmEventId: eventId }, { crmEventId: null }, { crmEventId: { $exists: false } }],
-  }).select("companyId").lean();
-  return new Set(payments.map((payment) => String(payment.companyId)));
+  const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+  const companyIds = companies.map((company) => String(company._id));
+
+  const registrationIds = companies
+    .map((company) => (company.eventAssignments || []).find(
+      (item) => String(item.eventId) === String(eventId),
+    )?.exhibitorRegistrationId)
+    .filter(Boolean);
+
+  const [payments, paidRegistrations] = await Promise.all([
+    Payment.find({
+      companyId: { $in: companyIds },
+      $or: [{ crmEventId: eventId }, { crmEventId: null }, { crmEventId: { $exists: false } }],
+    }).select("companyId").lean(),
+    registrationIds.length
+      ? ExhibitorRegistration.find({
+          _id: { $in: registrationIds },
+          $or: [{ status: { $in: PAID_REGISTRATION_STATUSES } }, { amountPaid: { $gt: 0 } }],
+        }).select("_id clientId").lean()
+      : [],
+  ]);
+
+  const paidIds = new Set(payments.map((payment) => String(payment.companyId)));
+  paidRegistrations.forEach((reg) => {
+    if (reg.clientId) paidIds.add(String(reg.clientId));
+  });
+  return paidIds;
 };
 
 // Shared shape for both "Converted" and "Booked": a Company matched by its
@@ -1312,7 +1341,7 @@ const getConvertedCompanies = async (req, res) => {
 
     const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
     const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
-    const paidCompanyIds = await getPaidCompanyIdSet(candidates.map((company) => String(company._id)), eventId);
+    const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
     const companies = candidates.filter((company) => paidCompanyIds.has(String(company._id)));
 
     const data = await buildEventCompanyResponse(companies, eventId, () => true, "Converted");
@@ -1339,7 +1368,7 @@ const getBookedCompanies = async (req, res) => {
     const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
     elemMatch.status = { $regex: BOOKED_STATUS_REGEX };
     const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
-    const paidCompanyIds = await getPaidCompanyIdSet(candidates.map((company) => String(company._id)), eventId);
+    const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
     const companies = candidates.filter((company) => !paidCompanyIds.has(String(company._id)));
 
     const data = await buildEventCompanyResponse(
@@ -1352,6 +1381,42 @@ const getBookedCompanies = async (req, res) => {
   } catch (error) {
     console.error("Error fetching booked companies:", error);
     return res.status(500).json({ success: false, message: "Error fetching booked companies" });
+  }
+};
+
+// "Hot Lead" = a PI/Estimate has been raised for this event and no Payment
+// has come in yet — independent of eventAssignments.status. A lead can sit
+// in any pipeline status (New Lead, Follow-up, Contacted...) and still be
+// Hot the moment a commercial document exists for it; once it's paid it
+// belongs in Converted instead, not here.
+const getHotLeadCompanies = async (req, res) => {
+  try {
+    const { eventId, username = "", role = "" } = req.query;
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: "eventId is required" });
+    }
+
+    const Estimate = require("../models/Estimate");
+    const estimates = await Estimate.find({ crmEventId: eventId }).select("companyId").lean();
+    const companyIds = [...new Set(estimates.map((estimate) => String(estimate.companyId)))];
+    if (companyIds.length === 0) {
+      return res.status(200).json({ success: true, data: [], total: 0 });
+    }
+
+    const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
+    const candidates = await Company.find({
+      _id: { $in: companyIds },
+      eventAssignments: { $elemMatch: elemMatch },
+    }).lean();
+
+    const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
+    const companies = candidates.filter((company) => !paidCompanyIds.has(String(company._id)));
+
+    const data = await buildEventCompanyResponse(companies, eventId, () => true, "Hot Lead");
+    return res.status(200).json({ success: true, data, total: data.length });
+  } catch (error) {
+    console.error("Error fetching hot lead companies:", error);
+    return res.status(500).json({ success: false, message: "Error fetching hot lead companies" });
   }
 };
 
@@ -1374,4 +1439,5 @@ module.exports = {
   getSalesLeaderboard,
   getConvertedCompanies,
   getBookedCompanies,
+  getHotLeadCompanies,
 };

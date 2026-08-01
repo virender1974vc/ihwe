@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const seoController = require('../controllers/seoController');
 const { verifyToken } = require('../utils/verifyToken');
+const optimizeImage = require('../middleware/optimizeImage');
 
 // Configure multer for OG Image upload
 const storage = multer.diskStorage({
@@ -23,13 +24,13 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Create or Update SEO
-router.post('/create', verifyToken, upload.single('ogImage'), (req, res) => seoController.createOrUpdateSeo(req, res));
+router.post('/create', verifyToken, upload.single('ogImage'), optimizeImage, (req, res) => seoController.createOrUpdateSeo(req, res));
 
 // Get all SEO modules (for admin list)
 router.get('/all', (req, res) => seoController.getAllSeo(req, res));
 
 // Update by ID
-router.put('/update/:id', verifyToken, upload.single('ogImage'), (req, res) => seoController.updateSeo(req, res));
+router.put('/update/:id', verifyToken, upload.single('ogImage'), optimizeImage, (req, res) => seoController.updateSeo(req, res));
 
 // Delete SEO
 router.delete('/delete/:id', verifyToken, (req, res) => seoController.deleteSeo(req, res));

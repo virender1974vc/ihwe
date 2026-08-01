@@ -259,10 +259,18 @@ const createInvoice = async (req, res) => {
       return res.status(400).json({ message: "Invoice must be linked to an exhibition event." });
     }
     // CrmEvent scoping (which Organic Expo 2026 / IHW Expo 2026 ... this
-    // Invoice belongs to) — best-effort, not required like eventId above,
-    // since Estimates created before this field existed won't have one and
-    // invoicing against them must keep working.
+    // Invoice belongs to). Inherited from the source estimate when raised
+    // against one — left lenient there since estimates created before this
+    // field existed won't have one and invoicing against them must keep
+    // working. For an invoice with no source estimate there's no such
+    // excuse, so it must be explicit or the invoice ends up orphaned from
+    // exhibition-scoped reports/ledgers.
     const resolvedCrmEventId = sourceEstimate?.crmEventId || req.body.crmEventId || null;
+    if (!resolvedCrmEventId && !sourceEstimate) {
+      return res.status(400).json({
+        message: "crmEventId is required — open this client from a specific event's list to create an Invoice.",
+      });
+    }
 
     const newInvoice = new Invoice({
       ...req.body,

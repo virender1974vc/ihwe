@@ -6,6 +6,7 @@ const {
   updateCorporateVisitor,
   deleteCorporateVisitor,
   uploadCorporateVisitors,
+  bulkResendCorporateVisitorMessages,
 } = require("../../controllers/visitor/corporateVisitorController.js");
 const multer = require("multer");
 const path = require("path");
@@ -32,6 +33,7 @@ router.get("/scan/:registrationId", async (req, res) => {
 router.get("/", getAllCorporateVisitors);
 router.get("/:id", getCorporateVisitorById);
 router.post("/upload", upload.single("file"), uploadCorporateVisitors);
+router.post("/bulk-resend", bulkResendCorporateVisitorMessages);
 router.post("/", createCorporateVisitor);
 router.put("/:id", updateCorporateVisitor);
 router.delete("/:id", deleteCorporateVisitor);

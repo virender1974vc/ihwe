@@ -111,6 +111,7 @@ const createGroupVisitor = async (req, res) => {
             companyName: saved.companyName || "N/A",
             groupRegistrationId: saved.groupRegistrationId,
             totalMembers: saved.persons.length,
+            created_by: saved.created_by,
         };
 
         emailService
