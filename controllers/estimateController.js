@@ -70,7 +70,10 @@ const addEstimate = async (req, res) => {
 
     const newEstimateNo = await generateNextProformaNo();
 
-    estimateBody.est_no = newEstimateNo;
+    const estimateBody = {
+      ...req.body,
+      est_no: newEstimateNo,
+    };
 
     const estimate = new Estimate(estimateBody);
     await estimate.save();
