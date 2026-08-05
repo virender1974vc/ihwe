@@ -54,7 +54,17 @@ router.post(
   createInternationalVisitor
 );
 
-router.put("/:id", updateInternationalVisitor);
+router.put(
+  "/:id",
+  upload.fields([
+    { name: "passport", maxCount: 1 },
+    { name: "visitingCard", maxCount: 1 },
+    { name: "companyProfile", maxCount: 1 },
+    { name: "visaDocs", maxCount: 1 },
+    { name: "photoId", maxCount: 1 },
+  ]),
+  updateInternationalVisitor
+);
 router.delete("/:id", deleteInternationalVisitor);
 
 module.exports = router;

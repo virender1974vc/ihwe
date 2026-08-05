@@ -116,7 +116,37 @@ const createInternationalVisitor = async (req, res) => {
 
 const updateInternationalVisitor = async (req, res) => {
   try {
-    const updated = await InternationalVisitor.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    // Only overwrite a document URL when a new file for that slot was actually uploaded
+    const getFilePath = (fieldName) => {
+      return req.files && req.files[fieldName] && req.files[fieldName][0]
+        ? `/uploads/${req.files[fieldName][0].filename}`
+        : undefined;
+    };
+
+    const documentFields = {
+      passportCopyUrl: getFilePath("passport"),
+      visitingCardUrl: getFilePath("visitingCard"),
+      companyProfileUrl: getFilePath("companyProfile"),
+      visaDocsUrl: getFilePath("visaDocs"),
+      photoIdUrl: getFilePath("photoId"),
+    };
+    Object.keys(documentFields).forEach((key) => documentFields[key] === undefined && delete documentFields[key]);
+
+    let parsedBody = { ...req.body };
+    try {
+      if (typeof req.body.purposeOfVisit === 'string') parsedBody.purposeOfVisit = JSON.parse(req.body.purposeOfVisit);
+      if (typeof req.body.areaOfInterest === 'string') parsedBody.areaOfInterest = JSON.parse(req.body.areaOfInterest);
+    } catch (e) {
+      // Fallback if parsing fails or not valid JSON
+    }
+
+    const normalizedBody = normalizeVisitorMultiSelectFields(parsedBody);
+
+    const updated = await InternationalVisitor.findByIdAndUpdate(
+      req.params.id,
+      { ...normalizedBody, ...documentFields },
+      { new: true },
+    );
     if (!updated) return res.status(404).json({ message: "Visitor not found" });
     await logActivity(req, 'Updated', 'Visitor Registrations', `Updated international visitor: ${updated.firstName} ${updated.lastName}`);
     res.json({ data: updated });
