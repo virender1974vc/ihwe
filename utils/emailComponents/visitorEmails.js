@@ -64,7 +64,7 @@ async function sendVisitorConfirmationOnly(data, formType) {
                 bodyContent += smallLogoHtml;
             }
 
-            if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
+            if ((formType === 'corporate-visitor' || formType === 'international-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
                 try {
                     const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
                     const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
@@ -220,15 +220,21 @@ async function sendDetailedVisitorNotification(data, recipientType = 'admin') {
             } else {
 
                 const isCorporateVisitor = String(data.visitorType || '').toLowerCase().includes('corporate');
+                const isInternationalVisitor = String(data.visitorType || '').toLowerCase().includes('international');
                 // Website (public) registrations never send created_by; admin-panel-entered
                 // registrations always do (see generalVisitorSlice.js etc.).
                 const registrationSource = data.created_by ? 'Portal' : 'Web';
-                subject = isCorporateVisitor
-                    ? `${registrationSource} | NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`
-                    : `${registrationSource} | NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
-                html = isCorporateVisitor
-                    ? getCorporateVisitorAdminAlertTemplate(data)
-                    : getGeneralVisitorAdminAlertTemplate(data);
+                
+                if (isInternationalVisitor) {
+                    subject = `${registrationSource} | NEW INTERNATIONAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                    html = getCorporateVisitorAdminAlertTemplate(data); // Reusing corporate template as requested
+                } else if (isCorporateVisitor) {
+                    subject = `${registrationSource} | NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                    html = getCorporateVisitorAdminAlertTemplate(data);
+                } else {
+                    subject = `${registrationSource} | NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                    html = getGeneralVisitorAdminAlertTemplate(data);
+                }
                 recipientEmail = process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
                 logMessage = 'Admin Notification';
             }

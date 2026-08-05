@@ -3,6 +3,7 @@
 const AISENSY_CAMPAIGN_BY_FORM_TYPE = {
     'general-visitor': 'AISENSY_CAMPAIGN_VISITOR_GENERAL',
     'corporate-visitor': 'AISENSY_CAMPAIGN_VISITOR_CORPORATE',
+    'international-visitor': 'AISENSY_CAMPAIGN_VISITOR_CORPORATE',
     'health-camp-visitor': 'AISENSY_CAMPAIGN_VISITOR_HEALTHCAMP',
     'buyer-registration': 'AISENSY_CAMPAIGN_BUYER_REGISTRATION',
     'exhibitor-registration': 'AISENSY_CAMPAIGN_EXHIBITOR_RECEIVED',
@@ -21,6 +22,7 @@ const AISENSY_CAMPAIGN_BY_FORM_TYPE = {
 const AISENSY_BANNER_BY_FORM_TYPE = {
     'general-visitor': 'AISENSY_BANNER_VISITOR_GENERAL',
     'corporate-visitor': 'AISENSY_BANNER_VISITOR_CORPORATE',
+    'international-visitor': 'AISENSY_BANNER_VISITOR_CORPORATE',
     'health-camp-visitor': 'AISENSY_BANNER_VISITOR_HEALTHCAMP',
     'buyer-registration': 'AISENSY_BANNER_BUYER_REGISTRATION',
     'exhibitor-registration': 'AISENSY_BANNER_EXHIBITOR_RECEIVED',
