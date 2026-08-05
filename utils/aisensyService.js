@@ -5,6 +5,8 @@ const AISENSY_API_URL = 'https://backend.aisensy.com/campaign/t1/api/v2';
 const formatDestination = (phone) => {
     if (!phone) return null;
     let cleaned = String(phone).replace(/\D/g, '');
+    // Strip a stray leading trunk '0' (e.g. "09568259784") before treating it as a bare 10-digit number
+    if (cleaned.length === 11 && cleaned.startsWith('0')) cleaned = cleaned.substring(1);
     if (cleaned.length === 10) cleaned = '91' + cleaned;
     if (cleaned.startsWith('910') && cleaned.length === 13) cleaned = '91' + cleaned.substring(3);
     return '+' + cleaned;
