@@ -1,6 +1,7 @@
 const Attendance = require('../models/Attendance');
 const Event = require('../models/Event');
 const CorporateVisitor = require('../models/visitor/CorporateVisitorModel');
+const InternationalVisitor = require('../models/visitor/InternationalVisitorModel');
 const GeneralVisitor = require('../models/visitor/GeneralVisitorModel');
 const FreeHealthCamp = require('../models/visitor/FreeHealthCampModel');
 const GroupVisitor = require('../models/visitor/GroupVisitorModel');
@@ -153,6 +154,15 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             companySize: doc.companySize, state: doc.state, city: doc.city, b2bMeeting: doc.b2bMeeting,
             purposeOfVisit: doc.purposeOfVisit, areaOfInterest: doc.areaOfInterest, specificRequirement: doc.specificRequirement
         }
+    }, requestOrigin);
+
+    doc = await InternationalVisitor.findOne({ registrationId }).lean();
+    if (doc) return subject(doc, 'visitor', 'international-visitor', {
+        registrationId, name: `${doc.firstName || ''} ${doc.lastName || ''}`, company: doc.companyName,
+        email: doc.email, mobile: doc.mobile, country: doc.country, designation: doc.designation, status: doc.status,
+        details: { registrationFor: doc.registrationFor, companyWebsite: doc.companyWebsite, industrySector: doc.industrySector,
+            companySize: doc.companySize, state: doc.state, city: doc.city, b2bMeeting: doc.b2bMeeting,
+            purposeOfVisit: doc.purposeOfVisit, areaOfInterest: doc.areaOfInterest, specificRequirement: doc.specificRequirement, nationality: doc.nationality }
     }, requestOrigin);
 
     doc = await GeneralVisitor.findOne({ registrationId }).lean();
@@ -321,8 +331,8 @@ async function getEventContext() {
 }
 
 async function registeredTotals() {
-    const [corporate, general, health, groups, buyers, internationalBuyers, exhibitors, sellers] = await Promise.all([
-        CorporateVisitor.countDocuments(), GeneralVisitor.countDocuments(), FreeHealthCamp.countDocuments(),
+    const [corporate, international, general, health, groups, buyers, internationalBuyers, exhibitors, sellers] = await Promise.all([
+        CorporateVisitor.countDocuments(), InternationalVisitor.countDocuments(), GeneralVisitor.countDocuments(), FreeHealthCamp.countDocuments(),
         GroupVisitor.aggregate([{ $project: { count: { $size: { $ifNull: ['$persons', []] } } } }, { $group: { _id: null, total: { $sum: '$count' } } }]),
         BuyerRegistration.countDocuments(), InternationalBuyer.countDocuments(),
         ExhibitorRegistration.countDocuments(), SellerRegistration.countDocuments()
@@ -330,6 +340,7 @@ async function registeredTotals() {
     const bySubType = {
         'general-visitor': general,
         'corporate-visitor': corporate,
+        'international-visitor': international,
         'group-visitor-member': groups[0]?.total || 0,
         'health-camp-visitor': health,
         buyer: buyers,

@@ -1,13 +1,5 @@
 const WhatsAppLog = require('../models/WhatsAppLog');
 const aisensy = require('./aisensyService');
-
-// Multi-event support: look up which event a CRM company/lead belongs to, so
-// log entries can be scoped later. Safe no-op (returns null) for companyIds
-// that don't resolve to a Company doc — e.g. buyer/visitor/OTP flows that pass
-// an unrelated id or none at all.
-// Fallback only — a company can belong to several events now (Company.events),
-// so this just picks its original/legacy one. Prefer resolveEventId(options)
-// below, which uses the event the send was actually triggered from.
 const resolveEventIdForCompany = async (companyId) => {
     if (!companyId) return null;
     try {
@@ -18,11 +10,6 @@ const resolveEventIdForCompany = async (companyId) => {
         return null;
     }
 };
-
-// The event a log entry should be scoped to: whichever event's page/section
-// the send was triggered from (options.eventId, passed by the frontend via
-// useEventContext()'s currentEventId), falling back to the company's legacy
-// single eventId for system-triggered sends with no page context (crons, OTPs).
 const resolveEventId = (options = {}) =>
     options.eventId ? Promise.resolve(options.eventId) : resolveEventIdForCompany(options.companyId);
 
@@ -67,6 +54,9 @@ const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) =>
         }
 
         let formattedMobile = mobile.replace(/\D/g, ''); // Remove non-digits
+        if (formattedMobile.length === 11 && formattedMobile.startsWith('0')) {
+            formattedMobile = formattedMobile.substring(1); // Strip stray leading trunk '0'
+        }
         if (formattedMobile.length === 10) {
             formattedMobile = '91' + formattedMobile;
         }
@@ -112,10 +102,6 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
     let errorMsg = null;
 
     try {
-        // Try AiSensy first, using the generic "freeform wrapper" template — this one
-        // function is shared by referral/advisory/partner/seller confirmations, admin
-        // broadcast, AND every visitor/buyer/exhibitor dynamic confirmation, so it
-        // carries whatever final message text the caller already built.
         const aisensyResult = await aisensy.sendTemplate({
             campaignEnvKey: 'AISENSY_CAMPAIGN_ADMIN_FREEFORM',
             phone: mobile,
@@ -132,6 +118,9 @@ const sendWhatsAppMessage = async (mobile, msg, name = null, options = {}) => {
 
         // Normalize mobile number (Ensure 91 prefix for 10-digit Indian numbers)
         let formattedMobile = mobile.replace(/\D/g, ''); // Remove non-digits
+        if (formattedMobile.length === 11 && formattedMobile.startsWith('0')) {
+            formattedMobile = formattedMobile.substring(1); // Strip stray leading trunk '0'
+        }
         if (formattedMobile.length === 10) {
             formattedMobile = '91' + formattedMobile;
         }
@@ -192,6 +181,9 @@ const sendOpusWhatsAppMessage = async (mobile, msg, name = null, options = {}) =
 
     try {
         let formattedMobile = mobile.replace(/\D/g, '');
+        if (formattedMobile.length === 11 && formattedMobile.startsWith('0')) {
+            formattedMobile = formattedMobile.substring(1); // Strip stray leading trunk '0'
+        }
         if (formattedMobile.length === 10) {
             formattedMobile = '91' + formattedMobile;
         }
@@ -279,11 +271,6 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
     let errorMsg = null;
 
     try {
-        // Try AiSensy first, one call per file (each WhatsApp template header can only
-        // carry ONE media type). Any file whose matching campaign isn't configured yet
-        // gets skipped here and falls through to the legacy Opus path below instead —
-        // unless NO files matched AiSensy at all, in which case we use the original
-        // single-call Opus rich message (all attachments combined) as before.
         const AISENSY_CAMPAIGN_BY_TYPE = {
             Image: 'AISENSY_CAMPAIGN_MATERIAL_IMAGE',
             Video: 'AISENSY_CAMPAIGN_MATERIAL_VIDEO',
@@ -320,6 +307,9 @@ const sendWhatsAppRichMessage = async (mobile, msg, files = [], name = null, opt
         }
 
         let formattedMobile = mobile.replace(/\D/g, '');
+        if (formattedMobile.length === 11 && formattedMobile.startsWith('0')) {
+            formattedMobile = formattedMobile.substring(1); // Strip stray leading trunk '0'
+        }
         if (formattedMobile.length === 10) {
             formattedMobile = '91' + formattedMobile;
         }
