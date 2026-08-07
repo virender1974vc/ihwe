@@ -6,6 +6,7 @@ const generateRegistrationId = async (type) => {
     general: "NGT/IHWE/GV",
     healthCamp: "NGT/IHWE/HV",
     group: "NGT/IHWE/GRP",
+    international: "NGT/IHWE/IV",
   };
 
   const prefix = prefixMap[type];

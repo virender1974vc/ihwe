@@ -11,7 +11,16 @@ const { getGeneralEnquiryAdminAlertTemplate } = require('../emailTemplates/gener
 async function getTemplate(formType) {
     try {
         const MessageTemplate = require('../../models/MessageTemplate');
-        return await MessageTemplate.findOne({ formType });
+        let template = await MessageTemplate.findOne({ formType }).lean();
+        if (!template && formType === 'international-visitor') {
+            template = await MessageTemplate.findOne({ formType: 'corporate-visitor' }).lean();
+            if (template) {
+                if (template.emailSubject) template.emailSubject = template.emailSubject.replace(/corporate/ig, 'International');
+                if (template.emailBody) template.emailBody = template.emailBody.replace(/corporate/ig, 'International');
+                if (template.whatsappBody) template.whatsappBody = template.whatsappBody.replace(/corporate/ig, 'International');
+            }
+        }
+        return template;
     } catch (error) {
         console.error('Error fetching template for ' + formType + ':', error);
         return null;
@@ -140,7 +149,7 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
     let mediaUrl = bannerUrl;
     let filename = `${formType}.jpg`;
 
-    if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
+    if ((formType === 'corporate-visitor' || formType === 'international-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
         const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
         const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
         const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
@@ -199,7 +208,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             bodyContent += smallLogoHtml;
         }
 
-        if ((formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
+        if ((formType === 'corporate-visitor' || formType === 'international-visitor' || formType === 'general-visitor' || formType === 'buyer-registration' || formType === 'health-camp-visitor') && data.registrationId) {
             try {
                 const frontendUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
                 const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';

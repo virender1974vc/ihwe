@@ -296,6 +296,22 @@ const getCompanies = async (req, res) => {
       mergeOrCondition(query, searchOr);
     }
 
+    // A company's eventAssignments.status text (Follow-up, Contacted, New
+    // Lead...) doesn't get updated once a real payment comes in for this
+    // event — same gap fixed for Hot Leads in getPaidCompanyIdSet. Any
+    // pipeline-stage list (status is always passed for these) must exclude
+    // already-converted companies so a paid client doesn't linger in
+    // Follow-up/New Lead/etc. just because nobody edited its status text.
+    // Views without a status filter (Master Data, "all leads") are
+    // intentionally unaffected — they're meant to show everything.
+    if (eventId && status) {
+      const statusMatchedCompanies = await Company.find(query).select('_id eventAssignments').lean();
+      const paidCompanyIds = await getPaidCompanyIdSet(statusMatchedCompanies, eventId);
+      if (paidCompanyIds.size > 0) {
+        query._id = { $nin: [...paidCompanyIds] };
+      }
+    }
+
     // Dashboard sample — scoped by the same status/event/source/etc filters as
     // the list itself (e.g. New Leads only pulls companyStatus "New Lead" for
     // the selected event), instead of the top 3000 across every status/event.
