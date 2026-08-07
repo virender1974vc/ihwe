@@ -1021,11 +1021,7 @@ class PDFGenerator {
                     contentBottom = authTop + authHeaderH + authBodyH + sectionGap;
                 }
                 const printSafeBottomGap = 10;
-                // Same left/right margin (mx) as every other section, instead of spanning
-                // edge-to-edge.
-                const barY = pageH - 16 - printSafeBottomGap;
-                // Anchor the thank-you/contact block just above the bottom bar (with a small
-                // internal gap between the two lines) instead of floating high above it.
+                const barY = doc.page.height - 16 - printSafeBottomGap;
                 const footerBlockH = 30;
                 const footerTop = Math.max(contentBottom + 10, barY - footerBlockH);
 
