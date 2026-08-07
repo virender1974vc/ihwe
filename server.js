@@ -493,12 +493,13 @@ app.use("/api/reminders", require("./routes/reminderRoutes"));
 app.use("/api/seed", seedRoutes);
 
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
-const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
-initPaymentWarningCron();
-const { initReminderCron } = require('./jobs/reminderCron');
-initReminderCron();
-const { initExhibitionReminderCron } = require('./jobs/exhibitionReminderCron');
-initExhibitionReminderCron();
+// Disabled per request (2026-08-07). Uncomment to re-enable.
+// const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
+// initPaymentWarningCron();
+// const { initReminderCron } = require('./jobs/reminderCron');
+// initReminderCron();
+// const { initExhibitionReminderCron } = require('./jobs/exhibitionReminderCron');
+// initExhibitionReminderCron();
 
 // ── Socket.io setup ───────────────────────────────────────────────────────────
 const httpServer = http.createServer(app);
@@ -726,10 +727,11 @@ databaseReady
       console.log(`🚀 Server running on port ${PORT} with Socket.io`);
 
       // Start background services only after MongoDB is ready.
-      const { initCommunicationCallCron } = require('./jobs/communicationCallCron');
-      initCommunicationCallCron(communicationIo);
-      const { startImapPoller } = require("./services/imapPollerService");
-      startImapPoller();
+      // Disabled per request (2026-08-07). Uncomment to re-enable.
+      // const { initCommunicationCallCron } = require('./jobs/communicationCallCron');
+      // initCommunicationCallCron(communicationIo);
+      // const { startImapPoller } = require("./services/imapPollerService");
+      // startImapPoller();
     });
   })
   .catch((error) => {
