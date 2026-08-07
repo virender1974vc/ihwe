@@ -632,6 +632,7 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
       designation,
       stallNo: stallNoToDisplay,
       stallSize: stallSizeToDisplay,
+      gstNo: exhibitor?.gstNo || company?.gstNumber || company?.gstNo || "N/A",
       category:
         company?.category ||
         company?.exhibitorCategory ||
@@ -639,11 +640,16 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
         exhibitor?.typeOfBusiness ||
         "N/A",
       registrationDate: exhibitor?.createdAt || company?.createdAt || new Date(),
+      gstNo: exhibitor?.gstNo || company?.gstNumber || "N/A",
+      // Format: "{address}, {city} - {pincode}, {state}, {country}"
       address: [
         exhibitor?.address || company?.address,
-        exhibitor?.city || company?.city,
+        [
+          exhibitor?.city || company?.city,
+          (exhibitor?.pincode || company?.pincode) ? `- ${exhibitor?.pincode || company?.pincode}` : "",
+        ].filter(Boolean).join(" "),
         exhibitor?.state || company?.state,
-        (exhibitor?.pincode || company?.pincode) ? `- ${exhibitor?.pincode || company?.pincode}` : "",
+        exhibitor?.country || company?.country,
       ].filter(Boolean).join(", ") || "N/A",
       logo: company?.companyLogo || null,
       statusLabel,
