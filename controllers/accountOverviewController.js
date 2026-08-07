@@ -632,6 +632,7 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
       designation,
       stallNo: stallNoToDisplay,
       stallSize: stallSizeToDisplay,
+      gstNo: exhibitor?.gstNo || company?.gstNumber || company?.gstNo || "N/A",
       category:
         company?.category ||
         company?.exhibitorCategory ||
