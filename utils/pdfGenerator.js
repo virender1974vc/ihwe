@@ -1104,6 +1104,8 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 const QRCode = require('qrcode');
 const Settings = require('../models/Settings');
 
@@ -1567,7 +1569,7 @@ class PDFGenerator {
                 const TEXT_MUTED = '#334155';
 
                 const headerH = clamp(receiptSettings.headerBandHeight, 70, 140, 95);
-                const eventH = clamp(receiptSettings.eventBandHeight, 60, 120, 85);
+                const eventH = clamp(receiptSettings.eventBandHeight, 42, 80, 52);
                 const infoH = clamp(receiptSettings.infoBandHeight, 80, 160, 115);
                 const footerH = clamp(receiptSettings.footerBandHeight, 60, 110, 85);
                 const mx = clamp(receiptSettings.pageMarginX, 15, 50, 30);
@@ -1592,37 +1594,139 @@ class PDFGenerator {
                 const ic_business = 'M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z';
                 const ic_bell = 'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z';
                 const drawMailIcon = (cx, cy, r, color) => {
+                    // Sharp outlined envelope like the reference.
                     doc.save();
-                    doc.rect(cx - r, cy - r * 0.7, r * 2, r * 1.4).lineWidth(0.8).stroke(color);
-                    doc.moveTo(cx - r, cy - r * 0.7).lineTo(cx, cy + r * 0.2).lineTo(cx + r, cy - r * 0.7).lineWidth(0.8).stroke(color);
+                    const w = r * 2.05;
+                    const h = r * 1.34;
+                    const x = cx - w / 2;
+                    const y0 = cy - h / 2;
+                    doc.roundedRect(x, y0, w, h, r * 0.06).lineWidth(0.82).stroke(color);
+                    doc.moveTo(x + 0.22, y0 + 0.2)
+                        .lineTo(cx, y0 + h * 0.62)
+                        .lineTo(x + w - 0.22, y0 + 0.2)
+                        .lineWidth(0.82)
+                        .stroke(color);
                     doc.restore();
                 };
+
                 const drawGlobeIcon = (cx, cy, r, color) => {
+                    // Globe with meridians + equator, matching the reference icon family.
                     doc.save();
-                    doc.circle(cx, cy, r).lineWidth(0.8).stroke(color);
-                    doc.ellipse(cx, cy, r * 0.45, r).lineWidth(0.6).stroke(color);
-                    doc.moveTo(cx - r, cy).lineTo(cx + r, cy).lineWidth(0.6).stroke(color);
+                    doc.circle(cx, cy, r).lineWidth(0.78).stroke(color);
+                    doc.ellipse(cx, cy, r * 0.44, r).lineWidth(0.62).stroke(color);
+                    doc.moveTo(cx - r, cy).lineTo(cx + r, cy).lineWidth(0.62).stroke(color);
+                    doc.ellipse(cx, cy, r, r * 0.42).lineWidth(0.5).stroke(color);
                     doc.restore();
                 };
+
                 const drawPhoneIcon = (cx, cy, r, color) => {
+                    // Outline handset — closer to the organiser contact icon in the reference.
                     doc.save();
-                    doc.roundedRect(cx - r * 0.7, cy - r, r * 1.4, r * 2, r * 0.3).lineWidth(0.8).stroke(color);
-                    doc.moveTo(cx - r * 0.2, cy - r * 0.6).lineTo(cx + r * 0.2, cy - r * 0.6).lineWidth(0.5).stroke(color);
-                    doc.circle(cx, cy + r * 0.6, r * 0.15).fillAndStroke(color, color);
+                    const s = (r * 2.0) / 24;
+                    doc.translate(cx - 12 * s, cy - 12 * s);
+                    doc.scale(s);
+                    doc.path('M6.54 5.87 5.29 7.12c-.36.36-.47.89-.28 1.36 1.37 3.33 4.01 5.98 7.35 7.35.47.19 1 .08 1.36-.28l1.25-1.25c.33-.33.82-.44 1.26-.28 1.02.36 2.11.55 3.22.55.72 0 1.3.58 1.3 1.3V19c0 .72-.58 1.3-1.3 1.3C10.3 20.3 3.7 13.7 3.7 5.55c0-.72.58-1.3 1.3-1.3h3.15c.72 0 1.3.58 1.3 1.3 0 1.11.19 2.2.55 3.22.16.44.05.93-.28 1.26l-1.88 1.84')
+                        .lineWidth(1.45)
+                        .lineCap('round')
+                        .lineJoin('round')
+                        .stroke(color);
                     doc.restore();
                 };
+
                 const drawPinIcon = (cx, cy, r, color) => {
+                    // Outlined map-pin with inner dot.
                     doc.save();
-                    doc.circle(cx, cy - r * 0.2, r * 0.55).lineWidth(0.8).stroke(color);
-                    doc.moveTo(cx, cy + r * 0.3).lineTo(cx, cy + r).lineWidth(0.8).stroke(color);
+                    const top = cy - r * 1.02;
+                    doc.moveTo(cx, cy + r * 0.98)
+                        .bezierCurveTo(
+                            cx - r * 0.28, cy + r * 0.52,
+                            cx - r * 0.98, cy - r * 0.02,
+                            cx - r * 0.98, cy - r * 0.37
+                        )
+                        .bezierCurveTo(
+                            cx - r * 0.98, cy - r * 0.89,
+                            cx - r * 0.52, top,
+                            cx, top
+                        )
+                        .bezierCurveTo(
+                            cx + r * 0.52, top,
+                            cx + r * 0.98, cy - r * 0.89,
+                            cx + r * 0.98, cy - r * 0.37
+                        )
+                        .bezierCurveTo(
+                            cx + r * 0.98, cy - r * 0.02,
+                            cx + r * 0.28, cy + r * 0.52,
+                            cx, cy + r * 0.98
+                        )
+                        .lineWidth(0.9)
+                        .stroke(color);
+                    doc.circle(cx, cy - r * 0.36, r * 0.28).lineWidth(0.8).stroke(color);
                     doc.restore();
                 };
+
                 const drawCalendarIcon = (cx, cy, r, color) => {
+                    // Outline calendar for event strip / organiser section.
                     doc.save();
-                    doc.roundedRect(cx - r * 0.8, cy - r * 0.6, r * 1.6, r * 1.6, r * 0.2).lineWidth(0.8).stroke(color);
-                    doc.moveTo(cx - r * 0.8, cy - r * 0.1).lineTo(cx + r * 0.8, cy - r * 0.1).lineWidth(0.8).stroke(color);
-                    doc.moveTo(cx - r * 0.4, cy - r * 0.9).lineTo(cx - r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
-                    doc.moveTo(cx + r * 0.4, cy - r * 0.9).lineTo(cx + r * 0.4, cy - r * 0.4).lineWidth(0.8).stroke(color);
+                    const x = cx - r * 0.80;
+                    const y0 = cy - r * 0.58;
+                    const w = r * 1.60;
+                    const h = r * 1.52;
+
+                    doc.roundedRect(x, y0, w, h, r * 0.15).lineWidth(0.84).stroke(color);
+
+                    doc.moveTo(x, y0 + r * 0.40)
+                        .lineTo(x + w, y0 + r * 0.40)
+                        .lineWidth(0.75)
+                        .stroke(color);
+
+                    doc.moveTo(cx - r * 0.40, y0 - r * 0.22)
+                        .lineTo(cx - r * 0.40, y0 + r * 0.16)
+                        .lineWidth(1.0)
+                        .stroke(color);
+                    doc.moveTo(cx + r * 0.40, y0 - r * 0.22)
+                        .lineTo(cx + r * 0.40, y0 + r * 0.16)
+                        .lineWidth(1.0)
+                        .stroke(color);
+
+                    // 2 x 2 date squares
+                    const cell = Math.max(0.72, r * 0.16);
+                    const gap = r * 0.20;
+                    const sx = cx - gap * 0.75;
+                    const sy = cy + r * 0.02;
+                    [-1, 1].forEach((mx) => {
+                        [-1, 1].forEach((my) => {
+                            doc.rect(sx + mx * gap - cell / 2, sy + my * gap * 0.85 - cell / 2, cell, cell).fill(color);
+                        });
+                    });
+
+                    doc.restore();
+                };
+
+                const drawFilledCalendarIcon = (cx, cy, r, color) => {
+                    // Filled calendar for the payment table circular badges.
+                    drawSvgIcon(cx, cy, ic_cal, (r * 1.9) / 24, color);
+                };
+
+                const drawBankIcon = (cx, cy, r, color) => {
+                    drawSvgIcon(cx, cy, 'M12 2 2 7v2h20V7L12 2zm-7 9v6h3v-6H5zm5 0v6h4v-6h-4zm6 0v6h3v-6h-3zM2 19v2h20v-2H2z', (r * 2.05) / 24, color);
+                };
+
+                const drawHashIcon = (cx, cy, r, color) => {
+                    drawSvgIcon(cx, cy, ic_hash, (r * 2.0) / 24, color);
+                };
+
+                const drawSmallDocumentIcon = (cx, cy, r, color) => {
+                    // Simple receipt/document glyph with three horizontal lines.
+                    doc.save();
+                    const w = r * 1.2;
+                    const h = r * 1.55;
+                    const x = cx - w / 2;
+                    const y0 = cy - h / 2;
+                    doc.roundedRect(x, y0, w, h, r * 0.08).fill(color);
+
+                    // Knock-out lines using the surrounding green/blue is not possible safely,
+                    // so draw short transparent-looking gaps by using white only when requested.
+                    // In the payment circles the document itself is white, matching the reference.
                     doc.restore();
                 };
                 const drawStarIcon = (cx, cy, r, color) => {
@@ -1658,6 +1762,21 @@ class PDFGenerator {
                     const monthYear = e.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
                     return `(${s.getDate()}-${e.getDate()} ${monthYear})`;
                 };
+                const formatEventNarrationRange = (start, end) => {
+                    const fallback = '21-23 August 2026';
+                    if (!start || !end) return fallback;
+                    const s = new Date(start);
+                    const e = new Date(end);
+                    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return fallback;
+                    const monthYear = e.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+                    return `${s.getDate()}–${e.getDate()} ${monthYear}`;
+                };
+                const formatLongDate = (value) => {
+                    if (!value) return formattedDate;
+                    const d = new Date(value);
+                    if (Number.isNaN(d.getTime())) return String(value);
+                    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+                };
                 const eventName = eventDoc?.name || '9th International Health & Wellness Expo, 2026';
                 const dateStr = eventDoc?.startDate ? `${fmtEvDate(eventDoc.startDate)}${eventDoc.endDate ? ' - ' + fmtEvDate(eventDoc.endDate) : ''}` : '21 Aug 2026 - 23 Aug 2026';
                 const eventSubDate = eventDoc?.startDate && eventDoc?.endDate ? formatEventShortRange(eventDoc.startDate, eventDoc.endDate) : '(21-23 August 2026)';
@@ -1669,12 +1788,54 @@ class PDFGenerator {
                     const lower = raw.toLowerCase();
                     return lower.charAt(0).toUpperCase() + lower.slice(1);
                 };
+                const toWords = (value) => {
+                    const n = Math.floor(Number(value || 0));
+                    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                        'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+                    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+                    const convert = (num) => {
+                        if (num < 20) return ones[num];
+                        if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ` ${ones[num % 10]}` : '');
+                        if (num < 1000) return `${ones[Math.floor(num / 100)]} Hundred${num % 100 ? ` ${convert(num % 100)}` : ''}`;
+                        if (num < 100000) return `${convert(Math.floor(num / 1000))} Thousand${num % 1000 ? ` ${convert(num % 1000)}` : ''}`;
+                        if (num < 10000000) return `${convert(Math.floor(num / 100000))} Lakh${num % 100000 ? ` ${convert(num % 100000)}` : ''}`;
+                        return `${convert(Math.floor(num / 10000000))} Crore${num % 10000000 ? ` ${convert(num % 10000000)}` : ''}`;
+                    };
+                    return n ? `Rupees ${convert(n).trim()} Only` : 'Rupees Zero Only';
+                };
                 const fullName = (contact) => clean(contact?.name || `${contact?.title ? contact.title + ' ' : ''}${contact?.firstName || ''} ${contact?.lastName || ''}`.trim(), '');
                 const resolveUploadPath = (value) => {
                     if (!value) return null;
                     const rel = String(value).replace(/^\//, '');
                     const candidate = path.resolve(__dirname, '..', rel);
                     return fs.existsSync(candidate) ? candidate : null;
+                };
+                const fetchImageBuffer = (url) => new Promise((resolve) => {
+                    const client = String(url).startsWith('https:') ? https : http;
+                    client.get(url, (response) => {
+                        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                            response.resume();
+                            fetchImageBuffer(response.headers.location).then(resolve);
+                            return;
+                        }
+                        if (response.statusCode !== 200) {
+                            response.resume();
+                            resolve(null);
+                            return;
+                        }
+                        const chunks = [];
+                        response.on('data', (chunk) => chunks.push(chunk));
+                        response.on('end', () => resolve(Buffer.concat(chunks)));
+                    }).on('error', () => resolve(null));
+                });
+                const resolvePdfImageSource = async (value) => {
+                    if (!value) return null;
+                    const raw = String(value);
+                    if (/^https?:\/\//i.test(raw)) return fetchImageBuffer(raw);
+                    if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(raw)) {
+                        return Buffer.from(raw.split(',')[1] || '', 'base64');
+                    }
+                    return resolveUploadPath(raw);
                 };
 
                 const Payment = require('../models/Payment');
@@ -1719,15 +1880,23 @@ class PDFGenerator {
                         const escapedIdentity = String(preparedByIdentity)
                             .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-                        creatorProfile = await User.findOne({
+                        if (mongoose.Types.ObjectId.isValid(preparedByIdentity)) {
+                            creatorProfile = await User.findById(preparedByIdentity)
+                                .select('fullName username email mobile designation department hodName reportingToName signatureImage')
+                                .lean();
+                        }
+
+                        if (!creatorProfile) {
+                            creatorProfile = await User.findOne({
                             $or: [
                                 { username: preparedByIdentity },
                                 { fullName: preparedByIdentity },
                                 { email: preparedByIdentity },
                             ],
                         })
-                            .select('fullName username email hodName reportingToName department')
+                            .select('fullName username email mobile designation department hodName reportingToName signatureImage')
                             .lean();
+                        }
 
                         if (!creatorProfile) {
                             creatorProfile = await User.findOne({
@@ -1737,13 +1906,29 @@ class PDFGenerator {
                                     { email: { $regex: new RegExp(`^${escapedIdentity}$`, 'i') } },
                                 ],
                             })
-                                .select('fullName username email hodName reportingToName department')
+                                .select('fullName username email mobile designation department hodName reportingToName signatureImage')
                                 .lean();
                         }
                     } catch (hodLookupErr) {
                         console.error('Receipt HOD lookup error:', hodLookupErr);
                     }
                 }
+
+                const generatedByName = clean(
+                    creatorProfile?.fullName ||
+                    creatorProfile?.username ||
+                    preparedByIdentity,
+                    'N/A'
+                );
+                const generatedByDepartment = 'ACCOUNTS DEPARTMENT';
+                const generatedByPhone = clean(
+                    creatorProfile?.mobile,
+                    settings?.contactPhone || '+91 96549 00525'
+                );
+                const generatedByEmail = clean(
+                    creatorProfile?.email,
+                    settings?.contactEmail || 'info@namogangewellness.com'
+                );
 
                 const reviewedByName = clean(
                     registration.reviewedByName ||
@@ -1753,13 +1938,46 @@ class PDFGenerator {
                     'N/A'
                 );
 
+                let reviewerProfile = null;
+                if (reviewedByName && reviewedByName !== 'N/A') {
+                    try {
+                        const User = require('../models/User');
+                        const escapedReviewer = String(reviewedByName)
+                            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                        if (mongoose.Types.ObjectId.isValid(reviewedByName)) {
+                            reviewerProfile = await User.findById(reviewedByName)
+                                .select('signatureImage')
+                                .lean();
+                        }
+
+                        if (!reviewerProfile) {
+                            reviewerProfile = await User.findOne({
+                            $or: [
+                                { username: reviewedByName },
+                                { fullName: reviewedByName },
+                                { email: reviewedByName },
+                                { username: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
+                                { fullName: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
+                                { email: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
+                            ],
+                        })
+                            .select('signatureImage')
+                            .lean();
+                        }
+                    } catch (reviewerLookupErr) {
+                        console.error('Receipt reviewer signature lookup error:', reviewerLookupErr);
+                    }
+                }
+
                 const drawSectionBox = (x, top, w, h, radius = 3) => {
-                    doc.roundedRect(x, top, w, h, radius).lineWidth(0.8).stroke(BORDER_COLOR);
+                    if (radius > 0) doc.roundedRect(x, top, w, h, radius).lineWidth(0.8).stroke(BORDER_COLOR);
+                    else doc.rect(x, top, w, h).lineWidth(0.8).stroke(BORDER_COLOR);
                 };
                 const drawHeaderLabel = (x, top, w, h, color, label) => {
-                    doc.roundedRect(x, top, w, h, 3).fill(color);
+                    doc.rect(x, top, w, h).fill(color);
                     doc.rect(x, top + h - 2, w, 2).fill(color);
-                    doc.fillColor('#fff').fontSize(8.5).font('Helvetica-Bold').text(label, x + 12, top + 5, { width: w - 24 });
+                    doc.fillColor('#fff').fontSize(8.2).font('Helvetica-Bold').text(label, x + 12, top + 4, { width: w - 24, align: 'center' });
                 };
                 const lineText = (text, x, top, w, opts = {}) => {
                     doc.fillColor(opts.color || TEXT_DARK).fontSize(opts.size || 7.5).font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').text(text, x, top, { width: w, lineGap: opts.lineGap || 1, align: opts.align || 'left' });
@@ -1791,6 +2009,7 @@ class PDFGenerator {
                         align: 'center',
                         valign: 'center',
                     });
+                    doc.rect(mx, y, mw, headerH).lineWidth(0.8).stroke(BORDER_COLOR);
                     y += headerH + sectionGap;
                 } else {
                     const headerContentH = Math.max(68, headerH - 24);
@@ -1814,7 +2033,7 @@ class PDFGenerator {
                     const headW = mw - 175;
                     doc.rect(headX, y + 3, headW, headerContentH - 2).fill(ACCENT);
                     doc.fillColor('#fff').fontSize(7).font('Helvetica').text(`${clean(settings?.contactEmail || settings?.receiptContactEmail || 'info@namogangewellness.com')}  |  ${clean(settings?.contactWebsite || 'www.namogangewellness.com')}`, headX + 12, y + 18, { width: headW * 0.58 });
-                    doc.text(`GSTIN - ${clean(settings?.companyGst, '09AAFCN9238F1Z6')}  |  CIN No. ${clean(settings?.companyCin, 'U85320DL2018PTC329002')}`, headX + 12, y + 43, { width: headW * 0.58 });
+                    doc.text(`GSTIN - ${clean(settings?.companyGst, '09AAFCN9238F1Z6')}  |  CIN No. ${clean(settings?.companyCin, 'U85320DL2018PTC329002')}`, headX + 12, y + 49, { width: headW * 0.58 });
                     doc.moveTo(headX + headW * 0.62, y + 14).lineTo(headX + headW * 0.62, y + headerContentH - 7).lineWidth(0.5).stroke('#dbeafe');
                     doc.fillColor('#fff').fontSize(7.4).font('Helvetica-Bold').text(receiptSettings.headOfficeLabel || 'Head Office:', headX + headW * 0.65, y + 14, { width: headW * 0.32 });
                     doc.font('Helvetica').fontSize(7.1).text(`${clean(settings?.companyName, 'Namo Gange Wellness Pvt. Ltd.')},\n${clean(settings?.companyAddress, '12/52, Site-II, Loni Road Industrial Area, Mohan Nagar, Ghaziabad-201007, Uttar Pradesh, India')}`, headX + headW * 0.65, y + 27, { width: headW * 0.32, lineGap: 1 });
@@ -1836,7 +2055,7 @@ class PDFGenerator {
                 [
                     ['Receipt No.', rNo],
                     ['Receipt Date', formattedDate],
-                    ['Registration ID', clean(registration.registrationId || registration._id?.toString().slice(-8), 'N/A')],
+                    ['Proforma No.', clean(registration.registrationId || registration._id?.toString().slice(-8), 'N/A')],
                 ].forEach((row, idx) => {
                     // Tight metadata spacing; typography and column widths are unchanged.
                     const yy = metaTop + idx * 13;
@@ -1848,8 +2067,9 @@ class PDFGenerator {
 
                 // Event strip - same compact reference look, but expands safely for wrapped content.
                 const evThird = mw / 3;
+                const eventDisplayName = eventName.replace(/\s*\(?\d{1,2}\s*-\s*\d{1,2}\s+[A-Za-z]+\s+\d{4}\)?\s*/g, '').trim();
                 const evRows = [
-                    { icon: 'cal', label: 'EVENT NAME', v1: eventName, v2: eventSubDate },
+                    { icon: 'cal', label: 'EVENT NAME', v1: eventDisplayName || eventName, v2: '' },
                     { icon: 'cal', label: 'EVENT DATE', v1: dateStr, v2: '' },
                     { icon: 'pin', label: 'EVENT VENUE', v1: venueText, v2: '' },
                 ];
@@ -1857,22 +2077,22 @@ class PDFGenerator {
                 const eventNeededH = Math.max(...evRows.map((item) => {
                     const mainH = measureText(item.v1, eventTextW, { size: 7 });
                     const subH = item.v2 ? measureText(item.v2, eventTextW, { size: 7 }) + 2 : 0;
-                    return 24 + mainH + subH + 6;
+                    return 20 + mainH + subH + 5;
                 }));
-                const eventBoxH = Math.max(50, Math.min(eventH, Math.ceil(eventNeededH)));
+                const eventBoxH = Math.max(40, Math.min(eventH, Math.ceil(eventNeededH)));
 
-                drawSectionBox(mx, y, mw, eventBoxH, 4);
+                drawSectionBox(mx, y, mw, eventBoxH, 0);
                 evRows.forEach((item, idx) => {
                     const x = mx + evThird * idx;
                     if (idx > 0) {
-                        doc.moveTo(x, y + 8).lineTo(x, y + eventBoxH - 8)
-                            .dash(1.5, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR).undash();
+                        doc.moveTo(x, y + 6).lineTo(x, y + eventBoxH - 6)
+                            .lineWidth(0.5).stroke(BORDER_COLOR);
                     }
-                    if (item.icon === 'pin') drawPinIcon(x + 22, y + 21, 11, ACCENT);
-                    else drawCalendarIcon(x + 22, y + 20, 11, ACCENT);
+                    if (item.icon === 'pin') drawPinIcon(x + 23, y + 19, 9.8, ACCENT);
+                    else drawCalendarIcon(x + 23, y + 18.5, 9.8, ACCENT);
 
-                    lineText(item.label, x + 48, y + 10, eventTextW, { size: 7, bold: true, color: ACCENT });
-                    lineText(item.v1, x + 48, y + 23, eventTextW, { size: 7 });
+                    lineText(item.label, x + 48, y + 8, eventTextW, { size: 6.8, bold: true, color: ACCENT });
+                    lineText(item.v1, x + 48, y + 19, eventTextW, { size: 6.8 });
 
                     if (item.v2) {
                         const mainH = measureText(item.v1, eventTextW, { size: 7 });
@@ -1886,7 +2106,7 @@ class PDFGenerator {
                 const boxTop = y;
                 const rowW = halfW - 24;
 
-                let fromAddr = settings?.companyAddress || '12/29, Site-II, Sunrise Industrial Area, Mohan Nagar, Ghaziabad - 201007, Uttar Pradesh, India';
+                let fromAddr = settings?.companyAddress || '12/52, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad - 201007, Uttar Pradesh, India';
                 if (settings?.addresses?.length) {
                     const addr = settings.addresses[0];
                     const parts = [addr.street, [addr.city, addr.zipCode].filter(Boolean).join(' - '), addr.state, addr.country].filter(Boolean);
@@ -1898,6 +2118,22 @@ class PDFGenerator {
                     registration.state,
                     registration.country || 'India',
                 ].filter(Boolean).join(', ');
+                const organiserWebsite = clean(settings?.contactWebsite, 'www.namogangewellness.com');
+                const clientWebsite = clean(registration.website || registration.companyWebsite || registration.websiteUrl, '-');
+                const organiserRows = [
+                    ['Full Name', generatedByName],
+                    ['Mobile No.', generatedByPhone],
+                    ['Email', generatedByEmail],
+                    ['Website', organiserWebsite],
+                    ['GSTIN No.', clean(settings?.companyGst, '09AAFCN9238F1Z6')],
+                ];
+                const clientRows = [
+                    ['Full Name', contactName],
+                    ['Mobile No.', clientMobile],
+                    ['Email', clientEmail],
+                    ['Website', clientWebsite],
+                    ['GSTIN No.', hasMsme ? udyamNo : clean(registration.gstNo, 'N/A')],
+                ];
                 const leftAddressH = measureText(fromAddr, rowW, { size: 7.4, lineGap: 2 });
 
                 const rightPrimaryLines = [];
@@ -1914,54 +2150,58 @@ class PDFGenerator {
 
                 // Shared compact vertical rhythm for both FROM and TO sections.
                 // This keeps both columns visually balanced and removes the large blank middle gap.
-                const contentTop = 28;
-                const titleStep = 13;
+                const headerBandH = 16;
+                const contentTop = 24;
+                const titleStep = 12;
                 const afterPrimaryGap = 4;
-                const afterDividerGap = 5;
-                const rowStep = 12;
-                const gstGap = 12;
-                const bottomPadding = 10;
-
-                const leftNeededH =
-                    contentTop +
-                    titleStep +
-                    leftAddressH +
-                    afterPrimaryGap +
-                    afterDividerGap +
-                    rowStep + // Accounts Department -> phone
-                    rowStep + // phone -> email
-                    rowStep + // email -> website
-                    gstGap +
-                    10 + // GST line itself
-                    bottomPadding;
+                const afterDividerGap = 6;
+                const rowStep = 11;
+                const bottomPadding = 8;
 
                 const rightPrimaryH = hasMsme
                     ? rightPrimaryHeights.reduce((sum, h) => sum + h, 0) + 3
                     : rightPrimaryHeights[0];
+                const primaryTextH = Math.max(leftAddressH, rightPrimaryH);
 
                 const rightNeededH =
                     contentTop +
                     titleStep +
-                    rightPrimaryH +
+                    primaryTextH +
                     afterPrimaryGap +
                     afterDividerGap +
-                    rowStep + // Contact Person -> Mobile
-                    rowStep + // Mobile -> Email
-                    gstGap +
-                    10 + // GST line itself
+                    clientRows.length * rowStep +
+                    bottomPadding;
+
+                const leftAlignedNeededH =
+                    contentTop +
+                    titleStep +
+                    primaryTextH +
+                    afterPrimaryGap +
+                    afterDividerGap +
+                    organiserRows.length * rowStep +
                     bottomPadding;
 
                 // Same height for both boxes; grows only when real content requires it.
-                const boxH = Math.min(180, Math.max(118, Math.ceil(Math.max(leftNeededH, rightNeededH))));
+                const boxH = Math.min(160, Math.max(112, Math.ceil(Math.max(leftAlignedNeededH, rightNeededH))));
+                const drawDetailRows = (rows, x, startY, labelColor) => {
+                    let rowY = startY;
+                    rows.forEach(([label, value]) => {
+                        lineText(label, x + 12, rowY, 62, { size: 7.2, bold: true, color: labelColor });
+                        lineText(':', x + 76, rowY, 8, { size: 7.2, bold: true });
+                        lineText(value, x + 88, rowY, rowW - 76, { size: 7.2 });
+                        rowY += rowStep;
+                    });
+                    return rowY;
+                };
 
                 // ---------------- FROM (ORGANISER) ----------------
-                drawHeaderLabel(mx, boxTop, halfW, 20, ORGANISER, receiptSettings.fromLabel || 'FROM (ORGANISER)');
-                drawSectionBox(mx, boxTop, halfW, boxH, 4);
+                drawHeaderLabel(mx, boxTop, halfW, headerBandH, ORGANISER, 'FROM (Organiser Details)');
+                drawSectionBox(mx, boxTop, halfW, boxH, 0);
 
                 let fy = boxTop + contentTop;
 
                 lineText(
-                    clean(settings?.companyName, 'Namo Gange Wellness Pvt. Ltd.'),
+                    clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.'),
                     mx + 12,
                     fy,
                     rowW,
@@ -1971,69 +2211,21 @@ class PDFGenerator {
                 fy += titleStep;
 
                 lineText(fromAddr, mx + 12, fy, rowW, { size: 7.4, lineGap: 2 });
-                fy += leftAddressH + afterPrimaryGap;
+                fy += primaryTextH + afterPrimaryGap;
 
                 doc.moveTo(mx + 12, fy)
                     .lineTo(mx + halfW - 22, fy)
-                    .dash(1, { space: 2 })
                     .lineWidth(0.5)
-                    .stroke(BORDER_COLOR)
-                    .undash();
+                    .stroke(BORDER_COLOR);
 
                 fy += afterDividerGap;
-
-                lineText(
-                    'ACCOUNTS DEPARTMENT',
-                    mx + 12,
-                    fy,
-                    rowW,
-                    { size: 7.2, bold: true, color: ACCENT }
-                );
-
-                fy += rowStep;
-                drawPhoneIcon(mx + 16, fy + 5, 5, ACCENT);
-                lineText(
-                    clean(settings?.contactPhone, '+91 96549 00525'),
-                    mx + 30,
-                    fy,
-                    rowW - 18,
-                    { size: 7.4 }
-                );
-
-                fy += rowStep;
-                drawMailIcon(mx + 16, fy + 5, 5, ACCENT);
-                lineText(
-                    clean(settings?.contactEmail, 'accounts@namogangewellness.com'),
-                    mx + 30,
-                    fy,
-                    rowW - 18,
-                    { size: 7.4 }
-                );
-
-                fy += rowStep;
-                drawGlobeIcon(mx + 16, fy + 5, 5, ACCENT);
-                lineText(
-                    clean(settings?.contactWebsite, 'www.namogangewellness.com'),
-                    mx + 30,
-                    fy,
-                    rowW - 18,
-                    { size: 7.4 }
-                );
-
-                fy += gstGap;
-                lineText(
-                    `GSTIN:  ${clean(settings?.companyGst, '09AAFCN9238F1Z6')}`,
-                    mx + 12,
-                    fy,
-                    rowW,
-                    { size: 7.4, bold: true, color: ACCENT }
-                );
+                drawDetailRows(organiserRows, mx, fy, ACCENT);
 
                 // ---------------- TO (CLIENT) ----------------
                 const rX = mx + halfW + 10;
 
-                drawHeaderLabel(rX, boxTop, halfW, 20, CLIENT_GREEN, receiptSettings.toLabel || 'TO (CLIENT)');
-                drawSectionBox(rX, boxTop, halfW, boxH, 4);
+                drawHeaderLabel(rX, boxTop, halfW, headerBandH, CLIENT_GREEN, 'TO (Client Details)');
+                drawSectionBox(rX, boxTop, halfW, boxH, 0);
 
                 let ty = boxTop + contentTop;
 
@@ -2073,49 +2265,17 @@ class PDFGenerator {
                         rowW,
                         { size: 7.2, lineGap: 2 }
                     );
-                    ty += rightPrimaryHeights[0];
                 }
 
-                ty += afterPrimaryGap;
+                ty = boxTop + contentTop + titleStep + primaryTextH + afterPrimaryGap;
 
                 doc.moveTo(rX + 12, ty)
                     .lineTo(rX + halfW - 22, ty)
-                    .dash(1, { space: 2 })
                     .lineWidth(0.5)
-                    .stroke(BORDER_COLOR)
-                    .undash();
+                    .stroke(BORDER_COLOR);
 
                 ty += afterDividerGap;
-
-                [
-                    ['Contact Person', contactName],
-                    ['Mobile', clientMobile],
-                    ['Email', clientEmail],
-                ].forEach(([label, value], idx) => {
-                    lineText(label, rX + 12, ty, 75, { size: 7.3 });
-                    lineText(':', rX + 82, ty, 8, { size: 7.3 });
-                    lineText(value, rX + 98, ty, rowW - 90, { size: 7.3 });
-
-                    if (idx < 2) ty += rowStep;
-                });
-
-                ty += gstGap;
-
-                lineText(
-                    hasMsme ? 'GSTIN / UDYAM' : 'GSTIN',
-                    rX + 12,
-                    ty,
-                    75,
-                    { size: 7.4, bold: true, color: CLIENT_GREEN }
-                );
-                lineText(':', rX + 82, ty, 8, { size: 7.4, bold: true });
-                lineText(
-                    hasMsme ? udyamNo : clean(registration.gstNo, 'N/A'),
-                    rX + 98,
-                    ty,
-                    rowW - 90,
-                    { size: 7.4 }
-                );
+                drawDetailRows(clientRows, rX, ty, CLIENT_GREEN);
 
                 y = boxTop + boxH + sectionGap;
 
@@ -2125,48 +2285,94 @@ class PDFGenerator {
                 const PAYMENT_BORDER = '#a9b8ad';
                 const paymentHeaderH = 14;
                 const rowH = 16;
+                const paymentModeParts = String(paymentMode || '').split('/').map((part) => part.trim()).filter(Boolean);
+                const paymentModeMain = paymentModeParts[0] || paymentMode;
+                const paymentModeDetail = paymentModeParts.slice(1).join(' / ');
+                const numericReference = String(reference || '').replace(/\D/g, '') || reference;
+                const paymentAgainstType = clean(
+                    registration.receiptDocumentType ||
+                    (String(paymentAgainst).toUpperCase().includes('PI') ? 'Proforma Invoice' : 'Invoice'),
+                    'Proforma Invoice'
+                );
+                const paymentTypeText = clean(accountPayment?.pymnt_type || m.paymentType || m.pymnt_type || p.stallScheme, '');
+                const paymentTypeLower = paymentTypeText.toLowerCase();
+                const receiptPaymentTypeLabel = paymentTypeLower.includes('running')
+                    ? 'Running'
+                    : (paymentTypeLower.includes('final') || paymentTypeLower.includes('full'))
+                        ? 'Full'
+                        : paymentTypeLower.includes('adj')
+                            ? 'Adjustment'
+                            : 'Advance';
                 const paymentRows = [
-                    ['Amount Received', fmt(totalPaid)],
-                    ['Payment Mode', paymentMode],
-                    ['Transaction ID', reference],
-                    ['Transaction Date', paymentDate],
-                    ['Received In Bank', receivedBank],
-                    ['Against Invoice', paymentAgainst],
+                    ['Amount Received', fmt(totalPaid), toWords(totalPaid)],
+                    ['Payment Type', receiptPaymentTypeLabel, ''],
+                    ['Payment Mode', paymentModeMain, paymentModeDetail],
+                    ['Transaction No.', numericReference, ''],
+                    ['Transaction Date', paymentDate, ''],
+                    ['Received In Bank', receivedBank, ''],
+                    ['Against Invoice/Proforma', paymentAgainst, paymentAgainstType],
                 ];
                 doc.roundedRect(mx, y, mw, paymentHeaderH, 4).fill(PAYMENT_GREEN);
                 doc.rect(mx, y + paymentHeaderH - 2, mw, 2).fill(PAYMENT_GREEN);
                 doc.fillColor('#ffffff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.paymentDetailsLabel || 'PAYMENT DETAILS', mx, y + 3, { width: mw, align: 'center' });
                 y += paymentHeaderH;
                 doc.rect(mx, y, mw, rowH).fill(PAYMENT_LIGHT);
-                lineText('Particulars', mx + 40, y + 4, 125, { size: 7, bold: true, align: 'left' });
-                lineText('Details', mx + 188, y + 4, 160, { size: 7, bold: true, align: 'left' });
+                const paymentMainSepX = mx + 165;
+                const paymentDetailSepX = mx + 305;
+                lineText('Particulars', mx + 40, y + 5, 125, { size: 7, bold: true, align: 'left' });
+                lineText('Details', mx + 188, y + 5, 160, { size: 7, bold: true, align: 'left' });
+                doc.moveTo(paymentMainSepX, y).lineTo(paymentMainSepX, y + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
+                doc.moveTo(paymentDetailSepX, y).lineTo(paymentDetailSepX, y + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
                 y += rowH;
                 paymentRows.forEach((row, idx) => {
                     const yy = y + idx * rowH;
                     doc.rect(mx, yy, mw, rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
                     doc.circle(mx + 20, yy + rowH / 2, 6).fill(PAYMENT_GREEN);
-                    const icon = idx === 0 ? ic_rupee : idx === 1 || idx === 4 ? ic_business : idx === 2 ? ic_hash : idx === 3 ? ic_cal : ic_doc;
-                    drawSvgIcon(mx + 20, yy + rowH / 2, icon, 0.32, '#fff');
+                    const iconCX = mx + 20;
+                    const iconCY = yy + rowH / 2;
+
+                    // Exact icon family from the supplied receipt reference.
+                    if (idx === 0) {
+                        drawSvgIcon(iconCX, iconCY, ic_rupee, 0.31, '#fff');
+                    } else if (idx === 1 || idx === 4) {
+                        drawBankIcon(iconCX, iconCY, 5.65, '#fff');
+                    } else if (idx === 2) {
+                        drawHashIcon(iconCX, iconCY, 5.7, '#fff');
+                    } else if (idx === 3) {
+                        drawFilledCalendarIcon(iconCX, iconCY, 5.65, '#fff');
+                    } else {
+                        drawSvgIcon(iconCX, iconCY, ic_doc, 0.31, '#fff');
+                    }
                     lineText(row[0], mx + 40, yy + 4, 135, { size: 7.1, bold: true });
-                    doc.moveTo(mx + 165, yy).lineTo(mx + 165, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
-                    lineText(row[1], mx + 188, yy + 4, mw - 200, { size: 7.1 });
+                    doc.moveTo(paymentMainSepX, yy).lineTo(paymentMainSepX, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
+                    doc.moveTo(paymentDetailSepX, yy).lineTo(paymentDetailSepX, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
+                    lineText(row[1], mx + 188, yy + 4, paymentDetailSepX - (mx + 188) - 8, { size: 7.1 });
+                    lineText(row[2], paymentDetailSepX + 10, yy + 4, mx + mw - paymentDetailSepX - 18, { size: 7.1 });
                 });
                 y += paymentRows.length * rowH + sectionGap;
 
                 // Narration
-                const stallSize = p.stallSize ? `${p.stallSize} Sqmt.` : 'N/A';
-                const stallNo = clean(p.stallFor || p.stallNo, 'N/A');
-                const stallType = clean(p.stallType, 'Stall');
-                const narrationParts = [
-                    `${eventName} ${eventSubDate} at ${venueText},`,
-                    `Stall no. ${stallNo}${p.hallNo ? `, hall no.- ${p.hallNo}` : ''} booked by ${clean(registration.exhibitorName, 'N/A')}${hasMsme ? ` (Udyam registration no.: ${udyamNo}) under Msme Pms scheme` : ''}.`,
-                    `${stallType} total size: ${stallSize} @ ${fmt(p.rate || stallAmount)} per Sqmt. Total stall amount: ${fmt(grandTotal)}.`,
-                    `Advance payment received through ${paymentMode} ${receivedBank !== '-' ? `in ${receivedBank}` : ''} on ${paymentDate}, transaction id: ${reference}.`,
-                    `Against proforma invoice no. ${paymentAgainst}.`,
-                ];
-                const narrationText = narrationParts.join(' ');
+                const stallSizeText = p.stallSize ? `${Number(p.stallSize).toLocaleString('en-IN')} Sq. Mt.` : 'N/A';
+                const narrationEventName = eventName
+                    .replace(/\s*\(?\d{1,2}\s*[-–]\s*\d{1,2}\s+[A-Za-z]+\s+\d{4}\)?\s*/g, '')
+                    .replace(/IHWE\s+Global Edition/i, 'IHWE – Global Edition')
+                    .trim();
+                const narrationEventRange = formatEventNarrationRange(eventDoc?.startDate, eventDoc?.endDate);
+                const narrationVenue = venueText.replace(/Hall Nos?\.\s*12,\s*Pragati Maidan(?:,\s*New Delhi)?(?:\s*[-–]\s*110001)?(?:,\s*Delhi,\s*India)?/i, 'Hall No. 12, Bharat Mandapam (Pragati Maidan), New Delhi');
+                const narrationPaymentMode = /neft|rtgs|bank transfer/i.test(paymentMode) ? 'Bank Transfer (NEFT/RTGS)' : sentenceCase(paymentMode, 'Bank Transfer');
+                const receiptPaymentKind = paymentTypeLower.includes('running')
+                    ? 'running payment'
+                    : (paymentTypeLower.includes('final') || paymentTypeLower.includes('full'))
+                        ? 'full payment'
+                        : paymentTypeLower.includes('adj')
+                            ? 'adjustment payment'
+                            : 'advance payment';
+                const narrationInvoiceValue = `Rs. ${fmt(grandTotal)}/-`;
+                const narrationPaymentDate = formatLongDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
+                const defaultNarrationText = `Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${stallSizeText} stall for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received through ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`;
+                const narrationText = clean(accountPayment?.customNarration || m.customNarration || registration.customNarration, defaultNarrationText);
                 const narrationTextH = measureText(narrationText, mw - 58, { size: 7.3, lineGap: 1.5 });
-                const narrH = Math.max(68, Math.min(94, Math.ceil(31 + narrationTextH)));
+                const narrH = Math.max(68, Math.min(112, Math.ceil(31 + narrationTextH)));
 
                 drawSectionBox(mx, y, mw, narrH, 4);
                 const narrationIconY = y + Math.min(36, Math.max(31, narrH / 2));
@@ -2180,8 +2386,10 @@ class PDFGenerator {
                 // Reserve a dedicated image zone when stamp/signature are enabled.
                 // Images are fitted INSIDE the cell instead of touching the bottom border.
                 const hasStamp = !!(receiptSettings.showSignatureStamp && receiptSettings.stampImage);
-                const hasSignature = !!(receiptSettings.showSignatureStamp && receiptSettings.signatureImage);
-                const authH = (hasStamp || hasSignature) ? 76 : 62;
+                const preparedSignatureSource = await resolvePdfImageSource(creatorProfile?.signatureImage);
+                const reviewedSignatureSource = await resolvePdfImageSource(reviewerProfile?.signatureImage);
+                const hasSignature = false;
+                const authH = hasStamp ? 54 : (hasSignature ? 52 : 44);
                 const authColW = mw / 3;
 
                 drawSectionBox(mx, y, mw, authH, 4);
@@ -2192,26 +2400,30 @@ class PDFGenerator {
                 });
 
                 const authData = [
-                    ['PREPARED BY', preparedByName, formattedDate],
-                    ['REVIEWED BY', reviewedByName, formattedDate],
-                    [receiptSettings.signatureLabel || 'AUTHORIZED SIGNATORY', `For ${clean(settings?.companyName, 'Namo Gange Wellness Pvt. Ltd.')}`, ''],
+                    ['PREPARED BY', preparedByName, formattedDate, preparedSignatureSource],
+                    ['REVIEWED BY', reviewedByName, formattedDate, reviewedSignatureSource],
+                    ['', `For ${clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.')}`, ''],
                 ];
 
                 authData.forEach((col, idx) => {
                     const x = mx + authColW * idx;
-                    lineText(col[0], x, y + 10, authColW, { size: 7.4, bold: true, color: ACCENT, align: 'center' });
-                    lineText(col[1], x + 8, y + 27, authColW - 16, { size: 7.2, align: 'center' });
+                    if (col[0]) {
+                        lineText(col[0], x, y + 10, authColW, { size: 7.4, bold: true, color: ACCENT, align: 'center' });
+                    }
+                    lineText(col[1], x + 8, idx === 2 ? y + 10 : y + 23, authColW - 16, { size: 7.2, align: 'center' });
 
                     if (idx < 2 && col[2]) {
-                        lineText(col[2], x + 8, y + 42, authColW - 16, { size: 7.2, align: 'center' });
+                        lineText(col[2], x + 8, y + 34, authColW - 16, { size: 7.2, align: 'center' });
                     }
 
+                    // Prepared/Reviewed signatures hidden in this compact strip.
+
                     if (idx === 2 && receiptSettings.showSignatureStamp) {
-                        const imageTop = y + 42;
-                        const imageBottomPadding = 7;
+                        const imageTop = y + 21;
+                        const imageBottomPadding = 5;
                         const availableH = Math.max(18, authH - (imageTop - y) - imageBottomPadding);
-                        const stampW = receiptSettings.stampImage ? 42 : 0;
-                        const sigW = receiptSettings.signatureImage ? Math.min(authColW - 76, 88) : 0;
+                        const stampW = receiptSettings.stampImage ? 46 : 0;
+                        const sigW = 0;
                         const imageGap = stampW && sigW ? 16 : 0;
                         const groupW = stampW + imageGap + sigW;
                         const groupX = x + (authColW - groupW) / 2;
@@ -2220,23 +2432,24 @@ class PDFGenerator {
                             const stampPath = resolveUploadPath(receiptSettings.stampImage);
                             if (stampPath) {
                                 doc.image(stampPath, groupX, imageTop, {
-                                    fit: [42, Math.min(availableH, 27)],
+                                    fit: [46, Math.min(availableH, 46)],
                                     align: 'center',
                                     valign: 'center',
                                 });
                             }
                         }
 
-                        if (receiptSettings.signatureImage) {
-                            const sigPath = resolveUploadPath(receiptSettings.signatureImage);
-                            if (sigPath) {
-                                doc.image(sigPath, groupX + stampW + imageGap, imageTop, {
-                                    fit: [sigW || 88, Math.min(availableH, 25)],
-                                    align: 'center',
-                                    valign: 'center',
-                                });
-                            }
-                        }
+                        // Signature intentionally hidden; only the centered company stamp is shown.
+                        // if (receiptSettings.signatureImage) {
+                        //     const sigPath = resolveUploadPath(receiptSettings.signatureImage);
+                        //     if (sigPath) {
+                        //         doc.image(sigPath, groupX + stampW + imageGap, imageTop, {
+                        //             fit: [sigW || 88, Math.min(availableH, 25)],
+                        //             align: 'center',
+                        //             valign: 'center',
+                        //         });
+                        //     }
+                        // }
                     }
                 });
 
@@ -2247,8 +2460,9 @@ class PDFGenerator {
                 doc.roundedRect(mx, footerY, mw, footerBandH, 4).fill(PAYMENT_GREEN);
                 doc.rect(mx, footerY + footerBandH - 2, mw, 2).fill(PAYMENT_GREEN);
                 const footerDisclaimer = receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.';
-                doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica').text(footerDisclaimer, mx + 8, footerY + 4, {
-                    width: mw - 70,
+                doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica').text(footerDisclaimer, mx, footerY + 4, {
+                    width: mw,
+                    align: 'center',
                     lineGap: 1,
                 });
                 doc.font('Helvetica-Bold').text('Page 1 of 1', mx + 8, footerY + 4, {

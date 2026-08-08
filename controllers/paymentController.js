@@ -76,6 +76,13 @@ const getDocumentUnitRate = (doc) => {
   const firstRate = rates[0];
   return rates.every((rate) => rate === firstRate) ? firstRate : firstRate;
 };
+const getDocumentStallSize = (doc) => {
+  const sizes = (doc?.items || [])
+    .map((item) => parseAmount(item?.area || item?.size || item?.areaSqm || item?.area_sqm || item?.sqm) || parseAmount(item?.qty))
+    .filter((size) => size > 0);
+  if (!sizes.length) return 1;
+  return sizes.reduce((sum, size) => sum + size, 0);
+};
 
 const getPaymentReference = (payment) => (
   payment.utr_no ||
@@ -125,6 +132,7 @@ const getReceiptContact = async (payment) => {
   let pincode = "";
   let gstNo = "";
   let rmName = "";
+  let website = "";
 
   if (exhibitor) {
     const contact1 = exhibitor.contact1 || {};
@@ -143,6 +151,7 @@ const getReceiptContact = async (payment) => {
     pincode = exhibitor.pincode || "";
     gstNo = exhibitor.gstNo || "";
     rmName = exhibitor.filledByFullName || exhibitor.spokenWith || "";
+    website = exhibitor.website || "";
   } else if (company) {
     const contact = company.contacts && company.contacts.length > 0
       ? (company.contacts.find((c) => c.isPrimary) || company.contacts[0])
@@ -159,9 +168,10 @@ const getReceiptContact = async (payment) => {
     pincode = company.pincode || company.pinCode || "";
     gstNo = company.gstNumber || "";
     rmName = company.added_by || "";
+    website = company.website || "";
   }
 
-  return { email, mobile, name, designation, companyName, address, city, state, country, pincode, gstNo, rmName, exhibitor };
+  return { email, mobile, name, designation, companyName, address, city, state, country, pincode, gstNo, rmName, website, exhibitor };
 };
 
 const DEFAULT_RECEIPT_EVENT = {
@@ -231,6 +241,7 @@ const generateAccountPaymentReceipt = async (payment) => {
   const documentType = docData?.invoice_no ? "Tax Invoice" : (docData ? "Proforma Invoice" : "Payment Receipt");
   const invoiceAmount = parseAmount(getDocumentAmount(docData, payment));
   const unitRate = getDocumentUnitRate(docData);
+  const stallSize = getDocumentStallSize(docData);
   const receivedAmount = parseAmount(payment.amount_text);
   const tdsAmount = parseAmount(payment.tds_text);
   const relatedDocumentIds = await getRelatedPaymentDocumentIds(docData, payment);
@@ -250,10 +261,13 @@ const generateAccountPaymentReceipt = async (payment) => {
   const paymentMode = payment.payment_mode || "manual";
   const reference = getPaymentReference(payment);
   const paymentHistory = paymentsUpToCurrent.map((p) => ({
+    accountPaymentId: String(p._id),
     amount: parseAmount(p.amount_text),
     paymentType: p.pymnt_type || "manual",
     paymentMode: p.payment_mode || "manual",
     method: p.payment_mode || "manual",
+    addedBy: p.added_by || "",
+    customNarration: p.customNarration || "",
     transactionId: getPaymentReference(p),
     paidAt: p.payment_date || p.added,
   }));
@@ -269,6 +283,7 @@ const generateAccountPaymentReceipt = async (payment) => {
     receiptUnitRate: unitRate,
     exhibitorName: contact.companyName || contact.name || "Client",
     companyEmail: contact.email,
+    website: contact.website,
     address: contact.address,
     city: contact.city,
     state: contact.state,
@@ -292,7 +307,7 @@ const generateAccountPaymentReceipt = async (payment) => {
       stallType: documentType,
       stallScheme: payment.pymnt_type || paymentMode,
       dimension: "Payment Receipt",
-      stallSize: 1,
+      stallSize,
       rate: unitRate || taxableAmount || invoiceAmount,
       amount: taxableAmount || invoiceAmount,
       gstPercent: invoiceAmount > 0 ? 18 : 0,
@@ -315,10 +330,14 @@ const generateAccountPaymentReceipt = async (payment) => {
     paymentId: reference,
     manualPaymentDetails: {
       method: paymentMode,
+      paymentType: payment.pymnt_type || "",
+      customNarration: payment.customNarration || "",
+      addedBy: payment.added_by || "",
       transactionId: reference,
       paidAt: payment.payment_date || payment.added,
     },
     paymentHistory,
+    customNarration: payment.customNarration || "",
   };
 
   if (contact.exhibitor) {
@@ -459,6 +478,9 @@ const syncExhibitorFromAccountPayments = async (companyId) => {
 const addPayment = async (req, res) => {
   try {
     const payload = { ...req.body };
+    if (!payload.pymnt_type && payload.status_short) {
+      payload.pymnt_type = payload.status_short;
+    }
     if (req.file) {
       payload.proofUrl = `/uploads/payment_proofs/${req.file.filename}`;
     }
