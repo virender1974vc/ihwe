@@ -1750,7 +1750,10 @@ class PDFGenerator {
                     if (!value) return 'N/A';
                     const d = new Date(value);
                     if (Number.isNaN(d.getTime())) return String(value);
-                    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const day = d.toLocaleDateString('en-GB', { day: '2-digit' });
+                    const month = d.toLocaleDateString('en-GB', { month: 'short' });
+                    const year = d.toLocaleDateString('en-GB', { year: 'numeric' });
+                    return `${day}-${month}-${year}`;
                 };
                 const formattedDate = formatDate(m.paidAt || m.neft_date || registration.updatedAt || Date.now());
                 const fmtEvDate = (d) => d ? formatDate(d) : '';
@@ -1845,6 +1848,17 @@ class PDFGenerator {
                 }
 
                 const paymentMode = clean(accountPayment?.payment_mode || m.method || m.paymentMode || registration.paymentMode, 'N/A').toUpperCase();
+                const normalizeReceiptPaymentMode = (mode) => {
+                    const raw = clean(mode, 'N/A');
+                    const normalized = raw.toUpperCase().replace(/\s+PAYMENTS?$/i, '').trim();
+                    const hasNeft = /NEFT/i.test(normalized);
+                    const hasRtgs = /RTGS/i.test(normalized);
+                    if (hasNeft && !hasRtgs) return 'NEFT';
+                    if (hasRtgs && !hasNeft) return 'RTGS';
+                    if (hasNeft && hasRtgs) return 'NEFT';
+                    if (/BANK\s*TRANSFER/i.test(normalized)) return 'BANK TRANSFER';
+                    return normalized;
+                };
                 const reference = clean(accountPayment?.utr_no || accountPayment?.cheque_no || accountPayment?.card_transaction_no || accountPayment?.wallet_transaction_no || accountPayment?.cash_receipt_no || m.transactionId || m.razorpayPaymentId || registration.paymentId, 'N/A');
                 const totalPaid = Number(accountPayment?.amount_text || m.amount || registration.amountPaid || 0);
                 const paymentDate = formatDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
@@ -2304,9 +2318,8 @@ class PDFGenerator {
                 const PAYMENT_BORDER = '#a9b8ad';
                 const paymentHeaderH = headerBandH;
                 const rowH = 20;
-                const paymentModeFull = /neft|rtgs|bank transfer/i.test(paymentMode)
-                    ? 'BANK TRANSFER / NEFT / RTGS'
-                    : paymentMode;
+                const paymentModeFull = normalizeReceiptPaymentMode(paymentMode);
+                const paymentModeDisplay = paymentModeFull === 'N/A' ? 'N/A' : `Payment Received By ${paymentModeFull}`;
                 const numericReference = String(reference || '').replace(/\D/g, '') || reference;
                 const paymentAgainstType = clean(
                     registration.receiptDocumentType ||
@@ -2329,13 +2342,19 @@ class PDFGenerator {
                 doc.fillColor('#ffffff').fontSize(paymentHeaderSize).font('Helvetica-Bold');
                 doc.text(paymentHeaderLabel, mx, y + Math.max(0, (paymentHeaderH - paymentHeaderSize) / 2) + 1.2, { width: mw, align: 'center' });
                 y += paymentHeaderH;
-                const paymentColW = mw / 4;
+                const paymentColXs = [
+                    mx,
+                    mx + mw * 0.18,
+                    mx + mw * 0.45,
+                    mx + mw * 0.59,
+                    mx + mw,
+                ];
                 const paymentGridRows = [
                     [['Amount Received', fmt(totalPaid)], ['Amount in Words', toWords(totalPaid)]],
-                    [['Payment Type', receiptPaymentTypeLabel], ['Payment Mode', paymentModeFull]],
+                    [['Payment Type', receiptPaymentTypeLabel], ['Payment Mode', paymentModeDisplay]],
                     [['Transaction No.', numericReference], ['Transaction Date', paymentDate]],
                     [['Received In Bank', receivedBank], ['Branch', receivedBankBranch || '-']],
-                    [['Against Invoice/Proforma', paymentAgainst], ['Document Type', paymentAgainstType]],
+                    [['Against Invoice/Proforma', paymentAgainst], ['Document Number', `${paymentAgainstType} / ${fmt(totalPaid)}`]],
                 ];
                 const paymentTableTop = y;
                 const paymentTableH = paymentGridRows.length * rowH;
@@ -2343,20 +2362,23 @@ class PDFGenerator {
 
                 paymentGridRows.forEach((pairs, rowIdx) => {
                     const yy = paymentTableTop + rowIdx * rowH;
+                    const rowColXs = paymentColXs;
                     if (rowIdx % 2 === 0) doc.rect(mx, yy, mw, rowH).fill(PAYMENT_LIGHT);
                     doc.rect(mx, yy, mw, rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
                     for (let c = 1; c < 4; c += 1) {
-                        const xLine = mx + paymentColW * c;
+                        const xLine = rowColXs[c];
                         doc.moveTo(xLine, yy).lineTo(xLine, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
                     }
 
                     pairs.forEach(([label, value], pairIdx) => {
-                        const baseX = mx + paymentColW * pairIdx * 2;
-                        const valueX = baseX + paymentColW;
-                        doc.fillColor(TEXT_DARK).fontSize(6.7).font('Helvetica-Bold')
-                            .text(label, baseX + 8, yy + 5, { width: paymentColW - 14, height: rowH - 7, lineGap: 0 });
-                        doc.fillColor(TEXT_DARK).fontSize(rowIdx === 0 && pairIdx === 1 ? 5.8 : 6.5).font('Helvetica')
-                            .text(value, valueX + 8, yy + 5, { width: paymentColW - 14, height: rowH - 7, lineGap: 0, ellipsis: true });
+                        const labelX = rowColXs[pairIdx * 2];
+                        const valueX = rowColXs[pairIdx * 2 + 1];
+                        const labelW = rowColXs[pairIdx * 2 + 1] - labelX;
+                        const valueW = rowColXs[pairIdx * 2 + 2] - valueX;
+                        doc.fillColor(TEXT_DARK).fontSize(7.1).font('Helvetica-Bold')
+                            .text(label, labelX + 8, yy + 5, { width: labelW - 14, height: rowH - 7, lineGap: 0 });
+                        doc.fillColor(TEXT_DARK).fontSize(7.1).font('Helvetica')
+                            .text(value, valueX + 8, yy + 5, { width: valueW - 14, height: rowH - 7, lineGap: 0, ellipsis: true });
                     });
                 });
                 y += paymentTableH + sectionGap;
@@ -2369,7 +2391,9 @@ class PDFGenerator {
                     .trim();
                 const narrationEventRange = formatEventNarrationRange(eventDoc?.startDate, eventDoc?.endDate);
                 const narrationVenue = venueText.replace(/Hall Nos?\.\s*12,\s*Pragati Maidan(?:,\s*New Delhi)?(?:\s*[-–]\s*110001)?(?:,\s*Delhi,\s*India)?/i, 'Hall No. 12, Bharat Mandapam (Pragati Maidan), New Delhi');
-                const narrationPaymentMode = /neft|rtgs|bank transfer/i.test(paymentMode) ? 'Bank Transfer (NEFT/RTGS)' : sentenceCase(paymentMode, 'Bank Transfer');
+                const narrationPaymentMode = /neft|rtgs/i.test(paymentModeFull)
+                    ? `Bank Transfer (${paymentModeFull})`
+                    : sentenceCase(paymentModeFull, 'Bank Transfer');
                 const receiptPaymentKind = paymentTypeLower.includes('remaining')
                     ? 'remaining payment'
                     : paymentTypeLower.includes('running')
@@ -2391,14 +2415,14 @@ class PDFGenerator {
                     ? defaultNarrationText
                     : clean(savedNarration, defaultNarrationText);
                 const narrationTextH = measureText(narrationText, mw - 58, { size: 7.3, lineGap: 1.5 });
-                const narrH = Math.max(68, Math.min(112, Math.ceil(31 + narrationTextH)));
+                const narrH = Math.max(58, Math.min(104, Math.ceil(23 + narrationTextH)));
 
                 drawSectionBox(mx, y, mw, narrH, 4);
                 const narrationIconY = y + Math.min(36, Math.max(31, narrH / 2));
                 doc.roundedRect(mx + 14, narrationIconY - 11, 18, 22, 2).fill(CLIENT_GREEN);
                 drawSvgIcon(mx + 23, narrationIconY, ic_doc, 0.42, '#fff');
-                lineText('NARRATION', mx + 42, y + 8, 160, { size: 8, bold: true, color: CLIENT_GREEN });
-                lineText(narrationText, mx + 42, y + 23, mw - 58, { size: 7.3, lineGap: 1.5 });
+                lineText('NARRATION', mx + 42, y + 7, 160, { size: 8, bold: true, color: CLIENT_GREEN });
+                lineText(narrationText, mx + 42, y + 15, mw - 58, { size: 7.3, lineGap: 1.2 });
                 y += narrH + sectionGap;
 
                 // Authorization strip
@@ -2408,37 +2432,38 @@ class PDFGenerator {
                 const preparedSignatureSource = await resolvePdfImageSource(creatorProfile?.signatureImage);
                 const reviewedSignatureSource = await resolvePdfImageSource(reviewerProfile?.signatureImage);
                 const hasSignature = false;
-                const authH = hasStamp ? 54 : (hasSignature ? 52 : 44);
+                const authH = hasStamp ? 52 : (hasSignature ? 50 : 42);
                 const authColW = mw / 3;
 
                 drawSectionBox(mx, y, mw, authH, 4);
+                const authTabH = 14;
                 [0, 1].forEach((i) => {
-                    doc.moveTo(mx + authColW * (i + 1), y + 10)
-                        .lineTo(mx + authColW * (i + 1), y + authH - 10)
-                        .dash(1, { space: 2 }).lineWidth(0.5).stroke(BORDER_COLOR).undash();
+                    doc.moveTo(mx + authColW * (i + 1), y)
+                        .lineTo(mx + authColW * (i + 1), y + authH)
+                        .lineWidth(0.5).stroke(BORDER_COLOR);
                 });
 
                 const authData = [
-                    ['PREPARED BY', preparedByName, formattedDate, preparedSignatureSource],
-                    ['REVIEWED BY', reviewedByName, formattedDate, reviewedSignatureSource],
-                    ['', `For ${clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.')}`, ''],
+                    ['PREPARED BY', preparedByName, formattedDate, preparedSignatureSource, ACCENT],
+                    ['REVIEWED BY', reviewedByName, formattedDate, reviewedSignatureSource, CLIENT_GREEN],
+                    ['FOR COMPANY', clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.'), '', null, PAYMENT_GREEN],
                 ];
 
                 authData.forEach((col, idx) => {
                     const x = mx + authColW * idx;
-                    if (col[0]) {
-                        lineText(col[0], x, y + 10, authColW, { size: 7.4, bold: true, color: ACCENT, align: 'center' });
-                    }
-                    lineText(col[1], x + 8, idx === 2 ? y + 10 : y + 23, authColW - 16, { size: 7.2, align: 'center' });
+                    doc.rect(x, y, authColW, authTabH).fill(col[4]);
+                    doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica-Bold')
+                        .text(col[0], x + 6, y + 4, { width: authColW - 12, align: 'center' });
+                    lineText(col[1], x + 8, y + 20, authColW - 16, { size: idx === 2 ? 6.8 : 7.2, bold: idx === 2, align: 'center' });
 
                     if (idx < 2 && col[2]) {
-                        lineText(col[2], x + 8, y + 34, authColW - 16, { size: 7.2, align: 'center' });
+                        lineText(col[2], x + 8, y + 32, authColW - 16, { size: 7.2, align: 'center' });
                     }
 
                     // Prepared/Reviewed signatures hidden in this compact strip.
 
                     if (idx === 2 && receiptSettings.showSignatureStamp) {
-                        const imageTop = y + 21;
+                        const imageTop = y + 27;
                         const imageBottomPadding = 5;
                         const availableH = Math.max(18, authH - (imageTop - y) - imageBottomPadding);
                         const stampW = receiptSettings.stampImage ? 46 : 0;
@@ -2474,17 +2499,17 @@ class PDFGenerator {
 
                 y += authH;
 
-                const footerBandH = 14;
+                const footerBandH = headerBandH;
                 const footerY = pageH - mx - footerBandH;
                 doc.roundedRect(mx, footerY, mw, footerBandH, 4).fill(PAYMENT_GREEN);
                 doc.rect(mx, footerY + footerBandH - 2, mw, 2).fill(PAYMENT_GREEN);
                 const footerDisclaimer = receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.';
-                doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica').text(footerDisclaimer, mx, footerY + 4, {
+                doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica').text(footerDisclaimer, mx, footerY + Math.max(0, (footerBandH - 7.2) / 2), {
                     width: mw,
                     align: 'center',
                     lineGap: 1,
                 });
-                doc.font('Helvetica-Bold').text('Page 1 of 1', mx + 8, footerY + 4, {
+                doc.font('Helvetica-Bold').text('Page 1 of 1', mx + 8, footerY + Math.max(0, (footerBandH - 7.2) / 2), {
                     width: mw - 16,
                     align: 'right',
                 });
@@ -2732,7 +2757,7 @@ class PDFGenerator {
                 const cols = [
                     { label: 'Date', w: tW * 0.11 },
                     { label: 'Type', w: tW * 0.11 },
-                    { label: 'Document No.', w: tW * 0.16 },
+                    { label: 'Document Number.', w: tW * 0.16 },
                     { label: 'Reference / Narration', w: tW * 0.23 },
                     { label: 'Debit', w: tW * 0.125, align: 'right' },
                     { label: 'Credit', w: tW * 0.125, align: 'right' },
