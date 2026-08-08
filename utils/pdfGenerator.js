@@ -1919,14 +1919,14 @@ class PDFGenerator {
 
                         if (!creatorProfile) {
                             creatorProfile = await User.findOne({
-                            $or: [
-                                { username: preparedByIdentity },
-                                { fullName: preparedByIdentity },
-                                { email: preparedByIdentity },
-                            ],
-                        })
-                            .select('fullName username email mobile designation department hodName reportingToName signatureImage')
-                            .lean();
+                                $or: [
+                                    { username: preparedByIdentity },
+                                    { fullName: preparedByIdentity },
+                                    { email: preparedByIdentity },
+                                ],
+                            })
+                                .select('fullName username email mobile designation department hodName reportingToName signatureImage')
+                                .lean();
                         }
 
                         if (!creatorProfile) {
@@ -1984,17 +1984,17 @@ class PDFGenerator {
 
                         if (!reviewerProfile) {
                             reviewerProfile = await User.findOne({
-                            $or: [
-                                { username: reviewedByName },
-                                { fullName: reviewedByName },
-                                { email: reviewedByName },
-                                { username: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
-                                { fullName: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
-                                { email: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
-                            ],
-                        })
-                            .select('signatureImage')
-                            .lean();
+                                $or: [
+                                    { username: reviewedByName },
+                                    { fullName: reviewedByName },
+                                    { email: reviewedByName },
+                                    { username: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
+                                    { fullName: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
+                                    { email: { $regex: new RegExp(`^${escapedReviewer}$`, 'i') } },
+                                ],
+                            })
+                                .select('signatureImage')
+                                .lean();
                         }
                     } catch (reviewerLookupErr) {
                         console.error('Receipt reviewer signature lookup error:', reviewerLookupErr);
@@ -2405,9 +2405,9 @@ class PDFGenerator {
                             ? 'final payment'
                             : paymentTypeLower.includes('full')
                                 ? 'full payment'
-                        : paymentTypeLower.includes('adj')
-                            ? 'adjustment payment'
-                            : 'advance payment';
+                                : paymentTypeLower.includes('adj')
+                                    ? 'adjustment payment'
+                                    : 'advance payment';
                 const narrationInvoiceValue = `Rs. ${fmt(grandTotal)}/-`;
                 const narrationPaymentDate = formatLongDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
                 const defaultNarrationText = `Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${stallSizeText} stall for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received through ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`;
@@ -2512,7 +2512,7 @@ class PDFGenerator {
                     align: 'center',
                     lineGap: 1,
                 });
-                doc.font('Helvetica-Bold').text('Page 1 of 1', mx + 8, footerY + Math.max(0, (footerBandH - 7.2) / 2), {
+                doc.font('Helvetica-Bold').text('Page 1', mx + 8, footerY + Math.max(0, (footerBandH - 7.2) / 2), {
                     width: mw - 16,
                     align: 'right',
                 });
