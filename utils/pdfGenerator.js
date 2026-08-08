@@ -2370,17 +2370,26 @@ class PDFGenerator {
                 const narrationEventRange = formatEventNarrationRange(eventDoc?.startDate, eventDoc?.endDate);
                 const narrationVenue = venueText.replace(/Hall Nos?\.\s*12,\s*Pragati Maidan(?:,\s*New Delhi)?(?:\s*[-–]\s*110001)?(?:,\s*Delhi,\s*India)?/i, 'Hall No. 12, Bharat Mandapam (Pragati Maidan), New Delhi');
                 const narrationPaymentMode = /neft|rtgs|bank transfer/i.test(paymentMode) ? 'Bank Transfer (NEFT/RTGS)' : sentenceCase(paymentMode, 'Bank Transfer');
-                const receiptPaymentKind = paymentTypeLower.includes('running')
-                    ? 'running payment'
-                    : (paymentTypeLower.includes('final') || paymentTypeLower.includes('full'))
-                        ? 'full payment'
+                const receiptPaymentKind = paymentTypeLower.includes('remaining')
+                    ? 'remaining payment'
+                    : paymentTypeLower.includes('running')
+                        ? 'running payment'
+                        : paymentTypeLower.includes('final')
+                            ? 'final payment'
+                            : paymentTypeLower.includes('full')
+                                ? 'full payment'
                         : paymentTypeLower.includes('adj')
                             ? 'adjustment payment'
                             : 'advance payment';
                 const narrationInvoiceValue = `Rs. ${fmt(grandTotal)}/-`;
                 const narrationPaymentDate = formatLongDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
                 const defaultNarrationText = `Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${stallSizeText} stall for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received through ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`;
-                const narrationText = clean(accountPayment?.customNarration || m.customNarration || registration.customNarration, defaultNarrationText);
+                const savedNarration = clean(accountPayment?.customNarration || m.customNarration || registration.customNarration, '');
+                // Earlier automatic receipts stored only the payment-type word in
+                // customNarration. Treat those tokens as automatic, not as a full override.
+                const narrationText = /^(advance|full|final|running|remaining)(?:\s+payment)?$/i.test(savedNarration)
+                    ? defaultNarrationText
+                    : clean(savedNarration, defaultNarrationText);
                 const narrationTextH = measureText(narrationText, mw - 58, { size: 7.3, lineGap: 1.5 });
                 const narrH = Math.max(68, Math.min(112, Math.ceil(31 + narrationTextH)));
 
