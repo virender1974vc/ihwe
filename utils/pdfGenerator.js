@@ -1855,7 +1855,7 @@ class PDFGenerator {
                     accountPayment?.bankBranch ||
                     accountPayment?.bankbranch ||
                     registration.bankDetails?.branch ||
-                    (/kotak/i.test(receivedBank) ? 'Kotak Mahindra Bank' : ''),
+                    (/kotak/i.test(receivedBank) ? 'Jagriti Enclave, Anand Vihar, Delhi' : ''),
                     '-'
                 );
                 if (
@@ -1864,7 +1864,7 @@ class PDFGenerator {
                     receivedBankBranch.toLowerCase() === receivedBank.toLowerCase() &&
                     /kotak/i.test(receivedBank)
                 ) {
-                    receivedBankBranch = 'Kotak Mahindra Bank';
+                    receivedBankBranch = 'Jagriti Enclave, Anand Vihar, Delhi';
                 }
                 const paymentAgainst = clean(registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || accountPayment?.invoice_id, 'N/A');
                 const fb = registration.financeBreakdown || {};
