@@ -2321,11 +2321,14 @@ class PDFGenerator {
                 const paymentModeFull = normalizeReceiptPaymentMode(paymentMode);
                 const paymentModeDisplay = paymentModeFull === 'N/A' ? 'N/A' : `Payment Received By ${paymentModeFull}`;
                 const numericReference = String(reference || '').replace(/\D/g, '') || reference;
-                const paymentAgainstType = clean(
+                const resolvedPaymentAgainstType = clean(
                     registration.receiptDocumentType ||
                     (String(paymentAgainst).toUpperCase().includes('PI') ? 'Proforma Invoice' : 'Invoice'),
                     'Proforma Invoice'
                 );
+                const paymentAgainstType = /proforma/i.test(resolvedPaymentAgainstType)
+                    ? 'Proforma Invoice'
+                    : 'Invoice';
                 const paymentTypeText = clean(accountPayment?.pymnt_type || m.paymentType || m.pymnt_type || p.stallScheme, '');
                 const paymentTypeLower = paymentTypeText.toLowerCase();
                 const receiptPaymentTypeLabel = paymentTypeLower.includes('running')
@@ -2354,7 +2357,7 @@ class PDFGenerator {
                     [['Payment Type', receiptPaymentTypeLabel], ['Payment Mode', paymentModeDisplay]],
                     [['Transaction No.', numericReference], ['Transaction Date', paymentDate]],
                     [['Received In Bank', receivedBank], ['Branch', receivedBankBranch || '-']],
-                    [['Against Invoice/Proforma', paymentAgainst], ['Document Number', `${paymentAgainstType} / ${fmt(totalPaid)}`]],
+                    [['Against Invoice/Proforma', paymentAgainstType], ['Document No.', `${paymentAgainst} - ${fmt(totalPaid)}`]],
                 ];
                 const paymentTableTop = y;
                 const paymentTableH = paymentGridRows.length * rowH;
@@ -2444,7 +2447,7 @@ class PDFGenerator {
                 });
 
                 const authData = [
-                    ['PREPARED BY', preparedByName, formattedDate, preparedSignatureSource, ACCENT],
+                    ['PREPARED BY', preparedByName, formattedDate, preparedSignatureSource, CLIENT_GREEN],
                     ['REVIEWED BY', reviewedByName, formattedDate, reviewedSignatureSource, CLIENT_GREEN],
                     ['FOR COMPANY', clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.'), '', null, PAYMENT_GREEN],
                 ];
