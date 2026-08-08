@@ -1849,6 +1849,23 @@ class PDFGenerator {
                 const totalPaid = Number(accountPayment?.amount_text || m.amount || registration.amountPaid || 0);
                 const paymentDate = formatDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
                 const receivedBank = clean(accountPayment?.neft_bank || accountPayment?.cheque_bank || accountPayment?.wallet_name || accountPayment?.card_name || accountPayment?.bankName, 'Kotak Mahindra Bank');
+                let receivedBankBranch = clean(
+                    accountPayment?.bank_branch ||
+                    accountPayment?.branch ||
+                    accountPayment?.bankBranch ||
+                    accountPayment?.bankbranch ||
+                    registration.bankDetails?.branch ||
+                    (/kotak/i.test(receivedBank) ? 'Kotak Mahindra Bank' : ''),
+                    '-'
+                );
+                if (
+                    receivedBankBranch &&
+                    receivedBank &&
+                    receivedBankBranch.toLowerCase() === receivedBank.toLowerCase() &&
+                    /kotak/i.test(receivedBank)
+                ) {
+                    receivedBankBranch = 'Kotak Mahindra Bank';
+                }
                 const paymentAgainst = clean(registration.customInvoiceNo || registration.referenceInvoice || registration.invoiceNo || p.invoiceNo || invoice?.invoice_no || accountPayment?.invoice_id, 'N/A');
                 const fb = registration.financeBreakdown || {};
                 const invVal = Number(registration.receiptInvoiceAmount || fb.invoiceAmount || fb.totalAmount || p.total || invoice?.finalAmount || fb.netPayable || p.amount || 0);
@@ -1977,7 +1994,9 @@ class PDFGenerator {
                 const drawHeaderLabel = (x, top, w, h, color, label) => {
                     doc.rect(x, top, w, h).fill(color);
                     doc.rect(x, top + h - 2, w, 2).fill(color);
-                    doc.fillColor('#fff').fontSize(8.2).font('Helvetica-Bold').text(label, x + 12, top + 4, { width: w - 24, align: 'center' });
+                    const labelSize = 8.2;
+                    doc.fillColor('#fff').fontSize(labelSize).font('Helvetica-Bold');
+                    doc.text(label, x + 12, top + Math.max(0, (h - labelSize) / 2) + 1.2, { width: w - 24, align: 'center' });
                 };
                 const lineText = (text, x, top, w, opts = {}) => {
                     doc.fillColor(opts.color || TEXT_DARK).fontSize(opts.size || 7.5).font(opts.bold ? 'Helvetica-Bold' : 'Helvetica').text(text, x, top, { width: w, lineGap: opts.lineGap || 1, align: opts.align || 'left' });
@@ -2283,11 +2302,11 @@ class PDFGenerator {
                 const PAYMENT_GREEN = CLIENT_GREEN;
                 const PAYMENT_LIGHT = '#edf6ee';
                 const PAYMENT_BORDER = '#a9b8ad';
-                const paymentHeaderH = 14;
-                const rowH = 16;
-                const paymentModeParts = String(paymentMode || '').split('/').map((part) => part.trim()).filter(Boolean);
-                const paymentModeMain = paymentModeParts[0] || paymentMode;
-                const paymentModeDetail = paymentModeParts.slice(1).join(' / ');
+                const paymentHeaderH = headerBandH;
+                const rowH = 20;
+                const paymentModeFull = /neft|rtgs|bank transfer/i.test(paymentMode)
+                    ? 'BANK TRANSFER / NEFT / RTGS'
+                    : paymentMode;
                 const numericReference = String(reference || '').replace(/\D/g, '') || reference;
                 const paymentAgainstType = clean(
                     registration.receiptDocumentType ||
@@ -2303,53 +2322,44 @@ class PDFGenerator {
                         : paymentTypeLower.includes('adj')
                             ? 'Adjustment'
                             : 'Advance';
-                const paymentRows = [
-                    ['Amount Received', fmt(totalPaid), toWords(totalPaid)],
-                    ['Payment Type', receiptPaymentTypeLabel, ''],
-                    ['Payment Mode', paymentModeMain, paymentModeDetail],
-                    ['Transaction No.', numericReference, ''],
-                    ['Transaction Date', paymentDate, ''],
-                    ['Received In Bank', receivedBank, ''],
-                    ['Against Invoice/Proforma', paymentAgainst, paymentAgainstType],
-                ];
                 doc.roundedRect(mx, y, mw, paymentHeaderH, 4).fill(PAYMENT_GREEN);
                 doc.rect(mx, y + paymentHeaderH - 2, mw, 2).fill(PAYMENT_GREEN);
-                doc.fillColor('#ffffff').fontSize(8.5).font('Helvetica-Bold').text(receiptSettings.paymentDetailsLabel || 'PAYMENT DETAILS', mx, y + 3, { width: mw, align: 'center' });
+                const paymentHeaderLabel = receiptSettings.paymentDetailsLabel || 'PAYMENT DETAILS';
+                const paymentHeaderSize = 8.5;
+                doc.fillColor('#ffffff').fontSize(paymentHeaderSize).font('Helvetica-Bold');
+                doc.text(paymentHeaderLabel, mx, y + Math.max(0, (paymentHeaderH - paymentHeaderSize) / 2) + 1.2, { width: mw, align: 'center' });
                 y += paymentHeaderH;
-                doc.rect(mx, y, mw, rowH).fill(PAYMENT_LIGHT);
-                const paymentMainSepX = mx + 165;
-                const paymentDetailSepX = mx + 305;
-                lineText('Particulars', mx + 40, y + 5, 125, { size: 7, bold: true, align: 'left' });
-                lineText('Details', mx + 188, y + 5, 160, { size: 7, bold: true, align: 'left' });
-                doc.moveTo(paymentMainSepX, y).lineTo(paymentMainSepX, y + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
-                doc.moveTo(paymentDetailSepX, y).lineTo(paymentDetailSepX, y + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
-                y += rowH;
-                paymentRows.forEach((row, idx) => {
-                    const yy = y + idx * rowH;
-                    doc.rect(mx, yy, mw, rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
-                    doc.circle(mx + 20, yy + rowH / 2, 6).fill(PAYMENT_GREEN);
-                    const iconCX = mx + 20;
-                    const iconCY = yy + rowH / 2;
+                const paymentColW = mw / 4;
+                const paymentGridRows = [
+                    [['Amount Received', fmt(totalPaid)], ['Amount in Words', toWords(totalPaid)]],
+                    [['Payment Type', receiptPaymentTypeLabel], ['Payment Mode', paymentModeFull]],
+                    [['Transaction No.', numericReference], ['Transaction Date', paymentDate]],
+                    [['Received In Bank', receivedBank], ['Branch', receivedBankBranch || '-']],
+                    [['Against Invoice/Proforma', paymentAgainst], ['Document Type', paymentAgainstType]],
+                ];
+                const paymentTableTop = y;
+                const paymentTableH = paymentGridRows.length * rowH;
+                doc.rect(mx, paymentTableTop, mw, paymentTableH).lineWidth(0.45).stroke(PAYMENT_BORDER);
 
-                    // Exact icon family from the supplied receipt reference.
-                    if (idx === 0) {
-                        drawSvgIcon(iconCX, iconCY, ic_rupee, 0.31, '#fff');
-                    } else if (idx === 1 || idx === 4) {
-                        drawBankIcon(iconCX, iconCY, 5.65, '#fff');
-                    } else if (idx === 2) {
-                        drawHashIcon(iconCX, iconCY, 5.7, '#fff');
-                    } else if (idx === 3) {
-                        drawFilledCalendarIcon(iconCX, iconCY, 5.65, '#fff');
-                    } else {
-                        drawSvgIcon(iconCX, iconCY, ic_doc, 0.31, '#fff');
+                paymentGridRows.forEach((pairs, rowIdx) => {
+                    const yy = paymentTableTop + rowIdx * rowH;
+                    if (rowIdx % 2 === 0) doc.rect(mx, yy, mw, rowH).fill(PAYMENT_LIGHT);
+                    doc.rect(mx, yy, mw, rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
+                    for (let c = 1; c < 4; c += 1) {
+                        const xLine = mx + paymentColW * c;
+                        doc.moveTo(xLine, yy).lineTo(xLine, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
                     }
-                    lineText(row[0], mx + 40, yy + 4, 135, { size: 7.1, bold: true });
-                    doc.moveTo(paymentMainSepX, yy).lineTo(paymentMainSepX, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
-                    doc.moveTo(paymentDetailSepX, yy).lineTo(paymentDetailSepX, yy + rowH).lineWidth(0.45).stroke(PAYMENT_BORDER);
-                    lineText(row[1], mx + 188, yy + 4, paymentDetailSepX - (mx + 188) - 8, { size: 7.1 });
-                    lineText(row[2], paymentDetailSepX + 10, yy + 4, mx + mw - paymentDetailSepX - 18, { size: 7.1 });
+
+                    pairs.forEach(([label, value], pairIdx) => {
+                        const baseX = mx + paymentColW * pairIdx * 2;
+                        const valueX = baseX + paymentColW;
+                        doc.fillColor(TEXT_DARK).fontSize(6.7).font('Helvetica-Bold')
+                            .text(label, baseX + 8, yy + 5, { width: paymentColW - 14, height: rowH - 7, lineGap: 0 });
+                        doc.fillColor(TEXT_DARK).fontSize(rowIdx === 0 && pairIdx === 1 ? 5.8 : 6.5).font('Helvetica')
+                            .text(value, valueX + 8, yy + 5, { width: paymentColW - 14, height: rowH - 7, lineGap: 0, ellipsis: true });
+                    });
                 });
-                y += paymentRows.length * rowH + sectionGap;
+                y += paymentTableH + sectionGap;
 
                 // Narration
                 const stallSizeText = p.stallSize ? `${Number(p.stallSize).toLocaleString('en-IN')} Sq. Mt.` : 'N/A';
