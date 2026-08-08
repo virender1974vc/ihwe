@@ -116,6 +116,9 @@ router.post('/', (req, res) => {
   _cache.clear();
   exhibitorRegistrationController.addRegistration(req, res);
 });
+router.post('/:id/send-registration', requireAdminAuth, (req, res) => {
+  exhibitorRegistrationController.sendRegistrationCommunication(req, res);
+});
 router.put('/:id', (req, res) => {
   _cache.clear();
   exhibitorRegistrationController.updateRegistration(req, res);

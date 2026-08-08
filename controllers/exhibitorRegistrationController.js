@@ -147,6 +147,16 @@ class ExhibitorRegistrationController {
         }
     }
 
+    async sendRegistrationCommunication(req, res) {
+        try {
+            const registration = await exhibitorRegistrationService.sendRegistrationCommunication(req.params.id);
+            await logActivity(req, 'Sent', 'Exhibitor Bookings', `Manually sent registration communication: ${registration.exhibitorName} (${registration.registrationId})`);
+            res.status(200).json({ success: true, message: 'Registration email sent and WhatsApp dispatch initiated' });
+        } catch (error) {
+            res.status(400).json({ success: false, message: error.message });
+        }
+    }
+
     /**
      * Delete a registration.
      */

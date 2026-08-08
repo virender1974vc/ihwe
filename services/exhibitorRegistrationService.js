@@ -1157,7 +1157,6 @@ class ExhibitorRegistrationService {
                 if (regPdf?.cloudUrl) {
                     await ExhibitorRegistration.findByIdAndUpdate(saved._id, { registrationPdfUrl: regPdf.cloudUrl });
                 }
-                await emailService.sendRegistrationConfirmation(saved, pdfPath, rawPassword);
             } catch (err) {
                 console.error('Registration Email/WhatsApp Error:', err);
             }
@@ -1174,7 +1173,7 @@ class ExhibitorRegistrationService {
                     if (receiptPdf?.cloudUrl) {
                         await ExhibitorRegistration.findByIdAndUpdate(saved._id, { receiptPdfUrl: receiptPdf.cloudUrl });
                     }
-                    await emailService.sendPaymentReceipt(saved, receiptPath);
+                    // Payment receipts are dispatched only from the manual CRM action.
                 } catch (err) {
                     console.error('Payment Receipt Email Error (addRegistration):', err);
                 }
@@ -1440,7 +1439,6 @@ class ExhibitorRegistrationService {
 
         if (updated.status === 'payment-failed' && current.status !== 'payment-failed') {
             try {
-                await emailService.sendPaymentFailedEmail(updated);
             } catch (err) {
                 console.error('Payment Failed Notification Error:', err);
             }
@@ -1470,7 +1468,6 @@ class ExhibitorRegistrationService {
                     }
                     await ExhibitorRegistration.findByIdAndUpdate(id, { $set: updateObj });
                 }
-                await emailService.sendPaymentReceipt(updated, receiptPath);
             } catch (err) {
                 console.error('Payment Receipt Email Error:', err);
             }
@@ -1479,21 +1476,21 @@ class ExhibitorRegistrationService {
         // --- APPROVED ---
         if (updated.status === 'approved' && current.status !== 'approved') {
             try {
-                await emailService.sendApprovalEmail(updated);
+                // Approval communication is manual-only.
             } catch (err) { console.error('Approval Notification Error:', err); }
         }
 
         // --- CONFIRMED ---
         if (updated.status === 'confirmed' && current.status !== 'confirmed') {
             try {
-                await emailService.sendConfirmationEmail(updated);
+                // Booking-confirmation communication is manual-only.
             } catch (err) { console.error('Confirmation Notification Error:', err); }
         }
 
         // --- REJECTED ---
         if (updated.status === 'rejected' && current.status !== 'rejected') {
             try {
-                await emailService.sendRejectionEmail(updated);
+                // Rejection communication is manual-only.
             } catch (err) { console.error('Rejection Notification Error:', err); }
         }
 
@@ -1628,6 +1625,36 @@ class ExhibitorRegistrationService {
         return { final, count: Object.keys(update).length };
     }
 
+    async sendRegistrationCommunication(registrationId) {
+        const crypto = require('crypto');
+        const bcrypt = require('bcryptjs');
+        const registration = await ExhibitorRegistration.findById(registrationId);
+        if (!registration) throw new Error('Registration not found');
+        if (!registration.contact1?.email) throw new Error('Exhibitor email is missing');
+
+        // The stored password is hashed and cannot be emailed back. A deliberate
+        // manual registration send therefore issues fresh portal credentials.
+        const rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
+        registration.password = await bcrypt.hash(rawPassword, 10);
+        await registration.save();
+
+        const templateData = await emailService.getExhibitorTemplateData();
+        const pdfOptions = {
+            headerImage: templateData?.headerImage ? path.resolve(__dirname, '..', templateData.headerImage.replace(/^\//, '')) : null,
+            footerImage: templateData?.footerImage ? path.resolve(__dirname, '..', templateData.footerImage.replace(/^\//, '')) : null
+        };
+        const regPdf = await pdfGenerator.generateRegistrationForm(registration, pdfOptions);
+        const pdfPath = regPdf?.filePath || regPdf;
+        if (regPdf?.cloudUrl) {
+            registration.registrationPdfUrl = regPdf.cloudUrl;
+            await registration.save();
+        }
+
+        const sent = await emailService.sendRegistrationConfirmation(registration, pdfPath, rawPassword);
+        if (!sent) throw new Error('Registration email could not be sent');
+        return registration;
+    }
+
     async activateRegistration(registrationId, customRawPassword = null) {
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
         const Stall = require('../models/Stall');
@@ -1653,7 +1680,6 @@ class ExhibitorRegistrationService {
             }
         }
 
-        // 2. Generate and hash raw password for login credentials
         let rawPassword = customRawPassword;
         if (!rawPassword) {
             rawPassword = crypto.randomBytes(4).toString('hex').toUpperCase();
@@ -1661,7 +1687,6 @@ class ExhibitorRegistrationService {
             await registration.save();
         }
 
-        // 3. Generate registration PDF & dispatch confirmation emails / WhatsApp alerts
         try {
             const templateData = await emailService.getExhibitorTemplateData();
             const pdfOptions = {
@@ -1674,12 +1699,10 @@ class ExhibitorRegistrationService {
             if (regPdf?.cloudUrl) {
                 await ExhibitorRegistration.findByIdAndUpdate(registration._id, { registrationPdfUrl: regPdf.cloudUrl });
             }
-            await emailService.sendRegistrationConfirmation(registration, pdfPath, rawPassword);
         } catch (err) {
             console.error('Registration Activation Email Error:', err);
         }
 
-        // 4. Dispatch Admin Alert notification
         await emailService.sendExhibitorAdminAlert(registration).catch(err => {
             console.error('Exhibitor Admin Alert Error:', err);
         });

@@ -174,6 +174,7 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
                 order.receiptUrl = pdfResult.cloudUrl;
                 await order.save();
             }
+            // Razorpay-paid accessory orders keep automatic receipt communication.
             const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
             order.emailSent = !!sent;
             await order.save();
@@ -373,12 +374,7 @@ router.put('/orders/:id/approve-neft', flexAuth, async (req, res) => {
                 order.receiptUrl = pdfResult.cloudUrl;
                 await order.save();
             }
-            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-            order.emailSent = !!sent;
-            await order.save();
-            if (!sent) {
-                console.error('Accessory NEFT approval notification failed for order:', order.orderNo);
-            }
+            // Accessory receipts are stored only; exhibitor communication is manual-only.
         } catch (e) {
             console.error('Accessory NEFT approval receipt/email error:', e.message);
         }
