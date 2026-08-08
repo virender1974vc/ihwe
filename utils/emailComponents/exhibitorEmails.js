@@ -56,12 +56,14 @@ async function sendRegistrationConfirmation(registration, pdfPath, rawPassword) 
                             color: { dark: '#000000', light: '#ffffff' }
                         });
                     const qrBlock = `
-                        <div style="text-align:center;margin:24px 0;padding:18px;border:1px solid #dbe4d8;border-radius:10px;background:#f8fbf7;">
-                            <p style="font-weight:700;color:#23471d;margin:0 0 10px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Exhibitor Entry QR Code</p>
-                            <img src="cid:exhibitor_entry_qr@ihwe.in" alt="Exhibitor Entry QR Code" width="150" height="150" style="display:inline-block;border:4px solid #23471d;border-radius:8px;" />
-                            <p style="margin:9px 0 0;font-size:12px;color:#64748b;">Registration ID: <strong>${registration.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:11px;color:#94a3b8;">Use this same QR code at the venue and in your stall dashboard.</p>
-                        </div>`;
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;margin:6px 0;border:1px solid #dbe4d8;border-radius:6px;background:#f8fbf7;border-collapse:separate;">
+                            <tr><td align="center" style="padding:6px 6px 3px;line-height:1.1;font-family:Arial,sans-serif;font-weight:700;color:#23471d;font-size:11px;text-transform:uppercase;letter-spacing:.6px;">EXHIBITOR ENTRY QR CODE</td></tr>
+                            <tr><td align="center" style="padding:0;line-height:0;">
+                                <img src="cid:exhibitor_entry_qr@ihwe.in" alt="Exhibitor Entry QR Code" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto;border:2px solid #23471d;border-radius:4px;" />
+                            </td></tr>
+                            <tr><td align="center" style="padding:3px 6px 0;line-height:1.15;font-family:Arial,sans-serif;font-size:10px;color:#64748b;">Registration ID: <strong>${registration.registrationId}</strong></td></tr>
+                            <tr><td align="center" style="padding:1px 6px 5px;line-height:1.15;font-family:Arial,sans-serif;font-size:9px;color:#94a3b8;">Use this same QR code at the venue and in your stall dashboard.</td></tr>
+                        </table>`;
                     bodyContent = bodyContent.includes(QR_TOKEN)
                         ? bodyContent.replace(QR_TOKEN, qrBlock)
                         : bodyContent + qrBlock;
@@ -70,6 +72,87 @@ async function sendRegistrationConfirmation(registration, pdfPath, rawPassword) 
                 }
             }
             bodyContent = bodyContent.replace(new RegExp(QR_TOKEN, 'g'), '');
+
+            // Keep the registration email compact even when its editable DB
+            // template contains legacy browser-default paragraph margins.
+            bodyContent = bodyContent
+                .replace(/line-height:\s*1\.6/gi, 'line-height:1.3')
+                .replace(/<p>/gi, '<p style="margin:0 0 3px;line-height:1.3;">')
+                .replace(/<p\s+style="/gi, '<p style="margin-top:0;')
+                .replace(/margin:\s*20px\s+0/gi, 'margin:6px 0')
+                .replace(/margin-bottom:\s*(?:25|20|15|12|10|8)px/gi, 'margin-bottom:3px')
+                .replace(/padding:\s*25px/gi, 'padding:10px')
+                .replace(/<ul([^>]*)style="([^"]*)margin-bottom:\s*20px;?/gi, '<ul$1style="$2margin-top:3px;margin-bottom:5px;')
+                .replace(/<li([^>]*)style="([^"]*)margin-bottom:\s*8px;?/gi, '<li$1style="$2margin-bottom:2px;');
+
+            // Tight rows inside Booking Details and Dashboard Access.
+            bodyContent = bodyContent.replace(
+                /<p\b([^>]*)>(\s*<strong>\s*(?:Registration ID:|Stall No\.:|Event Date:|Venue:|Login URL:|Username:)\s*<\/strong>)/gi,
+                (_match, attributes, content) => {
+                    const cleanAttributes = attributes.replace(/\s*style="[^"]*"/gi, '');
+                    return `<p${cleanAttributes} style="margin:0 0 2px;line-height:1.2;font-size:12px;">${content}`;
+                }
+            );
+            bodyContent = bodyContent.replace(/<p\b([^>]*)>([\s\S]*?)<\/p>/gi, (match, attributes, content) => {
+                const text = content.replace(/<[^>]+>/g, '').replace(/&amp;/gi, '&').trim();
+                const compactLine = /^(Dear\b|Greetings from\b|We are delighted\b|Thank you for choosing\b|Warm regards\b|Team IHWE 2026\b|Namo Gange Wellness Pvt\. Ltd\.?$)/i.test(text);
+                if (!compactLine) return match;
+                const cleanAttributes = attributes.replace(/\s*style="[^"]*"/gi, '');
+                return `<p${cleanAttributes} style="margin:0 0 2px;line-height:1.25;">${content}</p>`;
+            });
+            bodyContent = bodyContent.replace(/padding:\s*10px/gi, 'padding:6px 8px');
+
+            // Keep the About heading attached to its description. These styles
+            // are inline because many email clients discard external CSS.
+            bodyContent = bodyContent.replace(
+                /<(p|h[1-6])\b([^>]*)>((?:(?!<\/(?:p|h[1-6])>)[\s\S])*About IHWE 2026:(?:(?!<\/(?:p|h[1-6])>)[\s\S])*)<\/\1>\s*<p\b([^>]*)>([\s\S]*?)<\/p>/i,
+                (_match, headingTag, headingAttributes, headingContent, descriptionAttributes, descriptionContent) => {
+                    const cleanHeadingAttributes = headingAttributes.replace(/\s*style="[^"]*"/gi, '');
+                    const cleanDescriptionAttributes = descriptionAttributes.replace(/\s*style="[^"]*"/gi, '');
+                    return `<${headingTag}${cleanHeadingAttributes} style="margin:0 0 1px;line-height:1.2;">${headingContent}</${headingTag}><p${cleanDescriptionAttributes} style="margin:0 0 4px;line-height:1.25;font-size:13px;color:#555555;">${descriptionContent}</p>`;
+                }
+            );
+
+            // Present Booking Details and Dashboard Access together as two
+            // equal, email-safe columns instead of two tall separate sections.
+            const sectionPattern = (label) => new RegExp(
+                `(<(?:p|h[1-6])\\b[^>]*>(?:(?!<\\/(?:p|h[1-6])>)[\\s\\S])*${label}(?:(?!<\\/(?:p|h[1-6])>)[\\s\\S])*<\\/(?:p|h[1-6])>)\\s*(<(?:div|blockquote)\\b[^>]*>[\\s\\S]*?<\\/(?:div|blockquote)>)`,
+                'i'
+            );
+            const bookingMatch = bodyContent.match(sectionPattern('Booking Details:'));
+            const dashboardMatch = bodyContent.match(sectionPattern('Dashboard Access:'));
+            if (bookingMatch && dashboardMatch) {
+                const innerContent = (wrapper) => wrapper
+                    .replace(/^<(?:div|blockquote)\b[^>]*>/i, '')
+                    .replace(/<\/(?:div|blockquote)>$/i, '');
+                const combinedDetails = `
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%;margin:5px 0;border-collapse:separate;">
+                        <tr>
+                            <td class="registration-info-column" width="50%" valign="top" style="width:50%;padding:0 3px 0 0;">
+                                <div style="height:100%;background:#fcfcfc;border:1px solid #e8ece8;border-radius:6px;padding:6px 8px;box-sizing:border-box;">
+                                    <p style="margin:0 0 4px;line-height:1.2;font-size:12px;font-weight:700;color:#23471d;">📌 Booking Details</p>
+                                    ${innerContent(bookingMatch[2])}
+                                </div>
+                            </td>
+                            <td class="registration-info-column" width="50%" valign="top" style="width:50%;padding:0 0 0 3px;">
+                                <div style="height:100%;background:#f9fafb;border:1px solid #e8ece8;border-radius:6px;padding:6px 8px;box-sizing:border-box;">
+                                    <p style="margin:0 0 4px;line-height:1.2;font-size:12px;font-weight:700;color:#23471d;">🔗 Dashboard Access</p>
+                                    ${innerContent(dashboardMatch[2])}
+                                </div>
+                            </td>
+                        </tr>
+                    </table>`;
+                // Remove both sections from their old locations first, then put
+                // the combined row immediately below the About IHWE paragraph.
+                bodyContent = bodyContent.replace(dashboardMatch[0], '');
+                bodyContent = bodyContent.replace(bookingMatch[0], '');
+                const aboutSectionPattern = /(<(?:p|h[1-6])\b[^>]*>(?:(?!<\/(?:p|h[1-6])>)[\s\S])*About IHWE 2026:(?:(?!<\/(?:p|h[1-6])>)[\s\S])*<\/(?:p|h[1-6])>\s*<p\b[^>]*>[\s\S]*?<\/p>)/i;
+                if (aboutSectionPattern.test(bodyContent)) {
+                    bodyContent = bodyContent.replace(aboutSectionPattern, `$1${combinedDetails}`);
+                } else {
+                    bodyContent = `${combinedDetails}${bodyContent}`;
+                }
+            }
 
             const getImageBuffer = (imgPath) => {
                 try {
@@ -99,6 +182,8 @@ async function sendRegistrationConfirmation(registration, pdfPath, rawPassword) 
                 footerCid: footerBuf ? 'email_footer_img' : null,
                 headerImage: template.headerImage || null,
                 footerImage: template.footerImage || null,
+                padding: '12px 18px',
+                compactFooter: true,
             });
 
             const attachments = [];

@@ -49,6 +49,7 @@ const paymentSchema = new mongoose.Schema(
     tds_rate: { type: String, default: "" },
     tds_section: { type: String, default: "" },
     tds_certificate_no: { type: String, default: "" },
+    customNarration: { type: String, default: "" },
     notes: { type: String, default: "" },
   },
   { timestamps: { createdAt: "added", updatedAt: "updated" } },

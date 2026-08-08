@@ -47,21 +47,15 @@ const applyReceiptContact = (registration, receiptContact = {}) => {
 };
 
 const sendPaymentSuccessNotifications = async (registration, pdfFilePath, receiptData = {}) => {
-    // Unconditionally extract both the canonical email and mobile from the registration.
     const email = String(registration.contact1?.email || '').trim();
     const mobile = normalizeIndianMobile(registration.contact1?.whatsapp || registration.contact1?.mobile);
-
     const tasks = [];
 
     if (email) {
         tasks.push(
             emailService.sendPaymentReceipt(registration, pdfFilePath)
-                .catch(err => {
-                    console.error('[PaymentReceiptEmail] Failed:', err.message);
-                })
+                .catch(err => console.error('[PaymentReceiptEmail] Failed:', err.message))
         );
-    } else {
-        console.warn('[PaymentReceiptEmail] Skipped: No email found in registration');
     }
 
     if (mobile) {
@@ -72,19 +66,11 @@ const sendPaymentSuccessNotifications = async (registration, pdfFilePath, receip
                 amountPaid: receiptData.amountPaid,
                 transactionId: receiptData.transactionId,
                 companyName: process.env.COMPANY_NAME || 'Exhibition'
-            })
-                .catch(err => {
-                    console.error('[PaymentReceiptWhatsApp] Failed:', err.message);
-                })
+            }).catch(err => console.error('[PaymentReceiptWhatsApp] Failed:', err.message))
         );
-    } else {
-        console.warn('[PaymentReceiptWhatsApp] Skipped: No mobile found in registration');
     }
 
-    // Await both notifications concurrently to ensure one doesn't delay or block the other
-    if (tasks.length > 0) {
-        await Promise.allSettled(tasks);
-    }
+    if (tasks.length > 0) await Promise.allSettled(tasks);
 };
 
 router.post('/create-order/:registrationId', async (req, res) => {

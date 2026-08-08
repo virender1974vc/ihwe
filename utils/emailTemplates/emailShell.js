@@ -3,7 +3,7 @@
 const fs = require('fs');
 
 const emailShell = (body, options = {}) => {
-            const { headerCid, footerCid, headerImage, footerImage, padding, hideFallbackFooter } = options;
+            const { headerCid, footerCid, headerImage, footerImage, padding, hideFallbackFooter, compactFooter } = options;
 
 
             const toBase64 = (imgPath) => {
@@ -58,9 +58,9 @@ const emailShell = (body, options = {}) => {
                 : (hideFallbackFooter
                     ? ''
                     : `<tr>
-                    <td align="center" style="background: #f9fafb; padding: 20px; border-top: 1px solid #e5e7eb;">
-                        <p style="margin:0; font-size: 13px; color: #6b7280; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">&copy; 2026 IHWE. All Rights Reserved.</p>
-                        <p style="margin:3px 0 0; font-size: 12px; color: #9ca3af; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
+                    <td class="email-footer${compactFooter ? ' email-footer-compact' : ''}" bgcolor="${compactFooter ? '#23471d' : '#f9fafb'}" align="center" style="background-color: ${compactFooter ? '#23471d' : '#f9fafb'} !important; padding: ${compactFooter ? '8px 12px' : '20px'}; border-top: 1px solid ${compactFooter ? '#183515' : '#e5e7eb'}; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
+                        <p style="margin:0; font-size: ${compactFooter ? '10px' : '13px'}; color: ${compactFooter ? '#ffffff' : '#6b7280'}; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: ${compactFooter ? '1.2' : '1.4'}; font-weight:${compactFooter ? '600' : '400'};">&copy; 2026 IHWE. All Rights Reserved.</p>
+                        <p style="margin:${compactFooter ? '1px' : '3px'} 0 0; font-size: ${compactFooter ? '9px' : '12px'}; color: ${compactFooter ? '#d9e7d5' : '#9ca3af'}; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: ${compactFooter ? '1.2' : '1.4'};">Powered by Namo Gange Wellness Pvt. Ltd.</p>
                     </td>
                    </tr>`);
 
@@ -80,6 +80,17 @@ const emailShell = (body, options = {}) => {
                 @media only screen and (max-width: 600px) {
                     .container { width: 100% !important; }
                     .content-td { padding: 20px 15px !important; }
+                    .registration-info-column { display: block !important; width: 100% !important; padding: 0 0 5px !important; }
+                }
+                @media print {
+                    .email-footer-compact {
+                        background: #23471d !important;
+                        background-color: #23471d !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                    .email-footer-compact p:first-child { color: #ffffff !important; }
+                    .email-footer-compact p:last-child { color: #d9e7d5 !important; }
                 }
             </style>
         </head>

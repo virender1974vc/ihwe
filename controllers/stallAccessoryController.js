@@ -219,12 +219,6 @@ const createOrder = async (req, res) => {
             }
 
             // Send email/WhatsApp notification using saved exhibitor contact details.
-            const sent = await emailService.sendAccessoryOrderEmail(reg, order, pdfResult?.filePath);
-            order.emailSent = !!sent;
-            await order.save();
-            if (!sent) {
-                console.error('Accessory order notification failed for order:', order.orderNo);
-            }
         } catch (emailErr) {
             console.error('Accessory receipt/email error:', emailErr.message);
         }

@@ -6,6 +6,7 @@ const CreditNote = require("../models/CreditNote");
 const DebitNote = require("../models/DebitNote");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+const CrmEvent = require("../models/CrmEvent");
 const { sendWhatsAppMessage, sendTaxInvoiceWhatsApp } = require('../utils/whatsapp');
 const emailService = require('../utils/emailService');
 const { logActivity } = require("../utils/logger");
@@ -254,7 +255,38 @@ const createInvoice = async (req, res) => {
     if (sourceEstimate?.eventId && req.body.eventId && String(sourceEstimate.eventId) !== String(req.body.eventId)) {
       return res.status(400).json({ message: "Invoice event does not match the selected proforma invoice." });
     }
-    const resolvedEventId = sourceEstimate?.eventId || req.body.eventId || null;
+    let resolvedEventId = sourceEstimate?.eventId || req.body.eventId || null;
+    let resolvedCrmEventId = sourceEstimate?.crmEventId || req.body.crmEventId || null;
+
+    // Direct Account/Client-Ledger invoice links do not always carry event IDs
+    // in the URL. Resolve both event layers from the company's scoped assignment.
+    if (!resolvedEventId || !resolvedCrmEventId) {
+      const company = await Company.findById(req.body.companyId)
+        .select("eventId eventAssignments exhibitorRegistrationId")
+        .lean()
+        .catch(() => null);
+      const assignments = company?.eventAssignments || [];
+      const requestedCrmId = resolvedCrmEventId || company?.eventId || null;
+      const assignment = assignments.find((item) =>
+        item?.registrationEventId
+        && requestedCrmId
+        && String(item.eventId) === String(requestedCrmId)
+      ) || assignments.find((item) => item?.registrationEventId) || null;
+
+      if (!resolvedCrmEventId) resolvedCrmEventId = assignment?.eventId || company?.eventId || null;
+      if (!resolvedEventId) resolvedEventId = assignment?.registrationEventId || null;
+
+      const registrationId = assignment?.exhibitorRegistrationId || company?.exhibitorRegistrationId;
+      if (!resolvedEventId && registrationId) {
+        const registration = await ExhibitorRegistration.findById(registrationId).select("eventId").lean().catch(() => null);
+        resolvedEventId = registration?.eventId || null;
+      }
+
+      if (!resolvedEventId && resolvedCrmEventId) {
+        const crmEvent = await CrmEvent.findById(resolvedCrmEventId).select("registrationEventId").lean().catch(() => null);
+        resolvedEventId = crmEvent?.registrationEventId || null;
+      }
+    }
     if (!resolvedEventId) {
       return res.status(400).json({ message: "Invoice must be linked to an exhibition event." });
     }
@@ -265,7 +297,6 @@ const createInvoice = async (req, res) => {
     // working. For an invoice with no source estimate there's no such
     // excuse, so it must be explicit or the invoice ends up orphaned from
     // exhibition-scoped reports/ledgers.
-    const resolvedCrmEventId = sourceEstimate?.crmEventId || req.body.crmEventId || null;
     if (!resolvedCrmEventId && !sourceEstimate) {
       return res.status(400).json({
         message: "crmEventId is required — open this client from a specific event's list to create an Invoice.",
