@@ -1499,7 +1499,7 @@ class PDFGenerator {
                 doc.pipe(stream);
 
                 const pageW = doc.page.width;
-                const pageH = doc.page.height;
+                const receiptPageHeight = Number(doc.page?.height) || 841.89;
                 const p = registration.participation || {};
                 const c1 = registration.contact1 || {};
                 const paymentHistoryEntry = paymentIndex >= 0 && registration.paymentHistory?.[paymentIndex] ? registration.paymentHistory[paymentIndex] : null;
@@ -2030,7 +2030,7 @@ class PDFGenerator {
                 let y = mx;
 
                 // Thin outer page border — matches the supplied receipt reference.
-                doc.rect(0.6, 0.6, pageW - 1.2, pageH - 1.2)
+                doc.rect(0.6, 0.6, pageW - 1.2, receiptPageHeight - 1.2)
                     .lineWidth(0.7)
                     .stroke(ACCENT);
 
@@ -2503,7 +2503,7 @@ class PDFGenerator {
                 y += authH;
 
                 const footerBandH = headerBandH;
-                const footerY = pageH - mx - footerBandH;
+                const footerY = receiptPageHeight - mx - footerBandH;
                 doc.roundedRect(mx, footerY, mw, footerBandH, 4).fill(PAYMENT_GREEN);
                 doc.rect(mx, footerY + footerBandH - 2, mw, 2).fill(PAYMENT_GREEN);
                 const footerDisclaimer = receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.';
@@ -2526,8 +2526,8 @@ class PDFGenerator {
 
                 // Single-page safety: with the compact reference spacing above, content should
                 // stay inside A4. This warning makes unexpected oversized data visible in logs.
-                if (y > pageH - 18) {
-                    console.warn(`[PaymentReceipt] Content reached ${Math.round(y)}pt on ${Math.round(pageH)}pt A4 page for ${safeReceiptBase}`);
+                if (y > receiptPageHeight - 18) {
+                    console.warn(`[PaymentReceipt] Content reached ${Math.round(y)}pt on ${Math.round(receiptPageHeight)}pt A4 page for ${safeReceiptBase}`);
                 }
 
                 doc.end();
