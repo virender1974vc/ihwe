@@ -241,7 +241,15 @@ const generateAccountPaymentReceipt = async (payment) => {
   const documentType = docData?.invoice_no ? "Tax Invoice" : (docData ? "Proforma Invoice" : "Payment Receipt");
   const invoiceAmount = parseAmount(getDocumentAmount(docData, payment));
   const unitRate = getDocumentUnitRate(docData);
-  const stallSize = getDocumentStallSize(docData);
+  let stallSize = parseAmount(contact.exhibitor?.participation?.stallSize);
+  if (!stallSize && contact.exhibitor?.participation?.stallNo) {
+    const stallRef = contact.exhibitor.participation.stallNo;
+    if (mongoose.Types.ObjectId.isValid(stallRef)) {
+      const stallDoc = await Stall.findById(stallRef).select("area").lean();
+      stallSize = parseAmount(stallDoc?.area);
+    }
+  }
+  if (!stallSize) stallSize = getDocumentStallSize(docData);
   const receivedAmount = parseAmount(payment.amount_text);
   const tdsAmount = parseAmount(payment.tds_text);
   const relatedDocumentIds = await getRelatedPaymentDocumentIds(docData, payment);

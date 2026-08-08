@@ -573,12 +573,35 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
   const designation = primaryContact?.designation || exhibitor?.contact1?.designation || "N/A";
   let statusLabel = "Lead";
   let statusColor = "gray";
-  if (exhibitor?.status && EXHIBITOR_STATUS_LABELS[exhibitor.status]) {
-    statusLabel = EXHIBITOR_STATUS_LABELS[exhibitor.status].label;
-    statusColor = EXHIBITOR_STATUS_LABELS[exhibitor.status].color;
+  let scopedLifecycle = null;
+  if (normalizedCrmEventId) {
+    scopedLifecycle = (company?.eventAssignments || []).find(
+        (assignment) => String(assignment.eventId) === normalizedCrmEventId,
+      );
+  } else if (exhibitor?._id) {
+    scopedLifecycle = (company?.eventAssignments || []).find(
+        (assignment) => String(assignment.exhibitorRegistrationId) === String(exhibitor._id)
+      );
+  }
+  if (!scopedLifecycle && company?.eventAssignments?.length > 0) {
+    scopedLifecycle = company.eventAssignments[company.eventAssignments.length - 1];
+  }
+  if (normalizedCrmEventId && paidAmount > 0) {
+    statusLabel = "Converted";
+    statusColor = "green";
+  } else if (scopedLifecycle?.status) {
+    statusLabel = scopedLifecycle.status;
+    const normalizedLifecycleStatus = scopedLifecycle.status.toLowerCase();
+    statusColor = normalizedLifecycleStatus.includes("hot") ? "amber"
+      : normalizedLifecycleStatus.includes("book") || normalizedLifecycleStatus.includes("won") ? "green"
+        : normalizedLifecycleStatus.includes("lost") || normalizedLifecycleStatus.includes("cold") ? "red"
+          : "gray";
   } else if (company?.companyStatus) {
     statusLabel = company.companyStatus;
     statusColor = company.companyStatus.toLowerCase().includes("won") ? "green" : "gray";
+  } else if (exhibitor?.status && EXHIBITOR_STATUS_LABELS[exhibitor.status]) {
+    statusLabel = EXHIBITOR_STATUS_LABELS[exhibitor.status].label;
+    statusColor = EXHIBITOR_STATUS_LABELS[exhibitor.status].color;
   }
 
   const accountDisplayName = company?.companyName || exhibitor?.exhibitorName || "this account";

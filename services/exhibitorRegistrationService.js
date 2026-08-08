@@ -779,12 +779,6 @@ class ExhibitorRegistrationService {
             && Boolean(data.participation?.stallNo)
             && Number(data.participation?.stallSize || 0) > 0
             && Number(data.participation?.total || 0) > 0;
-
-        // Admin-created registrations (Book A Stand) never auto-generate an
-        // Estimate/PI and always land the company on "Booked" — it moves to
-        // Converted once a real Payment is recorded (see getConvertedCompanies/
-        // getBookedCompanies in companyController.js). Website self-registration
-        // keeps its original behavior untouched.
         const isAdminRegistration = data.registrationSource === 'admin';
         const boundStatus = isAdminRegistration ? 'Booked' : (isCommittedRegistration ? 'Closed - Won' : 'New Lead');
 
@@ -993,148 +987,148 @@ class ExhibitorRegistrationService {
         // PI/Estimate is auto-generated for them, only website self-registration
         // keeps this behavior.
         if (!isAdminRegistration) {
-        try {
-            const assignedTeamMember = String(data.spokenWith || '').trim();
-            const hasAssignedTeamMember =
-                assignedTeamMember
-                && !/^(direct|no one|none|unassigned)$/i.test(assignedTeamMember);
-            // Re-verify saved.clientId actually resolves to a real Company — the
-            // exact one just inserted or matched above — rather than trusting it
-            // blindly. This guarantees the Estimate's companyId can never end up
-            // being the ExhibitorRegistration's own _id (or any other stray id)
-            // even if something upstream ever passed a bad clientId.
-            const Company = require('../models/Company');
-            const linkedCompany = saved.clientId
-                ? await Company.findById(saved.clientId).select('_id').lean()
-                : null;
-            if (saved.clientId && !linkedCompany) {
-                console.error('Skipping Estimate auto-generation: clientId does not match a real Company:', saved.clientId);
-            }
-            if (linkedCompany && hasAssignedTeamMember) {
-                const Estimate = require('../models/Estimate');
-                const nextEstNo = await Estimate.generateNextEstimateNo();
-
-
-                let parsedParticipation = data.participation;
-                if (typeof parsedParticipation === 'string') {
-                    try { parsedParticipation = JSON.parse(parsedParticipation); } catch (e) { }
+            try {
+                const assignedTeamMember = String(data.spokenWith || '').trim();
+                const hasAssignedTeamMember =
+                    assignedTeamMember
+                    && !/^(direct|no one|none|unassigned)$/i.test(assignedTeamMember);
+                // Re-verify saved.clientId actually resolves to a real Company — the
+                // exact one just inserted or matched above — rather than trusting it
+                // blindly. This guarantees the Estimate's companyId can never end up
+                // being the ExhibitorRegistration's own _id (or any other stray id)
+                // even if something upstream ever passed a bad clientId.
+                const Company = require('../models/Company');
+                const linkedCompany = saved.clientId
+                    ? await Company.findById(saved.clientId).select('_id').lean()
+                    : null;
+                if (saved.clientId && !linkedCompany) {
+                    console.error('Skipping Estimate auto-generation: clientId does not match a real Company:', saved.clientId);
                 }
-                let parsedFinance = data.financeBreakdown;
-                if (typeof parsedFinance === 'string') {
-                    try { parsedFinance = JSON.parse(parsedFinance); } catch (e) { }
-                }
+                if (linkedCompany && hasAssignedTeamMember) {
+                    const Estimate = require('../models/Estimate');
+                    const nextEstNo = await Estimate.generateNextEstimateNo();
 
-                const estData = {
-                    companyId: String(linkedCompany._id),
-                    eventId: data.eventId || null,
-                    crmEventId: (await resolveCrmEventForRegistration(data.eventId))?._id || null,
-                    exhibitorRegistrationId: saved._id,
-                    est_no: nextEstNo,
-                    gst_no: data.gstNo || "N/A",
-                    supply_date: new Date().toISOString().split('T')[0],
-                    consignee_name: data.exhibitorName || 'Unknown Company',
-                    consignee_addr: data.address || 'N/A',
-                    consignee_person: [
-                        data.contact1?.title,
-                        data.contact1?.firstName,
-                        data.contact1?.lastName
-                    ].filter(Boolean).join(' '),
-                    consignee_phone: data.contact1?.mobile || '',
-                    country: data.country || 'N/A',
-                    state: data.state || 'N/A',
-                    city: data.city || 'N/A',
-                    pincode: data.pincode || 0,
-                    // Proforma/tax-invoice value is before TDS. TDS affects the cash
-                    // collected, not the taxable document value.
-                    finalAmount: parsedParticipation?.total || 0,
-                    added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
-                    items: []
-                };
 
-                if (parsedParticipation && parsedParticipation.stallFor) {
-                    const rate = Number(parsedParticipation.rate) || 0;
-                    const size = Number(parsedParticipation.stallSize) || 0;
-                    const grossAmount = Number(parsedFinance?.grossAmount) || (rate * size);
-                    const taxableAmount = Number(parsedFinance?.subtotal) || Number(parsedParticipation.amount) || grossAmount;
-                    const discountPercent = grossAmount > 0
-                        ? Math.max(0, Math.min(100, ((grossAmount - taxableAmount) / grossAmount) * 100))
-                        : 0;
-                    const invoiceTotal = Number(parsedParticipation.total)
-                        || (taxableAmount + (Number(parsedFinance?.gstAmount) || 0));
+                    let parsedParticipation = data.participation;
+                    if (typeof parsedParticipation === 'string') {
+                        try { parsedParticipation = JSON.parse(parsedParticipation); } catch (e) { }
+                    }
+                    let parsedFinance = data.financeBreakdown;
+                    if (typeof parsedFinance === 'string') {
+                        try { parsedFinance = JSON.parse(parsedFinance); } catch (e) { }
+                    }
 
-                    estData.items.push({
-                        description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
-                        hsn: "998596",
-                        qty: 1,
-                        size: size,
-                        unit: "Sqm",
-                        rate: rate,
-                        amount: grossAmount,
-                        disc: Number(discountPercent.toFixed(4)),
-                        tax: Number(parsedFinance?.gstAmount) || 0,
-                        gstRate: "18%",
-                        cgst_per: "9",
-                        igst_per: "9",
-                        finalAmount: invoiceTotal,
-                    });
-                }
-
-                if (estData.items.length > 0) {
-                    const existingEstimate = await Estimate.findOne({
+                    const estData = {
                         companyId: String(linkedCompany._id),
-                        eventId: data.eventId,
-                        status: { $in: ['active', 'draft', 'sent'] }
-                    }).sort({ added: -1 });
+                        eventId: data.eventId || null,
+                        crmEventId: (await resolveCrmEventForRegistration(data.eventId))?._id || null,
+                        exhibitorRegistrationId: saved._id,
+                        est_no: nextEstNo,
+                        gst_no: data.gstNo || "N/A",
+                        supply_date: new Date().toISOString().split('T')[0],
+                        consignee_name: data.exhibitorName || 'Unknown Company',
+                        consignee_addr: data.address || 'N/A',
+                        consignee_person: [
+                            data.contact1?.title,
+                            data.contact1?.firstName,
+                            data.contact1?.lastName
+                        ].filter(Boolean).join(' '),
+                        consignee_phone: data.contact1?.mobile || '',
+                        country: data.country || 'N/A',
+                        state: data.state || 'N/A',
+                        city: data.city || 'N/A',
+                        pincode: data.pincode || 0,
+                        // Proforma/tax-invoice value is before TDS. TDS affects the cash
+                        // collected, not the taxable document value.
+                        finalAmount: parsedParticipation?.total || 0,
+                        added_by: data.spokenWith || data.filledByFullName || 'Website Direct Booking',
+                        items: []
+                    };
 
-                    if (existingEstimate) {
-                        const oldItem = existingEstimate.items?.[0];
-                        const newItem = estData.items[0];
-                        const sameCommercials =
-                            Number(existingEstimate.finalAmount || 0) === Number(estData.finalAmount || 0)
-                            && Number(oldItem?.rate || 0) === Number(newItem?.rate || 0)
-                            && Number(oldItem?.size || 0) === Number(newItem?.size || 0)
-                            && String(oldItem?.description || '') === String(newItem?.description || '');
-                        const wasSent = existingEstimate.emailSent || existingEstimate.whatsappSent || existingEstimate.status === 'sent';
+                    if (parsedParticipation && parsedParticipation.stallFor) {
+                        const rate = Number(parsedParticipation.rate) || 0;
+                        const size = Number(parsedParticipation.stallSize) || 0;
+                        const grossAmount = Number(parsedFinance?.grossAmount) || (rate * size);
+                        const taxableAmount = Number(parsedFinance?.subtotal) || Number(parsedParticipation.amount) || grossAmount;
+                        const discountPercent = grossAmount > 0
+                            ? Math.max(0, Math.min(100, ((grossAmount - taxableAmount) / grossAmount) * 100))
+                            : 0;
+                        const invoiceTotal = Number(parsedParticipation.total)
+                            || (taxableAmount + (Number(parsedFinance?.gstAmount) || 0));
 
-                        const proformaAction = String(data.proformaAction || '').toLowerCase();
-                        if (proformaAction === 'new' || proformaAction === 'revision') {
-                            await Estimate.findByIdAndUpdate(existingEstimate._id, { status: 'superseded' });
-                            await Estimate.create({
-                                ...estData,
-                                revisionOf: existingEstimate._id,
-                                version: Number(existingEstimate.version || 1) + 1,
-                                status: 'active'
-                            });
-                        } else if (proformaAction === 'reuse') {
-                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
-                                exhibitorRegistrationId: saved._id
-                            });
-                        } else if (!wasSent) {
-                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
-                                ...estData,
-                                est_no: existingEstimate.est_no,
-                                version: existingEstimate.version || 1,
-                                status: 'active'
-                            });
-                        } else if (sameCommercials) {
-                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
-                                exhibitorRegistrationId: saved._id
-                            });
+                        estData.items.push({
+                            description: `Stall Booking: ${parsedParticipation.stallFor} (${parsedParticipation.stallType || 'Shell Space'})`,
+                            hsn: "998596",
+                            qty: 1,
+                            size: size,
+                            unit: "Sqm",
+                            rate: rate,
+                            amount: grossAmount,
+                            disc: Number(discountPercent.toFixed(4)),
+                            tax: Number(parsedFinance?.gstAmount) || 0,
+                            gstRate: "18%",
+                            cgst_per: "9",
+                            igst_per: "9",
+                            finalAmount: invoiceTotal,
+                        });
+                    }
+
+                    if (estData.items.length > 0) {
+                        const existingEstimate = await Estimate.findOne({
+                            companyId: String(linkedCompany._id),
+                            eventId: data.eventId,
+                            status: { $in: ['active', 'draft', 'sent'] }
+                        }).sort({ added: -1 });
+
+                        if (existingEstimate) {
+                            const oldItem = existingEstimate.items?.[0];
+                            const newItem = estData.items[0];
+                            const sameCommercials =
+                                Number(existingEstimate.finalAmount || 0) === Number(estData.finalAmount || 0)
+                                && Number(oldItem?.rate || 0) === Number(newItem?.rate || 0)
+                                && Number(oldItem?.size || 0) === Number(newItem?.size || 0)
+                                && String(oldItem?.description || '') === String(newItem?.description || '');
+                            const wasSent = existingEstimate.emailSent || existingEstimate.whatsappSent || existingEstimate.status === 'sent';
+
+                            const proformaAction = String(data.proformaAction || '').toLowerCase();
+                            if (proformaAction === 'new' || proformaAction === 'revision') {
+                                await Estimate.findByIdAndUpdate(existingEstimate._id, { status: 'superseded' });
+                                await Estimate.create({
+                                    ...estData,
+                                    revisionOf: existingEstimate._id,
+                                    version: Number(existingEstimate.version || 1) + 1,
+                                    status: 'active'
+                                });
+                            } else if (proformaAction === 'reuse') {
+                                await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                    exhibitorRegistrationId: saved._id
+                                });
+                            } else if (!wasSent) {
+                                await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                    ...estData,
+                                    est_no: existingEstimate.est_no,
+                                    version: existingEstimate.version || 1,
+                                    status: 'active'
+                                });
+                            } else if (sameCommercials) {
+                                await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                    exhibitorRegistrationId: saved._id
+                                });
+                            } else {
+                                // Preserve/link an existing sent proforma unless the
+                                // caller explicitly chose to create a revision.
+                                await Estimate.findByIdAndUpdate(existingEstimate._id, {
+                                    exhibitorRegistrationId: saved._id
+                                });
+                            }
                         } else {
-                            // Preserve/link an existing sent proforma unless the
-                            // caller explicitly chose to create a revision.
-                            await Estimate.findByIdAndUpdate(existingEstimate._id, {
-                                exhibitorRegistrationId: saved._id
-                            });
+                            await Estimate.create(estData);
                         }
-                    } else {
-                        await Estimate.create(estData);
                     }
                 }
+            } catch (err) {
+                console.error('Failed to auto-generate Estimate:', err);
             }
-        } catch (err) {
-            console.error('Failed to auto-generate Estimate:', err);
-        }
         }
 
         // Only book stall and send emails if payment is NOT failed
