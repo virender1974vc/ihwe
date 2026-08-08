@@ -2335,7 +2335,7 @@ class PDFGenerator {
                     [['Payment Type', receiptPaymentTypeLabel], ['Payment Mode', paymentModeFull]],
                     [['Transaction No.', numericReference], ['Transaction Date', paymentDate]],
                     [['Received In Bank', receivedBank], ['Branch', receivedBankBranch || '-']],
-                    [['Against Invoice/Proforma', paymentAgainst], ['Document Type', paymentAgainstType]],
+                    [['Against Invoice/Proforma', paymentAgainst], ['Document Number', paymentAgainstType]],
                 ];
                 const paymentTableTop = y;
                 const paymentTableH = paymentGridRows.length * rowH;
@@ -2723,7 +2723,7 @@ class PDFGenerator {
                 const cols = [
                     { label: 'Date', w: tW * 0.11 },
                     { label: 'Type', w: tW * 0.11 },
-                    { label: 'Document No.', w: tW * 0.16 },
+                    { label: 'Document Number.', w: tW * 0.16 },
                     { label: 'Reference / Narration', w: tW * 0.23 },
                     { label: 'Debit', w: tW * 0.125, align: 'right' },
                     { label: 'Credit', w: tW * 0.125, align: 'right' },
