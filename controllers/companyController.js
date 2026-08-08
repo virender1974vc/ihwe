@@ -1356,12 +1356,14 @@ const buildRoleScopedElemMatch = (eventId, username, role) => {
 // logged, so it isn't trusted on its own).
 const getConvertedCompanies = async (req, res) => {
   try {
-    const { eventId, username = "", role = "" } = req.query;
+    const { eventId } = req.query;
     if (!eventId) {
       return res.status(400).json({ success: false, message: "eventId is required" });
     }
 
-    const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
+    // Converted is an event-wide operational list. Do not scope it to the
+    // salesperson/forwardTo user viewing the CRM.
+    const elemMatch = { eventId };
     const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
     const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
     const companies = candidates.filter((company) => paidCompanyIds.has(String(company._id)));
@@ -1385,12 +1387,14 @@ const BOOKED_STATUS_REGEX = /^(?:Booked|Stand Booked|Booking Confirmed)$/i;
 
 const getBookedCompanies = async (req, res) => {
   try {
-    const { eventId, username = "", role = "" } = req.query;
+    const { eventId } = req.query;
     if (!eventId) {
       return res.status(400).json({ success: false, message: "eventId is required" });
     }
 
-    const elemMatch = buildRoleScopedElemMatch(eventId, username, role);
+    // Bookings are shared event-wide so accounts and operations can see every
+    // confirmed booking, irrespective of lead ownership.
+    const elemMatch = { eventId };
     elemMatch.status = { $regex: BOOKED_STATUS_REGEX };
     const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
     const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
