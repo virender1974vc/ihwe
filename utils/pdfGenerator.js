@@ -2499,17 +2499,17 @@ class PDFGenerator {
 
                 y += authH;
 
-                const footerBandH = 14;
+                const footerBandH = headerBandH;
                 const footerY = pageH - mx - footerBandH;
                 doc.roundedRect(mx, footerY, mw, footerBandH, 4).fill(PAYMENT_GREEN);
                 doc.rect(mx, footerY + footerBandH - 2, mw, 2).fill(PAYMENT_GREEN);
                 const footerDisclaimer = receiptSettings.footerDisclaimerText || 'This is a computer generated document and does not require a physical signature.';
-                doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica').text(footerDisclaimer, mx, footerY + 4, {
+                doc.fillColor('#ffffff').fontSize(7.2).font('Helvetica').text(footerDisclaimer, mx, footerY + Math.max(0, (footerBandH - 7.2) / 2), {
                     width: mw,
                     align: 'center',
                     lineGap: 1,
                 });
-                doc.font('Helvetica-Bold').text('Page 1 of 1', mx + 8, footerY + 4, {
+                doc.font('Helvetica-Bold').text('Page 1 of 1', mx + 8, footerY + Math.max(0, (footerBandH - 7.2) / 2), {
                     width: mw - 16,
                     align: 'right',
                 });
