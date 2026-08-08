@@ -2055,7 +2055,7 @@ class PDFGenerator {
                 [
                     ['Receipt No.', rNo],
                     ['Receipt Date', formattedDate],
-                    ['Proforma No.', clean(registration.registrationId || registration._id?.toString().slice(-8), 'N/A')],
+                    ['PI Number', clean(registration.registrationId || registration._id?.toString().slice(-8), 'N/A')],
                 ].forEach((row, idx) => {
                     // Tight metadata spacing; typography and column widths are unchanged.
                     const yy = metaTop + idx * 13;
