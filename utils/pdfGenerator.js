@@ -2461,7 +2461,7 @@ class PDFGenerator {
                     .replace(/IHWE\s+Global Edition/i, 'IHWE – Global Edition')
                     .trim();
                 const narrationEventRange = formatEventNarrationRange(eventDoc?.startDate, eventDoc?.endDate);
-                const narrationVenue = venueText.replace(/Hall Nos?\.\s*12,\s*Pragati Maidan(?:,\s*New Delhi)?(?:\s*[-–]\s*110001)?(?:,\s*Delhi,\s*India)?/i, 'Hall No. 12, Bharat Mandapam (Pragati Maidan), New Delhi');
+                const narrationVenue = rawVenueText.replace(/Hall Nos?\.\s*12,\s*Pragati Maidan(?:,\s*New Delhi)?(?:\s*[-–]\s*110001)?(?:,\s*Delhi,\s*India)?/i, 'Hall No. 12, Bharat Mandapam (Pragati Maidan), New Delhi');
                 const narrationPaymentMode = /neft|rtgs/i.test(paymentModeFull)
                     ? `bank transfer (${paymentModeFull})`
                     : sentenceCase(paymentModeFull, 'Bank Transfer');
