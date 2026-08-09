@@ -1755,6 +1755,12 @@ class PDFGenerator {
                     const year = d.toLocaleDateString('en-GB', { year: 'numeric' });
                     return `${day} ${month} ${year}`;
                 };
+                const formatDateWithDay = (value) => {
+                    if (!value) return 'N/A';
+                    const d = new Date(value);
+                    if (Number.isNaN(d.getTime())) return String(value);
+                    return `${formatDate(value)} / ${d.toLocaleDateString('en-GB', { weekday: 'long' })}`;
+                };
                 const formattedDate = formatDate(m.paidAt || m.neft_date || registration.updatedAt || Date.now());
                 const fmtEvDate = (d) => d ? formatDate(d) : '';
                 const formatEventShortRange = (start, end) => {
@@ -1889,7 +1895,7 @@ class PDFGenerator {
                 };
                 const reference = clean(accountPayment?.utr_no || accountPayment?.cheque_no || accountPayment?.card_transaction_no || accountPayment?.wallet_transaction_no || accountPayment?.cash_receipt_no || m.transactionId || m.razorpayPaymentId || registration.paymentId, 'N/A');
                 const totalPaid = Number(accountPayment?.amount_text || m.amount || registration.amountPaid || 0);
-                const paymentDate = formatDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
+                const paymentDate = formatDateWithDay(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
                 const receivedBank = clean(accountPayment?.neft_bank || accountPayment?.cheque_bank || accountPayment?.wallet_name || accountPayment?.card_name || accountPayment?.bankName, 'Kotak Mahindra Bank');
                 let receivedBankBranch = clean(
                     accountPayment?.bank_branch ||
