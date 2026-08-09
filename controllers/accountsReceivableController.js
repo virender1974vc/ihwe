@@ -9,6 +9,7 @@ const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Stall = require("../models/Stall");
 const Event = require("../models/Event");
+const CrmUser = require("../models/CrmUser");
 const { isCancelledDoc, parseAmount, getCreditedByInvoiceId } = require("../services/ledgerTotals");
 
 const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
@@ -18,6 +19,30 @@ const formatDateOnly = (value) => {
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d;
 };
+
+const resolveDateDaysBeforeEvent = (event, daysBeforeEvent) => {
+  const eventStart = formatDateOnly(event?.startDate);
+  const days = Number(daysBeforeEvent);
+  if (!eventStart || !Number.isFinite(days)) return null;
+  const dueDate = new Date(eventStart);
+  dueDate.setHours(0, 0, 0, 0);
+  dueDate.setDate(dueDate.getDate() - days);
+  return dueDate;
+};
+
+const resolvePlanDueDate = (event, plan) => (
+  resolveDateDaysBeforeEvent(event, plan?.dueDaysBeforeEvent) ||
+  formatDateOnly(plan?.dueDate)
+);
+
+const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+
+const toTitleCase = (value) => String(value || "")
+  .trim()
+  .replace(/\s+/g, " ")
+  .toLowerCase()
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
 const buildAccountLookups = async (companyIds) => {
   const validIds = companyIds.filter(isValidId);
   const [companiesRound1, exhibitorsRound1, exhibitorsByClient] = await Promise.all([
@@ -69,7 +94,22 @@ const buildAccountLookups = async (companyIds) => {
   const eventById = {};
   events.forEach((e) => { eventById[String(e._id)] = e; });
 
-  return { companyById, exhibitorById, stallById, eventById };
+  const assigneeValues = companies.flatMap((company) => [
+    company.forwardTo,
+    ...(company.eventAssignments || []).map((assignment) => assignment.forwardTo),
+  ]).filter(Boolean);
+  const hasAssignees = assigneeValues.some((value) => normalizeKey(value));
+  const crmUsers = hasAssignees
+    ? await CrmUser.find({}).select("user_name user_fullname").lean()
+    : [];
+  const userNameByKey = {};
+  crmUsers.forEach((user) => {
+    const fullName = user.user_fullname || user.user_name;
+    if (user.user_name) userNameByKey[normalizeKey(user.user_name)] = fullName;
+    if (user.user_fullname) userNameByKey[normalizeKey(user.user_fullname)] = fullName;
+  });
+
+  return { companyById, exhibitorById, stallById, eventById, userNameByKey };
 };
 
 const resolveClientInfo = (companyId, { companyById, exhibitorById, stallById }) => {
@@ -118,8 +158,8 @@ const getInstallmentDueInfo = (companyId, { exhibitorById, eventById }, today) =
     if (plan?.id) planById[String(plan.id)] = plan;
   });
   const resolveInstallmentDueDate = (inst) => {
-    const eventPlanDueDate = inst?.planId ? planById[String(inst.planId)]?.dueDate : null;
-    return formatDateOnly(eventPlanDueDate || inst?.dueDate);
+    const eventPlanDueDate = inst?.planId ? resolvePlanDueDate(event, planById[String(inst.planId)]) : null;
+    return eventPlanDueDate || formatDateOnly(inst?.dueDate);
   };
 
   const unpaidInstallments = (exhibitor.installments || [])
@@ -158,8 +198,10 @@ const buildReceivableDocuments = (activeInvoices, activeProformas) => {
     raw: inv,
     id: String(inv._id),
     companyId: inv.companyId,
+    crmEventId: inv.crmEventId ? String(inv.crmEventId) : "",
     docType: "Invoice",
     docNo: inv.invoice_no,
+    proformaNo: inv.estimate_no || "",
     docDate: inv.invoice_date || inv.added,
     dueDate: inv.due_date || null,
     value: parseAmount(inv.finalAmount),
@@ -173,8 +215,10 @@ const buildReceivableDocuments = (activeInvoices, activeProformas) => {
       raw: est,
       id: String(est._id),
       companyId: est.companyId,
+      crmEventId: est.crmEventId ? String(est.crmEventId) : "",
       docType: "Proforma Invoice",
       docNo: est.est_no,
+      proformaNo: est.est_no,
       docDate: est.supply_date || est.added,
       dueDate: null,
       value: parseAmount(est.finalAmount),
@@ -279,7 +323,7 @@ const getAccountsReceivable = async (req, res) => {
       const exhibitor = lookups.exhibitorById[doc.companyId];
       const event = exhibitor ? lookups.eventById[String(exhibitor.eventId)] : null;
       const defaultPlan = event?.paymentPlans?.find(p => p.isDefault);
-      const eventGeneralDueDate = defaultPlan?.dueDate ? formatDateOnly(defaultPlan.dueDate) : null;
+      const eventGeneralDueDate = resolvePlanDueDate(event, defaultPlan);
 
       const fallbackInvoiceDueDate = (() => {
         if (doc.docType !== "Invoice") return null;
@@ -306,13 +350,18 @@ const getAccountsReceivable = async (req, res) => {
             ? "Payment Due"
             : "Invoice Due";
 
-      let status = "Unpaid";
-      if (totalOwed > 0 && settled >= totalOwed) status = "Paid";
-      else if (isOverdue) status = "Overdue";
-      else if (settled > 0) status = "Partially Paid";
+      const overdueDays = isOverdue && dueDate
+        ? Math.max(1, Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)))
+        : 0;
+      const status = isOverdue ? "Overdue" : "Unpaid";
 
       const lastPayment = docPayments[docPayments.length - 1];
       const clientInfo = resolveClientInfo(doc.companyId, lookups);
+      const company = lookups.companyById[doc.companyId];
+      const rawHandledBy = (company?.eventAssignments || []).find(
+        (assignment) => String(assignment.eventId) === String(doc.crmEventId || ""),
+      )?.forwardTo || company?.forwardTo || doc.addedBy || "";
+      const handledBy = lookups.userNameByKey[normalizeKey(rawHandledBy)] || toTitleCase(rawHandledBy);
       const hallMatch = String(clientInfo.stallNo || "").match(/^H(\d+)/i);
 
       return {
@@ -320,6 +369,8 @@ const getAccountsReceivable = async (req, res) => {
         companyId: doc.companyId,
         docType: doc.docType,
         client: clientInfo.name,
+        proformaNo: doc.proformaNo || (doc.docType === "Proforma Invoice" ? doc.docNo : ""),
+        invoiceNo: doc.docType === "Invoice" ? doc.docNo : "",
         stallNo: clientInfo.stallNo,
         hallNo: hallMatch ? hallMatch[1] : "",
         sqMtr: clientInfo.stallSize,
@@ -328,6 +379,7 @@ const getAccountsReceivable = async (req, res) => {
         invDate: doc.docDate,
         poNo: doc.poNo,
         addedBy: doc.addedBy,
+        handledBy,
         totalInvoicesForClient: docCountByCompany[doc.companyId] || 1,
         paymentType,
         invValue: docValue,
@@ -353,8 +405,10 @@ const getAccountsReceivable = async (req, res) => {
         installmentDueLabel: installmentDue?.label || "",
         installmentBalanceAmount: installmentDue?.balanceAmount || 0,
         isOverdue,
+        overdueDays,
         status,
         eventId: event ? String(event._id) : null,
+        crmEventId: doc.crmEventId || null,
       };
     });
 
