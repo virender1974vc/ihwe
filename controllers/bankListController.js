@@ -3,7 +3,7 @@ const BankList = require("../models/BankList");
 // @route  GET /api/banks
 const getBanks = async (req, res) => {
   try {
-    const banks = await BankList.find();
+    const banks = await BankList.find().sort({ isPrimary: -1, added: -1 });
     res.json(banks);
   } catch (err) {
     res.status(500).json({
@@ -28,26 +28,41 @@ const getBankById = async (req, res) => {
   }
 };
 
+const BOOLEAN_FIELDS = [
+  "upiEnabled",
+  "isPrimary",
+  "showOnProformaInvoice",
+  "showOnTaxInvoice",
+  "showOnPaymentReceipt",
+  "allowShareWithClient",
+];
+
+// multipart/form-data sends every field as a string, so booleans need coercion
+const normalizeBody = (body) => {
+  const normalized = { ...body };
+  BOOLEAN_FIELDS.forEach((field) => {
+    if (normalized[field] !== undefined) {
+      normalized[field] = normalized[field] === true || normalized[field] === "true";
+    }
+  });
+  return normalized;
+};
+
 // Add new bank
 const createBank = async (req, res) => {
   try {
-    const { bankname, accountname, bankbranch, accountno, ifsccode, status, added_by } =
-      req.body;
+    const data = normalizeBody(req.body);
 
-    console.log("Creating bank with data:", req.body);
+    if (req.file) {
+      data.qrCodeUrl = `/uploads/bank_qr/${req.file.filename}`;
+    }
 
-    const newBank = new BankList({
-      bankname,
-      accountname,
-      bankbranch,
-      accountno,
-      ifsccode,
-      status,
-      added_by,
-    });
+    if (data.isPrimary) {
+      await BankList.updateMany({}, { $set: { isPrimary: false } });
+    }
 
+    const newBank = new BankList(data);
     const savedBank = await newBank.save();
-    console.log("Bank saved successfully:", savedBank);
     res.status(201).json(savedBank);
   } catch (err) {
     console.error("Error creating bank:", err);
@@ -61,10 +76,23 @@ const createBank = async (req, res) => {
 // Update bank
 const updateBank = async (req, res) => {
   try {
+    const data = normalizeBody(req.body);
+
+    if (req.file) {
+      data.qrCodeUrl = `/uploads/bank_qr/${req.file.filename}`;
+    }
+
+    if (data.isPrimary) {
+      await BankList.updateMany(
+        { _id: { $ne: req.params.id } },
+        { $set: { isPrimary: false } },
+      );
+    }
+
     const updatedBank = await BankList.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { returnDocument: 'after' }
+      data,
+      { new: true },
     );
 
     if (!updatedBank)
