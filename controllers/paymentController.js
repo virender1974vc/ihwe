@@ -65,9 +65,15 @@ const resolvePaymentDocument = async (payment) => {
   );
 };
 
-const getDocumentNo = (doc, payment) => doc?.invoice_no || doc?.est_no || payment?.invoice_no || payment?.invoice_id || "-";
+const getDocumentNo = (doc, payment) => doc?.invoice_no || doc?.est_no || doc?.pi_no || payment?.invoice_no || payment?.invoice_id || "-";
 const getDocumentDate = (doc) => doc?.invoice_date || doc?.supply_date || doc?.added || "";
 const getDocumentAmount = (doc, payment) => doc?.finalAmount ?? payment?.f_amount ?? 0;
+const getDocumentType = (doc) => {
+  if (!doc) return "";
+  if (doc.invoice_no) return "Tax Invoice";
+  if (doc.est_no || doc.pi_no) return "Proforma Invoice";
+  return "";
+};
 const getDocumentUnitRate = (doc) => {
   const rates = (doc?.items || [])
     .map((item) => parseAmount(item?.rate))
@@ -589,10 +595,12 @@ const getAllPayments = async (req, res) => {
 
     const mongoose = require("mongoose");
     const validInvoiceIds = payments.map(p => p.invoice_id).filter(id => id && mongoose.Types.ObjectId.isValid(id));
-    const documentFields = "companyId invoice_no invoice_date source_estimate_id estimate_no supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
-    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, documentFields).lean();
-    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, documentFields.replace("invoice_no invoice_date", "est_no")).lean();
-    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, documentFields.replace("invoice_no invoice_date", "est_no")).lean();
+    const invoiceFields = "companyId invoice_no invoice_date source_estimate_id estimate_no supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
+    const estimateFields = "companyId est_no supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
+    const proformaFields = "companyId pi_no supply_date finalAmount added company_name consignee_name stall_no stallNo hall_no hallNo";
+    const invoices = await Invoice.find({ _id: { $in: validInvoiceIds } }, invoiceFields).lean();
+    const estimates = await Estimate.find({ _id: { $in: validInvoiceIds } }, estimateFields).lean();
+    const proformas = await PerformaInvoice.find({ _id: { $in: validInvoiceIds } }, proformaFields).lean();
 
     const invoiceMap = {};
     invoices.forEach(i => invoiceMap[i._id.toString()] = i);
@@ -676,6 +684,13 @@ const getAllPayments = async (req, res) => {
       return {
         ...p,
         invoice_no: getDocumentNo(doc, p),
+        document_type: getDocumentType(doc),
+        pi_no: doc?.invoice_no ? (doc?.estimate_no || "") : (doc?.est_no || doc?.pi_no || ""),
+        pi_date: doc?.invoice_no ? "" : getDocumentDate(doc),
+        pi_amount: doc?.invoice_no ? 0 : getDocumentAmount(doc, p),
+        tax_invoice_no: doc?.invoice_no || "",
+        tax_invoice_date: doc?.invoice_no ? getDocumentDate(doc) : "",
+        tax_invoice_amount: doc?.invoice_no ? getDocumentAmount(doc, p) : 0,
         payment_group_id: String(doc?.source_estimate_id || doc?._id || p.invoice_id || ""),
         invoice_date: getDocumentDate(doc),
         invoice_amount: getDocumentAmount(doc, p),

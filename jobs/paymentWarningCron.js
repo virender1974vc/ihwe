@@ -34,6 +34,11 @@ const parseAmount = (value) => {
     return Number.isFinite(n) ? n : 0;
 };
 
+const normalizeReminderDays = (days) => {
+    const source = Array.isArray(days) && days.length ? days : [7, 3, 0];
+    return source.map(Number).filter((day) => Number.isFinite(day) && day >= 0);
+};
+
 const normalizeDate = (value) => {
     if (!value) return null;
     const d = new Date(value);
@@ -99,17 +104,17 @@ const sendAutomatedWarnings = async () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const threeDaysFromNow = new Date(today);
-        threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+        const reminderSearchLimit = new Date(today);
+        reminderSearchLimit.setDate(reminderSearchLimit.getDate() + 90);
 
         const registrations = await ExhibitorRegistration.find({
             status: { $in: ['pending', 'advance-paid'] },
             balanceAmount: { $gt: 0 },
             $or: [
-                { paymentDueDate: { $lte: threeDaysFromNow } },
-                { installments: { $elemMatch: { status: { $ne: 'paid' }, dueDate: { $lte: threeDaysFromNow } } } }
+                { paymentDueDate: { $lte: reminderSearchLimit } },
+                { installments: { $elemMatch: { status: { $ne: 'paid' }, dueDate: { $lte: reminderSearchLimit } } } }
             ]
-        }).populate('eventId', 'name').limit(100);
+        }).populate('eventId', 'name paymentRemindersActive paymentReminderDays').limit(100);
 
         console.log(`[CRON] Found ${registrations.length} payments requiring attention`);
 
@@ -120,6 +125,12 @@ const sendAutomatedWarnings = async () => {
         let skippedAlreadyClaimed = 0;
 
         for (const registration of registrations) {
+            const event = registration.eventId;
+            if (event?.paymentRemindersActive === false) {
+                skippedOutsideReminderWindow++;
+                continue;
+            }
+
             const dueInfo = getNextPaymentDue(registration);
             if (!dueInfo) continue;
 
@@ -128,8 +139,8 @@ const sendAutomatedWarnings = async () => {
             const daysOverdue = daysDiff < 0 ? Math.abs(daysDiff) : 0;
             const daysUntilDue = daysDiff >= 0 ? daysDiff : 0;
 
-            const upcomingReminderDays = [1, 3];
-            const shouldSendReminder = daysDiff <= 0 || upcomingReminderDays.includes(daysDiff);
+            const upcomingReminderDays = normalizeReminderDays(event?.paymentReminderDays);
+            const shouldSendReminder = daysDiff >= 0 && upcomingReminderDays.includes(daysDiff);
             if (!shouldSendReminder) {
                 skippedOutsideReminderWindow++;
                 continue;
@@ -145,7 +156,7 @@ const sendAutomatedWarnings = async () => {
             const templateData = {
                 exhibitorName: registration.exhibitorName,
                 contactPerson: `${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim(),
-                eventName: registration.eventId?.name || 'Exhibition',
+                eventName: event?.name || 'Exhibition',
                 registrationId: registration.registrationId,
                 stallNo: registration.participation?.stallFor || registration.participation?.stallNo || 'N/A',
                 stallType: registration.participation?.stallType || 'N/A',
