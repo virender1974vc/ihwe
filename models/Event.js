@@ -92,6 +92,14 @@ const eventSchema = new mongoose.Schema({
         type: Number,
         default: 7
     },
+    bookingFormUrl: {
+        type: String,
+        default: ''
+    },
+    bookingFormOriginalName: {
+        type: String,
+        default: ''
+    },
     showInPaymentsFilter: {
         type: Boolean,
         default: false
