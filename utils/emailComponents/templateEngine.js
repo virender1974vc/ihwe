@@ -284,10 +284,10 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             }
 
             const result = await this.trySendAisensyForFormType(formType, mobile, template, data);
-            
+
             // Do not fallback to legacy opus WhatsApp for visitor form types
             const isVisitor = formType === 'corporate-visitor' || formType === 'general-visitor' || formType === 'health-camp-visitor' || formType === 'buyer-registration';
-            
+
             if (result.success) {
                 console.log(`[WhatsApp] Sent successfully via AiSensy to ${mobile} for ${formType}`);
             } else if (!isVisitor) {
@@ -342,7 +342,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                 whatsappError: whatsappResult?.error || whatsappResult?.reason || null
             });
         } else {
-            sentToUser = whatsappOnly ? true : await this.sendEmail(emailPayload);
+            sentToUser = whatsappOnly ? false : await this.sendEmail(emailPayload);
         }
 
 
@@ -353,9 +353,15 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             }
             sentToUser = sentToUser || !!whatsappResult?.success;
         } else if (mobile && whatsappContent) {
-            sendDynamicWhatsapp().catch(err => {
-                console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
-            });
+            if (whatsappOnly) {
+                const whatsappResult = await sendDynamicWhatsapp().catch(err => ({ success: false, error: err.message }));
+                sentToUser = !!whatsappResult?.success;
+                if (!sentToUser) console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, whatsappResult?.error || whatsappResult?.reason || "Unknown error");
+            } else {
+                sendDynamicWhatsapp().catch(err => {
+                    console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
+                });
+            }
         }
         if (shouldNotifyAdmin && formType !== 'exhibitor-registration') {
             await this.notifyAdmin(formType, data, subject, profile).catch(err => {
@@ -371,9 +377,6 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
 }
 
 async function notifyAdmin(formType, data, originalSubject, profile) {
-    // Website (public) registrations never send created_by; admin-panel-entered
-    // registrations always do (see generalVisitorSlice.js etc.) — use that to
-    // tag the admin alert subject with where the registration came from.
     const registrationSource = data.created_by ? 'Portal' : 'Web';
     const dedicatedAlerts = {
         'general-visitor': {

@@ -1,6 +1,4 @@
 const CorporateVisitor = require("../../models/visitor/CorporateVisitorModel");
-const fs = require("fs");
-const XLSX = require("xlsx");
 const emailService = require("../../utils/emailService");
 const whatsapp = require("../../utils/whatsapp");
 const {
@@ -11,6 +9,7 @@ const {
   normalizeVisitorMultiSelectFields,
 } = require("../../utils/visitorSelectionNormalizer");
 const qrcode = require('qrcode');
+const { processVisitorBulkUpload } = require("../../utils/visitorBulkUpload");
 
 // ➤ Get all corporate visitors
 const getAllCorporateVisitors = async (req, res) => {
@@ -199,115 +198,20 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
 
 // ➤ Upload Corporate Visitors from Excel
 const uploadCorporateVisitors = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "Excel file required" });
-    }
-
-    const workbook = XLSX.readFile(req.file.path);
-    const sheetName = workbook.SheetNames[0];
-    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
-
-    if (!rows.length) {
-      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      return res.status(400).json({ success: false, message: "Excel file is empty" });
-    }
-
-    let insertedCount = 0;
-    let skippedCount = 0;
-
-    for (const row of rows) {
-      const email = String(row.email || "").trim().toLowerCase();
-      const mobile = String(row.mobile || "").trim();
-
-      if (!email && !mobile) {
-        skippedCount++;
-        continue;
-      }
-
-      // Check for duplicate by email OR mobile
-      const existing = await CorporateVisitor.findOne({
-        $or: [
-          ...(email ? [{ email }] : []),
-          ...(mobile ? [{ mobile }] : [])
-        ]
-      });
-
-      if (existing) {
-        skippedCount++;
-        continue;
-      }
-
-      const registrationId = await generateRegistrationId("corporate");
-      const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
-      const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
-      const qrCode = await qrcode.toDataURL(qrPayload);
-
-      const visitorData = {
-        registrationId,
-        registrationFor: row.registrationFor || "Corporate Visitor",
-        firstName: row.firstName || "",
-        lastName: row.lastName || "",
-        email,
-        mobile,
-        designation: row.designation || "",
-        companyName: row.companyName || "",
-        companyWebsite: row.companyWebsite || "",
-        industrySector: row.industrySector || "",
-        companySize: row.companySize || "",
-        country: row.country || "India",
-        state: row.state || "",
-        city: row.city || "",
-        b2bMeeting: row.b2bMeeting || "No",
-        whatsappUpdates: row.whatsappUpdates || "Yes",
-        specificRequirement: row.specificRequirement || "",
-        purposeOfVisit: row.purposeOfVisit ? String(row.purposeOfVisit).split(',').map(s => s.trim()) : [],
-        areaOfInterest: row.areaOfInterest ? String(row.areaOfInterest).split(',').map(s => s.trim()) : [],
-        qrCode,
-        status: "New Reg.",
-        created_by: req.user ? req.user.username : "Bulk Import",
-      };
-
-      const visitor = new CorporateVisitor(visitorData);
-      await visitor.save();
-      
-      const emailData = {
-        firstName: visitor.firstName,
-        lastName: visitor.lastName,
-        email: visitor.email,
-        mobileNo: visitor.mobile,
-        mobile: visitor.mobile,
-        visitorType: 'Corporate Visitor',
-        purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ['Business Networking'],
-        areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ['Healthcare'],
-        city: visitor.city || 'N/A',
-        country: visitor.country || 'India',
-        registrationId: visitor.registrationId,
-        b2bMeeting: visitor.b2bMeeting,
-        designation: visitor.designation || 'N/A',
-        companyName: visitor.companyName || 'N/A',
-        registrationDate: visitor.createdAt,
-        created_by: visitor.created_by,
-      };
-
-      emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor', true).catch(err => {
-        console.error("Error sending corporate visitor bulk whatsapp notification:", err);
-      });
-
-      insertedCount++;
-    }
-
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-
-    res.status(200).json({
-      success: true,
-      message: `Import complete. Inserted: ${insertedCount}, Skipped (duplicates/invalid): ${skippedCount}`
-    });
-  } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    console.error("Error importing corporate visitors:", error);
-    res.status(500).json({ success: false, message: error.message });
-  }
+  return processVisitorBulkUpload({
+    req, res, model: CorporateVisitor, registrationType: "corporate",
+    fields: {
+      registrationFor: [], firstName: ["first name"], lastName: ["last name"], email: ["email address"], mobile: ["mobile number", "phone"],
+      designation: [], companyName: ["company"], companyWebsite: ["website"], industrySector: ["industry"], companySize: [], country: [], state: [], city: [],
+      b2bMeeting: ["b2b meeting"], whatsappUpdates: ["whatsapp updates"], specificRequirement: ["specific requirement"], purposeOfVisit: ["purpose of visit"], areaOfInterest: ["area of interest"],
+    },
+    requiredFields: ["firstName", "lastName", "email", "mobile"],
+    transformRow: (row, { parseList }) => ({ ...row, registrationFor: row.registrationFor || "Corporate Visitor", country: row.country || "India", b2bMeeting: row.b2bMeeting || "No", whatsappUpdates: row.whatsappUpdates || "Yes", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
+    generateRegistrationId,
+    buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "Corporate Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "India", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
+    sendNotification: (data) => emailService.sendVisitorConfirmationOnly(data, "corporate-visitor", true),
+    logActivity, activityLabel: "corporate",
+  });
 };
 
 // ✅ EXPORT

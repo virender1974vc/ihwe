@@ -9,9 +9,9 @@ const {
   bulkResendCorporateVisitorMessages,
 } = require("../../controllers/visitor/corporateVisitorController.js");
 const multer = require("multer");
-const path = require("path");
+const { visitorExcelFileFilter, visitorUploadLimits, visitorUploadErrorHandler } = require("../../utils/visitorBulkUpload");
 
-const upload = multer({ dest: path.join(__dirname, "../../uploads/") });
+const upload = multer({ storage: multer.memoryStorage(), limits: visitorUploadLimits, fileFilter: visitorExcelFileFilter });
 
 const CorporateVisitor = require("../../models/visitor/CorporateVisitorModel");
 
@@ -37,5 +37,6 @@ router.post("/bulk-resend", bulkResendCorporateVisitorMessages);
 router.post("/", createCorporateVisitor);
 router.put("/:id", updateCorporateVisitor);
 router.delete("/:id", deleteCorporateVisitor);
+router.use(visitorUploadErrorHandler);
 
 module.exports = router;

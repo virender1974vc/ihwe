@@ -6,6 +6,7 @@ const {
 } = require("../../utils/generateRegistrationId");
 const { logActivity } = require("../../utils/logger");
 const qrcode = require('qrcode');
+const { processVisitorBulkUpload } = require("../../utils/visitorBulkUpload");
 
 // ➤ Get all health camp visitors
 const getAllHealthCampVisitors = async (req, res) => {
@@ -207,101 +208,21 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
 };
 
 const bulkUploadHealthCampVisitors = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file uploaded." });
-    }
-
-    const xlsx = require('xlsx');
-    const workbook = req.file.buffer 
-        ? xlsx.read(req.file.buffer, { type: 'buffer' })
-        : xlsx.readFile(req.file.path);
-        
-    const sheetName = workbook.SheetNames[0];
-    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
-
-    let successCount = 0;
-    let errors = [];
-    const fs = require('fs');
-
-    for (let i = 0; i < rows.length; i++) {
-      try {
-        const row = rows[i];
-        if (!row.firstName || !row.email || !row.mobile || !row.dateOfBirth || !row.gender) {
-          errors.push(`Row ${i + 2}: Missing required fields.`);
-          continue;
-        }
-
-        const registrationId = await generateRegistrationId("healthCamp");
-
-        const visitor = new FreeHealthCamp({ 
-          ...row, 
-          registrationId,
-          registrationFor: row.registrationFor || "Health Camp Visitor",
-          created_by: 'Bulk Upload'
-        });
-        
-        const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
-        const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
-        visitor.qrCode = await qrcode.toDataURL(qrPayload);
-        
-        const saved = await visitor.save();
-
-        const visitorData = {
-          registrationFor: saved.registrationFor,
-          firstName: saved.firstName,
-          lastName: saved.lastName,
-          fullName: `${saved.firstName} ${saved.lastName}`,
-          email: saved.email,
-          mobile: saved.mobile,
-          alternateNo: saved.alternateNo,
-          dateOfBirth: saved.dateOfBirth,
-          gender: saved.gender,
-          residenceAddress: saved.residenceAddress,
-          country: saved.country,
-          state: saved.state,
-          city: saved.city,
-          existingMedicalConditions: saved.existingMedicalConditions,
-          isTakingMedications: saved.isTakingMedications,
-          medicationNames: saved.medicationNames,
-          hasAllergies: saved.hasAllergies,
-          allergyDetails: saved.allergyDetails,
-          isExperiencingSymptoms: saved.isExperiencingSymptoms,
-          symptomDetails: saved.symptomDetails,
-          healthCheckupServices: saved.healthCheckupServices,
-          preferredDate: saved.preferredDate,
-          preferredTimeSlot: saved.preferredTimeSlot,
-          consentMedicalData: saved.consentMedicalData,
-          agreeToUpdates: saved.agreeToUpdates,
-          specificHealthConcerns: saved.specificHealthConcerns,
-          visitorType: 'Health Camp Participant',
-          registrationId: saved.registrationId,
-          purposeOfVisit: 'Free Health Checkup',
-          areaOfInterest: 'Healthcare Services',
-          created_by: saved.created_by,
-        };
-
-        // Send ONLY WhatsApp Notification
-        emailService.sendVisitorRegistrationEmails(visitorData, true).catch(err => {
-          console.error("Error sending bulk whatsapp notification:", err);
-        });
-
-        successCount++;
-      } catch (rowErr) {
-        errors.push(`Row ${i + 2}: ${rowErr.message}`);
-      }
-    }
-
-    if (req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-
-    await logActivity(req, 'Action', 'Visitor Registrations', `Bulk uploaded ${successCount} health camp visitors.`);
-    res.status(200).json({ success: true, message: `Successfully uploaded ${successCount} visitors.`, errors });
-  } catch (err) {
-    const fs = require('fs');
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    console.error("Bulk upload error:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
+  return processVisitorBulkUpload({
+    req, res, model: FreeHealthCamp, registrationType: "healthCamp",
+    fields: {
+      registrationFor: [], firstName: ["first name"], lastName: ["last name"], email: ["email address"], mobile: ["mobile number", "phone"], alternateNo: ["alternate number"],
+      dateOfBirth: ["dob", "date of birth"], gender: [], bloodGroup: ["blood group"], residenceAddress: ["address", "residence address"], country: [], state: [], city: [], pincode: ["postal code"],
+      existingMedicalConditions: ["medical history", "existing medical conditions"], isTakingMedications: ["taking medications"], medicationNames: ["medication names"], hasAllergies: ["has allergies"], allergyDetails: ["allergy details"],
+      isExperiencingSymptoms: ["experiencing symptoms"], symptomDetails: ["symptom details"], preferredDate: ["preferred date"], preferredTimeSlot: ["preferred time slot"], consentMedicalData: ["medical data consent"], agreeToUpdates: ["whatsapp updates"], specificHealthConcerns: ["specific health concerns"], subscribe: [],
+    },
+    requiredFields: ["firstName", "lastName", "email", "mobile", "dateOfBirth", "gender"],
+    transformRow: (row) => ({ ...row, registrationFor: row.registrationFor || "Health Camp Visitor", country: row.country || "India", status: "New Reg." }),
+    generateRegistrationId,
+    buildNotificationData: (visitor) => ({ registrationFor: visitor.registrationFor, firstName: visitor.firstName, lastName: visitor.lastName, fullName: `${visitor.firstName} ${visitor.lastName}`.trim(), email: visitor.email, mobile: visitor.mobile, alternateNo: visitor.alternateNo, dateOfBirth: visitor.dateOfBirth, gender: visitor.gender, residenceAddress: visitor.residenceAddress, country: visitor.country, state: visitor.state, city: visitor.city, existingMedicalConditions: visitor.existingMedicalConditions, isTakingMedications: visitor.isTakingMedications, medicationNames: visitor.medicationNames, hasAllergies: visitor.hasAllergies, allergyDetails: visitor.allergyDetails, isExperiencingSymptoms: visitor.isExperiencingSymptoms, symptomDetails: visitor.symptomDetails, healthCheckupServices: visitor.healthCheckupServices, preferredDate: visitor.preferredDate, preferredTimeSlot: visitor.preferredTimeSlot, consentMedicalData: visitor.consentMedicalData, agreeToUpdates: visitor.agreeToUpdates, specificHealthConcerns: visitor.specificHealthConcerns, visitorType: "Health Camp Participant", registrationId: visitor.registrationId, purposeOfVisit: "Free Health Checkup", areaOfInterest: "Healthcare Services", created_by: visitor.created_by }),
+    sendNotification: (data) => emailService.sendVisitorRegistrationEmails(data, true),
+    logActivity, activityLabel: "health camp",
+  });
 };
 
 // ✅ EXPORT

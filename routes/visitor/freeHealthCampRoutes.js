@@ -9,7 +9,8 @@ const {
   bulkUploadHealthCampVisitors,
 } = require("../../controllers/visitor/freeHealthCampController.js");
 const multer = require("multer");
-const upload = multer({ storage: multer.memoryStorage() });
+const { visitorExcelFileFilter, visitorUploadLimits, visitorUploadErrorHandler } = require("../../utils/visitorBulkUpload");
+const upload = multer({ storage: multer.memoryStorage(), limits: visitorUploadLimits, fileFilter: visitorExcelFileFilter });
 
 const FreeHealthCamp = require("../../models/visitor/FreeHealthCampModel");
 
@@ -33,5 +34,6 @@ router.post("/upload", upload.single("file"), bulkUploadHealthCampVisitors);
 router.post("/", createHealthCampVisitor);
 router.put("/:id", updateHealthCampVisitor);
 router.delete("/:id", deleteHealthCampVisitor);
+router.use(visitorUploadErrorHandler);
 
 module.exports = router;
