@@ -418,7 +418,8 @@ async function notifyAdmin(formType, data, originalSubject, profile) {
     });
 
     const adminWhatsApp = (process.env.ADMIN_WHATSAPP_NUMBER || '').trim();
-    if (adminWhatsApp) {
+    const isVisitorAlert = formType.includes('visitor');
+    if (adminWhatsApp && !isVisitorAlert) {
         const adminMsg = `🚨 *NEW ${formType.toUpperCase()} LEAD* 🚨\n\n*Name:* ${data.name || data.fullName}\n*Company:* ${data.company || data.companyName}\n*Email:* ${data.email}\n*Phone:* ${data.phone}\n*Subject:* ${originalSubject}\n\n_Please check your admin panel for full details._`;
         whatsapp.sendWhatsAppMessage(adminWhatsApp, adminMsg, `Admin Lead Alert: ${formType}`).catch(err => {
             console.error(`[AdminWhatsAppAlert] Failed for ${formType}:`, err.message);
