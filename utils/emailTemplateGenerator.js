@@ -941,7 +941,7 @@ function emailShell(body = '', options = {}) {
                 </td>
            </tr>`
         : '';
-
+ 
     const footerHtml = footerSrc
         ? `<tr>
                 <td style="padding:0;margin:0;line-height:0;font-size:0;background:#ffffff;">
