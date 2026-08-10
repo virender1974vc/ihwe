@@ -22,6 +22,7 @@ const BankListSchema = new mongoose.Schema(
     upiId: { type: String },
     upiRegisteredName: { type: String },
     qrCodeUrl: { type: String },
+    paymentGatewayLink: { type: String },
 
     // Usage & Settings
     purpose: { type: [String], default: ["Exhibitor Collection"] },
