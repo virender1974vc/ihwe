@@ -56,6 +56,13 @@ const sendPaymentSuccessNotifications = async (registration, pdfFilePath, receip
             emailService.sendPaymentReceipt(registration, pdfFilePath)
                 .catch(err => console.error('[PaymentReceiptEmail] Failed:', err.message))
         );
+
+        if ((registration.balanceAmount || 0) <= 0) {
+            tasks.push(
+                emailService.sendFullPaymentWelcomeEmail(registration)
+                    .catch(err => console.error('[FullPaymentWelcomeEmail] Failed:', err.message))
+            );
+        }
     }
 
     if (mobile) {
