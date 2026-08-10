@@ -6,6 +6,7 @@ const {
   updateInternationalVisitor,
   deleteInternationalVisitor,
   bulkUploadInternationalVisitors,
+  bulkResendInternationalVisitorMessages,
 } = require("../../controllers/visitor/internationalVisitorController.js");
 const multer = require("multer");
 const path = require("path");
@@ -39,6 +40,7 @@ router.get("/scan/:registrationId", async (req, res) => {
 
 router.get("/", getAllInternationalVisitors);
 router.get("/:id", getInternationalVisitorById);
+router.post("/bulk-resend", bulkResendInternationalVisitorMessages);
 router.post("/upload", upload.single("file"), bulkUploadInternationalVisitors);
 
 router.post(
