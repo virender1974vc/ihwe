@@ -165,7 +165,7 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
     });
 }
 
-async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding, notifyAdmin: shouldNotifyAdmin = true }) {
+async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding, notifyAdmin: shouldNotifyAdmin = true, whatsappOnly = false }) {
     try {
         const template = await this.getTemplate(formType);
         if (!template) {
@@ -324,7 +324,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             });
 
             const [emailResult, whatsappResult] = await Promise.all([
-                to
+                to && !whatsappOnly
                     ? this.sendEmail(emailPayload)
                     : Promise.resolve(false),
                 accessoryWhatsappPromise
@@ -342,7 +342,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                 whatsappError: whatsappResult?.error || whatsappResult?.reason || null
             });
         } else {
-            sentToUser = await this.sendEmail(emailPayload);
+            sentToUser = whatsappOnly ? true : await this.sendEmail(emailPayload);
         }
 
 

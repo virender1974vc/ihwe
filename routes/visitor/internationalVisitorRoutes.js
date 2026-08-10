@@ -5,13 +5,14 @@ const {
   createInternationalVisitor,
   updateInternationalVisitor,
   deleteInternationalVisitor,
+  bulkUploadInternationalVisitors,
+  bulkResendInternationalVisitorMessages,
 } = require("../../controllers/visitor/internationalVisitorController.js");
 const multer = require("multer");
 const path = require("path");
 
 const InternationalVisitor = require("../../models/visitor/InternationalVisitorModel");
 
-// Set up multer for document uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, path.join(__dirname, "../../uploads/"));
@@ -25,7 +26,6 @@ const upload = multer({ storage: storage });
 
 const router = express.Router();
 
-// Public: lookup visitor by registrationId (for QR scan)
 router.get("/scan/:registrationId", async (req, res) => {
   try {
     const visitor = await InternationalVisitor.findOne({
@@ -40,8 +40,9 @@ router.get("/scan/:registrationId", async (req, res) => {
 
 router.get("/", getAllInternationalVisitors);
 router.get("/:id", getInternationalVisitorById);
+router.post("/bulk-resend", bulkResendInternationalVisitorMessages);
+router.post("/upload", upload.single("file"), bulkUploadInternationalVisitors);
 
-// Create route with multer middleware to accept specific files
 router.post(
   "/",
   upload.fields([

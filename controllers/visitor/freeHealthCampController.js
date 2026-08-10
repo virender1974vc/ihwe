@@ -206,6 +206,104 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
   }
 };
 
+const bulkUploadHealthCampVisitors = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded." });
+    }
+
+    const xlsx = require('xlsx');
+    const workbook = req.file.buffer 
+        ? xlsx.read(req.file.buffer, { type: 'buffer' })
+        : xlsx.readFile(req.file.path);
+        
+    const sheetName = workbook.SheetNames[0];
+    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
+
+    let successCount = 0;
+    let errors = [];
+    const fs = require('fs');
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const row = rows[i];
+        if (!row.firstName || !row.email || !row.mobile || !row.dateOfBirth || !row.gender) {
+          errors.push(`Row ${i + 2}: Missing required fields.`);
+          continue;
+        }
+
+        const registrationId = await generateRegistrationId("healthCamp");
+
+        const visitor = new FreeHealthCamp({ 
+          ...row, 
+          registrationId,
+          registrationFor: row.registrationFor || "Health Camp Visitor",
+          created_by: 'Bulk Upload'
+        });
+        
+        const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+        const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
+        visitor.qrCode = await qrcode.toDataURL(qrPayload);
+        
+        const saved = await visitor.save();
+
+        const visitorData = {
+          registrationFor: saved.registrationFor,
+          firstName: saved.firstName,
+          lastName: saved.lastName,
+          fullName: `${saved.firstName} ${saved.lastName}`,
+          email: saved.email,
+          mobile: saved.mobile,
+          alternateNo: saved.alternateNo,
+          dateOfBirth: saved.dateOfBirth,
+          gender: saved.gender,
+          residenceAddress: saved.residenceAddress,
+          country: saved.country,
+          state: saved.state,
+          city: saved.city,
+          existingMedicalConditions: saved.existingMedicalConditions,
+          isTakingMedications: saved.isTakingMedications,
+          medicationNames: saved.medicationNames,
+          hasAllergies: saved.hasAllergies,
+          allergyDetails: saved.allergyDetails,
+          isExperiencingSymptoms: saved.isExperiencingSymptoms,
+          symptomDetails: saved.symptomDetails,
+          healthCheckupServices: saved.healthCheckupServices,
+          preferredDate: saved.preferredDate,
+          preferredTimeSlot: saved.preferredTimeSlot,
+          consentMedicalData: saved.consentMedicalData,
+          agreeToUpdates: saved.agreeToUpdates,
+          specificHealthConcerns: saved.specificHealthConcerns,
+          visitorType: 'Health Camp Participant',
+          registrationId: saved.registrationId,
+          purposeOfVisit: 'Free Health Checkup',
+          areaOfInterest: 'Healthcare Services',
+          created_by: saved.created_by,
+        };
+
+        // Send ONLY WhatsApp Notification
+        emailService.sendVisitorRegistrationEmails(visitorData, true).catch(err => {
+          console.error("Error sending bulk whatsapp notification:", err);
+        });
+
+        successCount++;
+      } catch (rowErr) {
+        errors.push(`Row ${i + 2}: ${rowErr.message}`);
+      }
+    }
+
+    if (req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+    await logActivity(req, 'Action', 'Visitor Registrations', `Bulk uploaded ${successCount} health camp visitors.`);
+    res.status(200).json({ success: true, message: `Successfully uploaded ${successCount} visitors.`, errors });
+  } catch (err) {
+    const fs = require('fs');
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    console.error("Bulk upload error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ✅ EXPORT
 module.exports = {
   getAllHealthCampVisitors,
@@ -214,4 +312,5 @@ module.exports = {
   updateHealthCampVisitor,
   deleteHealthCampVisitor,
   bulkResendHealthCampVisitorMessages,
+  bulkUploadHealthCampVisitors,
 };

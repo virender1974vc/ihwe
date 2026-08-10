@@ -146,3 +146,74 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.bulkUploadGeneralVisitors = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded." });
+    }
+
+    const xlsx = require('xlsx');
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    let successCount = 0;
+    let errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const row = rows[i];
+        if (!row.firstName || !row.email || !row.mobile) {
+          errors.push(`Row ${i + 2}: Missing required fields (firstName, email, or mobile).`);
+          continue;
+        }
+
+        const registrationId = await generateRegistrationId("general");
+        const normalizedBody = normalizeVisitorMultiSelectFields(row);
+
+        const visitor = new GeneralVisitor({
+          ...normalizedBody,
+          registrationId,
+          registrationFor: row.registrationFor || "General Visitor",
+          created_by: 'Bulk Upload'
+        });
+
+        const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
+        const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
+        visitor.qrCode = await qrcode.toDataURL(qrPayload);
+
+        const saved = await visitor.save();
+
+        const emailData = {
+          firstName: saved.firstName,
+          lastName: saved.lastName,
+          email: saved.email,
+          mobileNo: saved.mobile,
+          mobile: saved.mobile,
+          visitorType: 'General Visitor',
+          purposeOfVisit: saved.purposeOfVisit?.length ? saved.purposeOfVisit : ['General Interest'],
+          areaOfInterest: saved.areaOfInterest?.length ? saved.areaOfInterest : ['General'],
+          city: saved.city || 'N/A',
+          country: saved.country || 'India',
+          registrationId: saved.registrationId,
+          registrationDate: saved.createdAt,
+          created_by: saved.created_by,
+        };
+        emailService.sendVisitorRegistrationEmails(emailData, true).catch(err => {
+          console.error("Error sending bulk whatsapp notification:", err);
+        });
+
+        successCount++;
+      } catch (rowErr) {
+        errors.push(`Row ${i + 2}: ${rowErr.message}`);
+      }
+    }
+
+    await logActivity(req, 'Action', 'Visitor Registrations', `Bulk uploaded ${successCount} general visitors.`);
+    res.status(200).json({ success: true, message: `Successfully uploaded ${successCount} visitors.`, errors });
+  } catch (err) {
+    console.error("Bulk upload error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
