@@ -165,7 +165,7 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
     });
 }
 
-async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding, notifyAdmin: shouldNotifyAdmin = true }) {
+async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding, notifyAdmin: shouldNotifyAdmin = true, whatsappOnly = false }) {
     try {
         const template = await this.getTemplate(formType);
         if (!template) {
@@ -324,7 +324,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             });
 
             const [emailResult, whatsappResult] = await Promise.all([
-                to
+                to && !whatsappOnly
                     ? this.sendEmail(emailPayload)
                     : Promise.resolve(false),
                 accessoryWhatsappPromise
@@ -342,7 +342,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                 whatsappError: whatsappResult?.error || whatsappResult?.reason || null
             });
         } else {
-            sentToUser = await this.sendEmail(emailPayload);
+            sentToUser = whatsappOnly ? true : await this.sendEmail(emailPayload);
         }
 
 
@@ -418,7 +418,8 @@ async function notifyAdmin(formType, data, originalSubject, profile) {
     });
 
     const adminWhatsApp = (process.env.ADMIN_WHATSAPP_NUMBER || '').trim();
-    if (adminWhatsApp) {
+    const isVisitorAlert = formType.includes('visitor');
+    if (adminWhatsApp && !isVisitorAlert) {
         const adminMsg = `🚨 *NEW ${formType.toUpperCase()} LEAD* 🚨\n\n*Name:* ${data.name || data.fullName}\n*Company:* ${data.company || data.companyName}\n*Email:* ${data.email}\n*Phone:* ${data.phone}\n*Subject:* ${originalSubject}\n\n_Please check your admin panel for full details._`;
         whatsapp.sendWhatsAppMessage(adminWhatsApp, adminMsg, `Admin Lead Alert: ${formType}`).catch(err => {
             console.error(`[AdminWhatsAppAlert] Failed for ${formType}:`, err.message);

@@ -270,6 +270,30 @@ const uploadCorporateVisitors = async (req, res) => {
 
       const visitor = new CorporateVisitor(visitorData);
       await visitor.save();
+      
+      const emailData = {
+        firstName: visitor.firstName,
+        lastName: visitor.lastName,
+        email: visitor.email,
+        mobileNo: visitor.mobile,
+        mobile: visitor.mobile,
+        visitorType: 'Corporate Visitor',
+        purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ['Business Networking'],
+        areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ['Healthcare'],
+        city: visitor.city || 'N/A',
+        country: visitor.country || 'India',
+        registrationId: visitor.registrationId,
+        b2bMeeting: visitor.b2bMeeting,
+        designation: visitor.designation || 'N/A',
+        companyName: visitor.companyName || 'N/A',
+        registrationDate: visitor.createdAt,
+        created_by: visitor.created_by,
+      };
+
+      emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor', true).catch(err => {
+        console.error("Error sending corporate visitor bulk whatsapp notification:", err);
+      });
+
       insertedCount++;
     }
 
