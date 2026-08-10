@@ -9,7 +9,7 @@ const { getInternationalBuyerRegistrationAlertTemplate } = require('../emailTemp
 const { getCorporateVisitorAdminAlertTemplate } = require('../emailTemplates/corporateVisitorAdminAlert');
 const { getGeneralVisitorAdminAlertTemplate } = require('../emailTemplates/generalVisitorAdminAlert');
 
-async function sendVisitorRegistrationEmails(data) {
+async function sendVisitorRegistrationEmails(data, whatsappOnly = false) {
         const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' :
             data.visitorType.toLowerCase().includes('health') ? 'health-camp-visitor' : 'general-visitor';
 
@@ -22,7 +22,8 @@ async function sendVisitorRegistrationEmails(data) {
                 name: `${data.firstName} ${data.lastName || ''}`.trim(),
             },
             profile: 'VISITOR',
-            notifyAdmin: !isHealthCamp && !data.isResend
+            notifyAdmin: !isHealthCamp && !data.isResend && !whatsappOnly,
+            whatsappOnly
         });
 
         if (isHealthCamp && !data.isResend) {
@@ -32,7 +33,7 @@ async function sendVisitorRegistrationEmails(data) {
         return userResult;
     }
 
-async function sendVisitorConfirmationOnly(data, formType) {
+async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false) {
         try {
             const template = await this.getTemplate(formType);
             if (!template) {
@@ -111,14 +112,19 @@ async function sendVisitorConfirmationOnly(data, formType) {
 
             const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
 
-            const sentToUser = await this.sendEmail({
-                to: data.emailAddress || data.email,
-                subject,
-                html,
-                attachments: emailAttachments,
-                profile: 'VISITOR',
-                logData: { name: data.fullName || data.firstName || data.name, phone: data.mobileNumber || data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
-            });
+            let sentToUser = false;
+            if (!whatsappOnly) {
+                sentToUser = await this.sendEmail({
+                    to: data.emailAddress || data.email,
+                    subject,
+                    html,
+                    attachments: emailAttachments,
+                    profile: 'VISITOR',
+                    logData: { name: data.fullName || data.firstName || data.name, phone: data.mobileNumber || data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
+                });
+            } else {
+                sentToUser = true; // Pretend we sent it so the UI doesn't show error if we only wanted whatsapp
+            }
 
 
             const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;

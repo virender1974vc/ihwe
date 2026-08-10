@@ -6,9 +6,12 @@ const {
   updateGeneralVisitor,
   deleteGeneralVisitor,
   bulkResendGeneralVisitorMessages,
+  bulkUploadGeneralVisitors,
 } = require("../../controllers/visitor/generalVisitorController.js");
 
 const GeneralVisitor = require("../../models/visitor/GeneralVisitorModel");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 router.get("/scan/:registrationId", async (req, res) => {
@@ -26,6 +29,7 @@ router.get("/scan/:registrationId", async (req, res) => {
 router.get("/", getAllGeneralVisitors);
 router.get("/:id", getGeneralVisitorById);
 router.post("/bulk-resend", bulkResendGeneralVisitorMessages);
+router.post("/upload", upload.single("file"), bulkUploadGeneralVisitors);
 router.post("/", createGeneralVisitor);
 router.put("/:id", updateGeneralVisitor);
 router.delete("/:id", deleteGeneralVisitor);
