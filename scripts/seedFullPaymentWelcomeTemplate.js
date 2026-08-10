@@ -168,8 +168,8 @@ const emailBodyHtml = `
                                 <div style="font-size: 12px; font-weight: bold; color: #7e22ce; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px;">Register Delegates</div>
                                 <p style="margin: 0 0 8px; font-size: 10px; line-height: 1.5; color: #475569;">Secure your seat and participate in insightful sessions, earn certificates and network with experts and peers from across the globe.</p>
                                 <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
-                                    <td bgcolor="#7e22ce" style="background: #7e22ce; border-radius: 4px;" align="center">
-                                        <a href="[[REGISTER_DELEGATES_URL]]" style="display: inline-block; padding: 8px 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: bold;">REGISTER NOW</a>
+                                    <td bgcolor="#7e22ce" style="background: #7e22ce; border-radius: 4px; padding: 8px 16px;" align="center">
+                                        <a href="[[REGISTER_DELEGATES_URL]]" style="font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: bold;">REGISTER NOW</a>
                                     </td>
                                 </tr></table>
                             </td>
@@ -197,8 +197,8 @@ const emailBodyHtml = `
                                 <div style="font-size: 12px; font-weight: bold; color: #c2410c; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px;">Register for Buyer-Seller Meet</div>
                                 <p style="margin: 0 0 8px; font-size: 10px; line-height: 1.5; color: #475569;">Register your company profile to get visibility among verified buyers and schedule one-to-one meetings.</p>
                                 <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
-                                    <td bgcolor="#c2410c" style="background: #c2410c; border-radius: 4px;" align="center">
-                                        <a href="[[REGISTER_BUYER_SELLER_URL]]" style="display: inline-block; padding: 8px 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: bold;">REGISTER NOW</a>
+                                    <td bgcolor="#c2410c" style="background: #c2410c; border-radius: 4px; padding: 8px 16px;" align="center">
+                                        <a href="[[REGISTER_BUYER_SELLER_URL]]" style="font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: bold;">REGISTER NOW</a>
                                     </td>
                                 </tr></table>
                             </td>
@@ -239,8 +239,8 @@ const emailBodyHtml = `
                                     </table>
                                     <div style="height: 8px; line-height: 8px; font-size: 8px;">&nbsp;</div>
                                     <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
-                                        <td bgcolor="#0c2b5c" style="background: #0c2b5c; border-radius: 4px;" align="center">
-                                            <a href="[[LOGIN_URL]]" style="display: inline-block; padding: 8px 16px; font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: bold;">LOGIN TO DASHBOARD</a>
+                                        <td bgcolor="#0c2b5c" style="background: #0c2b5c; border-radius: 4px; padding: 8px 16px;" align="center">
+                                            <a href="[[LOGIN_URL]]" style="font-family: Arial, sans-serif; color: #ffffff; text-decoration: none; font-size: 11px; font-weight: bold;">LOGIN TO DASHBOARD</a>
                                         </td>
                                     </tr></table>
                                     <div style="font-size: 9px; color: #64748b; margin-top: 4px;">All your event essentials in one place.</div>

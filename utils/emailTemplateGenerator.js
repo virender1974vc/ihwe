@@ -1423,6 +1423,12 @@ class EmailTemplateGenerator {
             'financeBreakdown.totalPayable'
         ], totalAmount);
         const balanceDue = pickNumber(data, ['balanceDue', 'balanceAmount'], Math.max(0, netPayable - amountPaid));
+        // normalizeInstallments' own balance fallback (used when no explicit
+        // `installments` array is given) reads data.balanceDue — which isn't set
+        // on the raw input yet at this point, only computed just above — so without
+        // this it silently drops the pending installment row even though the
+        // summary table above shows a non-zero balance.
+        const dataForInstallments = { ...data, balanceDue };
 
         return {
             ...data,
@@ -1461,7 +1467,7 @@ class EmailTemplateGenerator {
             tdsDeducted: pickNumber(data, ['tdsDeducted', 'tdsAmount', 'financeBreakdown.tdsDeducted'], 0),
             paymentStatus: pickValue(data, ['paymentStatus', 'status'], balanceDue > 0 ? 'PARTIAL' : 'PAID'),
             paymentDate: pickValue(data, ['paymentDate', 'paidAt'], latestPayment.paidAt || latestPayment.date || latestPayment.createdAt || ''),
-            installments: normalizeInstallments(data),
+            installments: normalizeInstallments(dataForInstallments),
             stallNo: pickValue(data, [
                 'stallNo',
                 'stall_no',

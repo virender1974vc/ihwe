@@ -287,13 +287,4 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// A given CRM company (clientId) must not end up with two registrations for the
-// same event — e.g. two Proforma Invoices raised for the same company/event should
-// never each provision their own registration. Scoped to only where clientId is an
-// actual string so it never affects normal website bookings (clientId defaults to null).
-ExhibitorRegistrationSchema.index(
-    { eventId: 1, clientId: 1 },
-    { unique: true, partialFilterExpression: { clientId: { $type: 'string' } } }
-);
-
 module.exports = mongoose.model('ExhibitorRegistration', ExhibitorRegistrationSchema);

@@ -78,15 +78,6 @@ const addEstimate = async (req, res) => {
     const estimate = new Estimate(estimateBody);
     await estimate.save();
     await markCompanyHotLead(estimate.companyId, estimate.crmEventId);
-
-    // Provision (or link to an existing) ExhibitorRegistration for this company+event
-    // — non-fatal: the Proforma Invoice itself should still succeed even if this fails.
-    try {
-      const exhibitorRegistrationService = require("../services/exhibitorRegistrationService");
-      await exhibitorRegistrationService.createOrLinkExhibitorRegistrationForEstimate(estimate);
-    } catch (linkErr) {
-      console.error("[Estimate] Failed to create/link ExhibitorRegistration:", linkErr.message);
-    }
     const accountName = await getDocumentAccountName(estimate, "account");
     await logActivity(
       req,

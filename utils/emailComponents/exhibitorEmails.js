@@ -636,8 +636,8 @@ async function sendFullPaymentWelcomeEmail(registration) {
                         </td>
                         <td valign="middle" align="right">
                             <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
-                                <td bgcolor="${accentColor}" style="background:${accentColor};border-radius:4px;" align="center">
-                                    <a href="${url}" style="display:inline-block;padding:8px 14px;font-family:Arial,sans-serif;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:0.3px;white-space:nowrap;">DOWNLOAD</a>
+                                <td bgcolor="${accentColor}" style="background:${accentColor};border-radius:4px;padding:8px 14px;" align="center">
+                                    <a href="${url}" style="font-family:Arial,sans-serif;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:0.3px;white-space:nowrap;">DOWNLOAD</a>
                                 </td>
                             </tr></table>
                         </td>
