@@ -35,6 +35,11 @@ const parseAmount = (value) => {
     return Number.isFinite(n) ? n : 0;
 };
 
+const normalizeReminderDays = (days) => {
+    const source = Array.isArray(days) && days.length ? days : [7, 3, 0];
+    return source.map(Number).filter((day) => Number.isFinite(day) && day >= 0);
+};
+
 const getNextUnpaidInstallment = (registration) => {
     return (registration.installments || [])
         .filter((inst) => inst && inst.status !== 'paid' && parseAmount(inst.dueAmount) > parseAmount(inst.paidAmount))
@@ -92,15 +97,19 @@ const sendExhibitionReminders = async () => {
 
         for (const event of events) {
             if (!event.startDate) continue;
+            if (event.paymentRemindersActive === false) {
+                console.log(`Skipping ${event.name} - payment reminders inactive`);
+                continue;
+            }
 
             const startDate = new Date(event.startDate);
             startDate.setHours(0, 0, 0, 0);
 
             const daysUntilExhibition = Math.floor((startDate - today) / (1000 * 60 * 60 * 24));
-            const generalDays = event.generalReminderDays ?? 10;
-            const installmentDays = event.installmentReminderDays ?? 15;
-            const isGeneralReminderDay = daysUntilExhibition <= generalDays && daysUntilExhibition >= 0;
-            const isInstallmentReminderDay = daysUntilExhibition <= installmentDays && daysUntilExhibition >= 0;
+            const reminderDays = normalizeReminderDays(event.paymentReminderDays);
+            const isReminderDay = reminderDays.includes(daysUntilExhibition);
+            const isGeneralReminderDay = isReminderDay;
+            const isInstallmentReminderDay = isReminderDay;
 
             if (!isGeneralReminderDay && !isInstallmentReminderDay) continue;
 

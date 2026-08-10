@@ -27,6 +27,11 @@ const eventSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    paymentFilterName: {
+        type: String,
+        default: '',
+        trim: true
+    },
     contactPhone: {
         type: String,
         default: ''
@@ -40,20 +45,56 @@ const eventSchema = new mongoose.Schema({
         default: 500,
         min: 1
     },
+    earlyBirdDiscountActive: {
+        type: Boolean,
+        default: true
+    },
+    earlyBirdDiscountPercent: {
+        type: Number,
+        default: 10
+    },
+    earlyBirdValidityDays: {
+        type: Number,
+        default: 60
+    },
+    earlyBirdExclusionNote: {
+        type: String,
+        default: 'Note: Early Bird bookings are not eligible for the additional 5% Full Payment Discount.'
+    },
     paymentPlans: [{
         id: String,
         label: String,
         percentage: Number,
         isDefault: { type: Boolean, default: false },
-        dueDate: { type: Date, default: null }
+        dueDate: { type: Date, default: null },
+        dueDaysBeforeEvent: { type: Number, default: null },
+        discountPercent: { type: Number, default: 0 },
+        discountDaysBeforeEvent: { type: Number, default: null },
+        planConfigVersion: { type: Number, default: 2 }
     }],
+    paymentReminderDays: {
+        type: [Number],
+        default: [7, 3, 0]
+    },
+    paymentRemindersActive: {
+        type: Boolean,
+        default: true
+    },
+    paymentReminderConfigVersion: {
+        type: Number,
+        default: 2
+    },
     generalReminderDays: {
         type: Number,
-        default: 10
+        default: 7
     },
     installmentReminderDays: {
         type: Number,
-        default: 15
+        default: 7
+    },
+    showInPaymentsFilter: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

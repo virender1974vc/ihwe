@@ -45,6 +45,7 @@ class AuthService {
                 role: user.role,
                 fullName: user.fullName || '',
                 mobile: user.mobile || '',
+                department: user.department || '',
                 profileImage: user.profileImage || ''
             }
         };
