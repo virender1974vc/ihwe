@@ -167,7 +167,8 @@ const allowedOrigins = [
   "https://www.ihwe.in",
   "https://api.ihwe.in",
   "https://admin.ihwe.in",
-  "http://localhost:8080"
+  "http://localhost:8080",
+  "http://localhost:5173"
 ];
 
 app.use(
