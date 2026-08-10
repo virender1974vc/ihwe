@@ -48,6 +48,8 @@ const estimateSchema = new mongoose.Schema(
     pincode: { type: Number, required: true },
     items: { type: [estimateItemSchema], required: true }, // Array of items
     finalAmount: { type: Number },
+    paymentPlanType: { type: String, default: "" },
+    paymentPlanLabel: { type: String, default: "" },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
     added_by: { type: String },

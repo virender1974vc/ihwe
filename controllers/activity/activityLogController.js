@@ -37,7 +37,7 @@ const getClientIp = (req) => {
 // CREATE
 const createActivityLog = async (req, res) => {
   try {
-    const { user_id, user, action, module, details, link } = req.body;
+    const { user_id, user, action, module, details, link, data } = req.body;
 
     if (!user || !action || !module || !details) {
       return res.status(400).json({
@@ -54,6 +54,7 @@ const createActivityLog = async (req, res) => {
       details: formatDetails(details),
       link: link || "",
       ip_address: getClientIp(req),
+      data: data || {},
     });
 
     res.status(201).json({
@@ -97,7 +98,7 @@ const getActivityLogById = async (req, res) => {
 // GET ALL (with pagination, search, filter)
 const getAllActivityLogs = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "", module = "" } = req.query;
+    const { page = 1, limit = 10, search = "", module = "", entityId = "" } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     let query = {};
@@ -105,6 +106,11 @@ const getAllActivityLogs = async (req, res) => {
     // Module filter
     if (module && module !== "all") {
       query.module = module;
+    }
+
+    // Scope to a single record's history (e.g. one bank account)
+    if (entityId) {
+      query["data.bank_id"] = entityId;
     }
 
     // Search filter (on user or details)
