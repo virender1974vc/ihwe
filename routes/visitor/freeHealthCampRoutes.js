@@ -11,7 +11,20 @@ const {
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 
+const FreeHealthCamp = require("../../models/visitor/FreeHealthCampModel");
+
 const router = express.Router();
+router.get("/scan/:registrationId", async (req, res) => {
+  try {
+    const visitor = await FreeHealthCamp.findOne({
+      registrationId: req.params.registrationId,
+    }).select("-__v");
+    if (!visitor) return res.status(404).json({ success: false, message: "Visitor not found" });
+    res.json({ success: true, data: visitor });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 router.get("/", getAllHealthCampVisitors);
 router.get("/:id", getHealthCampVisitorById);
