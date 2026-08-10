@@ -242,15 +242,21 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
 
 
 
+        // exhibitor-full-payment-welcome builds its own bespoke footer inside the body
+        // content, so only the generic fallback footer is suppressed here. The header
+        // uses the normal image-slot mechanism (template.headerImage), same as every
+        // other exhibitor email — an admin uploads the banner via the CMS.
+        const usesOwnFooter = formType === 'exhibitor-full-payment-welcome';
+
         const html = this.emailShell(bodyContent, {
             headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
-            footerCid: footerBuf ? 'email_footer_img@ihwe.in' : null,
+            footerCid: usesOwnFooter ? null : (footerBuf ? 'email_footer_img@ihwe.in' : null),
             smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
             headerImage: template.headerImage || null,
-            footerImage: template.footerImage || null,
+            footerImage: usesOwnFooter ? null : (template.footerImage || null),
             smallLogoImage: template.smallLogo || null,
-            padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : null),
-            hideFallbackFooter: formType === 'exhibitor-payment-receipt'
+            padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : (usesOwnFooter ? '24px 20px 20px' : null)),
+            hideFallbackFooter: formType === 'exhibitor-payment-receipt' || usesOwnFooter
         });
 
         const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
@@ -268,7 +274,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
             emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img@ihwe.in' });
         }
-        if (footerBuf) {
+        if (footerBuf && !usesOwnFooter) {
             const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
             emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img@ihwe.in' });
         }

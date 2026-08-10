@@ -493,6 +493,215 @@ async function sendPaymentReceipt(registration, pdfPath) {
         return userResult;
     }
 
+async function sendFullPaymentWelcomeEmail(registration) {
+        const ExhibitorPassConfig = require('../../models/ExhibitorPassConfig');
+        const Stall = require('../../models/Stall');
+        const Settings = require('../../models/Settings');
+        const { computeEntitlement, computeVehicleEntitlements } = require('../entitlementCalculator');
+
+        const cur = registration.participation?.currency === 'USD' ? '$' : '₹';
+        const fmt = (n) => `${cur}${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        const toTitleCase = (str) => !str ? '' : str.toLowerCase().replace(/\b\w/g, s => s.toUpperCase());
+
+        const fb = registration.financeBreakdown || {};
+        const netPayableVal = fb.netPayable || registration.participation?.total || 0;
+        const tdsAmountVal = fb.tdsAmount || 0;
+        const amountPaidVal = registration.amountPaid || 0;
+        const balanceAmountVal = registration.balanceAmount || 0;
+
+        const lastPayment = (() => {
+            const h = registration.paymentHistory || [];
+            return h.length > 0 ? h[h.length - 1] : null;
+        })();
+        const formattedPaymentDate = (() => {
+            const d = lastPayment?.paidAt ? new Date(lastPayment.paidAt) : new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${pad(d.getDate())} ${d.toLocaleString('en-IN', { month: 'long' })} ${d.getFullYear()}`;
+        })();
+
+        const contactPersonName = `${registration.contact1?.title || ''} ${registration.contact1?.firstName || ''} ${registration.contact1?.lastName || ''}`.trim() || 'N/A';
+
+        // Stall position (e.g. "Corner Stall (3 Side Open)") is derived from the real
+        // plScheme on the booked Stall document — there is no separate "position" field.
+        let stallPosition = 'N/A';
+        try {
+            if (registration.participation?.stallNo) {
+                const stall = await Stall.findById(registration.participation.stallNo).select('plScheme').lean();
+                if (stall?.plScheme) {
+                    const label = { 'One Side Open': 'Standard Stall', 'Two Side Open': 'Corner Stall', 'Three Side Open': 'Corner Stall', 'Four Side Open': 'Island Stall' }[stall.plScheme] || 'Stall';
+                    stallPosition = `${label} (${stall.plScheme})`;
+                }
+            }
+        } catch (_) { }
+
+        // Pass entitlements are computed from the live ExhibitorPassConfig against this
+        // exhibitor's booked stall area — same calculation used by the exhibitor dashboard,
+        // so the counts shown here always match what the exhibitor can actually claim.
+        let passesRowsHtml = '';
+        try {
+            const stallArea = Number(registration.participation?.stallSize) || 0;
+            const configs = await ExhibitorPassConfig.find({ isActive: true, passType: { $in: ['visitor', 'service', 'exhibitor'] } }).lean();
+            const passItems = configs.map(config => ({
+                title: config.title || `${toTitleCase(config.passType)} Passes`,
+                qty: computeEntitlement({
+                    allocationMode: config.allocationMode,
+                    ratioQty: config.ratioQty,
+                    ratioArea: config.ratioArea,
+                    roundingMode: config.roundingMode,
+                    fixedQty: config.complimentaryQuota
+                }, stallArea)
+            }));
+            const vehicleConfig = await ExhibitorPassConfig.findOne({ passType: 'vehicle', isActive: true }).lean();
+            if (vehicleConfig) {
+                const veh = computeVehicleEntitlements(vehicleConfig, stallArea);
+                const totalVehicle = (veh.twoWheeler || 0) + (veh.fourWheeler || 0);
+                if (totalVehicle > 0) passItems.push({ title: 'Vehicle Passes', qty: totalVehicle });
+            }
+            passesRowsHtml = passItems
+                .filter(item => item.qty > 0)
+                .map(item => `<li style="margin-bottom:3px;">${item.qty} ${item.title}</li>`)
+                .join('');
+        } catch (err) {
+            console.error('[sendFullPaymentWelcomeEmail] Pass entitlement calc failed:', err.message);
+        }
+        if (!passesRowsHtml) passesRowsHtml = '<li>As per your booked package — contact your Relationship Manager for details.</li>';
+
+        const entitlements = registration.entitlements || {};
+        const hospitalityText = (entitlements.lunchCount || entitlements.waterBottleCount)
+            ? `${entitlements.lunchCount || 0} Lunches + ${entitlements.waterBottleCount || 0} Water Bottles per day for all 3 days of the event.`
+            : '2 Lunches + 2 Water Bottles per day for all 3 days of the event.';
+
+        const isShellScheme = /shell/i.test(registration.participation?.stallType || '');
+        const inclusionsBlockHtml = isShellScheme ? `
+            <div style="font-size:9px;font-weight:bold;color:#0c2b5c;text-transform:uppercase;letter-spacing:0.4px;margin:0 0 3px;font-family:Arial,sans-serif;">Shell Scheme Inclusions</div>
+            <ul style="margin:0;padding-left:13px;font-size:10px;color:#334155;font-family:Arial,sans-serif;line-height:1.4;">
+                <li>Fascia Name Board</li>
+                <li>Carpet</li>
+                <li>3 Spot Lights</li>
+                <li>1 Table</li>
+                <li>2 Chairs</li>
+                <li>1 Power Point</li>
+                <li>Dustbin</li>
+            </ul>` : '';
+
+        let settings = null;
+        try {
+            settings = await Settings.findOne().lean();
+        } catch (settingsErr) {
+            console.error('[sendFullPaymentWelcomeEmail] Settings query failed:', settingsErr.message);
+        }
+
+        // Hall No. is not a stored field — it follows the same convention already used
+        // by the accounts module (paymentController.js): an "H<n>" prefix on the stall number.
+        const rawStallNo = String(registration.participation?.stallFor || registration.participation?.stallNo || '');
+        const hallMatch = rawStallNo.match(/^H(\d+)/i);
+        const hallNo = hallMatch ? hallMatch[1] : '';
+
+        const siteUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+        const loginUrl = `${siteUrl}/exhibitor-login`;
+
+        // The event header is a full banner image (same mechanism as every other
+        // exhibitor email: template.headerImage, uploaded via the CMS) rather than
+        // hand-built HTML — an admin uploads the exact banner for this formType there.
+
+        // NOTE: values here are interpolated directly (not via [[PLACEHOLDER]] tokens) —
+        // this HTML is itself inserted into the template through a placeholder, and
+        // applyPlaceholders only does a single pass, so a nested [[TOKEN]] introduced
+        // by the replacement text would never get resolved.
+        const headOfficeAddress = settings?.companyAddress || 'Namo Gange Wellness Pvt. Ltd., 12/52, Site-2, Loni Road Industrial Area, Mohan Nagar, Ghaziabad-201007, Uttar Pradesh, India';
+        const footerBlockHtml = `
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;border-top:1px solid #e2e8f0;margin-top:4px;"><tr>
+                <td style="padding:10px 4px 4px;font-family:Arial,sans-serif;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr>
+                        <td style="font-size:10px;color:#64748b;">
+                            <strong style="color:#334155;">HEAD OFFICE:</strong> ${headOfficeAddress}
+                        </td>
+                        <td align="right" style="font-size:10px;color:#94a3b8;white-space:nowrap;padding-left:10px;">FOLLOW US ON &nbsp;
+                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#1877f2;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">f</span>
+                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#e1306c;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">i</span>
+                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#0a66c2;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">in</span>
+                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#ff0000;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">&#9654;</span>
+                        </td>
+                    </tr></table>
+                </td>
+            </tr></table>`;
+
+        const downloadCard = (title, description, url, accentColor) => `
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border:1px solid #e2e8f0;border-radius:6px;background:#f8fafc;margin-bottom:10px;">
+                <tr><td style="padding:10px 12px;font-family:Arial,sans-serif;">
+                    <table role="presentation" width="100%"><tr>
+                        <td valign="middle">
+                            <div style="font-size:11px;font-weight:bold;color:${accentColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">${title}</div>
+                            <div style="font-size:10px;color:#64748b;line-height:1.4;max-width:150px;">${description}</div>
+                        </td>
+                        <td valign="middle" align="right">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0"><tr>
+                                <td bgcolor="${accentColor}" style="background:${accentColor};border-radius:4px;" align="center">
+                                    <a href="${url}" style="display:inline-block;padding:8px 14px;font-family:Arial,sans-serif;color:#ffffff;text-decoration:none;font-size:10px;font-weight:bold;letter-spacing:0.3px;white-space:nowrap;">DOWNLOAD</a>
+                                </td>
+                            </tr></table>
+                        </td>
+                    </tr></table>
+                </td></tr>
+            </table>`;
+        const downloadButtonsHtml = [
+            registration.registrationPdfUrl ? downloadCard('Proforma Invoice', 'You can download your Proforma Invoice for future reference.', registration.registrationPdfUrl, '#0c2b5c') : '',
+            registration.receiptPdfUrl ? downloadCard('Payment Receipt', 'You can download your Payment Receipt for future reference.', registration.receiptPdfUrl, '#23471d') : ''
+        ].join('');
+
+        const relationshipMgr = (registration.spokenWith && registration.spokenWith.trim())
+            ? registration.spokenWith.trim()
+            : (registration.referredBy && registration.referredBy.trim())
+                ? registration.referredBy.trim()
+                : 'Team IHWE';
+
+        const data = {
+            site_url: siteUrl,
+            footer_block: footerBlockHtml,
+            exhibitor_name: toTitleCase(registration.exhibitorName),
+            contact_person: contactPersonName,
+            registrationId: registration.registrationId,
+            pi_no: `PI/26-27/${(registration.registrationId || '').split('-').pop() || '0000'}`,
+            booking_amount: fmt(netPayableVal),
+            tds_deducted: fmt(tdsAmountVal),
+            net_payable: fmt(netPayableVal),
+            amount_paid: fmt(amountPaidVal),
+            balance_due: fmt(balanceAmountVal),
+            payment_status: balanceAmountVal <= 0 ? 'FULLY PAID' : 'PARTIALLY PAID',
+            payment_date: formattedPaymentDate,
+            stall_no: registration.participation?.stallFor || 'N/A',
+            hall_no: hallNo || 'As allotted at the venue',
+            stall_type: registration.participation?.stallType || 'N/A',
+            stall_scheme: registration.participation?.stallScheme || 'N/A',
+            stall_size: registration.participation?.stallSize || 'N/A',
+            stall_position: stallPosition,
+            inclusions_block: inclusionsBlockHtml,
+            hospitality_text: hospitalityText,
+            passes_rows: passesRowsHtml,
+            download_buttons: downloadButtonsHtml,
+            register_delegates_url: `${siteUrl}/delegate-registration`,
+            register_buyer_seller_url: `${siteUrl}/buyer-seller-meet`,
+            login_url: loginUrl,
+            username: registration.contact1?.email || 'N/A',
+            rm_name: toTitleCase(relationshipMgr),
+            rm_phone: settings?.contactPhone || 'N/A',
+            rm_email: settings?.contactEmail || 'N/A',
+            accounts_phone: process.env.ACCOUNTS_SUPPORT_PHONE || settings?.contactPhone || 'N/A',
+            accounts_email: process.env.ACCOUNTS_SUPPORT_EMAIL || settings?.contactEmail || 'N/A',
+            helpline_phone: process.env.EXHIBITOR_HELPLINE_PHONE || settings?.contactPhone || 'N/A',
+            helpline_email: process.env.EXHIBITOR_HELPLINE_EMAIL || settings?.contactEmail || 'N/A'
+        };
+
+        const userResult = await this.sendDynamicConfirmation({
+            to: this.getExhibitorRecipient(registration),
+            formType: 'exhibitor-full-payment-welcome',
+            data,
+            profile: 'EXHIBITOR',
+            notifyAdmin: false
+        });
+        return userResult;
+    }
+
 async function sendApprovalEmail(registration) {
         const loginUrl = `${(process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '')}/exhibitor-login`;
         const contactPerson = `${registration.contact1.title || ''} ${registration.contact1.firstName || ''} ${registration.contact1.lastName || ''}`.trim();
@@ -596,4 +805,4 @@ async function sendPaymentFailedEmail(registration) {
         return userResult;
     }
 
-module.exports = { sendRegistrationConfirmation, sendPaymentReceipt, sendApprovalEmail, sendConfirmationEmail, sendRejectionEmail, sendPaymentFailedEmail };
+module.exports = { sendRegistrationConfirmation, sendPaymentReceipt, sendFullPaymentWelcomeEmail, sendApprovalEmail, sendConfirmationEmail, sendRejectionEmail, sendPaymentFailedEmail };
