@@ -21,10 +21,14 @@ const sendCrmEmail = async (req, res) => {
       return res.status(400).json({ success: false, message: "to, subject and content are required" });
     }
 
-    const uploadedAttachments = (req.files || []).map((file) => ({
-      filename: file.originalname,
-      content: file.buffer,
-    }));
+    const uploadedAttachments = (req.files || []).map((file) => {
+      const isImage = file.originalname.toLowerCase().endsWith('.png') || file.originalname.toLowerCase().endsWith('.jpg');
+      return {
+        filename: file.originalname,
+        content: file.buffer,
+        cid: isImage ? `cid_${file.originalname}` : undefined
+      };
+    });
 
     let existingAttachments = [];
     if (req.body.existingAttachments) {
@@ -42,7 +46,7 @@ const sendCrmEmail = async (req, res) => {
       to,
       replyTo: process.env.FROM_EMAIL || process.env.SMTP_USER,
       subject,
-      html: `
+      html: req.body.useCustomHtml === "true" && req.body.customHtml ? req.body.customHtml : `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: #1a3516; padding: 20px; text-align: center;">
             <h2 style="color: white; margin: 0;">IHWE 2026</h2>
