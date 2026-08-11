@@ -43,6 +43,8 @@ const toTitleCase = (value) => String(value || "")
   .toLowerCase()
   .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const normalizeSearchText = (value) => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+
 const buildAccountLookups = async (companyIds) => {
   const validIds = companyIds.filter(isValidId);
   const [companiesRound1, exhibitorsRound1, exhibitorsByClient] = await Promise.all([
@@ -299,7 +301,7 @@ const getAccountsReceivable = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const rows = receivableDocs.map((doc) => {
+    const allRows = receivableDocs.map((doc) => {
       const docPayments = (paymentsByDocId[doc.id] || []).slice()
         .sort((a, b) => new Date(a.payment_date || a.added) - new Date(b.payment_date || b.added));
 
@@ -363,6 +365,11 @@ const getAccountsReceivable = async (req, res) => {
       )?.forwardTo || company?.forwardTo || doc.addedBy || "";
       const handledBy = lookups.userNameByKey[normalizeKey(rawHandledBy)] || toTitleCase(rawHandledBy);
       const hallMatch = String(clientInfo.stallNo || "").match(/^H(\d+)/i);
+      const hasBookedStand = Boolean(
+        exhibitor?.participation?.stallNo &&
+        Number(exhibitor?.participation?.stallSize || 0) > 0 &&
+        Number(exhibitor?.participation?.total || 0) > 0
+      );
 
       return {
         id: doc.id,
@@ -404,6 +411,7 @@ const getAccountsReceivable = async (req, res) => {
         installmentDueDate: installmentDue?.dueDate || null,
         installmentDueLabel: installmentDue?.label || "",
         installmentBalanceAmount: installmentDue?.balanceAmount || 0,
+        hasBookedStand,
         isOverdue,
         overdueDays,
         status,
@@ -411,6 +419,12 @@ const getAccountsReceivable = async (req, res) => {
         crmEventId: doc.crmEventId || null,
       };
     });
+
+    const clientCompanySearch = normalizeSearchText(req.query.clientCompanySearch);
+    const rows = clientCompanySearch
+      ? allRows.filter((row) => normalizeSearchText(row.client).includes(clientCompanySearch))
+      : allRows;
+    const filteredCompanyIds = [...new Set(rows.map((row) => row.companyId).filter(Boolean))];
 
     const totalInvoiceValue = rows.reduce((s, r) => s + r.invValue, 0);
     const totalReceived = rows.reduce((s, r) => s + r.received, 0);
@@ -446,7 +460,7 @@ const getAccountsReceivable = async (req, res) => {
           partiallyPaidCount,
           overdueCount,
           unpaidCount,
-          totalClients: companyIds.length,
+          totalClients: filteredCompanyIds.length,
           totalInvoiceValue,
           totalReceived,
           totalOutstanding,
