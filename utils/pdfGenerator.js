@@ -2301,7 +2301,7 @@ class PDFGenerator {
                 };
 
                 // ---------------- FROM (ORGANISER) ----------------
-                drawHeaderLabel(mx, boxTop, halfW, headerBandH, ORGANISER, 'FROM (Organiser details)');
+                drawHeaderLabel(mx, boxTop, halfW, headerBandH, ORGANISER, 'FROM (Organiser Details)');
                 drawSectionBox(mx, boxTop, halfW, boxH, 0);
 
                 let fy = boxTop + contentTop;
