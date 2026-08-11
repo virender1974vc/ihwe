@@ -11,7 +11,8 @@ const {
 
 const GeneralVisitor = require("../../models/visitor/GeneralVisitorModel");
 const multer = require("multer");
-const upload = multer({ storage: multer.memoryStorage() });
+const { visitorExcelFileFilter, visitorUploadLimits, visitorUploadErrorHandler } = require("../../utils/visitorBulkUpload");
+const upload = multer({ storage: multer.memoryStorage(), limits: visitorUploadLimits, fileFilter: visitorExcelFileFilter });
 
 const router = express.Router();
 router.get("/scan/:registrationId", async (req, res) => {
@@ -33,5 +34,6 @@ router.post("/upload", upload.single("file"), bulkUploadGeneralVisitors);
 router.post("/", createGeneralVisitor);
 router.put("/:id", updateGeneralVisitor);
 router.delete("/:id", deleteGeneralVisitor);
+router.use(visitorUploadErrorHandler);
 
 module.exports = router;

@@ -123,19 +123,25 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
                 logData: { name: data.fullName || data.firstName || data.name, phone: data.mobileNumber || data.mobile || data.phone, message: `Visitor Confirmation (${formType})` }
             });
         } else {
-            sentToUser = true; // Pretend we sent it so the UI doesn't show error if we only wanted whatsapp
+            sentToUser = false;
         }
 
 
         const mobile = data.mobile || data.phone || data.whatsapp || data.mobileNumber;
         if (mobile && whatsappContent) {
-            this.trySendAisensyForFormType(formType, mobile, template, data).then(result => {
-                if (!result.success) {
-                    return whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Visitor: ${formType}`);
-                }
-            }).catch(err => {
-                console.error(`[WhatsApp] Failed to send msg for ${formType}:`, err.message);
-            });
+            const sendWhatsapp = async () => {
+                const result = await this.trySendAisensyForFormType(formType, mobile, template, data);
+                return result.success ? result : whatsapp.sendWhatsAppMessage(mobile, whatsappContent, `Visitor: ${formType}`);
+            };
+            if (whatsappOnly) {
+                const whatsappResult = await sendWhatsapp().catch(err => ({ success: false, error: err.message }));
+                sentToUser = !!whatsappResult?.success;
+                if (!sentToUser) console.error(`[WhatsApp] Failed to send msg for ${formType}:`, whatsappResult?.error || "Unknown error");
+            } else {
+                sendWhatsapp().catch(err => {
+                    console.error(`[WhatsApp] Failed to send msg for ${formType}:`, err.message);
+                });
+            }
         }
 
         return sentToUser;

@@ -5,6 +5,7 @@ const { generateRegistrationId } = require("../../utils/generateRegistrationId")
 const { logActivity } = require("../../utils/logger");
 const { normalizeVisitorMultiSelectFields } = require("../../utils/visitorSelectionNormalizer");
 const qrcode = require('qrcode');
+const { processVisitorBulkUpload } = require("../../utils/visitorBulkUpload");
 
 // ➤ Get all international visitors
 const getAllInternationalVisitors = async (req, res) => {
@@ -167,84 +168,19 @@ const deleteInternationalVisitor = async (req, res) => {
 };
 
 const bulkUploadInternationalVisitors = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file uploaded." });
-    }
-
-    const xlsx = require('xlsx');
-    const workbook = req.file.buffer 
-        ? xlsx.read(req.file.buffer, { type: 'buffer' })
-        : xlsx.readFile(req.file.path);
-        
-    const sheetName = workbook.SheetNames[0];
-    const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" });
-
-    let successCount = 0;
-    let errors = [];
-
-    for (let i = 0; i < rows.length; i++) {
-      try {
-        const row = rows[i];
-        if (!row.firstName || !row.email || !row.mobile || !row.gender || !row.nationality) {
-          errors.push(`Row ${i + 2}: Missing required fields.`);
-          continue;
-        }
-
-        const registrationId = await generateRegistrationId("international");
-        const normalizedBody = normalizeVisitorMultiSelectFields(row);
-
-        const visitor = new InternationalVisitor({ 
-          ...normalizedBody, 
-          registrationId,
-          registrationFor: row.registrationFor || "International Visitor",
-          created_by: 'Bulk Upload'
-        });
-        
-        const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
-        const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
-        visitor.qrCode = await qrcode.toDataURL(qrPayload);
-        
-        const saved = await visitor.save();
-
-        const emailData = {
-          firstName: saved.firstName,
-          lastName: saved.lastName,
-          email: saved.email,
-          mobileNo: saved.mobile,
-          mobile: saved.mobile,
-          visitorType: 'International Visitor',
-          purposeOfVisit: saved.purposeOfVisit?.length ? saved.purposeOfVisit : ['Business Networking'],
-          areaOfInterest: saved.areaOfInterest?.length ? saved.areaOfInterest : ['Healthcare'],
-          city: saved.city || 'N/A',
-          country: saved.country || 'N/A',
-          registrationId: saved.registrationId,
-          b2bMeeting: saved.b2bMeeting,
-          designation: saved.designation || 'N/A',
-          companyName: saved.companyName || 'N/A',
-          registrationDate: saved.createdAt,
-          created_by: saved.created_by,
-        };
-
-        emailService.sendVisitorConfirmationOnly(emailData, 'international-visitor', true).catch(err => {
-          console.error("Error sending bulk whatsapp notification:", err);
-        });
-
-        successCount++;
-      } catch (rowErr) {
-        errors.push(`Row ${i + 2}: ${rowErr.message}`);
-      }
-    }
-
-    if (req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-
-    await logActivity(req, 'Action', 'Visitor Registrations', `Bulk uploaded ${successCount} international visitors.`);
-    res.status(200).json({ success: true, message: `Successfully uploaded ${successCount} visitors.`, errors });
-  } catch (err) {
-    if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    console.error("Bulk upload error:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
+  return processVisitorBulkUpload({
+    req, res, model: InternationalVisitor, registrationType: "international",
+    fields: {
+      registrationFor: [], firstName: ["first name"], lastName: ["last name"], email: ["email address"], mobile: ["mobile number", "phone"], gender: [], nationality: [], passportNo: ["passport number"],
+      country: [], state: [], city: [], companyName: ["company"], designation: [], industrySector: ["industry"], specificRequirement: ["specific requirement"], b2bMeeting: ["b2b meeting"], whatsappUpdates: ["whatsapp updates"], areaOfInterest: ["area of interest"], purposeOfVisit: ["purpose of visit"],
+    },
+    requiredFields: ["firstName", "lastName", "email", "mobile", "gender", "nationality"],
+    transformRow: (row, { parseList }) => normalizeVisitorMultiSelectFields({ ...row, registrationFor: row.registrationFor || "International Visitor", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
+    generateRegistrationId,
+    buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "International Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "N/A", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
+    sendNotification: (data) => emailService.sendVisitorConfirmationOnly(data, "international-visitor", true),
+    logActivity, activityLabel: "international",
+  });
 };
 
 

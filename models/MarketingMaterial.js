@@ -54,6 +54,14 @@ const marketingMaterialSchema = new mongoose.Schema(
       type: String,
       default: "Admin",
     },
+    sourceType: {
+      type: String,
+      default: "",
+    },
+    sourceEventId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
   },
   { timestamps: true }
 );

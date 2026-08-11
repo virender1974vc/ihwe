@@ -118,11 +118,16 @@ const buildPaymentDetails = (payment) => {
 const getReceiptContact = async (payment) => {
   const companyId = payment.companyId;
   const company = companyId ? await Company.findById(companyId).lean() : null;
+  // Company.exhibitorRegistrationId stores the human-readable registrationId
+  // string (e.g. "9IHWE-EX-2026-8002"), not an ObjectId — it must be matched
+  // against ExhibitorRegistration.registrationId, not _id (mismatching these
+  // throws a CastError since it isn't valid ObjectId hex).
+  const mongoose = require("mongoose");
   let exhibitor = companyId ? await ExhibitorRegistration.findOne({
     $or: [
-      { _id: companyId },
+      ...(mongoose.Types.ObjectId.isValid(companyId) ? [{ _id: companyId }] : []),
       { clientId: companyId },
-      ...(company?.exhibitorRegistrationId ? [{ _id: company.exhibitorRegistrationId }] : [])
+      ...(company?.exhibitorRegistrationId ? [{ registrationId: company.exhibitorRegistrationId }] : [])
     ]
   }).lean() : null;
 
@@ -157,7 +162,10 @@ const getReceiptContact = async (payment) => {
     pincode = exhibitor.pincode || "";
     gstNo = exhibitor.gstNo || "";
     rmName = exhibitor.filledByFullName || exhibitor.spokenWith || "";
-    website = exhibitor.website || "";
+    // ExhibitorRegistration doesn't always carry its own website (many records
+    // never had it filled in during booking) — fall back to the linked
+    // Company's website rather than leaving it blank when it's known there.
+    website = exhibitor.website || company?.website || "";
   } else if (company) {
     const contact = company.contacts && company.contacts.length > 0
       ? (company.contacts.find((c) => c.isPrimary) || company.contacts[0])
@@ -545,6 +553,53 @@ const addPayment = async (req, res) => {
       "Accounts",
       `Added Payment for ${accountName}. Amount: ₹${payment.amount_text || 0}`,
     );
+
+    // Advance / Final / Full Payment recorded against a PI -> notify the client.
+    // Non-fatal: the payment itself must still succeed even if this fails.
+    if (["Advance Payment", "Final Payment", "Full Payment"].includes(payment.pymnt_type)) {
+      try {
+        const docData = await resolvePaymentDocument(payment);
+        const contact = await getReceiptContact(payment);
+
+        if (payment.pymnt_type === "Advance Payment") {
+          const event = await resolveReceiptEvent(payment, contact, docData);
+          if (contact?.email) {
+            await emailService.sendAdvancePaymentConfirmation({
+              to: contact.email,
+              payment,
+              docData,
+              contact,
+              event,
+            });
+          } else {
+            console.warn(`[AdvancePaymentEmail] Skipped — no contact email resolved for payment ${payment._id} (companyId ${payment.companyId}).`);
+          }
+        } else {
+          // Final / Full Payment reuses the existing full-payment welcome email
+          // (utils/emailComponents/exhibitorEmails.js), which expects a full
+          // ExhibitorRegistration document — only fires when this company/PI is
+          // actually linked to one.
+          if (contact?.exhibitor) {
+            // Registrations created via this Accounts/PI flow never go through the
+            // online-booking flow that normally sets registrationPdfUrl/receiptPdfUrl,
+            // so both are typically empty here — which silently drops the download
+            // cards in the email. The payment receipt this flow *does* generate is
+            // served by the endpoint just fixed above (downloadPaymentReceipt), so
+            // point the email at that instead of the unset field.
+            const backendUrl = (process.env.BACKEND_URL || "http://localhost:5000").replace(/\/$/, "");
+            const exhibitorForEmail = {
+              ...contact.exhibitor,
+              receiptPdfUrl: contact.exhibitor.receiptPdfUrl || `${backendUrl}/api/payments/${payment._id}/receipt`,
+            };
+            await emailService.sendFullPaymentWelcomeEmail(exhibitorForEmail);
+          } else {
+            console.warn(`[FullPaymentWelcomeEmail] Skipped — no linked ExhibitorRegistration for payment ${payment._id} (companyId ${payment.companyId}).`);
+          }
+        }
+      } catch (paymentEmailErr) {
+        console.error(`[${payment.pymnt_type}Email] Failed:`, paymentEmailErr.message);
+      }
+    }
 
     res.status(201).json({
       message: "Payment added successfully",

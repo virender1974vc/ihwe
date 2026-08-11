@@ -22,6 +22,7 @@ const sendAccessoryOrderEmailHandler = require('./emailHandlers/accessoryOrderEm
 const sendPaymentDelayWarningHandler = require('./emailHandlers/paymentDelayWarning');
 const sendInstallmentReminderHandler = require('./emailHandlers/installmentReminder');
 const sendManualPaymentReceiptHandler = require('./emailHandlers/manualPaymentReceipt');
+const sendAdvancePaymentConfirmationHandler = require('./emailHandlers/advancePaymentConfirmation');
 
 class EmailService {
     constructor() {
@@ -194,7 +195,8 @@ Object.assign(
         sendAccessoryOrderEmail: sendAccessoryOrderEmailHandler,
         sendPaymentDelayWarning: sendPaymentDelayWarningHandler,
         sendInstallmentReminder: sendInstallmentReminderHandler,
-        sendManualPaymentReceipt: sendManualPaymentReceiptHandler
+        sendManualPaymentReceipt: sendManualPaymentReceiptHandler,
+        sendAdvancePaymentConfirmation: sendAdvancePaymentConfirmationHandler
     }
 );
 

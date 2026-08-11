@@ -2100,9 +2100,8 @@ class PDFGenerator {
                 const customHeaderPath = resolveUploadPath(receiptSettings.headerLogoImage);
                 if (customHeaderPath) {
                     doc.image(customHeaderPath, mx, y, {
-                        fit: [mw, headerH],
-                        align: 'center',
-                        valign: 'center',
+                        width: mw,
+                        height: headerH,
                     });
                     doc.rect(mx, y, mw, headerH).lineWidth(0.8).stroke(BORDER_COLOR);
                     y += headerH + sectionGap;

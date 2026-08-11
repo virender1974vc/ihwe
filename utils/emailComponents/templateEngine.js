@@ -242,15 +242,21 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
 
 
 
+        // exhibitor-full-payment-welcome builds its own bespoke footer inside the body
+        // content, so only the generic fallback footer is suppressed here. The header
+        // uses the normal image-slot mechanism (template.headerImage), same as every
+        // other exhibitor email — an admin uploads the banner via the CMS.
+        const usesOwnFooter = formType === 'exhibitor-full-payment-welcome';
+
         const html = this.emailShell(bodyContent, {
             headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
-            footerCid: footerBuf ? 'email_footer_img@ihwe.in' : null,
+            footerCid: usesOwnFooter ? null : (footerBuf ? 'email_footer_img@ihwe.in' : null),
             smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
             headerImage: template.headerImage || null,
-            footerImage: template.footerImage || null,
+            footerImage: usesOwnFooter ? null : (template.footerImage || null),
             smallLogoImage: template.smallLogo || null,
-            padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : null),
-            hideFallbackFooter: formType === 'exhibitor-payment-receipt'
+            padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : (usesOwnFooter ? '24px 20px 20px' : null)),
+            hideFallbackFooter: formType === 'exhibitor-payment-receipt' || usesOwnFooter
         });
 
         const whatsappContent = this.applyPlaceholders(template.whatsappBody, data);
@@ -268,7 +274,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             const hExt = (template.headerImage || '').split('.').pop().toLowerCase() || 'png';
             emailAttachments.push({ filename: `header.${hExt}`, content: headerBuf, cid: 'email_header_img@ihwe.in' });
         }
-        if (footerBuf) {
+        if (footerBuf && !usesOwnFooter) {
             const fExt = (template.footerImage || '').split('.').pop().toLowerCase() || 'png';
             emailAttachments.push({ filename: `footer.${fExt}`, content: footerBuf, cid: 'email_footer_img@ihwe.in' });
         }
@@ -342,7 +348,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                 whatsappError: whatsappResult?.error || whatsappResult?.reason || null
             });
         } else {
-            sentToUser = whatsappOnly ? true : await this.sendEmail(emailPayload);
+            sentToUser = whatsappOnly ? false : await this.sendEmail(emailPayload);
         }
 
 
@@ -353,9 +359,15 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             }
             sentToUser = sentToUser || !!whatsappResult?.success;
         } else if (mobile && whatsappContent) {
-            sendDynamicWhatsapp().catch(err => {
-                console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
-            });
+            if (whatsappOnly) {
+                const whatsappResult = await sendDynamicWhatsapp().catch(err => ({ success: false, error: err.message }));
+                sentToUser = !!whatsappResult?.success;
+                if (!sentToUser) console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, whatsappResult?.error || whatsappResult?.reason || "Unknown error");
+            } else {
+                sendDynamicWhatsapp().catch(err => {
+                    console.error(`[WhatsApp] Failed to send dynamic msg for ${formType}:`, err.message);
+                });
+            }
         }
         if (shouldNotifyAdmin && formType !== 'exhibitor-registration') {
             await this.notifyAdmin(formType, data, subject, profile).catch(err => {
@@ -371,9 +383,6 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
 }
 
 async function notifyAdmin(formType, data, originalSubject, profile) {
-    // Website (public) registrations never send created_by; admin-panel-entered
-    // registrations always do (see generalVisitorSlice.js etc.) — use that to
-    // tag the admin alert subject with where the registration came from.
     const registrationSource = data.created_by ? 'Portal' : 'Web';
     const dedicatedAlerts = {
         'general-visitor': {

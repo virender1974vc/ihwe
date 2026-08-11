@@ -1,5 +1,7 @@
 const eventService = require('../services/eventService');
 const { logActivity } = require('../utils/logger');
+const PdfManager = require('../models/PdfManager');
+const MarketingMaterial = require('../models/MarketingMaterial');
 
 const formatEventDate = (value) => {
     if (!value) return 'blank';
@@ -53,6 +55,103 @@ const summarizeEventChanges = (beforeDoc, afterDoc) => {
     }, []);
 };
 
+const parseJsonField = (value, fallback) => {
+    if (typeof value !== 'string') return value;
+    try {
+        return JSON.parse(value);
+    } catch (error) {
+        return fallback;
+    }
+};
+
+const normalizeEventPayload = (body = {}) => {
+    const payload = { ...body };
+    if (typeof payload.paymentPlans === 'string') {
+        payload.paymentPlans = parseJsonField(payload.paymentPlans, []);
+    }
+    if (typeof payload.paymentReminderDays === 'string') {
+        payload.paymentReminderDays = parseJsonField(payload.paymentReminderDays, []);
+    }
+
+    [
+        'order',
+        'earlyBirdDiscountPercent',
+        'earlyBirdValidityDays',
+        'paymentReminderConfigVersion',
+        'generalReminderDays',
+        'installmentReminderDays'
+    ].forEach((key) => {
+        if (payload[key] !== undefined && payload[key] !== '') payload[key] = Number(payload[key]);
+    });
+
+    ['earlyBirdDiscountActive', 'paymentRemindersActive', 'showInPaymentsFilter'].forEach((key) => {
+        if (payload[key] === 'true') payload[key] = true;
+        if (payload[key] === 'false') payload[key] = false;
+    });
+
+    return payload;
+};
+
+const attachBookingFormUpload = (req) => {
+    const payload = normalizeEventPayload(req.body);
+    if (!req.file) return payload;
+    return {
+        ...payload,
+        bookingFormUrl: `/uploads/event-booking-forms/${req.file.filename}`,
+        bookingFormOriginalName: req.file.originalname || ''
+    };
+};
+
+const syncBookingFormToBrochures = async (event) => {
+    if (!event?.bookingFormUrl) return;
+    await PdfManager.findOneAndUpdate(
+        { sourceType: 'event-booking-form', sourceEventId: event._id },
+        {
+            title: `${event.name || 'Event'} Booking Form`,
+            category: 'E-Brochure',
+            subCategory: 'Booking Form',
+            pdfUrl: event.bookingFormUrl,
+            status: 'active',
+            sourceType: 'event-booking-form',
+            sourceEventId: event._id
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+};
+
+const getBookingFormFileType = (fileName = '') => {
+    const ext = String(fileName).split('.').pop().toLowerCase();
+    if (ext === 'pdf') return 'PDF';
+    if (['doc', 'docx'].includes(ext)) return 'Word';
+    if (['jpg', 'jpeg', 'png'].includes(ext)) return 'Image';
+    return 'PDF';
+};
+
+const syncBookingFormToMarketingMaterials = async (event, req) => {
+    if (!event?.bookingFormUrl) return;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const fileUrl = /^https?:\/\//i.test(event.bookingFormUrl)
+        ? event.bookingFormUrl
+        : `${baseUrl}${event.bookingFormUrl}`;
+
+    await MarketingMaterial.findOneAndUpdate(
+        { sourceType: 'event-booking-form', sourceEventId: event._id },
+        {
+            category: 'Booking Form',
+            title: `${event.name || 'Event'} Booking Form`,
+            fileType: getBookingFormFileType(event.bookingFormOriginalName || event.bookingFormUrl),
+            fileUrl,
+            fileSize: req.file ? `${(req.file.size / (1024 * 1024)).toFixed(2)} MB` : '',
+            isActive: true,
+            createdBy: req.body.userName || req.body.added_by || 'Admin',
+            updatedBy: req.body.userName || req.body.updated_by || 'Admin',
+            sourceType: 'event-booking-form',
+            sourceEventId: event._id
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+};
+
 class EventController {
     async getAllEvents(req, res) {
         try {
@@ -90,7 +189,9 @@ class EventController {
     }
     async addEvent(req, res) {
         try {
-            const data = await eventService.addEvent(req.body);
+            const data = await eventService.addEvent(attachBookingFormUpload(req));
+            await syncBookingFormToBrochures(data);
+            await syncBookingFormToMarketingMaterials(data, req);
             await logActivity(req, 'Created', 'Event Schedule', `Created event: ${data.name || req.body.name || 'Untitled Event'} | Date: ${formatEventDate(data.startDate)} to ${formatEventDate(data.endDate)} | Venue: ${data.location || 'blank'}`);
             res.status(201).json({ success: true, message: 'Event added successfully', data });
         } catch (error) {
@@ -100,7 +201,9 @@ class EventController {
     async updateEvent(req, res) {
         try {
             const before = await eventService.getEventById(req.params.id);
-            const data = await eventService.updateEvent(req.params.id, req.body);
+            const data = await eventService.updateEvent(req.params.id, attachBookingFormUpload(req));
+            await syncBookingFormToBrochures(data);
+            await syncBookingFormToMarketingMaterials(data, req);
             const changes = summarizeEventChanges(before, data);
             await logActivity(req, 'Updated', 'Event Schedule', `Updated event: ${data?.name || req.body.name || 'Untitled Event'} | Changed: ${changes.length ? changes.join('; ') : 'No visible field changes'}`);
             res.json({ success: true, message: 'Event updated successfully', data });
