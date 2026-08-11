@@ -453,6 +453,12 @@ class ExhibitorAuthController {
                     if (crmCompany?.contacts?.[1]) {
                         plainReg.contact2 = mapCrmContact(crmCompany.contacts[1], plainReg.contact2 || {});
                     }
+                    if (crmCompany?.companyLogo) {
+                        plainReg.companyLogoUrl = plainReg.companyLogoUrl || crmCompany.companyLogo;
+                    }
+                    if (crmCompany?.companyDescription) {
+                        plainReg.companyDescription = crmCompany.companyDescription;
+                    }
                 } catch (err) {
                     console.error('CRM contact enrichment error:', err);
                 }

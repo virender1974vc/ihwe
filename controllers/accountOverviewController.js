@@ -677,6 +677,11 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
       logo: company?.companyLogo || null,
       statusLabel,
       statusColor,
+      // This is deliberately derived from the event-scoped exhibitor resolved
+      // above.  The account UI uses it to keep post-booking actions locked for
+      // leads that have not booked a stand in the exhibition being viewed.
+      hasExhibitorRegistration: Boolean(exhibitor?._id),
+      exhibitorRegistrationId: exhibitor?._id || null,
     },
     financials: {
       totalDue,

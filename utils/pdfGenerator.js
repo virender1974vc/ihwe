@@ -2301,7 +2301,7 @@ class PDFGenerator {
                 };
 
                 // ---------------- FROM (ORGANISER) ----------------
-                drawHeaderLabel(mx, boxTop, halfW, headerBandH, ORGANISER, 'From (Organiser details)');
+                drawHeaderLabel(mx, boxTop, halfW, headerBandH, ORGANISER, 'FROM (Organiser Details)');
                 drawSectionBox(mx, boxTop, halfW, boxH, 0);
 
                 let fy = boxTop + contentTop;
@@ -2330,7 +2330,7 @@ class PDFGenerator {
                 // ---------------- TO (CLIENT) ----------------
                 const rX = mx + halfW + 10;
 
-                drawHeaderLabel(rX, boxTop, halfW, headerBandH, CLIENT_GREEN, 'To (Client Details)');
+                drawHeaderLabel(rX, boxTop, halfW, headerBandH, CLIENT_GREEN, 'TO (Client Details)');
                 drawSectionBox(rX, boxTop, halfW, boxH, 0);
 
                 let ty = boxTop + contentTop;
