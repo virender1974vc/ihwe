@@ -9,6 +9,7 @@ const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const Stall = require("../models/Stall");
 const Event = require("../models/Event");
+const CrmEvent = require("../models/CrmEvent");
 const CrmUser = require("../models/CrmUser");
 const { isCancelledDoc, parseAmount, getCreditedByInvoiceId } = require("../services/ledgerTotals");
 
@@ -180,11 +181,53 @@ const getInstallmentDueInfo = (companyId, { exhibitorById, eventById }, today) =
   return {
     dueDate,
     label: nextInstallment?.resolvedLabel || exhibitor.paymentPlanLabel || "Payment Due",
+    planId: nextInstallment?.planId || null,
     dueAmount: parseAmount(nextInstallment?.dueAmount),
     paidAmount: parseAmount(nextInstallment?.paidAmount),
     balanceAmount: parseAmount(exhibitor.balanceAmount),
     isOverdue: dueDate < today,
   };
+};
+
+// Exhibitor is on an installment schedule only when its `installments` array was actually
+// populated (Full Payment bookings leave it empty) — used to tell "PYMT Req." apart from
+// "Advance/Running/Final PYMT Req.".
+const getPymtTypeLabel = (exhibitor) => {
+  const installments = exhibitor?.installments;
+  if (!Array.isArray(installments) || installments.length === 0) return "PYMT Req.";
+
+  const nextUnpaid = installments
+    .filter((inst) => inst && inst.status !== "paid" && parseAmount(inst.dueAmount) > parseAmount(inst.paidAmount))
+    .sort((a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0))[0];
+
+  switch (nextUnpaid?.planId) {
+    case "advance": return "Advance PYMT Req.";
+    case "running": return "Running PYMT Req.";
+    case "final":
+    case "final_balance": return "Final PYMT Req.";
+    default: return "PYMT Req.";
+  }
+};
+
+// Fallback for PIs paid manually through Accounts (no ExhibitorRegistration.installments
+// tracking): derive the next-due phase from the PI's own chosen paymentPlanType and how much
+// of the total has actually been settled, against the event's advance/running percentages.
+const getPymtTypeFromPlanProgress = (planType, event, settled, totalOwed) => {
+  const plans = event?.paymentPlans || [];
+  if (!planType || planType === "full" || !plans.length || totalOwed <= 0) return "PYMT Req.";
+
+  const planEntry = plans.find((p) => p.id === planType);
+  if (planEntry && Number(planEntry.percentage) === 100) return "PYMT Req.";
+
+  const advancePct = Number(plans.find((p) => p.id === "advance")?.percentage) || 0;
+  const runningPct = Number(plans.find((p) => p.id === "running")?.percentage) || 0;
+  if (!advancePct && !runningPct) return "PYMT Req.";
+
+  const paidPct = (settled / totalOwed) * 100;
+  const EPS = 0.5; // tolerate rounding noise around a threshold
+  if (paidPct < advancePct - EPS) return "Advance PYMT Req.";
+  if (paidPct < advancePct + runningPct - EPS) return "Running PYMT Req.";
+  return "Final PYMT Req.";
 };
 
 const buildReceivableDocuments = (activeInvoices, activeProformas) => {
@@ -196,20 +239,34 @@ const buildReceivableDocuments = (activeInvoices, activeProformas) => {
     if (inv.estimate_no) coveredProformaNos.add(String(inv.estimate_no));
   });
 
-  const invoiceDocs = activeInvoices.map((inv) => ({
-    raw: inv,
-    id: String(inv._id),
-    companyId: inv.companyId,
-    crmEventId: inv.crmEventId ? String(inv.crmEventId) : "",
-    docType: "Invoice",
-    docNo: inv.invoice_no,
-    proformaNo: inv.estimate_no || "",
-    docDate: inv.invoice_date || inv.added,
-    dueDate: inv.due_date || null,
-    value: parseAmount(inv.finalAmount),
-    poNo: inv.po_no || "",
-    addedBy: inv.added_by || "",
-  }));
+  // Invoice has no paymentPlanType of its own — inherit it from the estimate it was raised from.
+  const estimateById = {};
+  const estimateByNo = {};
+  activeProformas.forEach((est) => {
+    estimateById[String(est._id)] = est;
+    if (est.est_no) estimateByNo[String(est.est_no)] = est;
+  });
+
+  const invoiceDocs = activeInvoices.map((inv) => {
+    const sourceEstimate = (inv.source_estimate_id && estimateById[String(inv.source_estimate_id)])
+      || (inv.estimate_no && estimateByNo[String(inv.estimate_no)])
+      || null;
+    return {
+      raw: inv,
+      id: String(inv._id),
+      companyId: inv.companyId,
+      crmEventId: inv.crmEventId ? String(inv.crmEventId) : "",
+      docType: "Invoice",
+      docNo: inv.invoice_no,
+      proformaNo: inv.estimate_no || "",
+      docDate: inv.invoice_date || inv.added,
+      dueDate: inv.due_date || null,
+      value: parseAmount(inv.finalAmount),
+      poNo: inv.po_no || "",
+      addedBy: inv.added_by || "",
+      paymentPlanType: sourceEstimate?.paymentPlanType || "",
+    };
+  });
 
   const proformaDocs = activeProformas
     .filter((est) => !coveredProformaIds.has(String(est._id)) && !coveredProformaNos.has(String(est.est_no)))
@@ -226,6 +283,7 @@ const buildReceivableDocuments = (activeInvoices, activeProformas) => {
       value: parseAmount(est.finalAmount),
       poNo: "",
       addedBy: est.added_by || "",
+      paymentPlanType: est.paymentPlanType || "",
     }));
 
   return [...invoiceDocs, ...proformaDocs].sort((a, b) => new Date(b.docDate || 0) - new Date(a.docDate || 0));
@@ -282,6 +340,23 @@ const getAccountsReceivable = async (req, res) => {
       (paymentsByDocId[key] || (paymentsByDocId[key] = [])).push(p);
     });
 
+    // Resolve each PI/invoice's own event (via the CrmEvent it was raised against) so its
+    // paymentPlanType can be checked against that event's actual advance/running percentages —
+    // this is the same event the "Payment Plan" dropdown on the PI itself was populated from,
+    // which can differ from whichever event the exhibitor's registration links to.
+    const crmEventIds = [...new Set(receivableDocs.map((doc) => doc.crmEventId).filter(isValidId))];
+    const crmEvents = crmEventIds.length
+      ? await CrmEvent.find({ _id: { $in: crmEventIds } }).select("registrationEventId").lean()
+      : [];
+    const registrationEventIdByCrmEventId = {};
+    crmEvents.forEach((ce) => {
+      if (ce.registrationEventId) registrationEventIdByCrmEventId[String(ce._id)] = String(ce.registrationEventId);
+    });
+    const extraEventIds = [...new Set(Object.values(registrationEventIdByCrmEventId))]
+      .filter((eid) => !lookups.eventById[eid]);
+    const extraEvents = extraEventIds.length ? await Event.find({ _id: { $in: extraEventIds } }).lean() : [];
+    extraEvents.forEach((e) => { lookups.eventById[String(e._id)] = e; });
+
     const creditedByInvoiceId = getCreditedByInvoiceId(activeInvoices, creditNotes, legacyDebitNotes);
     const creditedByProformaId = getCreditedByProformaId(activeProformas, creditNotes, legacyDebitNotes);
 
@@ -326,6 +401,15 @@ const getAccountsReceivable = async (req, res) => {
       const event = exhibitor ? lookups.eventById[String(exhibitor.eventId)] : null;
       const defaultPlan = event?.paymentPlans?.find(p => p.isDefault);
       const eventGeneralDueDate = resolvePlanDueDate(event, defaultPlan);
+
+      // Prefer the precise per-installment tracking on the exhibitor's registration; when that's
+      // empty (PI paid manually via Accounts, never went through online checkout) fall back to
+      // the PI's own paymentPlanType plus how much of it has been settled so far.
+      let pymtType = getPymtTypeLabel(exhibitor);
+      if (pymtType === "PYMT Req." && doc.paymentPlanType) {
+        const docEvent = lookups.eventById[registrationEventIdByCrmEventId[doc.crmEventId]] || event;
+        pymtType = getPymtTypeFromPlanProgress(doc.paymentPlanType, docEvent, settled, totalOwed);
+      }
 
       const fallbackInvoiceDueDate = (() => {
         if (doc.docType !== "Invoice") return null;
@@ -389,6 +473,7 @@ const getAccountsReceivable = async (req, res) => {
         handledBy,
         totalInvoicesForClient: docCountByCompany[doc.companyId] || 1,
         paymentType,
+        pymtType,
         invValue: docValue,
         received,
         receivedPct,
