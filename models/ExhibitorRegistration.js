@@ -56,6 +56,18 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         year: Number,
         edition: String
     },
+    brandName: String,
+    productCategories: [String],
+    certificates: [{
+        name: String
+    }],
+    socialMedia: {
+        facebook: String,
+        twitter: String,
+        instagram: String,
+        linkedin: String,
+        youtube: String
+    },
     typeOfBusiness: String,
     industrySector: String,
     website: String,
