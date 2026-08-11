@@ -116,12 +116,19 @@ exports.getClientContacts = async (req, res) => {
             return contactList;
         };
 
+        const isObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
+
         if (company) {
             contacts = company.contacts || [];
             source = "Company";
 
             if (company.exhibitorRegistrationId) {
-                exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId);
+                if (isObjectId(company.exhibitorRegistrationId)) {
+                    exhibitor = await ExhibitorRegistration.findById(company.exhibitorRegistrationId);
+                } else {
+                    exhibitor = await ExhibitorRegistration.findOne({ registrationId: company.exhibitorRegistrationId });
+                }
+                
                 if (exhibitor) {
                     contacts = exhibitor.teamMembers || [];
                     contacts = injectPrimaryContact(contacts, exhibitor);
@@ -130,7 +137,12 @@ exports.getClientContacts = async (req, res) => {
             }
         } else {
             // Check if it is an ExhibitorRegistration ID directly
-            exhibitor = await ExhibitorRegistration.findById(clientId);
+            if (isObjectId(clientId)) {
+                exhibitor = await ExhibitorRegistration.findById(clientId);
+            } else {
+                exhibitor = await ExhibitorRegistration.findOne({ registrationId: clientId });
+            }
+            
             if (exhibitor) {
                 contacts = exhibitor.teamMembers || [];
                 contacts = injectPrimaryContact(contacts, exhibitor);
