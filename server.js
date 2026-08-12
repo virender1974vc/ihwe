@@ -126,6 +126,7 @@ const annualTurnoverRoutes = require("./routes/add_by_admin/AnnualTurnoverRoutes
 const businessTypeRoutes = require("./routes/add_by_admin/BusinessType");
 const leadTypeOfBusinessRoutes = require("./routes/add_by_admin/leadTypeOfBusinessRoutes");
 const leadIndustryRoutes = require("./routes/add_by_admin/leadIndustryRoutes");
+const accessoryCategoryRoutes = require("./routes/add_by_admin/accessoryCategoryRoutes");
 const meetingPriorityLevelRoutes = require("./routes/add_by_admin/MeetingPriorityLevelRoutes");
 const primaryProductInterestsRoutes = require("./routes/add_by_admin/primaryProductInterestsRoutes");
 const stallAccessoryRoutes = require('./routes/stallAccessoryRoutes');
@@ -458,6 +459,7 @@ app.use("/api/message-templates", require("./routes/messageTemplateRoutes"));
 app.use("/api/business-types", businessTypeRoutes);
 app.use("/api/lead-type-of-business", leadTypeOfBusinessRoutes);
 app.use("/api/lead-industry", leadIndustryRoutes);
+app.use("/api/accessory-categories", accessoryCategoryRoutes);
 app.use("/api/annual-turnovers", annualTurnoverRoutes);
 app.use("/api/meeting-priorities", meetingPriorityLevelRoutes);
 app.use("/api/primary-products", primaryProductInterestsRoutes);

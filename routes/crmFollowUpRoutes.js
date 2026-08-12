@@ -236,4 +236,33 @@ router.get("/", async (req, res) => {
   }
 });
 
+/**
+ * PUT /api/crm-follow-ups/:id/complete
+ * Marks a follow-up as Completed for a company so alerts stop.
+ */
+router.put("/:id/complete", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const company = await Company.findById(id);
+    if (!company) {
+      return res.status(404).json({ success: false, message: "Company not found" });
+    }
+
+    company.followUpDate = null;
+    company.followUpStatus = "Completed";
+    if (company.eventAssignments && company.eventAssignments.length > 0) {
+      company.eventAssignments.forEach(ea => {
+        ea.followUpDate = null;
+        ea.followUpStatus = "Completed";
+      });
+    }
+
+    await company.save();
+    res.json({ success: true, message: "Follow-up marked as completed" });
+  } catch (error) {
+    console.error("Error marking follow-up as completed:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
