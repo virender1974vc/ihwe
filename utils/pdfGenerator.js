@@ -1172,6 +1172,7 @@ const GRAY = '#6b7280';
 const LGRAY = '#f3f4f6';
 const DARK = '#111827';
 const WHITE = '#ffffff';
+const DEFAULT_COMPANY_ADDRESS = '12/52, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad - 201007, Uttar Pradesh, India';
 
 class PDFGenerator {
     _headerImg(doc, customPath, isReceipt = false) {
@@ -1309,7 +1310,7 @@ class PDFGenerator {
                 doc.fillColor(GREEN).fontSize(10).font('Helvetica-Bold')
                     .text(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', lx + 8, y + 20, { width: colW - 16 });
                 doc.fillColor(GRAY).fontSize(8).font('Helvetica')
-                    .text(settings?.companyAddress || '12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India', lx + 8, y + 36, { width: colW - 16 });
+                    .text(settings?.companyAddress || DEFAULT_COMPANY_ADDRESS, lx + 8, y + 36, { width: colW - 16 });
 
                 let currentLeftY = Math.max(doc.y + 6, y + 72);
 
@@ -2130,7 +2131,7 @@ class PDFGenerator {
                     doc.text(`GSTIN - ${clean(settings?.companyGst, '09AAFCN9238F1Z6')}  |  CIN No. ${clean(settings?.companyCin, 'U85320DL2018PTC329002')}`, headX + 12, y + 49, { width: headW * 0.58 });
                     doc.moveTo(headX + headW * 0.62, y + 14).lineTo(headX + headW * 0.62, y + headerContentH - 7).lineWidth(0.5).stroke('#dbeafe');
                     doc.fillColor('#fff').fontSize(7.4).font('Helvetica-Bold').text(receiptSettings.headOfficeLabel || 'Head Office:', headX + headW * 0.65, y + 14, { width: headW * 0.32 });
-                    doc.font('Helvetica').fontSize(7.1).text(`${clean(settings?.companyName, 'Namo Gange Wellness Pvt. Ltd.')},\n${clean(settings?.companyAddress, '12/52, Site-II, Loni Road Industrial Area, Mohan Nagar, Ghaziabad-201007, Uttar Pradesh, India')}`, headX + headW * 0.65, y + 27, { width: headW * 0.32, lineGap: 1 });
+                    doc.font('Helvetica').fontSize(7.1).text(clean(settings?.companyAddress, DEFAULT_COMPANY_ADDRESS), headX + headW * 0.65, y + 27, { width: headW * 0.32, lineGap: 1 });
                     y += headerH;
                 }
 
@@ -2202,7 +2203,7 @@ class PDFGenerator {
 
                 let fromAddr = settings?.companyAddress
                     ? String(settings.companyAddress).replace(/,\s*/g, '\n')
-                    : '12/52, Site-II, Loni Road, Industrial Area\nMohan Nagar, Ghaziabad - 201007\nUttar Pradesh\nIndia';
+                    : DEFAULT_COMPANY_ADDRESS.replace(/,\s*/g, '\n');
                 if (settings?.addresses?.length) {
                     const addr = settings.addresses[0];
                     const locationLine = [

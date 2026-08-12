@@ -95,7 +95,7 @@ const settingsSchema = new mongoose.Schema({
     },
     companyAddress: {
         type: String,
-        default: "12/29, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad, India"
+        default: "12/52, Site-II, Loni Road, Industrial Area, Mohan Nagar, Ghaziabad - 201007, Uttar Pradesh, India"
     },
     companyGst: {
         type: String,
