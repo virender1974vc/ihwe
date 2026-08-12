@@ -17,6 +17,9 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+// Public client view used by payment-confirmation emails.
+router.get("/:id/public-view", previewEmailEstimate);
+
 router.use(authMiddleware);
 
 router.get("/next-number", getNextEstimateNumber);

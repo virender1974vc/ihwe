@@ -15,6 +15,9 @@ const { authMiddleware } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+// Receipt links are emailed to clients, who do not have an admin auth token.
+router.get("/:id/receipt", downloadPaymentReceipt);
+
 router.use(authMiddleware);
 
 const proofStorage = multer.diskStorage({
@@ -31,7 +34,6 @@ const proofUpload = multer({ storage: proofStorage });
 
 router.post("/", proofUpload.single("paymentProof"), addPayment); // Create
 router.get("/", getAllPayments); // Read all
-router.get("/:id/receipt", downloadPaymentReceipt); // Receipt PDF
 router.get("/:id", getPaymentById); // Read one
 router.put("/:id", updatePayment); // Update
 router.delete("/:id", deletePayment); // Delete
