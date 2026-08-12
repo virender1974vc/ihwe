@@ -980,14 +980,17 @@ function emailShell(body = '', options = {}) {
         }
     </style>
 </head>
-<body style="margin:0;padding:0;background:#f4f6fb;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
-        style="width:100%;margin:0;padding:0;background:#f4f6fb;border-collapse:collapse;">
+<body style="margin:0;padding:0;width:100%;background:#f4f6fb;background-color:#f4f6fb;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f4f6fb"
+        style="width:100%;margin:0;padding:0;background:#f4f6fb;background-color:#f4f6fb;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
         <tr>
             <td align="center" style="padding:0;">
-                <table role="presentation" width="${maxWidth}" cellspacing="0" cellpadding="0" border="0"
+                <!--[if mso]>
+                <table role="presentation" width="${maxWidth}" cellspacing="0" cellpadding="0" border="0"><tr><td>
+                <![endif]-->
+                <table role="presentation" align="center" width="${maxWidth}" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff"
                     class="email-frame"
-                    style="width:100%;max-width:${maxWidth}px;margin:0 auto;border-collapse:collapse;background:#ffffff;border:1px solid #d6ddeb;">
+                    style="width:100%;max-width:${maxWidth}px;margin:0 auto;border-collapse:collapse;background:#ffffff;background-color:#ffffff;border:1px solid #d6ddeb;mso-table-lspace:0pt;mso-table-rspace:0pt;">
                     ${headerHtml}
                     <tr>
                         <td style="padding:${padding}px;background:#ffffff;">
@@ -996,6 +999,9 @@ function emailShell(body = '', options = {}) {
                     </tr>
                     ${footerHtml}
                 </table>
+                <!--[if mso]>
+                </td></tr></table>
+                <![endif]-->
             </td>
         </tr>
     </table>
@@ -1232,7 +1238,7 @@ function sectionHeader(number, title, color) {
         <table role="presentation" cellspacing="0" cellpadding="0" border="0"
             style="border-collapse:collapse;margin:0;">
             <tr>
-                <td style="background:${color};color:#fff;font-size:11.6px;font-weight:800;line-height:1;padding:6.2px 9.3px;border-radius:4px 4px 0 0;white-space:nowrap;">
+                <td bgcolor="${color}" style="background:${color};background-color:${color};color:#fff;font-family:Arial,Helvetica,sans-serif;font-size:11.6px;font-weight:800;line-height:1;padding:6.2px 9.3px;border-radius:4px 4px 0 0;white-space:nowrap;mso-line-height-rule:exactly;">
                     ${number ? `${esc(number)}.&nbsp;&nbsp;` : ''}${esc(title)}
                 </td>
             </tr>
@@ -1306,10 +1312,7 @@ function downloadCard(title, text, url, color, iconKind) {
         <div style="padding:3px 1.6px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
-                    <td width="48" valign="top">
-                        ${downloadIcon(iconKind, color, 33)}
-                    </td>
-                    <td valign="top" style="padding-left:7.8px;">
+                    <td valign="top">
                         <div style="font-size:9.3px;font-weight:800;color:${color};text-transform:uppercase;margin-bottom:4px;">${esc(title)}</div>
                         <div style="font-size:8.5px;line-height:1.35;color:#333b55;margin-bottom:6.2px;">${esc(text)}</div>
                         <a href="${esc(url || '#')}"
@@ -1601,7 +1604,7 @@ class EmailTemplateGenerator {
         const exhibitorHelpline = data.exhibitorHelpline || {};
 
         return `
-        <div style="font-family:Arial,Helvetica,sans-serif;color:#171d3d;background:#fff;">
+        <div style="width:100%;font-family:Arial,Helvetica,sans-serif;color:#171d3d;background:#fff;background-color:#fff;mso-line-height-rule:exactly;">
             <!-- Greeting -->
             <div style="padding:23.3px 14px 4.7px 14px;">
                 <div style="font-size:14px;line-height:1.25;font-weight:800;color:#1735aa;margin:0 0 7px 0;">
@@ -1813,12 +1816,10 @@ class EmailTemplateGenerator {
                                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
                                     style="border-collapse:collapse;">
                                     ${infoRows([
-                                        ['Dashboard URL', `<a href="${esc(data.dashboardUrl || 'https://exhibitor.ihwe.in/login')}" style="color:#1735aa;font-weight:700;text-decoration:none;">${esc(data.dashboardUrl || 'https://exhibitor.ihwe.in/login')}</a>`],
-                                        ['Username', `<strong style="color:#1735aa;">${esc(data.dashboardUsername || data.username || '[username]')}</strong>`],
-                                        ['Temporary Password', `<strong style="color:#1735aa;">${esc(data.temporaryPassword || data.password || '[password]')}</strong>`]
+                                        ['Dashboard URL', `<a href="${esc(data.dashboardUrl || 'https://www.ihwe.in/exhibitor-login')}" style="color:#1735aa;font-weight:700;text-decoration:none;">${esc(data.dashboardUrl || 'https://www.ihwe.in/exhibitor-login')}</a>`],
+                                        ['Username', `<strong style="color:#1735aa;">${esc(data.dashboardUsername || data.username || 'Registered email address')}</strong>`]
                                     ], { labelWidth: 43 })}
                                 </table>
-                                <div style="font-size:7px;color:#5e6578;margin-top:4px;">(Please change your password after first login)</div>
                             </td>
                             <td width="23%" valign="middle" align="center" style="padding-left:9.3px;border-left:1px dotted #cfd6e7;">
                                 ${actionButton('LOGIN TO DASHBOARD', data.dashboardUrl || 'https://exhibitor.ihwe.in/login', '#1735aa')}
@@ -1842,7 +1843,6 @@ class EmailTemplateGenerator {
                             <td width="25%" valign="top" style="padding-right:7px;border-right:1px dotted #cfd6e7;">
                                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                     <tr>
-                                        <td valign="top" style="padding-right:6.2px;">${iconImg('user', 28)}</td>
                                         <td valign="top">
                                             <div style="font-size:7.8px;font-weight:800;color:#14786c;text-transform:uppercase;line-height:1.2;margin-bottom:4px;">RELATIONSHIP MANAGER</div>
                                             <div style="font-size:8.5px;line-height:1.38;color:#28304d;">
@@ -1857,7 +1857,6 @@ class EmailTemplateGenerator {
                             <td width="25%" valign="top" style="padding:0 7px;border-right:1px dotted #cfd6e7;">
                                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                     <tr>
-                                        <td valign="top" style="padding-right:6.2px;">${iconImg('accounts', 28)}</td>
                                         <td valign="top">
                                             <div style="font-size:7.8px;font-weight:800;color:#14786c;text-transform:uppercase;line-height:1.2;margin-bottom:4px;">ACCOUNTS SUPPORT</div>
                                             <div style="font-size:8.5px;line-height:1.38;color:#28304d;">
@@ -1871,7 +1870,6 @@ class EmailTemplateGenerator {
                             <td width="25%" valign="top" style="padding:0 7px;border-right:1px dotted #cfd6e7;">
                                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                                     <tr>
-                                        <td valign="top" style="padding-right:6.2px;">${iconImg('headset', 28)}</td>
                                         <td valign="top">
                                             <div style="font-size:7.8px;font-weight:800;color:#14786c;text-transform:uppercase;line-height:1.2;margin-bottom:4px;">EXHIBITOR HELPLINE</div>
                                             <div style="font-size:8.5px;line-height:1.38;color:#28304d;">
@@ -1899,18 +1897,11 @@ class EmailTemplateGenerator {
             <div style="padding:0 11px 11px 11px;">
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
                     <tr>
-                        <td width="73%" valign="middle" style="padding:6.2px 3px 0 3px;white-space:nowrap;">
+                        <td width="100%" valign="middle" style="padding:6.2px 3px 0 3px;">
                             <span style="font-size:8.5px;font-weight:800;color:#1735aa;text-transform:uppercase;">HEAD OFFICE:</span>
                             <span style="font-size:7.8px;line-height:1.3;color:#28304d;margin-left:5.4px;">
                                 ${esc(data.headOfficeText || 'Namo Gange Wellness Pvt. Ltd., 608, 6th Floor, Pearls Best Heights–II, Netaji Subhash Place, Pitampura, New Delhi – 110034, India')}
                             </span>
-                        </td>
-                        <td width="27%" valign="middle" align="right" style="padding:6.2px 3px 0 3px;white-space:nowrap;">
-                            <span style="font-size:8.5px;font-weight:800;color:#1f2848;text-transform:uppercase;margin-right:5.4px;">FOLLOW US ON:</span>
-                            <a href="${esc(data.facebookUrl || '#')}" style="display:inline-block;vertical-align:middle;margin-left:3px;">${iconImg('facebook', 14)}</a>
-                            <a href="${esc(data.instagramUrl || '#')}" style="display:inline-block;vertical-align:middle;margin-left:3px;">${iconImg('instagram', 14)}</a>
-                            <a href="${esc(data.linkedinUrl || '#')}" style="display:inline-block;vertical-align:middle;margin-left:3px;">${iconImg('linkedin', 14)}</a>
-                            <a href="${esc(data.youtubeUrl || '#')}" style="display:inline-block;vertical-align:middle;margin-left:3px;">${iconImg('youtube', 14)}</a>
                         </td>
                     </tr>
                 </table>

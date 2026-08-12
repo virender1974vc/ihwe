@@ -1016,6 +1016,10 @@ const previewEmailEstimate = async (req, res) => {
             </div>
         `;
 
+    if (req.path.endsWith('/public-view')) {
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      return res.status(200).send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${estimate.est_no || 'Proforma Invoice'}</title></head><body style="margin:0;background:#f4f7f6">${htmlContent}</body></html>`);
+    }
     res.status(200).json({ email, htmlContent });
   } catch (error) {
     res.status(500).json({ message: "Error previewing Email", error: error.message });
