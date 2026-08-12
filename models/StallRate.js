@@ -16,9 +16,24 @@ const stallRateSchema = new mongoose.Schema({
         enum: ['Raw Space', 'Shell Space'], 
         required: true 
     },
-    ratePerSqm: { 
-        type: Number, 
-        required: true 
+    ratePerSqm: {
+        type: Number,
+        required: true
+    },
+    plSchemeCharges: [{
+        plScheme: {
+            type: String,
+            enum: ['One Side Open', 'Two Side Open', 'Three Side Open', 'Four Side Open'],
+            default: 'One Side Open'
+        },
+        plcCharges: {
+            type: Number,
+            default: 0
+        }
+    }],
+    hsnCode: {
+        type: String,
+        default: ''
     }
 }, { timestamps: true });
 

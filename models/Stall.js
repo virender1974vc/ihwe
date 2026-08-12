@@ -26,11 +26,15 @@ const stallSchema = new mongoose.Schema({
         required: true 
     },
     plScheme: {
-        type: String, 
+        type: String,
         enum: ['One Side Open', 'Two Side Open', 'Three Side Open', 'Four Side Open'],
         default: 'One Side Open'
     },
-    incrementPercentage: { 
+    plcCharges: {
+        type: Number,
+        default: 0
+    },
+    incrementPercentage: {
         type: Number, 
         default: 0 
     },
