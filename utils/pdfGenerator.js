@@ -2201,20 +2201,43 @@ class PDFGenerator {
                 const boxTop = y;
                 const rowW = halfW - 24;
 
-                let fromAddr = settings?.companyAddress
-                    ? String(settings.companyAddress).replace(/,\s*/g, '\n')
-                    : DEFAULT_COMPANY_ADDRESS.replace(/,\s*/g, '\n');
-                if (settings?.addresses?.length) {
+                const configuredCompanyAddress = String(settings?.companyAddress || '').trim();
+                const hasLegacyCompanyAddress = /namo\s+gange\s+wellness|12\/29|sunrise\s+industrial/i.test(configuredCompanyAddress);
+                const formatOrganiserAddress = (value) => {
+                    const address = String(value || '').trim();
+                    const citySplit = address.split(/,\s*(?=Ghaziabad\b)/i);
+                    if (citySplit.length < 2) return address;
+                    const streetLine = citySplit.shift().trim();
+                    const locationLine = citySplit.join(', ')
+                        .replace(/,\s*/g, ' ')
+                        .replace(/\s+-\s+/g, ' - ')
+                        .replace(/\s{2,}/g, ' ')
+                        .trim();
+                    return `${streetLine}\n${locationLine}`;
+                };
+                let fromAddr = formatOrganiserAddress(
+                    configuredCompanyAddress && !hasLegacyCompanyAddress
+                        ? configuredCompanyAddress
+                        : DEFAULT_COMPANY_ADDRESS
+                );
+
+                if (!configuredCompanyAddress && settings?.addresses?.length) {
                     const addr = settings.addresses[0];
-                    const locationLine = [
-                        [addr.city, addr.zipCode].filter(Boolean).join(' - '),
-                        addr.state,
-                        addr.country,
-                    ].filter(Boolean).join(' ');
-                    fromAddr = formatAddressLines(
-                        addr.street,
-                        locationLine
-                    ) || fromAddr;
+                    const rawStreet = String(addr.street || '');
+                    const hasLegacyStreet = /namo\s+gange\s+wellness|12\/29|sunrise\s+industrial/i.test(rawStreet);
+                    if (hasLegacyStreet) {
+                        fromAddr = formatOrganiserAddress(DEFAULT_COMPANY_ADDRESS);
+                    } else {
+                        const locationLine = [
+                            [addr.city, addr.zipCode].filter(Boolean).join(' - '),
+                            addr.state,
+                            addr.country,
+                        ].filter(Boolean).join(' ');
+                        fromAddr = formatAddressLines(
+                            addr.street,
+                            locationLine
+                        ) || fromAddr;
+                    }
                 }
                 const exhibitorLocationLine = [
                     [registration.city, registration.pincode].filter(Boolean).join(' - '),

@@ -44,5 +44,18 @@ class StallController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async bulkDeleteStalls(req, res) {
+        try {
+            const { ids } = req.body;
+            if (!ids || !Array.isArray(ids) || ids.length === 0) {
+                return res.status(400).json({ success: false, message: 'No stall IDs provided' });
+            }
+            await stallService.bulkDeleteStalls(ids);
+            await logActivity(req, 'Deleted', 'Stalls', `Bulk deleted ${ids.length} stalls`);
+            res.json({ success: true, message: `${ids.length} stalls deleted successfully` });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 module.exports = new StallController();

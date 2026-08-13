@@ -25,6 +25,8 @@ const paymentSchema = new mongoose.Schema(
     debit_note_date: { type: String, default: "" },
     pymnt_type: { type: String, default: "" },
     payment_mode: { type: String, required: true },
+    received_by: { type: String, default: "" },
+    received_date: { type: String, default: "" },
     cash_receipt_no: { type: String, default: "" },
     cheque_name: { type: String, default: "" },
     cheque_no: { type: String, default: "" },

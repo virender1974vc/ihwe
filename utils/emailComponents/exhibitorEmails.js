@@ -496,6 +496,9 @@ async function sendPaymentReceipt(registration, pdfPath) {
 async function sendFullPaymentWelcomeEmail(registration) {
         const ExhibitorPassConfig = require('../../models/ExhibitorPassConfig');
         const Stall = require('../../models/Stall');
+        const StallAccessory = require('../../models/StallAccessory');
+        const Payment = require('../../models/Payment');
+        const Estimate = require('../../models/Estimate');
         const Settings = require('../../models/Settings');
         const { computeEntitlement, computeVehicleEntitlements } = require('../entitlementCalculator');
 
@@ -566,23 +569,29 @@ async function sendFullPaymentWelcomeEmail(registration) {
         }
         if (!passesRowsHtml) passesRowsHtml = '<li>As per your booked package — contact your Relationship Manager for details.</li>';
 
-        const entitlements = registration.entitlements || {};
-        const hospitalityText = (entitlements.lunchCount || entitlements.waterBottleCount)
-            ? `${entitlements.lunchCount || 0} Lunches + ${entitlements.waterBottleCount || 0} Water Bottles per day for all 3 days of the event.`
-            : '2 Lunches + 2 Water Bottles per day for all 3 days of the event.';
-
         const isShellScheme = /shell/i.test(registration.participation?.stallType || '');
+        let inclusionsRowsHtml = '';
+        if (isShellScheme) {
+            const stallArea = Number(registration.participation?.stallSize) || 0;
+            const accessories = await StallAccessory.find({ type: 'complimentary', isActive: true }).sort({ sortOrder: 1, createdAt: -1 }).lean();
+            inclusionsRowsHtml = accessories.map(item => {
+                const qty = computeEntitlement({ allocationMode: item.allocationMode, ratioQty: item.ratioQty, ratioArea: item.ratioArea, roundingMode: item.roundingMode, fixedQty: item.includedQty }, stallArea);
+                return qty > 0 ? `<li>${qty} ${item.name}</li>` : '';
+            }).join('');
+        }
+        if (!inclusionsRowsHtml) inclusionsRowsHtml = '<li>No complimentary accessories configured.</li>';
         const inclusionsBlockHtml = isShellScheme ? `
             <div style="font-size:9px;font-weight:bold;color:#0c2b5c;text-transform:uppercase;letter-spacing:0.4px;margin:0 0 3px;font-family:Arial,sans-serif;">Shell Scheme Inclusions</div>
             <ul style="margin:0;padding-left:13px;font-size:10px;color:#334155;font-family:Arial,sans-serif;line-height:1.4;">
-                <li>Fascia Name Board</li>
-                <li>Carpet</li>
-                <li>3 Spot Lights</li>
-                <li>1 Table</li>
-                <li>2 Chairs</li>
-                <li>1 Power Point</li>
-                <li>Dustbin</li>
+                ${inclusionsRowsHtml}
             </ul>` : '';
+
+        const stallArea = Number(registration.participation?.stallSize) || 0;
+        const hospitalityConfigs = await ExhibitorPassConfig.find({ isActive: true, passType: { $in: ['lunch', 'water'] } }).lean();
+        const hospitalityText = hospitalityConfigs.map(config => {
+            const qty = computeEntitlement({ allocationMode: config.allocationMode, ratioQty: config.ratioQty, ratioArea: config.ratioArea, roundingMode: config.roundingMode, fixedQty: config.complimentaryQuota }, stallArea);
+            return qty > 0 ? `${qty} ${config.title}` : '';
+        }).filter(Boolean).join(' + ') || 'No complimentary hospitality allocation configured.';
 
         let settings = null;
         try {
@@ -597,8 +606,15 @@ async function sendFullPaymentWelcomeEmail(registration) {
         const hallMatch = rawStallNo.match(/^H(\d+)/i);
         const hallNo = hallMatch ? hallMatch[1] : '';
 
-        const siteUrl = (process.env.SITE_URL || 'http://localhost:8080').replace(/\/$/, '');
+        const siteUrl = (process.env.SITE_URL || 'https://www.ihwe.in').replace(/\/$/, '');
+        const backendUrl = (process.env.BACKEND_URL || 'https://api.ihwe.in').replace(/\/$/, '');
         const loginUrl = `${siteUrl}/exhibitor-login`;
+
+        const accountPaymentId = lastPayment?.accountPaymentId;
+        const accountPayment = accountPaymentId ? await Payment.findById(accountPaymentId).lean() : null;
+        const proforma = accountPayment?.invoice_id ? await Estimate.findById(accountPayment.invoice_id).lean() : null;
+        const proformaUrl = proforma?._id ? `${backendUrl}/api/estimates/${proforma._id}/public-view` : '';
+        const receiptUrl = accountPayment?._id ? `${backendUrl}/api/payments/${accountPayment._id}/receipt` : registration.receiptPdfUrl;
 
         // The event header is a full banner image (same mechanism as every other
         // exhibitor email: template.headerImage, uploaded via the CMS) rather than
@@ -615,12 +631,6 @@ async function sendFullPaymentWelcomeEmail(registration) {
                     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr>
                         <td style="font-size:10px;color:#64748b;">
                             <strong style="color:#334155;">HEAD OFFICE:</strong> ${headOfficeAddress}
-                        </td>
-                        <td align="right" style="font-size:10px;color:#94a3b8;white-space:nowrap;padding-left:10px;">FOLLOW US ON &nbsp;
-                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#1877f2;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">f</span>
-                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#e1306c;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">i</span>
-                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#0a66c2;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">in</span>
-                            <span style="display:inline-block;width:16px;height:16px;line-height:16px;text-align:center;background:#ff0000;color:#fff;border-radius:50%;font-size:9px;font-weight:bold;font-family:Arial,sans-serif;">&#9654;</span>
                         </td>
                     </tr></table>
                 </td>
@@ -645,8 +655,8 @@ async function sendFullPaymentWelcomeEmail(registration) {
                 </td></tr>
             </table>`;
         const downloadButtonsHtml = [
-            registration.registrationPdfUrl ? downloadCard('Proforma Invoice', 'You can download your Proforma Invoice for future reference.', registration.registrationPdfUrl, '#0c2b5c') : '',
-            registration.receiptPdfUrl ? downloadCard('Payment Receipt', 'You can download your Payment Receipt for future reference.', registration.receiptPdfUrl, '#23471d') : ''
+            proformaUrl ? downloadCard('Proforma Invoice', 'You can view your Proforma Invoice for future reference.', proformaUrl, '#0c2b5c') : '',
+            receiptUrl ? downloadCard('Payment Receipt', 'You can download your Payment Receipt for future reference.', receiptUrl, '#23471d') : ''
         ].join('');
 
         const relationshipMgr = (registration.spokenWith && registration.spokenWith.trim())
@@ -661,7 +671,7 @@ async function sendFullPaymentWelcomeEmail(registration) {
             exhibitor_name: toTitleCase(registration.exhibitorName),
             contact_person: contactPersonName,
             registrationId: registration.registrationId,
-            pi_no: `PI/26-27/${(registration.registrationId || '').split('-').pop() || '0000'}`,
+            pi_no: proforma?.est_no || accountPayment?.ex_no || 'N/A',
             booking_amount: fmt(netPayableVal),
             tds_deducted: fmt(tdsAmountVal),
             net_payable: fmt(netPayableVal),
@@ -679,7 +689,7 @@ async function sendFullPaymentWelcomeEmail(registration) {
             hospitality_text: hospitalityText,
             passes_rows: passesRowsHtml,
             download_buttons: downloadButtonsHtml,
-            register_delegates_url: `${siteUrl}/delegate-registration`,
+            register_delegates_url: 'https://arogya.namogange.org/register-now',
             register_buyer_seller_url: `${siteUrl}/buyer-seller-meet`,
             login_url: loginUrl,
             username: registration.contact1?.email || 'N/A',
