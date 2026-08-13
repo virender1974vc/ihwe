@@ -34,6 +34,25 @@ const stallRateSchema = new mongoose.Schema({
     hsnCode: {
         type: String,
         default: ''
+    },
+    // A stall booking is a service (exhibition space rental), not goods —
+    // so invoices classify it under SAC, not HSN. Kept separate from
+    // hsnCode so both can be configured if a setup ever needs it.
+    sacCode: {
+        type: String,
+        default: ''
+    },
+    // Free-text TDS Deduction notes shown on invoices for this rate card —
+    // separate lists per payment plan since the terms can differ (e.g. TDS
+    // treatment may only need calling out for one of the two). An empty list
+    // means no TDS note is shown for that payment plan.
+    tdsFullPaymentLines: {
+        type: [String],
+        default: []
+    },
+    tdsInstalmentPaymentLines: {
+        type: [String],
+        default: []
     }
 }, { timestamps: true });
 

@@ -419,23 +419,44 @@ const IMPACT_FIELDS = [
   ["event_gst_no", "Event GST number"],
   ["consignee_person", "Contact person"],
   ["consignee_phone", "Contact phone"],
+  ["consignee_email", "Contact email"],
+  ["consignee_country", "Consignee country"],
+  ["consignee_state", "Consignee state"],
+  ["consignee_city", "Consignee city"],
+  ["consignee_pincode", "Consignee PIN code"],
+  ["company_contact_person", "Company contact person"],
+  ["company_contact_mobile", "Company contact mobile"],
+  ["company_email", "Company email"],
   ["country", "Country"],
   ["state", "State"],
   ["city", "City"],
   ["pincode", "PIN code"],
   ["finalAmount", "Grand total"],
+  ["paymentPlanType", "Payment plan type"],
+  ["paymentPlanLabel", "Payment plan label"],
+  ["plcPct", "PLC %"],
+  ["plcCharges", "PLC charges"],
+  ["plcGstPct", "PLC GST %"],
+  ["plcGstAmount", "PLC GST amount"],
+  ["plcFinalAmount", "PLC final amount"],
+  ["tdsApplicable", "TDS applicable"],
+  ["tdsLines", "TDS deduction notes"],
+  ["instalments", "Instalment plan"],
   ["remarks", "Remarks"],
   ["terms", "Terms"],
 ];
 
 const normalizeImpactValue = (value) => {
   if (value === undefined || value === null) return "";
-  return typeof value === "number" ? Number(value) : String(value).trim();
+  if (typeof value === "number") return Number(value);
+  if (typeof value === "boolean") return value;
+  if (Array.isArray(value) || typeof value === "object") return JSON.stringify(value);
+  return String(value).trim();
 };
 
 const summarizeItemChanges = (oldItems = [], newItems = []) => {
   const comparableFields = [
-    "description", "hsn", "qty", "size", "area", "unit", "rate",
+    "category", "plScheme", "stallType", "description", "hsn", "qty", "size", "area", "unit", "rate",
     "amount", "disc", "gstRate", "tax", "finalAmount",
   ];
   const maxLength = Math.max(oldItems.length, newItems.length);

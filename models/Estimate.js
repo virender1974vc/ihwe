@@ -1,6 +1,26 @@
 const mongoose = require("mongoose");
 const { secondaryDB } = require("../config/secondaryDb");
+
+const estimateInstalmentSchema = new mongoose.Schema(
+  {
+    // The Event Setup payment-plan phase id this instalment came from (e.g.
+    // "advance") — kept so an edited PI can match its saved Remarks override
+    // back to the right row even though the row itself is re-derived fresh
+    // from the event's plan config on every load.
+    id: { type: String, default: "" },
+    label: { type: String, default: "" },
+    percentage: { type: Number, default: 0 },
+    amount: { type: Number, default: 0 },
+    dueDate: { type: Date, default: null },
+    remarks: { type: String, default: "" },
+  },
+  { _id: false },
+);
+
 const estimateItemSchema = new mongoose.Schema({
+  category: { type: String, default: "" },
+  plScheme: { type: String, default: "" },
+  stallType: { type: String, default: "" },
   description: { type: String, required: true },
   hsn: { type: String, required: true, default: "998596" },
   qty: { type: Number, required: true },
@@ -42,6 +62,14 @@ const estimateSchema = new mongoose.Schema(
     consignee_addr: { type: String, required: true },
     consignee_person: { type: String, default: "" },
     consignee_phone: { type: String, default: "" },
+    consignee_email: { type: String, default: "" },
+    consignee_country: { type: String, default: "" },
+    consignee_state: { type: String, default: "" },
+    consignee_city: { type: String, default: "" },
+    consignee_pincode: { type: String, default: "" },
+    company_contact_person: { type: String, default: "" },
+    company_contact_mobile: { type: String, default: "" },
+    company_email: { type: String, default: "" },
     country: { type: String, required: true },
     state: { type: String, required: true },
     city: { type: String, required: true },
@@ -50,6 +78,17 @@ const estimateSchema = new mongoose.Schema(
     finalAmount: { type: Number },
     paymentPlanType: { type: String, default: "" },
     paymentPlanLabel: { type: String, default: "" },
+    // Preferential Location Charge — a % of the primary stall's base cost,
+    // folded into finalAmount but also stored on its own for the invoice's
+    // "Additional Charges" breakdown.
+    plcPct: { type: Number, default: 0 },
+    plcCharges: { type: Number, default: 0 },
+    plcGstPct: { type: Number, default: 0 },
+    plcGstAmount: { type: Number, default: 0 },
+    plcFinalAmount: { type: Number, default: 0 },
+    tdsApplicable: { type: Boolean, default: true },
+    tdsLines: { type: [String], default: [] },
+    instalments: { type: [estimateInstalmentSchema], default: [] },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
     added_by: { type: String },
