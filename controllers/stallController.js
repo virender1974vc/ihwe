@@ -35,6 +35,15 @@ class StallController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+    async makeAvailable(req, res) {
+        try {
+            const data = await stallService.makeAvailable(req.params.id);
+            await logActivity(req, 'Updated', 'Stalls', `Made stall ${data.stallNumber} available`);
+            res.json({ success: true, message: 'Stall is now available', data });
+        } catch (error) {
+            res.status(error.statusCode || 400).json({ success: false, message: error.message });
+        }
+    }
     async deleteStall(req, res) {
         try {
             await stallService.deleteStall(req.params.id);
