@@ -1,7 +1,7 @@
 const Stall = require('../models/Stall');
 class StallService {
     async getAllStalls() {
-        return await Stall.find().populate('eventId', 'name').sort({ createdAt: -1 });
+        return await Stall.find().populate('eventId', 'name').populate('bookedBy', 'exhibitorName companyEmail').sort({ createdAt: -1 });
     }
     async getAvailableStalls(query = {}) {
         const filter = { status: 'available' };
@@ -20,6 +20,9 @@ class StallService {
     }
     async deleteStall(id) {
         return await Stall.findByIdAndDelete(id);
+    }
+    async bulkDeleteStalls(ids) {
+        return await Stall.deleteMany({ _id: { $in: ids } });
     }
     async bookStall(id, bookedById) {
         return await Stall.findByIdAndUpdate(id, { status: 'booked', bookedBy: bookedById }, { returnDocument: 'after' });
