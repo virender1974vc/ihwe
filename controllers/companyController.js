@@ -794,29 +794,45 @@ const updateCompany = async (req, res) => {
     });
     if (!updated) return res.status(404).json({ message: "Company not found" });
 
-    if (req.body.contacts) {
+    const hasMappedFieldUpdate = Object.keys(COMPANY_TO_EXHIBITOR_FIELD_MAP).some(
+      (key) => req.body[key] !== undefined,
+    );
+
+    if (req.body.contacts || hasMappedFieldUpdate) {
       try {
         const ExhibitorRegistration = require('../models/ExhibitorRegistration');
         const exhibitor = await ExhibitorRegistration.findOne({ clientId: req.params.id });
         if (exhibitor) {
-          const payload = { contact1: null, contact2: null };
-          const mapContact = (c) => c ? {
-            title: c.title,
-            firstName: c.firstName,
-            lastName: c.surname,
-            email: c.email,
-            designation: c.designation,
-            mobile: c.mobile,
-            alternateNo: c.alternate,
-            photoUrl: c.photo
-          } : null;
+          const payload = {};
 
-          if (updated.contacts[0]) payload.contact1 = mapContact(updated.contacts[0]);
-          if (updated.contacts[1]) payload.contact2 = mapContact(updated.contacts[1]);
-          await ExhibitorRegistration.updateOne({ _id: exhibitor._id }, { $set: payload });
+          if (req.body.contacts) {
+            const mapContact = (c) => c ? {
+              title: c.title,
+              firstName: c.firstName,
+              lastName: c.surname,
+              email: c.email,
+              designation: c.designation,
+              mobile: c.mobile,
+              alternateNo: c.alternate,
+              photoUrl: c.photo
+            } : null;
+
+            payload.contact1 = updated.contacts[0] ? mapContact(updated.contacts[0]) : null;
+            payload.contact2 = updated.contacts[1] ? mapContact(updated.contacts[1]) : null;
+          }
+
+          Object.entries(COMPANY_TO_EXHIBITOR_FIELD_MAP).forEach(([companyField, exhibitorField]) => {
+            if (req.body[companyField] !== undefined) {
+              payload[exhibitorField] = updated[companyField];
+            }
+          });
+
+          if (Object.keys(payload).length > 0) {
+            await ExhibitorRegistration.updateOne({ _id: exhibitor._id }, { $set: payload });
+          }
         }
       } catch (err) {
-        console.error("Failed to sync contacts to ExhibitorRegistration", err);
+        console.error("Failed to sync company details to ExhibitorRegistration", err);
       }
     }
 
