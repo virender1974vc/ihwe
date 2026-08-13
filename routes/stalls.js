@@ -15,6 +15,7 @@ router.get('/available', (req, res) => stallController.getAvailableStalls(req, r
 router.get('/', verifyAdmin, (req, res) => stallController.getAllStalls(req, res));
 router.post('/', verifyAdmin, (req, res) => stallController.addStall(req, res));
 router.post('/bulk', verifyAdmin, (req, res) => stallController.bulkDeleteStalls(req, res));
+router.patch('/:id/make-available', verifyAdmin, (req, res) => stallController.makeAvailable(req, res));
 router.put('/:id', verifyAdmin, (req, res) => stallController.updateStall(req, res));
 router.delete('/:id', verifyAdmin, (req, res) => stallController.deleteStall(req, res));
 
