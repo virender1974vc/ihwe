@@ -25,6 +25,12 @@ const stallSchema = new mongoose.Schema({
         type: Number, 
         required: true 
     },
+    stallType: {
+        type: String,
+        enum: ['Raw Space', 'Shell Space'],
+        default: 'Shell Space',
+        required: true
+    },
     plScheme: {
         type: String,
         enum: ['One Side Open', 'Two Side Open', 'Three Side Open', 'Four Side Open'],
