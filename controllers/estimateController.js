@@ -442,6 +442,7 @@ const IMPACT_FIELDS = [
   ["tdsApplicable", "TDS applicable"],
   ["tdsLines", "TDS deduction notes"],
   ["instalments", "Instalment plan"],
+  ["paymentConditions", "Payment terms"],
   ["remarks", "Remarks"],
   ["terms", "Terms"],
 ];
