@@ -96,7 +96,7 @@ const validateInvoiceItemsAgainstEstimate = async (payload, excludeInvoiceId = n
   if (!estimate) return null;
 
   const allowedQtyByKey = new Map();
-  (estimate.items || []).forEach((item) => {
+  buildInvoiceItemsFromEstimate(estimate).forEach((item) => {
     const key = getItemKey(item);
     allowedQtyByKey.set(key, (allowedQtyByKey.get(key) || 0) + (Number(item.qty) || 0));
   });
@@ -238,7 +238,21 @@ const createInvoice = async (req, res) => {
 
     const validationError = await validateInvoiceItemsAgainstEstimate(req.body);
     if (validationError) {
-      return res.status(400).json({ message: validationError });
+      const existingInvoice = req.body.source_estimate_id || req.body.estimate_no
+        ? await Invoice.findOne({
+            companyId: req.body.companyId,
+            status: { $ne: "cancelled" },
+            $or: [
+              ...(req.body.source_estimate_id ? [{ source_estimate_id: String(req.body.source_estimate_id) }] : []),
+              ...(req.body.estimate_no ? [{ estimate_no: req.body.estimate_no }] : []),
+            ],
+          }).sort({ added: -1 }).select("_id invoice_no").lean()
+        : null;
+      return res.status(400).json({
+        message: validationError,
+        existingInvoiceId: existingInvoice?._id || null,
+        existingInvoiceNo: existingInvoice?.invoice_no || "",
+      });
     }
 
     const challanResult = await buildDeliveryChallanSnapshots(req.body);
@@ -413,7 +427,47 @@ const estimateItemToInvoiceItem = (item = {}) => {
     size: String(item.size ?? ""), area: String(item.area ?? ""), unit: item.unit || "Nos",
     rate: Number(item.rate || 0), amount, discountPct, taxableValue, gstPct, gstAmount,
     total: Number(item.finalAmount || (taxableValue + gstAmount)),
+    category: item.category || "", plScheme: item.plScheme || "", stallType: item.stallType || "",
   };
+};
+
+const buildInvoiceItemsFromEstimate = (estimate = {}) => {
+  const invoiceItems = (estimate.items || []).map(estimateItemToInvoiceItem);
+  const stall = (estimate.items || []).find((item) => item?.category !== "Addon Product") || estimate.items?.[0] || {};
+  const plcPct = Number(estimate.plcPct || 0);
+  const plcCharges = Number(estimate.plcCharges || 0) || (Number(stall.amount || 0) * plcPct / 100);
+  if (plcCharges <= 0) return invoiceItems;
+  const gstPct = Number(estimate.plcGstPct || 18);
+  const gstAmount = Number(estimate.plcGstAmount || 0) || (plcCharges * gstPct / 100);
+  invoiceItems.push({
+    description: `Preferred Location Charges (PLC)${plcPct ? ` @ ${plcPct}%` : ""}`,
+    hsn: stall.hsn || "", qty: 1, size: String(stall.size || ""), area: String(stall.area || ""), unit: "Nos",
+    rate: Number(stall.rate || 0) * plcPct / 100, amount: plcCharges, discountPct: 0,
+    taxableValue: plcCharges, gstPct: String(gstPct), gstAmount,
+    total: Number(estimate.plcFinalAmount || 0) || plcCharges + gstAmount,
+    category: "PLC Charges", plScheme: stall.plScheme || "", stallType: stall.stallType || "",
+  });
+  return invoiceItems;
+};
+
+const uploadInvoiceAttachments = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    if (!req.files?.length) return res.status(400).json({ message: "Select at least one attachment." });
+
+    const uploaded = req.files.map((file) => ({
+      originalName: file.originalname,
+      url: `/uploads/invoices/${file.filename}`,
+      mimeType: file.mimetype,
+      size: file.size,
+    }));
+    invoice.attachments.push(...uploaded);
+    await invoice.save();
+    return res.status(201).json({ message: "Attachments uploaded", data: invoice.attachments });
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to upload invoice attachments", error: error.message });
+  }
 };
 
 const buildRevisedInvoiceData = (invoice, estimate) => ({
@@ -435,10 +489,8 @@ const buildRevisedInvoiceData = (invoice, estimate) => ({
   billing_address: estimate.company_addr || invoice.billing_address,
   country: estimate.country || "", state: estimate.state || "", city: estimate.city || "",
   pincode: String(estimate.pincode || ""),
-  items: (estimate.items || []).map(estimateItemToInvoiceItem),
-  finalAmount: (estimate.items || []).map(estimateItemToInvoiceItem).reduce((sum, item) => sum + Number(item.total || 0), 0) || Number(estimate.finalAmount || 0),
-  remarks: estimate.remarks || "",
-  terms: estimate.terms || "",
+  items: buildInvoiceItemsFromEstimate(estimate),
+  finalAmount: buildInvoiceItemsFromEstimate(estimate).reduce((sum, item) => sum + Number(item.total || 0), 0) || Number(estimate.finalAmount || 0),
 });
 
 const getInvoiceRevisionDependencies = async (invoice) => {
@@ -524,7 +576,6 @@ const reviseInvoiceFromEstimate = async (req, res) => {
     if (isCancelledDoc(invoice)) return res.status(409).json({ message: "Cancelled invoice cannot be revised." });
     const estimate = await getSourceEstimateForInvoice(invoice);
     if (!estimate) return res.status(404).json({ message: "Linked Proforma Invoice was not found." });
-
     const currentInvoice = invoice.toObject();
     const revisedData = buildRevisedInvoiceData(currentInvoice, estimate);
     if (!summarizeInvoiceRevision(currentInvoice, revisedData).hasChanges) {
@@ -1158,4 +1209,5 @@ module.exports = {
   previewWhatsAppInvoice,
   sendEmailInvoice,
   previewEmailInvoice,
+  uploadInvoiceAttachments,
 };

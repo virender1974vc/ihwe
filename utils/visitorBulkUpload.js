@@ -43,6 +43,34 @@ const parseList = (value) => Array.isArray(value)
   ? value.map((item) => String(item).trim()).filter(Boolean)
   : String(value || "").split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
 
+const normalizeBooleanFields = (data, model) => {
+  const normalized = { ...data };
+
+  model.schema.eachPath((path, schemaType) => {
+    if (schemaType.instance !== "Boolean" || path.includes(".") || !(path in normalized)) return;
+
+    const value = normalized[path];
+    if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+      delete normalized[path];
+      return;
+    }
+
+    if (typeof value !== "string") return;
+    const booleanValue = value.trim().toLowerCase();
+    if (["true", "yes", "y", "1", "on"].includes(booleanValue)) {
+      normalized[path] = true;
+      return;
+    }
+    if (["false", "no", "n", "0", "off"].includes(booleanValue)) {
+      normalized[path] = false;
+      return;
+    }
+    throw new Error(`invalid value for ${path}; use Yes/No, True/False, or 1/0.`);
+  });
+
+  return normalized;
+};
+
 async function runWithConcurrency(items, limit, worker) {
   const results = new Array(items.length);
   let nextIndex = 0;
@@ -112,7 +140,7 @@ async function validateRows({ rows, model, fields, requiredFields, transformRow 
     }
 
     try {
-      prepared.push({ rowNumber, data: transformRow(row, { parseList }) });
+      prepared.push({ rowNumber, data: normalizeBooleanFields(transformRow(row, { parseList }), model) });
     } catch (error) {
       errors.push(`Row ${rowNumber}: ${error.message}`);
     }
@@ -224,5 +252,6 @@ module.exports = {
   visitorExcelFileFilter,
   visitorUploadLimits,
   visitorUploadErrorHandler,
+  normalizeBooleanFields,
   processVisitorBulkUpload,
 };

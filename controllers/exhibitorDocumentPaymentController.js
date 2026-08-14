@@ -122,18 +122,38 @@ const getAuthorizedCompanyIds = async (user) => {
   registrations.forEach((reg) => {
     ids.add(String(reg._id));
     if (reg.clientId) ids.add(String(reg.clientId));
+    // Legacy documents may have companyId set to the human-readable registration
+    // code (e.g. "9IHWE-EX-2026-8002") instead of the registration's real _id.
+    if (reg.registrationId) ids.add(String(reg.registrationId));
   });
   return ids;
 };
 
 const lookupCompanyOrExhibitor = async (id) => {
-  if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
+  if (!id) return null;
+
+  // Some legacy documents store the human-readable registration code
+  // (e.g. "9IHWE-EX-2026-8002") in companyId instead of the real _id.
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    const exhibitorByCode = await ExhibitorRegistration.findOne({ registrationId: id }).lean();
+    return exhibitorByCode ? { ...exhibitorByCode, _source: "exhibitorRegistration" } : null;
+  }
+
   const company = await Company.findById(id).lean();
   if (company) {
+    // company.exhibitorRegistrationId is usually the registration's ObjectId,
+    // but some legacy company records have the human-readable code
+    // (e.g. "9IHWE-EX-2026-8002") stored there instead. Match on whichever
+    // shape it actually is instead of passing a non-ObjectId string into an
+    // { _id: ... } clause, which would make the whole $or throw a CastError.
+    const exhibitorRegistrationId = company.exhibitorRegistrationId;
     const exhibitor = await ExhibitorRegistration.findOne({
       $or: [
         { clientId: company._id },
-        ...(company.exhibitorRegistrationId ? [{ _id: company.exhibitorRegistrationId }] : [])
+        ...(exhibitorRegistrationId && mongoose.Types.ObjectId.isValid(exhibitorRegistrationId)
+          ? [{ _id: exhibitorRegistrationId }]
+          : []),
+        ...(exhibitorRegistrationId ? [{ registrationId: exhibitorRegistrationId }] : [])
       ]
     }).lean();
     if (exhibitor) {
@@ -352,8 +372,13 @@ const getDocument = async (req, res) => {
     }
 
     const company = await lookupCompanyOrExhibitor(doc.companyId || doc.account_ref_id);
+    const sourceEstimate = docType === "invoice" && (doc.source_estimate_id || doc.estimate_no)
+      ? await Estimate.findOne(doc.source_estimate_id
+          ? { _id: doc.source_estimate_id }
+          : { est_no: doc.estimate_no, companyId: doc.companyId }).lean()
+      : null;
 
-    res.json({ success: true, document: doc, company });
+    res.json({ success: true, document: doc, company, sourceEstimate });
   } catch (error) {
     console.error("Exhibitor get-document error:", error);
     res.status(500).json({ success: false, message: error?.message || "Failed to load document" });

@@ -89,6 +89,12 @@ const estimateSchema = new mongoose.Schema(
     tdsApplicable: { type: Boolean, default: true },
     tdsLines: { type: [String], default: [] },
     instalments: { type: [estimateInstalmentSchema], default: [] },
+    // Snapshot of the Full Payment plan's payment-terms text (sourced from
+    // EstimateTermsConfig at save time) so it stays accurate to what was
+    // shown on the PI even if the global config is edited later. Only
+    // populated for Full Payment PIs — Instalment Plan PIs already have
+    // their own structured breakdown in `instalments`.
+    paymentConditions: { type: [String], default: [] },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
     added_by: { type: String },
