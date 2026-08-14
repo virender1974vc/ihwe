@@ -25,7 +25,18 @@ const invoiceItemSchema = new mongoose.Schema({
   gstPct: { type: String, required: true },
   gstAmount: { type: Number, required: true },
   total: { type: Number, required: true },
+  category: { type: String, default: "" },
+  plScheme: { type: String, default: "" },
+  stallType: { type: String, default: "" },
 });
+
+const invoiceAttachmentSchema = new mongoose.Schema({
+  originalName: { type: String, required: true },
+  url: { type: String, required: true },
+  mimeType: { type: String, default: "" },
+  size: { type: Number, default: 0 },
+  uploadedAt: { type: Date, default: Date.now },
+}, { _id: false });
 
 const invoiceDeliveryChallanItemSchema = new mongoose.Schema(
   {
@@ -74,8 +85,8 @@ const InvoiceSchema = new mongoose.Schema(
     invoice_no: { type: String, required: true, unique: true }, 
     type_of_invoice: { type: String, required: true },
     invoice_date: { type: String },
-    due_date: { type: String },
     po_no: { type: String },
+    eway_bill_no: { type: String, default: "" },
     currency: { type: String },
     
     gst_no: { type: String },
@@ -109,6 +120,7 @@ const InvoiceSchema = new mongoose.Schema(
     delivery_challans: { type: [invoiceDeliveryChallanSchema], default: [] },
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },
+    attachments: { type: [invoiceAttachmentSchema], default: [] },
     revision_no: { type: Number, default: 0 },
     revised_at: { type: Date, default: null },
     revisions: { type: [invoiceRevisionSchema], default: [] },
