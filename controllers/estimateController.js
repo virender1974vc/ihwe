@@ -208,11 +208,21 @@ const getGroupedEstimateData = async (req, res) => {
           updated: 1,
           items: 1,
           supply_date: 1,
+          // The document's own saved finalAmount already includes PLC Charges
+          // (plcCharges + plcGstAmount), which aren't line items — summing
+          // items.finalAmount here would silently drop them. Only fall back
+          // to that sum for legacy records saved before finalAmount existed.
           finalAmount: {
             $cond: {
-              if: { $isArray: "$items" },
-              then: { $sum: "$items.finalAmount" },
-              else: 0,
+              if: { $and: [{ $ne: ["$finalAmount", null] }, { $gt: ["$finalAmount", 0] }] },
+              then: "$finalAmount",
+              else: {
+                $cond: {
+                  if: { $isArray: "$items" },
+                  then: { $sum: "$items.finalAmount" },
+                  else: 0,
+                },
+              },
             },
           },
           added: 1,
@@ -316,11 +326,21 @@ const getAllEstimates = async (req, res) => {
           updated: 1,
           items: 1,
           supply_date: 1,
+          // The document's own saved finalAmount already includes PLC Charges
+          // (plcCharges + plcGstAmount), which aren't line items — summing
+          // items.finalAmount here would silently drop them. Only fall back
+          // to that sum for legacy records saved before finalAmount existed.
           finalAmount: {
             $cond: {
-              if: { $isArray: "$items" },
-              then: { $sum: "$items.finalAmount" },
-              else: 0,
+              if: { $and: [{ $ne: ["$finalAmount", null] }, { $gt: ["$finalAmount", 0] }] },
+              then: "$finalAmount",
+              else: {
+                $cond: {
+                  if: { $isArray: "$items" },
+                  then: { $sum: "$items.finalAmount" },
+                  else: 0,
+                },
+              },
             },
           },
           added: 1,
@@ -655,7 +675,10 @@ const previewWhatsAppEstimate = async (req, res) => {
 
     const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
 
-    const totalTaxable = estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0).toFixed(2);
+    const totalTaxable = (
+      (estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0) || 0)
+      + (Number(estimate.plcCharges) || 0)
+    ).toFixed(2);
 
     let itemsText = estimate.items.map((i, index) => {
       let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
@@ -755,7 +778,10 @@ const sendWhatsAppEstimate = async (req, res) => {
 
       const dateStr = estimate.supply_date ? new Date(estimate.supply_date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN');
 
-      const totalTaxable = estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0).toFixed(2);
+      const totalTaxable = (
+        (estimate.items?.reduce((sum, item) => sum + (parseFloat(item.taxable) || parseFloat(item.amount) || 0), 0) || 0)
+        + (Number(estimate.plcCharges) || 0)
+      ).toFixed(2);
 
       let itemsText = estimate.items.map((i, index) => {
         let itemStr = `🔹 *${index + 1}. ${i.description}*\n` +
@@ -909,6 +935,8 @@ const previewEmailEstimate = async (req, res) => {
             </tr>
             `;
     }).join('');
+    // PLC Charges are a real part of the taxable base but aren't a line item.
+    totalTaxable += Number(estimate.plcCharges) || 0;
 
     let totalsHtml = `
             <tr>
@@ -1111,6 +1139,8 @@ const sendEmailEstimate = async (req, res) => {
                 </tr>
                 `;
       }).join('');
+      // PLC Charges are a real part of the taxable base but aren't a line item.
+      totalTaxable += Number(estimate.plcCharges) || 0;
 
       let totalsHtml = `
                 <tr>

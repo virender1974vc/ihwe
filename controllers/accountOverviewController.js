@@ -9,6 +9,8 @@ const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const ActivityLog = require("../models/activity/activityLogModel");
 const Stall = require("../models/Stall");
+const CrmEvent = require("../models/CrmEvent");
+const Event = require("../models/Event");
 const mongoose = require("mongoose");
 const { cleanText, formatDetails } = require("../utils/activityLogFormatter");
 const { legacyCreditNoteAmount, getCreditedByInvoiceId } = require("../services/ledgerTotals");
@@ -25,6 +27,77 @@ const cleanActorName = (value) => {
   return isGenericUserName(cleaned) ? "" : cleaned;
 };
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
+
+// Same due-date formula PerformaInvoices.jsx uses when it saves each
+// instalment's dueDate: an explicit dueDate on the plan phase wins, otherwise
+// it's the event's start date minus that phase's dueDaysBeforeEvent.
+const computePlanPhaseDueDate = (plan, eventStartDate) => {
+  if (!plan) return null;
+  if (plan.dueDate) return new Date(plan.dueDate);
+  // 0 is a real, meaningful value here ("due on the event's own start
+  // date") — a truthy check would wrongly treat it as "unset".
+  if (eventStartDate && plan.dueDaysBeforeEvent != null) {
+    const d = new Date(eventStartDate);
+    d.setDate(d.getDate() - Number(plan.dueDaysBeforeEvent));
+    return d;
+  }
+  return null;
+};
+
+// Is this PI (or the Invoice generated from one) overdue? Instalment Plan
+// PIs already have each phase's resolved due date saved on the Estimate
+// itself — overdue if any instalment's due date has passed and the
+// cumulative amount due by then exceeds what's actually been paid. A Full
+// Payment PI has no instalments saved, so its due date is resolved the same
+// way — from the event's own "full" Payment Plan phase — instead of a flat
+// grace period.
+const isPiPaymentOverdue = async (sourceEstimate, docPaidAmount, eventCache) => {
+  if (!sourceEstimate) return false;
+  const today = new Date();
+
+  if (sourceEstimate.instalments?.length > 0) {
+    const sorted = [...sourceEstimate.instalments]
+      .filter((inst) => inst.dueDate)
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    let cumulative = 0;
+    for (const inst of sorted) {
+      cumulative += Number(inst.amount) || 0;
+      if (new Date(inst.dueDate) < today && cumulative > docPaidAmount + 0.01) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (!sourceEstimate.crmEventId) return false;
+  const crmEventId = String(sourceEstimate.crmEventId);
+  if (!eventCache.has(crmEventId)) {
+    let event = null;
+    try {
+      const crmEvent = await CrmEvent.findById(crmEventId).lean();
+      if (crmEvent?.registrationEventId) {
+        event = await Event.findById(crmEvent.registrationEventId).lean();
+      }
+    } catch {
+      event = null;
+    }
+    eventCache.set(crmEventId, event);
+  }
+  const event = eventCache.get(crmEventId);
+  if (!event) return false;
+
+  const fullPlan = (event.paymentPlans || []).find((plan) => Number(plan.percentage) === 100);
+  // Only trust this as "genuinely Full Payment" when the estimate's own
+  // paymentPlanType actually points at that 100% phase. An estimate saved
+  // with an instalment plan type but no instalments (inconsistent legacy
+  // data) isn't Full Payment — don't guess a due date from the wrong phase.
+  if (!fullPlan || (sourceEstimate.paymentPlanType && sourceEstimate.paymentPlanType !== fullPlan.id)) {
+    return false;
+  }
+  const dueDate = computePlanPhaseDueDate(fullPlan, event.startDate);
+  return Boolean(dueDate && dueDate < today);
+};
+
 const getProformaCommunicationStatus = (estimate) => {
   if (isCancelledDoc(estimate)) return "Cancelled";
   const emailSent = Boolean(estimate?.emailSent || estimate?.emailSentAt);
@@ -56,7 +129,18 @@ const resolveCompanyAndExhibitor = async (companyId, crmEventId = "") => {
     const scopedAssignment = crmEventId
       ? (company.eventAssignments || []).find((a) => String(a.eventId) === String(crmEventId))
       : null;
-    const registrationId = scopedAssignment?.exhibitorRegistrationId || company.exhibitorRegistrationId;
+    // Viewed without an event in scope (e.g. the plain Account Overview
+    // page) — company.exhibitorRegistrationId is routinely null once a
+    // company only has per-event assignments, so "no crmEventId → no
+    // registration" would wrongly lock booked-exhibitor actions. Any
+    // assignment with a registration means this company HAS event-wise
+    // Exhibitor Registration data, so fall back to that instead of assuming
+    // none exists.
+    const anyAssignmentWithRegistration = (company.eventAssignments || [])
+      .find((a) => isValidId(a.exhibitorRegistrationId));
+    const registrationId = scopedAssignment?.exhibitorRegistrationId
+      || company.exhibitorRegistrationId
+      || anyAssignmentWithRegistration?.exhibitorRegistrationId;
     if (isValidId(registrationId)) {
       exhibitor = await ExhibitorRegistration.findById(registrationId).lean();
     }
@@ -175,12 +259,28 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
   let totalDue = 0;
   let dueBreakdown = [];
 
-  if (activeInvoices.length > 0) {
-    totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-    dueBreakdown = activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added }));
-  } else if (activeProformaInvoices.length > 0) {
-    totalDue = activeProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
-    dueBreakdown = activeProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added }));
+  // An exhibitor can have several independent PIs at once, each at its own
+  // stage — some already converted to an Invoice, others not yet. Using
+  // "any invoice exists → show invoices only, ignore every PI" (the old
+  // logic) silently dropped every PI that hadn't been invoiced the moment
+  // *any other* PI for this account had been — undercounting what's owed.
+  // Sum invoices with only the PIs that haven't been converted into one.
+  const invoicedEstimateKeys = new Set();
+  activeInvoices.forEach((inv) => {
+    if (inv.source_estimate_id) invoicedEstimateKeys.add(String(inv.source_estimate_id));
+    if (inv.estimate_no) invoicedEstimateKeys.add(String(inv.estimate_no));
+  });
+  const uninvoicedProformaInvoices = activeProformaInvoices.filter((estimate) =>
+    !invoicedEstimateKeys.has(String(estimate._id)) && !invoicedEstimateKeys.has(String(estimate.est_no))
+  );
+
+  if (activeInvoices.length > 0 || uninvoicedProformaInvoices.length > 0) {
+    totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0)
+      + uninvoicedProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
+    dueBreakdown = [
+      ...activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added })),
+      ...uninvoicedProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added })),
+    ];
   } else if (exhibitor?.financeBreakdown?.netPayable) {
     totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
     dueBreakdown = [{ no: 'Registration (Net Payable)', amount: totalDue, type: 'Registration', date: exhibitor?.createdAt }];
@@ -327,6 +427,32 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
 
   if (totalDue === 0 && exhibitor?.balanceAmount) {
     remainingBalance = parseFloat(exhibitor.balanceAmount) || 0;
+  }
+
+  // Account Status: Received (nothing owed) / Due (balance owed, nothing
+  // overdue yet) / Overdue (balance owed and at least one PI's payment is
+  // past its due date).
+  let accountStatus = "Received";
+  if (remainingBalance > 0) {
+    const eventCache = new Map();
+    let anyOverdue = false;
+    for (const doc of remainingBreakdown) {
+      if (doc.type !== "Invoice" && doc.type !== "Proforma Invoice") continue;
+      const sourceEstimate = doc.type === "Proforma Invoice"
+        ? proformaInvoices.find((e) => String(e._id) === String(doc.id))
+        : (() => {
+          const invoice = invoices.find((i) => String(i._id) === String(doc.id));
+          if (!invoice) return null;
+          return proformaInvoices.find((e) =>
+            String(e._id) === String(invoice.source_estimate_id) || e.est_no === invoice.estimate_no
+          );
+        })();
+      if (await isPiPaymentOverdue(sourceEstimate, doc.paidAmount || 0, eventCache)) {
+        anyOverdue = true;
+        break;
+      }
+    }
+    accountStatus = anyOverdue ? "Overdue" : "Due";
   }
 
   // 4. Format Recent Documents
@@ -687,6 +813,7 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
       totalDue,
       paidAmount,
       remainingBalance,
+      accountStatus,
       creditNoteTotal,
       debitNoteTotal,
       dueBreakdown,

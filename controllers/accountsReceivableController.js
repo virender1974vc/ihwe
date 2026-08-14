@@ -474,6 +474,11 @@ const getAccountsReceivable = async (req, res) => {
         totalInvoicesForClient: docCountByCompany[doc.companyId] || 1,
         paymentType,
         pymtType,
+        // The actual type recorded on the most recent Payment against this
+        // document (e.g. "Advance Payment"/"Running Payment"/"Full Payment"),
+        // as opposed to pymtType above which is a derived installment-progress
+        // label, not what was literally selected when that payment was logged.
+        lastPymtType: lastPayment?.pymnt_type || null,
         invValue: docValue,
         received,
         receivedPct,
