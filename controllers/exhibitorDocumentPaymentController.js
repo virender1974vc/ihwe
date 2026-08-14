@@ -372,8 +372,13 @@ const getDocument = async (req, res) => {
     }
 
     const company = await lookupCompanyOrExhibitor(doc.companyId || doc.account_ref_id);
+    const sourceEstimate = docType === "invoice" && (doc.source_estimate_id || doc.estimate_no)
+      ? await Estimate.findOne(doc.source_estimate_id
+          ? { _id: doc.source_estimate_id }
+          : { est_no: doc.estimate_no, companyId: doc.companyId }).lean()
+      : null;
 
-    res.json({ success: true, document: doc, company });
+    res.json({ success: true, document: doc, company, sourceEstimate });
   } catch (error) {
     console.error("Exhibitor get-document error:", error);
     res.status(500).json({ success: false, message: error?.message || "Failed to load document" });
