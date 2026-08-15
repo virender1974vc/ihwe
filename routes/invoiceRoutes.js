@@ -15,6 +15,7 @@ const {
   sendEmailInvoice,
   previewEmailInvoice,
   uploadInvoiceAttachments,
+  uploadInvoicePoAttachment,
 } = require("../controllers/invoiceController.js");
 const { authMiddleware } = require("../middleware/authMiddleware");
 
@@ -47,6 +48,15 @@ const uploadAttachments = (req, res, next) => {
     return res.status(400).json({ message: error.message || "Unable to upload attachments." });
   });
 };
+const uploadPoAttachment = (req, res, next) => {
+  attachmentUpload.single("po_attachment")(req, res, (error) => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ message: "The PO file must be 25MB or smaller." });
+    }
+    return res.status(400).json({ message: error.message || "Unable to upload PO attachment." });
+  });
+};
 
 router.get("/", getAllInvoices); // GET all invoices
 router.get("/:id/revision-preview", previewInvoiceRevision);
@@ -54,6 +64,7 @@ router.post("/:id/revise-from-estimate", reviseInvoiceFromEstimate);
 router.get("/:id", getInvoiceById); // GET single invoice
 router.post("/", createInvoice); // CREATE invoice
 router.post("/:id/attachments", uploadAttachments, uploadInvoiceAttachments);
+router.post("/:id/po-attachment", uploadPoAttachment, uploadInvoicePoAttachment);
 router.put("/:id", updateInvoice); // UPDATE invoice
 router.delete("/:id", deleteInvoice); // DELETE invoice
 router.post("/:id/send-whatsapp", sendWhatsAppInvoice);

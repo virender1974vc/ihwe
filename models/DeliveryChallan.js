@@ -1,6 +1,14 @@
 const mongoose = require("mongoose");
 const { secondaryDB } = require("../config/secondaryDb");
 
+const challanAttachmentSchema = new mongoose.Schema({
+  originalName: { type: String, required: true },
+  url: { type: String, required: true },
+  mimeType: { type: String, default: "" },
+  size: { type: Number, default: 0 },
+  uploadedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const challanItemSchema = new mongoose.Schema(
   {
     sourceItemKey: { type: String, required: true },
@@ -87,6 +95,7 @@ const deliveryChallanSchema = new mongoose.Schema(
     state_code: { type: String, default: "" },
     bilty_no: { type: String, default: "" },
     po_no: { type: String, default: "" },
+    attachment: { type: challanAttachmentSchema, default: null },
 
     remarks: { type: String, default: "" },
     terms: { type: String, default: "" },

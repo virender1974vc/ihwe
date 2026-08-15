@@ -356,25 +356,74 @@ const createInvoice = async (req, res) => {
   }
 };
 
+// Fields that can still be corrected after an invoice is issued — administrative/
+// tracking details only. Core tax content (items, amounts, GST, invoice_no,
+// invoice_date, company/consignee/GST details) stays immutable; corrections to
+// those require cancelling the invoice and issuing a new one, or a credit/debit note.
+const ADMIN_EDITABLE_INVOICE_FIELDS = [
+  "po_no",
+  "po_date",
+  "payment_terms",
+  "payment_status",
+  "payment_due_date",
+  "show_payment_details",
+  "delivery_challan_ids",
+];
+
 // 📍 UPDATE invoice
 const updateInvoice = async (req, res) => {
   try {
-    const existingInvoice = await Invoice.findById(req.params.id).lean();
+    const existingInvoice = await Invoice.findById(req.params.id);
     if (!existingInvoice) return res.status(404).json({ message: "Invoice not found" });
     const updateKeys = Object.keys(req.body || {});
     const isCancellationOnly = updateKeys.length === 1
       && updateKeys[0] === "status"
       && String(req.body.status || "").toLowerCase() === "cancelled";
-    if (!isCancellationOnly) {
+
+    if (isCancellationOnly) {
+      const cancelledInvoice = await Invoice.findByIdAndUpdate(
+        req.params.id,
+        { status: "cancelled" },
+        { returnDocument: 'after' },
+      );
+      const accountName = await getDocumentAccountName(cancelledInvoice, "account");
+      await logActivity(
+        req,
+        "Updated",
+        "Accounts",
+        `Updated Invoice for ${accountName}. Amount: ₹${cancelledInvoice.finalAmount || 0}`,
+      );
+      return res.status(200).json({ message: "✅ Invoice Updated", data: cancelledInvoice });
+    }
+
+    const disallowedKeys = updateKeys.filter((key) => !ADMIN_EDITABLE_INVOICE_FIELDS.includes(key));
+    if (disallowedKeys.length > 0) {
       return res.status(409).json({
         message: "Issued invoices cannot be edited. Mark the incorrect invoice as cancelled and create a corrected invoice, or use a credit/debit note.",
       });
     }
 
+    const updates = {};
+    for (const key of ADMIN_EDITABLE_INVOICE_FIELDS) {
+      if (key in req.body) updates[key] = req.body[key];
+    }
+
+    if ("delivery_challan_ids" in updates) {
+      const challanResult = await buildDeliveryChallanSnapshots({
+        delivery_challan_ids: updates.delivery_challan_ids,
+        source_estimate_id: existingInvoice.source_estimate_id,
+        estimate_no: existingInvoice.estimate_no,
+        companyId: existingInvoice.companyId,
+      });
+      if (challanResult.error) return res.status(400).json({ message: challanResult.error });
+      updates.delivery_challan_ids = challanResult.ids;
+      updates.delivery_challans = challanResult.snapshots;
+    }
+
     const updatedInvoice = await Invoice.findByIdAndUpdate(
       req.params.id,
-      { status: "cancelled" },
-      { returnDocument: 'after' },
+      updates,
+      { returnDocument: 'after', runValidators: true },
     );
 
     if (!updatedInvoice)
@@ -467,6 +516,25 @@ const uploadInvoiceAttachments = async (req, res) => {
     return res.status(201).json({ message: "Attachments uploaded", data: invoice.attachments });
   } catch (error) {
     return res.status(500).json({ message: "Unable to upload invoice attachments", error: error.message });
+  }
+};
+
+const uploadInvoicePoAttachment = async (req, res) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    if (!req.file) return res.status(400).json({ message: "Select a PO file to upload." });
+
+    invoice.po_attachment = {
+      originalName: req.file.originalname,
+      url: `/uploads/invoices/${req.file.filename}`,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+    };
+    await invoice.save();
+    return res.status(201).json({ message: "PO attachment uploaded", data: invoice.po_attachment });
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to upload PO attachment", error: error.message });
   }
 };
 
@@ -1210,4 +1278,5 @@ module.exports = {
   sendEmailInvoice,
   previewEmailInvoice,
   uploadInvoiceAttachments,
+  uploadInvoicePoAttachment,
 };

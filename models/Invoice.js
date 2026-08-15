@@ -86,8 +86,14 @@ const InvoiceSchema = new mongoose.Schema(
     type_of_invoice: { type: String, required: true },
     invoice_date: { type: String },
     po_no: { type: String },
+    po_date: { type: Date, default: null },
+    po_attachment: { type: invoiceAttachmentSchema, default: null },
     eway_bill_no: { type: String, default: "" },
     currency: { type: String },
+    payment_terms: { type: String, default: "" },
+    payment_status: { type: String, enum: ["", "pending", "partial", "paid"], default: "" },
+    payment_due_date: { type: Date, default: null },
+    show_payment_details: { type: Boolean, default: true },
     
     gst_no: { type: String },
     supply_date: { type: String }, // Can be used as invoice date if not separate
