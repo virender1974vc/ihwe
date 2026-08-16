@@ -1,5 +1,6 @@
 const DeliveryChallan = require("../models/DeliveryChallan");
 const Estimate = require("../models/Estimate");
+const Invoice = require("../models/Invoice");
 const Company = require("../models/Company");
 const ExhibitorRegistration = require("../models/ExhibitorRegistration");
 const { logActivity } = require("../utils/logger");
@@ -286,6 +287,76 @@ exports.getChallans = async (req, res) => {
   }
 };
 
+// Cross-client list for the Delivery Challans overview page — joins each challan
+// to its source PI (for PI Date) and, if one exists, the Invoice it was billed
+// into (Invoice.delivery_challan_ids is the only place that link is recorded).
+exports.getChallansOverview = async (req, res) => {
+  try {
+    const allChallans = await DeliveryChallan.find({}).sort({ added: -1 }).lean();
+    const activeChallans = allChallans.filter((c) => !isCancelled(c));
+    const enriched = await Promise.all(activeChallans.map(enrichChallan));
+
+    const estimateIds = [...new Set(enriched.map((c) => String(c.source_estimate_id)).filter(Boolean))];
+    const estimates = estimateIds.length
+      ? await Estimate.find({ _id: { $in: estimateIds } }).select("added est_no").lean()
+      : [];
+    const estimateById = {};
+    estimates.forEach((e) => { estimateById[String(e._id)] = e; });
+
+    const invoices = await Invoice.find({ delivery_challan_ids: { $exists: true, $ne: [] } })
+      .select("invoice_no invoice_date finalAmount delivery_challan_ids status")
+      .lean();
+    const invoiceByChallanId = {};
+    invoices.forEach((inv) => {
+      if (isCancelled(inv)) return;
+      (inv.delivery_challan_ids || []).forEach((cid) => {
+        invoiceByChallanId[String(cid)] = inv;
+      });
+    });
+
+    const rows = enriched.map((c) => {
+      const estimate = estimateById[String(c.source_estimate_id)];
+      const dcValue = (c.items || []).reduce((sum, it) => sum + (Number(it.finalAmount) || 0), 0);
+      const matchedInvoice = invoiceByChallanId[String(c._id)] || null;
+      return {
+        id: String(c._id),
+        challanNo: c.challan_no,
+        challanDate: c.challan_date,
+        companyId: c.companyId,
+        clientName: c.company_name,
+        estimateId: c.source_estimate_id || null,
+        estimateNo: c.estimate_no,
+        piDate: estimate?.added || null,
+        invoiceNo: matchedInvoice?.invoice_no || null,
+        invoiceDate: matchedInvoice?.invoice_date || null,
+        invoiceValue: matchedInvoice ? Number(matchedInvoice.finalAmount) || 0 : null,
+        dcValue,
+        status: c.status,
+        addedBy: c.added_by,
+        added: c.added,
+        hasAttachment: Boolean(c.attachment),
+        attachmentUrl: c.attachment?.url || null,
+      };
+    });
+
+    const totalChallans = rows.length;
+    const totalPIsLinked = new Set(rows.map((r) => r.estimateNo).filter(Boolean)).size;
+    const totalDCValue = rows.reduce((sum, r) => sum + r.dcValue, 0);
+    const avgDCValue = totalChallans > 0 ? totalDCValue / totalChallans : 0;
+    const invoicesGenerated = rows.filter((r) => r.invoiceNo).length;
+
+    res.json({
+      success: true,
+      data: {
+        rows,
+        stats: { totalChallans, totalPIsLinked, totalDCValue, avgDCValue, invoicesGenerated },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching delivery challans overview", error: error.message });
+  }
+};
+
 exports.getChallan = async (req, res) => {
   try {
     const challan = await DeliveryChallan.findById(req.params.id).lean();
@@ -400,6 +471,25 @@ exports.updateChallan = async (req, res) => {
     res.json({ message: "Delivery challan updated", data: updated });
   } catch (error) {
     res.status(500).json({ message: "Error updating delivery challan", error: error.message });
+  }
+};
+
+exports.uploadAttachment = async (req, res) => {
+  try {
+    const challan = await DeliveryChallan.findById(req.params.id);
+    if (!challan) return res.status(404).json({ message: "Delivery challan not found" });
+    if (!req.file) return res.status(400).json({ message: "Select a file to upload." });
+
+    challan.attachment = {
+      originalName: req.file.originalname,
+      url: `/uploads/delivery-challans/${req.file.filename}`,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+    };
+    await challan.save();
+    return res.status(201).json({ message: "Attachment uploaded", data: challan.attachment });
+  } catch (error) {
+    return res.status(500).json({ message: "Unable to upload attachment", error: error.message });
   }
 };
 

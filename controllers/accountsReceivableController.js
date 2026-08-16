@@ -230,13 +230,22 @@ const getPymtTypeFromPlanProgress = (planType, event, settled, totalOwed) => {
   return "Final PYMT Req.";
 };
 
-const buildReceivableDocuments = (activeInvoices, activeProformas) => {
+const buildReceivableDocuments = (activeInvoices, activeProformas, includeConvertedProformas = false) => {
   const coveredProformaIds = new Set();
   const coveredProformaNos = new Set();
+  const convertedInfoByProformaId = {};
+  const convertedInfoByProformaNo = {};
 
   activeInvoices.forEach((inv) => {
-    if (inv.source_estimate_id) coveredProformaIds.add(String(inv.source_estimate_id));
-    if (inv.estimate_no) coveredProformaNos.add(String(inv.estimate_no));
+    const info = { invoiceNo: inv.invoice_no, invoiceId: String(inv._id) };
+    if (inv.source_estimate_id) {
+      coveredProformaIds.add(String(inv.source_estimate_id));
+      convertedInfoByProformaId[String(inv.source_estimate_id)] = info;
+    }
+    if (inv.estimate_no) {
+      coveredProformaNos.add(String(inv.estimate_no));
+      convertedInfoByProformaNo[String(inv.estimate_no)] = info;
+    }
   });
 
   // Invoice has no paymentPlanType of its own — inherit it from the estimate it was raised from.
@@ -269,7 +278,8 @@ const buildReceivableDocuments = (activeInvoices, activeProformas) => {
   });
 
   const proformaDocs = activeProformas
-    .filter((est) => !coveredProformaIds.has(String(est._id)) && !coveredProformaNos.has(String(est.est_no)))
+    .filter((est) => includeConvertedProformas
+      || (!coveredProformaIds.has(String(est._id)) && !coveredProformaNos.has(String(est.est_no))))
     .map((est) => ({
       raw: est,
       id: String(est._id),
@@ -284,6 +294,7 @@ const buildReceivableDocuments = (activeInvoices, activeProformas) => {
       poNo: "",
       addedBy: est.added_by || "",
       paymentPlanType: est.paymentPlanType || "",
+      convertedInfo: convertedInfoByProformaId[String(est._id)] || convertedInfoByProformaNo[String(est.est_no)] || null,
     }));
 
   return [...invoiceDocs, ...proformaDocs].sort((a, b) => new Date(b.docDate || 0) - new Date(a.docDate || 0));
@@ -321,8 +332,12 @@ const getAccountsReceivable = async (req, res) => {
       Estimate.find().sort({ supply_date: -1, added: -1 }).lean(),
     ]);
     const activeInvoices = invoices.filter((inv) => !isCancelledDoc(inv));
-    const activeProformas = proformas.filter((est) => !isCancelledDoc(est));
-    const receivableDocs = buildReceivableDocuments(activeInvoices, activeProformas);
+    // includeAllProformas: the dedicated Proforma Invoices page wants to see every PI it has
+    // ever raised — converted-to-invoice and cancelled ones included — not just the "still
+    // live" subset the shared Payments/Invoices pages care about.
+    const includeAllProformas = req.query.includeAllProformas === "true";
+    const activeProformas = includeAllProformas ? proformas : proformas.filter((est) => !isCancelledDoc(est));
+    const receivableDocs = buildReceivableDocuments(activeInvoices, activeProformas, includeAllProformas);
     const docIds = receivableDocs.map((doc) => doc.id);
     const companyIds = [...new Set(receivableDocs.map((doc) => doc.companyId).filter(Boolean))];
 
@@ -507,13 +522,16 @@ const getAccountsReceivable = async (req, res) => {
         status,
         eventId: event ? String(event._id) : null,
         crmEventId: doc.crmEventId || null,
+        convertedInvoiceNo: doc.convertedInfo?.invoiceNo || null,
+        convertedInvoiceId: doc.convertedInfo?.invoiceId || null,
       };
     });
 
     const clientCompanySearch = normalizeSearchText(req.query.clientCompanySearch);
-    const rows = clientCompanySearch
-      ? allRows.filter((row) => normalizeSearchText(row.client).includes(clientCompanySearch))
-      : allRows;
+    const docTypeFilter = req.query.docType;
+    const rows = allRows
+      .filter((row) => !docTypeFilter || row.docType === docTypeFilter)
+      .filter((row) => !clientCompanySearch || normalizeSearchText(row.client).includes(clientCompanySearch));
     const filteredCompanyIds = [...new Set(rows.map((row) => row.companyId).filter(Boolean))];
 
     const totalInvoiceValue = rows.reduce((s, r) => s + r.invValue, 0);
@@ -524,8 +542,10 @@ const getAccountsReceivable = async (req, res) => {
     const overdueAmount = rows.filter((r) => r.status === "Overdue").reduce((s, r) => s + r.outstanding, 0);
     const pendingAmount = totalOutstanding - overdueAmount;
 
-    const fullyPaidCount = rows.filter((r) => r.status === "Paid").length;
-    const partiallyPaidCount = rows.filter((r) => r.status === "Partially Paid").length;
+    // r.status only ever carries a due-date reading ("Unpaid"/"Overdue"), never a payment-progress
+    // one — so "fully/partially paid" must come from paymentType, the amount-progress field.
+    const fullyPaidCount = rows.filter((r) => r.paymentType === "Full Payment").length;
+    const partiallyPaidCount = rows.filter((r) => r.paymentType === "Partial Payment").length;
     const overdueCount = rows.filter((r) => r.status === "Overdue").length;
     const unpaidCount = rows.filter((r) => r.status === "Unpaid").length;
     const totalCreditNotes = rows.reduce((s, r) => s + r.credited, 0);
