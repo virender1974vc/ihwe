@@ -28,6 +28,22 @@ const cleanActorName = (value) => {
 };
 const isCancelledDoc = (doc) => String(doc?.status || "").trim().toLowerCase() === "cancelled";
 
+// A short "what is this for" label built from a document's line items — e.g. "Stall 175 +
+// PLC Charges" — so an exhibitor looking at several invoices at once (extra stalls, add-ons,
+// etc.) can tell them apart without opening each one.
+const summarizeItems = (items) => {
+  if (!Array.isArray(items) || !items.length) return "";
+  const labels = items.map((it) => {
+    const desc = String(it?.description || "").replace(/\s+/g, " ").trim();
+    const category = String(it?.category || "").trim();
+    if (/^\d+$/.test(desc) && (!category || category.toLowerCase() === "stall")) return `Stall ${desc}`;
+    if (category) return category;
+    return desc;
+  }).filter(Boolean);
+  if (!labels.length) return "";
+  return labels.length <= 2 ? labels.join(" + ") : `${labels[0]} + ${labels.length - 1} more`;
+};
+
 // Same due-date formula PerformaInvoices.jsx uses when it saves each
 // instalment's dueDate: an explicit dueDate on the plan phase wins, otherwise
 // it's the event's start date minus that phase's dueDaysBeforeEvent.
@@ -278,8 +294,8 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
     totalDue = activeInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0)
       + uninvoicedProformaInvoices.reduce((acc, curr) => acc + (parseFloat(curr.finalAmount) || 0), 0);
     dueBreakdown = [
-      ...activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added })),
-      ...uninvoicedProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added })),
+      ...activeInvoices.map(i => ({ id: i._id, no: i.invoice_no, amount: parseFloat(i.finalAmount) || 0, type: 'Invoice', date: i.invoice_date || i.added, particulars: summarizeItems(i.items) })),
+      ...uninvoicedProformaInvoices.map(i => ({ id: i._id, no: i.est_no, amount: parseFloat(i.finalAmount) || 0, type: 'Proforma Invoice', date: i.supply_date || i.added, particulars: summarizeItems(i.items) })),
     ];
   } else if (exhibitor?.financeBreakdown?.netPayable) {
     totalDue = parseFloat(exhibitor.financeBreakdown.netPayable) || 0;
@@ -299,6 +315,7 @@ const buildAccountOverview = async (companyId, company, exhibitor, eventId = "",
       amount: parseFloat(dn.totalAmount) || 0,
       type: 'Debit Note',
       date: dn.debit_note_date || dn.added,
+      particulars: summarizeItems(dn.items) || dn.reason || "",
     }));
   }
 

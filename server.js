@@ -448,6 +448,7 @@ app.use("/api/account-debit-notes", accountDebitNoteRoutes);
 app.use("/api/account-overview", require("./routes/accountOverviewRoutes"));
 app.use("/api/client-ledger", require("./routes/clientLedgerRoutes"));
 app.use("/api/accounts-receivable", require("./routes/accountsReceivableRoutes"));
+app.use("/api/payment-adjustments", require("./routes/paymentAdjustmentRoutes"));
 app.use("/api/imprest", require("./routes/imprestRoutes"));
 app.use("/api/corporate-visitors", corporateVisitorRoutes);
 app.use("/api/international-visitors", internationalVisitorRoutes);

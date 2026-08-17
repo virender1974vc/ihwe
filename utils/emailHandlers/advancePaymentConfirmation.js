@@ -42,7 +42,7 @@ async function sendAdvancePaymentConfirmation({ to, payment, docData, contact, e
             .filter(Boolean);
         if (!shellSchemeInclusions.length) shellSchemeInclusions.push('No complimentary accessories configured.');
 
-        const passConfigs = await ExhibitorPassConfig.find({ isActive: true }).sort({ displayOrder: 1, createdAt: 1 }).lean();
+        const passConfigs = await ExhibitorPassConfig.find({ eventId: event?._id, isActive: true }).sort({ displayOrder: 1, createdAt: 1 }).lean();
         const passes = [];
         const hospitality = [];
         passConfigs.forEach((config) => {

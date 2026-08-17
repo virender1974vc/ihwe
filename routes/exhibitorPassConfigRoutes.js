@@ -1,10 +1,15 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { protectExhibitor } = require('../middleware/auth');
 const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const eventService = require('../services/eventService');
 const { computeEntitlement, computeVehicleEntitlements, getExhibitorStallArea } = require('../utils/entitlementCalculator');
 
 const router = express.Router();
+
+const isValidId = (val) => val && mongoose.Types.ObjectId.isValid(val);
 
 const defaultConfigs = [
     { passType: 'exhibitor', title: 'Exhibitor Pass', subtitle: 'For Your Team Members', complimentaryQuota: 2, totalQuota: 10, price: 150, displayOrder: 1 },
@@ -20,46 +25,34 @@ const defaultConfigs = [
     { passType: 'delegate', title: 'Delegate Pass', subtitle: 'For Conference Access', complimentaryQuota: 0, totalQuota: 0, price: 0, displayOrder: 5 },
 ];
 
-let cleanedUpLegacyVehicleSplit = false;
-
-const ensureDefaults = async () => {
-    const count = await ExhibitorPassConfig.countDocuments();
-    if (count === 0) {
-        await ExhibitorPassConfig.insertMany(defaultConfigs);
-        cleanedUpLegacyVehicleSplit = true;
-        return;
-    }
-    for (const cfg of defaultConfigs) {
-        await ExhibitorPassConfig.findOneAndUpdate(
-            { passType: cfg.passType },
-            { $setOnInsert: cfg },
-            { upsert: true }
-        );
-    }
-    // One-time cleanup: an earlier iteration briefly split "Vehicle Pass" into separate
-    // vehicle_2w/vehicle_4w configs — collapse back into the single "vehicle" pass type.
-    if (!cleanedUpLegacyVehicleSplit) {
-        await ExhibitorPassConfig.updateOne({ passType: 'vehicle' }, { $set: { isActive: true } });
-        await ExhibitorPassConfig.deleteMany({ passType: { $in: ['vehicle_2w', 'vehicle_4w'] } });
-        // Backfill sensible ratio defaults onto a pre-existing "vehicle" doc whose
-        // vehicleTypeConfig was never configured (still at schema defaults).
-        await ExhibitorPassConfig.updateOne(
-            { passType: 'vehicle', 'vehicleTypeConfig.twoWheeler.ratioQty': 0, 'vehicleTypeConfig.fourWheeler.ratioQty': 0 },
-            {
-                $set: {
-                    'vehicleTypeConfig.twoWheeler': { allocationMode: 'perArea', ratioQty: 2, ratioArea: 9, roundingMode: 'floor', complimentaryQuota: 2, price: 300 },
-                    'vehicleTypeConfig.fourWheeler': { allocationMode: 'perArea', ratioQty: 1, ratioArea: 24, roundingMode: 'floor', complimentaryQuota: 1, price: 800 },
-                }
-            }
-        );
-        cleanedUpLegacyVehicleSplit = true;
-    }
+// Lazily seeds an event's pass configs with the standard default set the first time
+// anyone asks for that event's configs and none exist yet — so a brand new event isn't
+// a blank page, without needing a separate "initialize" step in the admin UI.
+const ensureDefaultsForEvent = async (eventId) => {
+    const count = await ExhibitorPassConfig.countDocuments({ eventId });
+    if (count > 0) return;
+    await ExhibitorPassConfig.insertMany(defaultConfigs.map((cfg) => ({ ...cfg, eventId })));
 };
 
-router.get('/active', async (_req, res) => {
+const resolveExhibitorEventId = async (registrationId) => {
+    const reg = await ExhibitorRegistration.findById(registrationId).select('eventId');
+    return reg?.eventId || null;
+};
+
+router.get('/active', async (req, res) => {
     try {
-        await ensureDefaults();
-        const configs = await ExhibitorPassConfig.find({ isActive: true }).sort({ displayOrder: 1, createdAt: 1 });
+        let { eventId } = req.query;
+        if (!isValidId(eventId)) {
+            // No eventId supplied (e.g. unauthenticated callers) — fall back to
+            // whichever event is currently active, per Event Setup.
+            const currentEvent = await eventService.getCurrentEvent();
+            if (!currentEvent) {
+                return res.status(404).json({ success: false, message: 'No active event found' });
+            }
+            eventId = currentEvent._id;
+        }
+        await ensureDefaultsForEvent(eventId);
+        const configs = await ExhibitorPassConfig.find({ eventId, isActive: true }).sort({ displayOrder: 1, createdAt: 1 });
         res.json({ success: true, data: configs });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -68,8 +61,12 @@ router.get('/active', async (_req, res) => {
 
 router.get('/my-active', protectExhibitor, async (req, res) => {
     try {
-        await ensureDefaults();
-        const configs = await ExhibitorPassConfig.find({ isActive: true }).sort({ displayOrder: 1, createdAt: 1 });
+        const eventId = await resolveExhibitorEventId(req.user.id);
+        if (!eventId) {
+            return res.status(404).json({ success: false, message: 'No event linked to this registration' });
+        }
+        await ensureDefaultsForEvent(eventId);
+        const configs = await ExhibitorPassConfig.find({ eventId, isActive: true }).sort({ displayOrder: 1, createdAt: 1 });
         const stallArea = await getExhibitorStallArea(req.user.id);
         const data = configs.map((config) => {
             if (config.passType === 'vehicle') {
@@ -96,10 +93,14 @@ router.get('/my-active', protectExhibitor, async (req, res) => {
     }
 });
 
-router.get('/admin/all', authMiddleware, async (_req, res) => {
+router.get('/admin/all', authMiddleware, async (req, res) => {
     try {
-        await ensureDefaults();
-        const configs = await ExhibitorPassConfig.find().sort({ displayOrder: 1, createdAt: 1 });
+        const { eventId } = req.query;
+        if (!isValidId(eventId)) {
+            return res.status(400).json({ success: false, message: 'A valid eventId is required' });
+        }
+        await ensureDefaultsForEvent(eventId);
+        const configs = await ExhibitorPassConfig.find({ eventId }).sort({ displayOrder: 1, createdAt: 1 });
         res.json({ success: true, data: configs });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -108,6 +109,11 @@ router.get('/admin/all', authMiddleware, async (_req, res) => {
 
 router.put('/admin/:passType', authMiddleware, async (req, res) => {
     try {
+        const { eventId } = req.query;
+        if (!isValidId(eventId)) {
+            return res.status(400).json({ success: false, message: 'A valid eventId is required' });
+        }
+
         const payload = {
             title: req.body.title,
             subtitle: req.body.subtitle,
@@ -116,6 +122,7 @@ router.put('/admin/:passType', authMiddleware, async (req, res) => {
             price: Number(req.body.price || 0),
             currency: req.body.currency || 'INR',
             maxPerRequest: Number(req.body.maxPerRequest || 10),
+            gstPercentage: Number(req.body.gstPercentage ?? 18),
             isActive: req.body.isActive !== false,
             displayOrder: Number(req.body.displayOrder || 0),
             allocationMode: req.body.allocationMode === 'perArea' ? 'perArea' : 'fixed',
@@ -141,8 +148,8 @@ router.put('/admin/:passType', authMiddleware, async (req, res) => {
         }
 
         const config = await ExhibitorPassConfig.findOneAndUpdate(
-            { passType: req.params.passType },
-            { $set: payload, $setOnInsert: { passType: req.params.passType } },
+            { eventId, passType: req.params.passType },
+            { $set: payload, $setOnInsert: { eventId, passType: req.params.passType } },
             { upsert: true, returnDocument: 'after', runValidators: true }
         );
 

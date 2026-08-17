@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Estimate = require("../models/Estimate");
 const Invoice = require("../models/Invoice");
 const DeliveryChallan = require("../models/DeliveryChallan");
@@ -13,6 +14,65 @@ const emailService = require('../utils/emailService');
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
 const { markCompanyHotLead } = require("../utils/companyStatusSync");
+
+// Keeps ExhibitorRegistration.participation.stallSize in sync with the real
+// stall footprint captured on this exhibitor's Proforma Invoices — a company
+// can have more than one stall spread across multiple PIs, so pass-quota
+// entitlement (getExhibitorStallArea) reads this field rather than a single
+// stall lookup. Only overwrites when a real stall total is found, so a PI with
+// no stall items never zeroes out a registration's own booking data.
+//
+// Keyed off companyId rather than exhibitorRegistrationId: PIs are reliably
+// tagged with companyId at creation, but exhibitorRegistrationId is often left
+// null (e.g. PIs raised before the exhibitor's own online registration exists,
+// or created through flows that don't set it) — keying off the field that's
+// actually always populated is what makes this catch real multi-stall PIs.
+const isStallItem = (item) =>
+  item?.category === 'Stall' || !!item?.stallType || /stall/i.test(item?.description || '');
+
+const syncExhibitorStallSize = async (companyId) => {
+  if (!companyId) return;
+  try {
+    const estimates = await Estimate.find({
+      companyId,
+      status: { $nin: ['cancelled', 'superseded'] },
+    }).select('items exhibitorRegistrationId').lean();
+
+    if (!estimates.length) return;
+
+    let totalArea = 0;
+    const registrationIds = new Set();
+    estimates.forEach((est) => {
+      if (est.exhibitorRegistrationId) registrationIds.add(String(est.exhibitorRegistrationId));
+      (est.items || []).forEach((item) => {
+        if (isStallItem(item)) {
+          totalArea += Number(item.size || 0) * Number(item.qty || 1);
+        }
+      });
+    });
+    if (totalArea <= 0) return;
+
+    // Fall back to the Company's own registration links when none of its PIs
+    // happen to carry exhibitorRegistrationId directly.
+    if (!registrationIds.size) {
+      const company = await Company.findById(companyId).select('exhibitorRegistrationId eventAssignments').lean();
+      (company?.eventAssignments || []).forEach((a) => {
+        if (a.exhibitorRegistrationId) registrationIds.add(String(a.exhibitorRegistrationId));
+      });
+      if (company?.exhibitorRegistrationId && mongoose.Types.ObjectId.isValid(company.exhibitorRegistrationId)) {
+        registrationIds.add(String(company.exhibitorRegistrationId));
+      }
+    }
+    if (!registrationIds.size) return;
+
+    await ExhibitorRegistration.updateMany(
+      { _id: { $in: [...registrationIds] } },
+      { 'participation.stallSize': totalArea },
+    );
+  } catch (err) {
+    console.error('Failed to sync exhibitor stall size from Proforma Invoices:', err);
+  }
+};
 
 const getFiscalYear = () => {
   const date = new Date();
@@ -77,6 +137,7 @@ const addEstimate = async (req, res) => {
 
     const estimate = new Estimate(estimateBody);
     await estimate.save();
+    await syncExhibitorStallSize(estimate.companyId);
     await markCompanyHotLead(estimate.companyId, estimate.crmEventId);
     const accountName = await getDocumentAccountName(estimate, "account");
     await logActivity(
@@ -407,6 +468,7 @@ const updateEstimate = async (req, res) => {
 
     if (!updated)
       return res.status(404).json({ message: "Estimate not found" });
+    await syncExhibitorStallSize(updated.companyId);
     const accountName = await getDocumentAccountName(updated, "account");
     await logActivity(
       req,
@@ -625,6 +687,7 @@ const deleteEstimate = async (req, res) => {
 
     if (!deleted)
       return res.status(404).json({ message: "Estimate not found" });
+    await syncExhibitorStallSize(deleted.companyId);
     const accountName = await getDocumentAccountName(deleted, "account");
     await logActivity(
       req,

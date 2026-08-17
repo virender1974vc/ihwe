@@ -518,7 +518,7 @@ exports.createExhibitorComplimentaryRegistration = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Exhibitor not found' });
         }
 
-        const delegateConfig = await ExhibitorPassConfig.findOne({ passType: 'delegate', isActive: true });
+        const delegateConfig = await ExhibitorPassConfig.findOne({ eventId: exhibitor.eventId, passType: 'delegate', isActive: true });
         const stallArea = await getExhibitorStallArea(exhibitorId);
         const configuredQuota = computeEntitlement({
             allocationMode: delegateConfig?.allocationMode,
