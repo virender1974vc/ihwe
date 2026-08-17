@@ -38,6 +38,7 @@ router.post('/send-email-otp', (req, res) => exhibitorAuthController.sendEmailOt
 router.post('/send-mobile-otp', (req, res) => exhibitorAuthController.sendMobileOtp(req, res));
 router.post('/verify-otp', (req, res) => exhibitorAuthController.verifyOtp(req, res));
 router.get('/dashboard', protectExhibitor, (req, res) => exhibitorAuthController.getMyDashboard(req, res));
+router.get('/my-stalls', protectExhibitor, (req, res) => exhibitorAuthController.getMyStalls(req, res));
 router.get('/account-overview', protectExhibitor, (req, res) => exhibitorAuthController.getMyAccountOverview(req, res));
 router.get('/my-pass-usage', protectExhibitor, (req, res) => exhibitorAuthController.getMyPassUsage(req, res));
 router.patch('/my-pass-usage/:id/acknowledge', protectExhibitor, (req, res) => exhibitorAuthController.acknowledgePassUsage(req, res));

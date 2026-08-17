@@ -9,6 +9,8 @@ const eventSchema = new mongoose.Schema({
     },
     startDate: Date,
     endDate: Date,
+    setupDate: Date,
+    dismantlingDate: Date,
     location: String,
     status: {
         type: String,

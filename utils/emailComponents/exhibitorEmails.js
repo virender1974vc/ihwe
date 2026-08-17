@@ -543,7 +543,7 @@ async function sendFullPaymentWelcomeEmail(registration) {
         let passesRowsHtml = '';
         try {
             const stallArea = Number(registration.participation?.stallSize) || 0;
-            const configs = await ExhibitorPassConfig.find({ isActive: true, passType: { $in: ['visitor', 'service', 'exhibitor'] } }).lean();
+            const configs = await ExhibitorPassConfig.find({ eventId: registration.eventId, isActive: true, passType: { $in: ['visitor', 'service', 'exhibitor'] } }).lean();
             const passItems = configs.map(config => ({
                 title: config.title || `${toTitleCase(config.passType)} Passes`,
                 qty: computeEntitlement({
@@ -554,7 +554,7 @@ async function sendFullPaymentWelcomeEmail(registration) {
                     fixedQty: config.complimentaryQuota
                 }, stallArea)
             }));
-            const vehicleConfig = await ExhibitorPassConfig.findOne({ passType: 'vehicle', isActive: true }).lean();
+            const vehicleConfig = await ExhibitorPassConfig.findOne({ eventId: registration.eventId, passType: 'vehicle', isActive: true }).lean();
             if (vehicleConfig) {
                 const veh = computeVehicleEntitlements(vehicleConfig, stallArea);
                 const totalVehicle = (veh.twoWheeler || 0) + (veh.fourWheeler || 0);
@@ -587,7 +587,7 @@ async function sendFullPaymentWelcomeEmail(registration) {
             </ul>` : '';
 
         const stallArea = Number(registration.participation?.stallSize) || 0;
-        const hospitalityConfigs = await ExhibitorPassConfig.find({ isActive: true, passType: { $in: ['lunch', 'water'] } }).lean();
+        const hospitalityConfigs = await ExhibitorPassConfig.find({ eventId: registration.eventId, isActive: true, passType: { $in: ['lunch', 'water'] } }).lean();
         const hospitalityText = hospitalityConfigs.map(config => {
             const qty = computeEntitlement({ allocationMode: config.allocationMode, ratioQty: config.ratioQty, ratioArea: config.ratioArea, roundingMode: config.roundingMode, fixedQty: config.complimentaryQuota }, stallArea);
             return qty > 0 ? `${qty} ${config.title}` : '';

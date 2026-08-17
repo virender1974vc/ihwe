@@ -9,11 +9,14 @@ const VehicleTypeAllocationSchema = new mongoose.Schema({
 }, { _id: false });
 
 const exhibitorPassConfigSchema = new mongoose.Schema({
+    // Pass configuration is per-event — each event has its own independent set of pass
+    // types, quotas, and pricing (see Event Wise Pass Management). A passType is only
+    // unique *within* an event, not across the whole system (compound index below).
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
     passType: {
         type: String,
         enum: ['exhibitor', 'vehicle', 'service', 'visitor', 'lunch', 'water', 'delegate'],
-        required: true,
-        unique: true
+        required: true
     },
     title: { type: String, required: true },
     subtitle: { type: String, default: '' },
@@ -35,5 +38,7 @@ const exhibitorPassConfigSchema = new mongoose.Schema({
         fourWheeler: { type: VehicleTypeAllocationSchema, default: () => ({}) },
     }
 }, { timestamps: true });
+
+exhibitorPassConfigSchema.index({ eventId: 1, passType: 1 }, { unique: true });
 
 module.exports = mongoose.model('ExhibitorPassConfig', exhibitorPassConfigSchema);

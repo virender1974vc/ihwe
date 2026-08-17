@@ -25,6 +25,8 @@ const summarizeEventChanges = (beforeDoc, afterDoc) => {
         ['paymentFilterName', 'Short Name'],
         ['startDate', 'Start Date', formatEventDate],
         ['endDate', 'End Date', formatEventDate],
+        ['setupDate', 'Setup Date', formatEventDate],
+        ['dismantlingDate', 'Dismantling Date', formatEventDate],
         ['location', 'Venue'],
         ['status', 'Status'],
         ['description', 'Description'],

@@ -98,11 +98,9 @@ async function resolveRegistration(rawValue, requestOrigin = '') {
             throw Object.assign(new Error('Pass QR type does not match the approved pass.'), { status: 400 });
         }
         const index = Number(qrData.index);
-        const [exhibitor, passConfig] = await Promise.all([
-            ExhibitorRegistration.findById(request.exhibitorId).lean(),
-            ExhibitorPassConfig.findOne({ passType: request.passType, isActive: true }).lean()
-        ]);
+        const exhibitor = await ExhibitorRegistration.findById(request.exhibitorId).lean();
         if (!exhibitor) throw Object.assign(new Error('The company linked to this pass was not found.'), { status: 404 });
+        const passConfig = await ExhibitorPassConfig.findOne({ eventId: exhibitor.eventId, passType: request.passType, isActive: true }).lean();
         const requestItems = request.passType === 'vehicle' ? request.vehicles : request.personnel;
         const isConsumablePass = ['lunch', 'water'].includes(request.passType);
         const items = requestItems?.length

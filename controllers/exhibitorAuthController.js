@@ -414,7 +414,7 @@ class ExhibitorAuthController {
                     { 'contact1.mobile': '0' + strippedMobile }
                 ]
             })
-                .populate('eventId', 'name date location venue startDate endDate')
+                .populate('eventId', 'name date location venue startDate endDate setupDate dismantlingDate paymentPlans')
                 .sort({ createdAt: -1 });
 
             if (!rawRegistrations || rawRegistrations.length === 0)
@@ -640,6 +640,86 @@ class ExhibitorAuthController {
             res.status(500).json({ success: false, message: error.message });
         }
     }
+
+    // A company can have more stalls than the single one tracked on its own
+    // registration's participation.stallNo — e.g. extra stalls added via later
+    // Proforma Invoices. This resolves the exhibitor's real company (via
+    // clientId) and returns every stall captured across that company's active
+    // PIs, enriched with the real Stall document where one can be matched.
+    async getMyStalls(req, res) {
+        try {
+            const Estimate = require('../models/Estimate');
+            const registration = await ExhibitorRegistration.findById(req.user.id)
+                .select('clientId eventId participation.stallNo participation.stallSize')
+                .lean();
+            if (!registration) {
+                return res.status(404).json({ success: false, message: 'Registration not found' });
+            }
+
+            const isStallItem = (item) =>
+                item?.category === 'Stall' || !!item?.stallType || /stall/i.test(item?.description || '');
+
+            const stalls = [];
+            const seen = new Set();
+
+            if (registration.clientId) {
+                const estimates = await Estimate.find({
+                    companyId: String(registration.clientId),
+                    status: { $nin: ['cancelled', 'superseded'] },
+                }).select('est_no eventId items').lean();
+
+                for (const est of estimates) {
+                    for (const item of est.items || []) {
+                        if (!isStallItem(item)) continue;
+                        const stallNumber = String(item.description || '').trim();
+                        if (!stallNumber || seen.has(stallNumber)) continue;
+
+                        let stallDoc = est.eventId
+                            ? await Stall.findOne({ eventId: est.eventId, stallNumber }).lean()
+                            : null;
+                        if (!stallDoc) {
+                            stallDoc = await Stall.findOne({ stallNumber }).lean();
+                        }
+
+                        seen.add(stallNumber);
+                        stalls.push({
+                            stallNumber,
+                            size: stallDoc?.area || Number(item.size || 0),
+                            dimension: stallDoc ? `${stallDoc.length}x${stallDoc.width}` : (item.area || ''),
+                            stallType: stallDoc?.stallType || item.stallType || '',
+                            plScheme: stallDoc?.plScheme || '',
+                            status: stallDoc?.status || 'unknown',
+                            piNo: est.est_no,
+                        });
+                    }
+                }
+            }
+
+            // No PI-derived stalls found — fall back to the registration's own
+            // single stall so exhibitors without any linked PI still see something.
+            if (!stalls.length && registration.participation?.stallNo) {
+                const stallRef = String(registration.participation.stallNo);
+                const stallDoc = mongoose.Types.ObjectId.isValid(stallRef)
+                    ? await Stall.findById(stallRef).lean()
+                    : null;
+                stalls.push({
+                    stallNumber: stallDoc?.stallNumber || stallRef,
+                    size: stallDoc?.area || Number(registration.participation.stallSize || 0),
+                    dimension: stallDoc ? `${stallDoc.length}x${stallDoc.width}` : '',
+                    stallType: stallDoc?.stallType || '',
+                    plScheme: stallDoc?.plScheme || '',
+                    status: stallDoc?.status || 'unknown',
+                    piNo: '',
+                });
+            }
+
+            const totalSize = stalls.reduce((sum, s) => sum + Number(s.size || 0), 0);
+            res.json({ success: true, data: stalls, totalSize });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+
     async getMyAccountOverview(req, res) {
         try {
             if (req.user.role !== 'exhibitor')
@@ -1126,7 +1206,12 @@ class ExhibitorAuthController {
                 });
             }
 
-            const config = await ExhibitorPassConfig.findOne({ passType, isActive: true });
+            const exhibitorReg = await ExhibitorRegistration.findById(exhibitorId).select('eventId');
+            if (!exhibitorReg?.eventId) {
+                return res.status(404).json({ success: false, message: 'No event linked to this registration' });
+            }
+
+            const config = await ExhibitorPassConfig.findOne({ eventId: exhibitorReg.eventId, passType, isActive: true });
             if (!config) {
                 return res.status(404).json({ success: false, message: 'Pass configuration not found or inactive' });
             }
@@ -1201,7 +1286,12 @@ class ExhibitorAuthController {
                 return res.status(400).json({ success: false, message: 'Pass type and quantity are required' });
             }
 
-            const config = await ExhibitorPassConfig.findOne({ passType, isActive: true });
+            const exhibitorReg = await ExhibitorRegistration.findById(exhibitorId).select('eventId');
+            if (!exhibitorReg?.eventId) {
+                return res.status(404).json({ success: false, message: 'No event linked to this registration' });
+            }
+
+            const config = await ExhibitorPassConfig.findOne({ eventId: exhibitorReg.eventId, passType, isActive: true });
             if (!config) {
                 return res.status(404).json({ success: false, message: 'Pass configuration not found' });
             }

@@ -5,6 +5,7 @@ const ExhibitorPassRequest = require('../models/ExhibitorPassRequest');
 const DelegateRegistration = require('../models/DelegateRegistration');
 const Attendance = require('../models/Attendance');
 const ExhibitorPassConfig = require('../models/ExhibitorPassConfig');
+const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const { computeEntitlement, computeVehicleEntitlements, getExhibitorStallArea } = require('../utils/entitlementCalculator');
 const { signPassQr } = require('../utils/passQrToken');
 
@@ -121,6 +122,7 @@ router.post('/admin/:id/revoke', authMiddleware, async (req, res) => {
 router.get('/wallet/my', protectExhibitor, async (req, res) => {
     try {
         const exhibitorId = req.user.id;
+        const exhibitorReg = await ExhibitorRegistration.findById(exhibitorId).select('eventId').lean();
         const [requests, allRequests, delegates, usageRecords, configs, stallArea] = await Promise.all([
             ExhibitorPassRequest.find({ exhibitorId, status: 'approved', revokedAt: null }).sort({ createdAt: -1 }).lean(),
             ExhibitorPassRequest.find({ exhibitorId }).select('passType quantity status vehicles paymentStatus').lean(),
@@ -133,7 +135,7 @@ router.get('/wallet/my', protectExhibitor, async (req, res) => {
                 .select('registrationId eventDay markedAt deliveredQuantity allocatedQuantity deliveryHistory')
                 .sort({ markedAt: -1 })
                 .lean(),
-            ExhibitorPassConfig.find({ isActive: true }).lean(),
+            ExhibitorPassConfig.find({ eventId: exhibitorReg?.eventId, isActive: true }).lean(),
             getExhibitorStallArea(exhibitorId)
         ]);
         const validityByType = new Map(configs.map(config => [
