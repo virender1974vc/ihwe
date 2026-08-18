@@ -3,6 +3,7 @@ const router = express.Router();
 const razorpay = require('../utils/razorpay');
 const crypto = require('crypto');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const Estimate = require('../models/Estimate');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
 const whatsappService = require('../utils/whatsappService');
@@ -368,10 +369,49 @@ router.get('/summary/:registrationId', async (req, res) => {
 
         const registration = await ExhibitorRegistration.findById(registrationId)
             .populate('eventId', 'name startDate endDate paymentPlans')
-            .select('exhibitorName registrationId contact1 participation financeBreakdown amountPaid balanceAmount penaltyAmount totalPayable paymentHistory installments status paymentDueDate paymentPlanType paymentPlanLabel chosenTdsPercent');
+            .select('exhibitorName registrationId clientId contact1 participation financeBreakdown amountPaid balanceAmount penaltyAmount totalPayable paymentHistory installments status paymentDueDate paymentPlanType paymentPlanLabel chosenTdsPercent');
 
         if (!registration) {
             return res.status(404).json({ success: false, message: 'Registration not found' });
+        }
+
+        // financeBreakdown is a snapshot of whichever stall this exhibitor
+        // originally self-registered for — a client can have more stalls
+        // added later, each raised as its own PI/Estimate. When that's the
+        // case, the breakdown shown here must reflect the combined cost of
+        // every active PI, not just the first one, or "Total Contract Value"
+        // reads far lower than "Amount Paid So Far" even though every stall
+        // has genuinely been paid for.
+        let combinedFinance = null;
+        if (registration.clientId) {
+            const estimates = await Estimate.find({
+                companyId: String(registration.clientId),
+                status: { $nin: ['cancelled', 'superseded'] },
+            }).select('items finalAmount plcCharges plcGstAmount').lean();
+
+            if (estimates.length) {
+                let grossAmount = 0;
+                let discountAmount = 0;
+                let subtotal = 0;
+                let gstAmount = 0;
+                let netPayable = 0;
+                estimates.forEach((est) => {
+                    (est.items || []).forEach((item) => {
+                        const amount = Number(item.amount) || 0;
+                        const disc = Number(item.disc) || 0;
+                        const itemDiscountAmount = (amount * disc) / 100;
+                        grossAmount += amount;
+                        discountAmount += itemDiscountAmount;
+                        subtotal += amount - itemDiscountAmount;
+                        gstAmount += Number(item.tax) || 0;
+                    });
+                    grossAmount += Number(est.plcCharges) || 0;
+                    subtotal += Number(est.plcCharges) || 0;
+                    gstAmount += Number(est.plcGstAmount) || 0;
+                    netPayable += Number(est.finalAmount) || 0;
+                });
+                combinedFinance = { grossAmount, discountAmount, subtotal, gstAmount, netPayable };
+            }
         }
 
         const summary = {
@@ -381,22 +421,29 @@ router.get('/summary/:registrationId', async (req, res) => {
             event: registration.eventId,
             stall: registration.participation,
             finance: {
-                grossAmount: registration.financeBreakdown?.grossAmount || 0,
+                grossAmount: combinedFinance?.grossAmount ?? (registration.financeBreakdown?.grossAmount || 0),
                 stallDiscountPercent: registration.financeBreakdown?.stallDiscountPercent || 0,
                 stallDiscountAmount: registration.financeBreakdown?.stallDiscountAmount || 0,
                 subtotal1: registration.financeBreakdown?.subtotal1 || 0,
                 discountPercent: registration.financeBreakdown?.discountPercent || 0,
-                discountAmount: registration.financeBreakdown?.discountAmount || 0,
-                subtotal: registration.financeBreakdown?.subtotal || 0,
-                gstAmount: registration.financeBreakdown?.gstAmount || 0,
+                discountAmount: combinedFinance?.discountAmount ?? (registration.financeBreakdown?.discountAmount || 0),
+                subtotal: combinedFinance?.subtotal ?? (registration.financeBreakdown?.subtotal || 0),
+                gstAmount: combinedFinance?.gstAmount ?? (registration.financeBreakdown?.gstAmount || 0),
                 tdsPercent: registration.financeBreakdown?.tdsPercent || 0,
                 tdsAmount: registration.financeBreakdown?.tdsAmount || 0,
-                netPayable: registration.financeBreakdown?.netPayable || 0,
-                // Payment tracking
+                netPayable: combinedFinance?.netPayable ?? (registration.financeBreakdown?.netPayable || 0),
+                // Payment tracking. registration.balanceAmount/totalPayable are only
+                // as fresh as the last time an accounts payment was added/edited (see
+                // syncExhibitorFromAccountPayments) — recompute live against the
+                // combined multi-PI total here so this never shows a stale balance.
                 amountPaid: registration.amountPaid || 0,
-                balanceAmount: registration.balanceAmount || 0,
+                balanceAmount: combinedFinance
+                    ? Math.max(0, Math.round(combinedFinance.netPayable - (registration.amountPaid || 0)))
+                    : (registration.balanceAmount || 0),
                 penaltyAmount: registration.penaltyAmount || 0,
-                totalPayable: registration.totalPayable || registration.balanceAmount || 0
+                totalPayable: combinedFinance
+                    ? Math.max(0, Math.round(combinedFinance.netPayable - (registration.amountPaid || 0))) + (registration.penaltyAmount || 0)
+                    : (registration.totalPayable || registration.balanceAmount || 0)
             },
             installments: registration.installments || [],
             paymentHistory: registration.paymentHistory || [],

@@ -6,6 +6,8 @@ const VehicleTypeAllocationSchema = new mongoose.Schema({
     roundingMode: { type: String, enum: ['floor', 'round', 'ceil'], default: 'floor' },
     complimentaryQuota: { type: Number, default: 0 },
     price: { type: Number, default: 0 },
+    hsnCode: { type: String, default: '' },
+    gstPercentage: { type: Number, default: 18, min: 0, max: 100 },
 }, { _id: false });
 
 const exhibitorPassConfigSchema = new mongoose.Schema({
@@ -25,6 +27,7 @@ const exhibitorPassConfigSchema = new mongoose.Schema({
     price: { type: Number, default: 0, min: 0 },
     currency: { type: String, default: 'INR' },
     maxPerRequest: { type: Number, default: 10, min: 1 },
+    hsnCode: { type: String, default: '' },
     gstPercentage: { type: Number, default: 18, min: 0, max: 100 },
     isActive: { type: Boolean, default: true },
     displayOrder: { type: Number, default: 0 },

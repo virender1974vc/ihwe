@@ -185,6 +185,13 @@ router.post('/verify-payment', requireExhibitor, async (req, res) => {
             console.error('Accessory receipt/email error:', e.message);
         }
 
+        // Auto-generate the real Proforma Invoice record for accounts
+        try {
+            await ctrl.createProformaInvoiceForAccessoryOrder(order, reg);
+        } catch (e) {
+            console.error('Accessory auto-Proforma Invoice error:', e.message);
+        }
+
         // Emit socket event to admin
         const io = req.app.get('io');
         if (io) {
@@ -377,6 +384,13 @@ router.put('/orders/:id/approve-neft', flexAuth, async (req, res) => {
             // Accessory receipts are stored only; exhibitor communication is manual-only.
         } catch (e) {
             console.error('Accessory NEFT approval receipt/email error:', e.message);
+        }
+
+        // Auto-generate the real Proforma Invoice record for accounts
+        try {
+            await ctrl.createProformaInvoiceForAccessoryOrder(order, reg);
+        } catch (e) {
+            console.error('Accessory NEFT approval auto-Proforma Invoice error:', e.message);
         }
 
         res.json({ success: true, data: order });

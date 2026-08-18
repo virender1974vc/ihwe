@@ -8,6 +8,37 @@ const Company = require("../models/Company");
 const markCompanyHotLead = async (companyId, crmEventId = null) => {
   if (!companyId) return;
   try {
+    // A company that already has a real stall booked (an ExhibitorRegistration
+    // linked to this event with a stall on it) has moved past the lead stage.
+    // Raising another PI for them later — extra stalls, a revised quote,
+    // add-ons — must not silently downgrade them back to Hot Lead and drop
+    // them out of the Booked/Converted lists (getHotLeadCompanies excludes
+    // anyone with a booked stall, and getBookedCompanies only matches on this
+    // exact status text, so a stray "Hot Lead" here makes them invisible in
+    // every list). Only companies with no booked stall for this event get
+    // (re-)marked Hot.
+    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+    const company = await Company.findById(companyId).select("eventAssignments").lean();
+    if (!company) return;
+
+    const scopedAssignment = crmEventId
+      ? company.eventAssignments?.find((a) => String(a.eventId) === String(crmEventId))
+      : null;
+    const registrationIdsToCheck = scopedAssignment
+      ? [scopedAssignment.exhibitorRegistrationId].filter(Boolean)
+      : (company.eventAssignments || []).map((a) => a.exhibitorRegistrationId).filter(Boolean);
+
+    if (registrationIdsToCheck.length) {
+      const bookedRegistration = await ExhibitorRegistration.findOne({
+        _id: { $in: registrationIdsToCheck },
+        $or: [
+          { "participation.stallNo": { $nin: [null, ""] } },
+          { "participation.stallFor": { $nin: [null, ""] } },
+        ],
+      }).select("_id").lean();
+      if (bookedRegistration) return;
+    }
+
     if (crmEventId) {
       const updated = await Company.findOneAndUpdate(
         { _id: companyId, "eventAssignments.eventId": crmEventId },

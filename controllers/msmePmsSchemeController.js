@@ -2,10 +2,91 @@ const MsmePmsScheme = require('../models/MsmePmsScheme');
 const MsmePmsPage = require('../models/MsmePmsPage');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const Company = require('../models/Company');
+const User = require('../models/User');
 const mongoose = require('mongoose');
+const cloudinary = require('cloudinary').v2;
+const aiDocumentVerificationService = require('../services/aiDocumentVerificationService');
+
+// Same Industry/Sector choices offered on the admin Book a Stand form
+// (IHWE-admin/src/pages/BookAStand.jsx) — kept in sync so the AI's
+// bestMatchingCategory suggestion always lands on a real, selectable option.
+const INDUSTRY_SECTOR_OPTIONS = [
+    'Medical & Healthcare',
+    'AYUSH & Traditional Medicine',
+    'Wellness, Fitness & Lifestyle',
+    'Nutrition, Organic & Health Foods',
+    'Beauty, Personal Care & Aesthetic Wellness',
+    'Mental Health, Yoga & Spiritual Wellness',
+    'Medical Technology, Diagnostics & Devices',
+    'Institutions, Government Bodies & Startups',
+];
+
+// The 3 admin-facing tracking stages shown as a stepper on the MSME PMS
+// application tracking page.
+const PMS_STAGE_LABELS = [
+    'Application & Submission',
+    'Claim Documents',
+    'Claim & Reimbursement',
+];
+
+// The 14 documents required for an MSME PMS claim, shown as a grid on the
+// admin tracking page — distinct from REQUIRED_DOCUMENTS below (that list is
+// for the exhibitor's own 4-step self-service application editor and must
+// not change, or it breaks the already-live MSMEPMSDocumentsUpload flow).
+// Whether a given document actually applies to a given exhibitor (e.g.
+// Category Certificate only for SC/ST/OBC applicants) is a per-claim call an
+// admin makes via documents[].notApplicable, not a fixed list here.
+const PMS_CLAIM_DOCUMENT_TYPES = [
+    'claimForm', 'onlineApplicationPrintout', 'udyam', 'taxInvoice', 'paymentProof',
+    'participationProof', 'bankMandate', 'cheque', 'preReceipt', 'pfmsDetails',
+    'gst', 'pan', 'categoryCertificate', 'otherSupportingDocument',
+];
 
 const REQUIRED_DOCUMENTS = ['udyam', 'gst', 'pan', 'aadhaar', 'cheque', 'statement'];
-const DOCUMENT_TYPES = new Set([...REQUIRED_DOCUMENTS, 'passbook', 'hotelInvoice', 'hotelPayment', 'travelExpense', 'travelInvoice', 'courier', 'marketing']);
+const DOCUMENT_TYPES = new Set([...REQUIRED_DOCUMENTS, 'passbook', 'hotelInvoice', 'hotelPayment', 'travelExpense', 'travelInvoice', 'courier', 'marketing', ...PMS_CLAIM_DOCUMENT_TYPES]);
+const DOCUMENT_LABELS = {
+    udyam: 'Udyam Registration Certificate',
+    gst: 'GST Certificate',
+    pan: 'PAN Card',
+    aadhaar: 'Aadhaar Card',
+    cheque: 'Cancelled Cheque',
+    statement: 'Bank Statement',
+    passbook: 'Bank Passbook',
+    hotelInvoice: 'Hotel Invoice',
+    hotelPayment: 'Hotel Payment Proof',
+    travelExpense: 'Travel Expense Proof',
+    travelInvoice: 'Travel Invoice',
+    courier: 'Courier / Logistics Invoice',
+    marketing: 'Marketing / Printing Invoice',
+    claimForm: 'PMS Claim Form',
+    onlineApplicationPrintout: 'MSME Portal Application Printout',
+    taxInvoice: 'Tax Invoice / Bills',
+    paymentProof: 'Payment Proof',
+    participationProof: 'Participation Proof (Photos / Certificate)',
+    bankMandate: 'Bank Details / Mandate Form',
+    preReceipt: 'Pre-Receipt / Advance Received Proof (if any)',
+    pfmsDetails: 'PFMS / Other Details (if applicable)',
+    categoryCertificate: 'Category Certificate (SC/ST/OBC - if applicable)',
+    otherSupportingDocument: 'Any Other Supporting Document',
+};
+
+// Same cleanup used by clientDocumentController.js for the general Document
+// Center — an AI-rejected upload shouldn't leave an orphaned file sitting in
+// Cloudinary.
+async function deleteUploadedFile(fileUrl) {
+    if (!fileUrl || !fileUrl.includes('cloudinary.com')) return;
+    try {
+        const urlParts = fileUrl.split('/upload/');
+        if (urlParts.length <= 1) return;
+        let publicId = urlParts[1];
+        if (publicId.match(/^v\d+\//)) publicId = publicId.replace(/^v\d+\//, '');
+        publicId = publicId.substring(0, publicId.lastIndexOf('.')) || publicId;
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'image' }).catch(() => {});
+        await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' }).catch(() => {});
+    } catch (err) {
+        console.error('MSME PMS document cleanup error:', err.message);
+    }
+}
 const REQUIRED_APPLICANT_FIELDS = ['companyName', 'udyamRegNo', 'gstNumber', 'panNumber', 'organizationType', 'yearOfEstablishment', 'msmeCategory', 'contactName', 'designation', 'mobileNumber', 'addressLine1', 'country', 'state', 'city', 'pincode'];
 const REQUIRED_BANK_FIELDS = ['accountHolderName', 'bankName', 'branchName', 'accountNumber', 'ifscCode', 'accountType'];
 const requiredDocumentsFor = application => {
@@ -72,6 +153,28 @@ async function makeAdminApplicationPayload(application) {
     const displayStallNo = savedStallNo && !mongoose.isValidObjectId(String(savedStallNo))
         ? savedStallNo
         : exhibitor.participation?.stallFor || '';
+
+    // Real assigned relationship manager (the admin user who filled/owns this
+    // registration), not the exhibitor's own contact — same lookup chain
+    // `/api/admin/by-username/:username` uses.
+    let relationshipManager = null;
+    const rmUsername = exhibitor.filledBy && exhibitor.filledBy !== 'User' ? exhibitor.filledBy.trim() : null;
+    if (rmUsername) {
+        relationshipManager = await User.findOne({ username: rmUsername })
+            .select('username fullName designation department email mobile profileImage')
+            .lean();
+        if (!relationshipManager) {
+            relationshipManager = await User.findOne({ username: { $regex: new RegExp(`^${rmUsername}`, 'i') } })
+                .select('username fullName designation department email mobile profileImage')
+                .lean();
+        }
+        if (!relationshipManager) {
+            relationshipManager = await User.findOne({ fullName: { $regex: new RegExp(rmUsername, 'i') } })
+                .select('username fullName designation department email mobile profileImage')
+                .lean();
+        }
+    }
+    const rmName = relationshipManager?.fullName || exhibitor.filledByFullName || (rmUsername || '');
     return {
         ...payload,
         exhibitorName: exhibitor.exhibitorName,
@@ -109,6 +212,8 @@ async function makeAdminApplicationPayload(application) {
         },
         event: {
             name: payload.applicantDetails?.eventName || exhibitor.eventId?.name || exhibitor.eventId?.title,
+            startDate: exhibitor.eventId?.startDate,
+            endDate: exhibitor.eventId?.endDate,
             stallNumber: displayStallNo,
             hallNumber: payload.applicantDetails?.hallNo || 'Hall 12',
             stallSize: payload.applicantDetails?.stallSize || exhibitor.participation?.stallSize,
@@ -116,14 +221,29 @@ async function makeAdminApplicationPayload(application) {
             bookingStatus: payload.applicantDetails?.bookingStatus,
             paymentStatus: payload.applicantDetails?.paymentStatus,
         },
-        pmsCoordinator: {
-            name: contactName,
-            designation: contact.designation,
-            phone: contact.mobile,
-            whatsapp: contact.whatsapp || contact.mobile,
-            email: contact.email,
-            photo: contact.photoUrl,
-            initials: contactName.split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase(),
+        pmsCoordinator: rmName ? {
+            name: rmName,
+            designation: relationshipManager?.designation || relationshipManager?.department || 'Relationship Manager',
+            phone: relationshipManager?.mobile || '',
+            email: relationshipManager?.email || '',
+            photo: relationshipManager?.profileImage || '',
+            initials: rmName.split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('').toUpperCase(),
+        } : null,
+        pmsStageLabels: PMS_STAGE_LABELS,
+        pmsClaimDocuments: PMS_CLAIM_DOCUMENT_TYPES.map(type => ({
+            type,
+            label: DOCUMENT_LABELS[type],
+            required: true,
+        })),
+        // Client (Exhibitor) Contact Details card — editable via the
+        // existing PUT /api/exhibitor-registration/:id, not stored here.
+        contactDetails: {
+            contactPerson: contactName,
+            designation: contact.designation || '',
+            mobileNumber: contact.mobile || '',
+            emailId: contact.email || exhibitor.companyEmail || '',
+            landlineNo: exhibitor.landlineNo || '',
+            address: [exhibitor.address, exhibitor.city, exhibitor.state, exhibitor.pincode].filter(Boolean).join(', '),
         },
     };
 }
@@ -373,8 +493,49 @@ class MsmePmsSchemeController {
             if (!req.file) return res.status(400).json({ success: false, message: 'File is required' });
             const application = await getOrCreateClaim(req.user.id);
             if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
+
+            // Same AI document-verification service the general Document Center
+            // (clientDocumentController.js) already uses, but with an MSME-only
+            // prompt override that also extracts the document's real fields
+            // (Udyam number, GSTIN, account number, etc.) straight from the file
+            // — the general moderation prompt used elsewhere in the app is left
+            // untouched. Fails open (skipped) if AI verification isn't
+            // configured/enabled, so an unconfigured key never blocks a real
+            // submission.
+            const documentName = DOCUMENT_LABELS[documentType] || documentType;
+            const fileType = (req.file.originalname.split('.').pop() || '').toUpperCase();
+            const aiResult = await aiDocumentVerificationService.verifyDocument({
+                fileUrl: req.file.path,
+                documentName,
+                fileType,
+                promptOverride: aiDocumentVerificationService.buildMsmeExtractionPrompt(documentType, documentName),
+            });
+            if (!aiResult.skipped && aiResult.valid === false) {
+                await deleteUploadedFile(req.file.path);
+                const issueMessages = {
+                    nudity: `This file appears to contain inappropriate content and cannot be accepted as "${documentName}".`,
+                    minor: `This file cannot be accepted as "${documentName}".`,
+                    mismatch: `This file doesn't look like a valid "${documentName}". Please upload the correct document.`,
+                    unreadable: `This file is unclear/unreadable. Please upload a clearer copy of "${documentName}".`,
+                };
+                return res.status(400).json({
+                    success: false,
+                    message: aiResult.reason || issueMessages[aiResult.issue] || `This document was rejected by AI verification: ${aiResult.issue}`,
+                    aiIssue: aiResult.issue,
+                });
+            }
+
             application.documents = application.documents.filter(doc => doc.documentType !== documentType);
-            application.documents.push({ documentType, filename: req.file.originalname, path: req.file.path, mimetype: req.file.mimetype, size: req.file.size });
+            application.documents.push({
+                documentType,
+                filename: req.file.originalname,
+                path: req.file.path,
+                mimetype: req.file.mimetype,
+                size: req.file.size,
+                aiVerification: { checked: !aiResult.skipped, reason: aiResult.reason || '' },
+                extractedDetails: aiResult.extractedDetails || null,
+                uploadedBy: req.user?.fullName || req.user?.username || req.user?.exhibitorName || 'Admin',
+            });
             await application.save();
             res.status(201).json({ success: true, message: 'Document uploaded', data: application });
         } catch (error) {
@@ -407,6 +568,7 @@ class MsmePmsSchemeController {
             application.status = 'Pending';
             application.currentStep = 5;
             application.submittedAt = new Date();
+            application.pmsStage = Math.max(application.pmsStage || 1, 2);
             application.statusHistory.push({ status: 'Pending', changedBy: String(req.user.id), note: 'Application submitted' });
             await application.save();
             res.json({ success: true, message: 'Application submitted successfully', data: application });
@@ -464,6 +626,90 @@ class MsmePmsSchemeController {
         }
     }
 
+    // Used from Book a Stand (admin) when Stall Category = "Under MSME PSM
+    // Scheme": no ExhibitorRegistration exists yet at that point, so this
+    // just verifies + extracts from the certificate and hands the result
+    // back for the admin form to hold onto and submit with the booking —
+    // nothing is persisted here.
+    async verifyUdyamCertificateStandalone(req, res) {
+        try {
+            if (!req.file) return res.status(400).json({ success: false, message: 'File is required' });
+
+            const documentName = DOCUMENT_LABELS.udyam;
+            const fileType = (req.file.originalname.split('.').pop() || '').toUpperCase();
+            const { industrySector, companyBrief, typeOfBusiness } = req.body;
+            const aiResult = await aiDocumentVerificationService.verifyDocument({
+                fileUrl: req.file.path,
+                documentName,
+                fileType,
+                promptOverride: aiDocumentVerificationService.buildMsmeEligibilityScreeningPrompt(documentName, {
+                    industrySector,
+                    companyBrief,
+                    typeOfBusiness,
+                    validCategories: INDUSTRY_SECTOR_OPTIONS,
+                }),
+            });
+
+            if (!aiResult.skipped && aiResult.valid === false) {
+                await deleteUploadedFile(req.file.path);
+                const issueMessages = {
+                    nudity: `This file cannot be accepted as "${documentName}".`,
+                    minor: `This file cannot be accepted as "${documentName}".`,
+                    mismatch: `This file doesn't look like a valid "${documentName}". Please upload the correct document.`,
+                    unreadable: `This file is unclear/unreadable. Please upload a clearer copy of "${documentName}".`,
+                };
+                return res.status(400).json({
+                    success: false,
+                    message: aiResult.reason || issueMessages[aiResult.issue] || `This document was rejected by AI verification: ${aiResult.issue}`,
+                    aiIssue: aiResult.issue,
+                });
+            }
+
+            const details = aiResult.extractedDetails || {};
+            const udyamRegNo = details['Udyam Registration Number'] || null;
+            const enterpriseName = details['Enterprise Name'] || null;
+            const category = details['Type of Enterprise (Micro/Small/Medium)'] || null;
+            const registrationDate = details['Date of Registration'] || null;
+            const majorActivity = details['Major Activity (Manufacturing/Service/Trading)'] || null;
+
+            // Eligibility for the MSME PMS scheme, checkable purely from what's
+            // on the certificate itself — a genuine, readable Udyam certificate
+            // with its core identifying fields present. When AI verification
+            // isn't configured, this stays "unknown" rather than blocking the
+            // booking on an unavailable check.
+            let eligible = null;
+            const eligibilityReasons = [];
+            if (aiResult.skipped) {
+                eligibilityReasons.push('AI verification is not available right now — please confirm the certificate details manually.');
+            } else {
+                if (!udyamRegNo) eligibilityReasons.push('Udyam Registration Number could not be read from the certificate.');
+                if (!enterpriseName) eligibilityReasons.push('Enterprise Name could not be read from the certificate.');
+                if (!category) eligibilityReasons.push('MSME category (Micro/Small/Medium) could not be read from the certificate.');
+                eligible = eligibilityReasons.length === 0;
+            }
+
+            res.json({
+                success: true,
+                data: {
+                    fileUrl: req.file.path,
+                    aiChecked: !aiResult.skipped,
+                    aiReason: aiResult.reason || '',
+                    extractedDetails: details,
+                    udyamRegNo,
+                    enterpriseName,
+                    category,
+                    registrationDate,
+                    majorActivity,
+                    eligible,
+                    eligibilityReasons,
+                    screening: aiResult.screening || null,
+                },
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Udyam certificate verification failed', error: error.message });
+        }
+    }
+
     async getApplicationById(req, res) {
         try {
             const application = await findApplicationByIdentifier(req.params.id);
@@ -479,23 +725,282 @@ class MsmePmsSchemeController {
 
     async updateApplicationStatus(req, res) {
         try {
-            const { status, is_lead } = req.body;
-            const updateFields = {};
-            if (status !== undefined) updateFields.status = status;
-            if (is_lead !== undefined) updateFields.is_lead = is_lead;
-
-            const updatedApplication = await MsmePmsScheme.findByIdAndUpdate(
-                req.params.id,
-                updateFields,
-                { returnDocument: 'after' }
-            );
-            if (!updatedApplication) {
+            const { status, is_lead, reason } = req.body;
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) {
                 return res.status(404).json({ success: false, message: 'Application not found' });
             }
-            res.status(200).json({ success: true, message: 'Status updated successfully', data: updatedApplication });
+            if (status !== undefined) {
+                application.status = status;
+                application.statusHistory.push({
+                    status,
+                    note: reason || '',
+                    changedBy: req.user?.fullName || req.user?.username || 'Admin',
+                });
+            }
+            if (is_lead !== undefined) application.is_lead = is_lead;
+            await application.save();
+            res.status(200).json({ success: true, message: 'Status updated successfully', data: application });
         } catch (error) {
             console.error('Error updating MSME PMS application status:', error);
             res.status(500).json({ success: false, message: 'Internal server error', error: error.message });
+        }
+    }
+
+    async updatePmsStage(req, res) {
+        try {
+            const stage = Number(req.body.stage);
+            if (!Number.isInteger(stage) || stage < 1 || stage > 3) {
+                return res.status(400).json({ success: false, message: 'Stage must be a number between 1 and 3' });
+            }
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            application.pmsStage = stage;
+            application.statusHistory.push({
+                status: application.status,
+                note: `Stage moved to "${PMS_STAGE_LABELS[stage - 1]}"`,
+                changedBy: req.user?.fullName || req.user?.username || 'Admin',
+            });
+            await application.save();
+            res.json({ success: true, message: 'Stage updated', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not update stage', error: error.message });
+        }
+    }
+
+    async updateMsmePortal(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { applicationNo, currentStatus, remarks, submittedOn, submittedBy, submittedByRole } = req.body;
+            const existing = application.msmePortal || {};
+            application.msmePortal = {
+                applicationNo: applicationNo ?? existing.applicationNo ?? '',
+                submittedOn: submittedOn ?? existing.submittedOn ?? (applicationNo ? new Date() : undefined),
+                submittedBy: submittedBy ?? existing.submittedBy ?? req.user?.fullName ?? req.user?.username ?? 'Admin',
+                submittedByRole: submittedByRole ?? existing.submittedByRole ?? req.user?.designation ?? '',
+                currentStatus: currentStatus ?? existing.currentStatus ?? '',
+                lastStatusChecked: new Date(),
+                acknowledgementFile: existing.acknowledgementFile || '',
+                acknowledgementFileName: existing.acknowledgementFileName || '',
+                acknowledgementFileSize: existing.acknowledgementFileSize || 0,
+                remarks: remarks ?? existing.remarks ?? '',
+            };
+            application.statusHistory.push({
+                status: application.status,
+                note: `MSME Portal status updated${currentStatus ? `: ${currentStatus}` : ''}`,
+                changedBy: req.user?.fullName || req.user?.username || 'Admin',
+            });
+            await application.save();
+            res.json({ success: true, message: 'Portal status saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not save portal status', error: error.message });
+        }
+    }
+
+    async uploadPortalAcknowledgement(req, res) {
+        try {
+            if (!req.file) return res.status(400).json({ success: false, message: 'File is required' });
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            if (application.msmePortal?.acknowledgementFile) {
+                await deleteUploadedFile(application.msmePortal.acknowledgementFile);
+            }
+            application.msmePortal = {
+                ...(application.msmePortal?.toObject ? application.msmePortal.toObject() : application.msmePortal || {}),
+                acknowledgementFile: req.file.path,
+                acknowledgementFileName: req.file.originalname,
+                acknowledgementFileSize: req.file.size,
+            };
+            await application.save();
+            res.status(201).json({ success: true, message: 'Acknowledgement uploaded', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not upload acknowledgement', error: error.message });
+        }
+    }
+
+    async setActionRequired(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { resolved } = req.body;
+            if (resolved) {
+                application.actionRequired = { resolved: true };
+            } else {
+                const { message, dueDate } = req.body;
+                if (!message) return res.status(400).json({ success: false, message: 'A message describing what is needed is required' });
+                application.actionRequired = { message, dueDate: dueDate || undefined, resolved: false, createdAt: new Date() };
+            }
+            application.statusHistory.push({
+                status: application.status,
+                note: resolved ? 'Action-required query resolved' : `Action required: ${req.body.message}`,
+                changedBy: req.user?.fullName || req.user?.username || 'Admin',
+            });
+            await application.save();
+            res.json({ success: true, message: 'Saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not update action-required status', error: error.message });
+        }
+    }
+
+    async updateDocumentStatus(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const doc = application.documents.id(req.params.documentId);
+            if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
+            const { status, portalStatus, uploadedOnPortal } = req.body;
+            if (status !== undefined) {
+                if (!['Submitted', 'Verified', 'Rejected'].includes(status)) {
+                    return res.status(400).json({ success: false, message: 'Invalid document status' });
+                }
+                doc.status = status;
+            }
+            if (portalStatus !== undefined) {
+                if (!['', 'Accepted', 'Pending', 'Rejected'].includes(portalStatus)) {
+                    return res.status(400).json({ success: false, message: 'Invalid portal status' });
+                }
+                doc.portalStatus = portalStatus;
+                if (portalStatus && !doc.uploadedOnPortal) doc.uploadedOnPortal = new Date();
+            }
+            if (uploadedOnPortal !== undefined) doc.uploadedOnPortal = uploadedOnPortal || undefined;
+            await application.save();
+            res.json({ success: true, message: 'Document status updated', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not update document status', error: error.message });
+        }
+    }
+
+    // A document type marked Not Applicable applies to THIS exhibitor's
+    // claim only (e.g. Category Certificate for a General-category
+    // applicant) — it's a decision on the claim, not a global document-type
+    // setting, so it's stored as a placeholder documents[] entry.
+    async markDocumentNotApplicable(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { documentType } = req.params;
+            if (!DOCUMENT_TYPES.has(documentType)) return res.status(400).json({ success: false, message: 'Invalid document type' });
+            const { notApplicable } = req.body;
+            let doc = application.documents.find(d => d.documentType === documentType);
+            if (notApplicable) {
+                if (doc?.path) return res.status(409).json({ success: false, message: 'A file is already uploaded for this document — remove it first.' });
+                if (!doc) {
+                    application.documents.push({ documentType, notApplicable: true });
+                } else {
+                    doc.notApplicable = true;
+                }
+            } else if (doc && !doc.path) {
+                application.documents = application.documents.filter(d => d !== doc);
+            } else if (doc) {
+                doc.notApplicable = false;
+            }
+            await application.save();
+            res.json({ success: true, message: 'Saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not update document', error: error.message });
+        }
+    }
+
+    async updateUdyamDetails(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { registrationType, enterpriseType, majorActivity, socialCategory, constitution, dateOfIncorporation } = req.body;
+            const existing = application.udyamDetails || {};
+            application.udyamDetails = {
+                registrationType: registrationType ?? existing.registrationType ?? '',
+                enterpriseType: enterpriseType ?? existing.enterpriseType ?? '',
+                majorActivity: majorActivity ?? existing.majorActivity ?? '',
+                socialCategory: socialCategory ?? existing.socialCategory ?? '',
+                constitution: constitution ?? existing.constitution ?? '',
+                dateOfIncorporation: dateOfIncorporation ?? existing.dateOfIncorporation,
+            };
+            await application.save();
+            res.json({ success: true, message: 'Udyam details saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not save Udyam details', error: error.message });
+        }
+    }
+
+    async updatePortalOtpContact(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { contactPerson, mobile, mobileVerified, email, emailVerified } = req.body;
+            const existing = application.portalOtpContact || {};
+            application.portalOtpContact = {
+                contactPerson: contactPerson ?? existing.contactPerson ?? '',
+                mobile: mobile ?? existing.mobile ?? '',
+                mobileVerified: mobileVerified ?? existing.mobileVerified ?? false,
+                email: email ?? existing.email ?? '',
+                emailVerified: emailVerified ?? existing.emailVerified ?? false,
+            };
+            await application.save();
+            res.json({ success: true, message: 'Portal OTP contact saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not save portal OTP contact', error: error.message });
+        }
+    }
+
+    // Runs the same AI eligibility-screening prompt used on Book a Stand
+    // (buildMsmeEligibilityScreeningPrompt), but against this claim's already
+    // -uploaded Udyam certificate + its own applicant details, and persists
+    // the result so admins don't need to re-run it on every page load.
+    async runAiScreening(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const udyamDoc = application.documents.find(d => d.documentType === 'udyam' && d.path);
+            if (!udyamDoc) return res.status(400).json({ success: false, message: 'Upload the Udyam Registration Certificate before running AI screening.' });
+
+            const applicant = application.applicantDetails || {};
+            // industrySector/companyBrief live on the exhibitor's own
+            // registration, not applicantDetails — applicantDetails.
+            // participationType is the stall construction type (e.g. "Shell
+            // Space"), not an industry, so it must never be used as a
+            // fallback here.
+            const exhibitorSource = application.exhibitorId
+                ? await ExhibitorRegistration.findById(application.exhibitorId).select('industrySector aboutCompany typeOfBusiness').lean()
+                : null;
+            const documentName = DOCUMENT_LABELS.udyam;
+            const fileType = (udyamDoc.filename?.split('.').pop() || 'pdf').toUpperCase();
+            const aiResult = await aiDocumentVerificationService.verifyDocument({
+                fileUrl: udyamDoc.path,
+                documentName,
+                fileType,
+                promptOverride: aiDocumentVerificationService.buildMsmeEligibilityScreeningPrompt(documentName, {
+                    industrySector: applicant.industrySector || exhibitorSource?.industrySector,
+                    companyBrief: applicant.companyBrief || applicant.aboutCompany || exhibitorSource?.aboutCompany,
+                    typeOfBusiness: applicant.organizationType || exhibitorSource?.typeOfBusiness,
+                    validCategories: INDUSTRY_SECTOR_OPTIONS,
+                }),
+            });
+
+            if (aiResult.skipped) {
+                return res.status(422).json({ success: false, message: 'AI verification is not available right now — please configure/enable it in AI Verification Settings.' });
+            }
+            const screening = aiResult.screening || {};
+            const comments = [];
+            if (screening.categoryMatch) comments.push('Business activities match with approved PMS scheme activities and event category.');
+            if (screening.riskLevel === 'Low') comments.push('Low risk — subject to MSME-DFO verification and actual exhibited products.');
+            if (screening.recommendation === 'PROCEED_WITH_PMS_APPLICATION') comments.push('Recommended to proceed with PMS application on MSME portal.');
+            if (screening.riskNote) comments.push(screening.riskNote);
+
+            application.aiScreening = {
+                pmsEligible: screening.recommendation === 'PROCEED_WITH_PMS_APPLICATION',
+                categoryMatch: screening.categoryMatch ?? null,
+                bestMatchingCategory: screening.bestMatchingCategory || '',
+                nicCodeMatch: screening.nicCodeMatch || '',
+                riskLevel: screening.riskLevel || '',
+                recommendation: screening.recommendation || '',
+                comments,
+                screenedAt: new Date(),
+            };
+            await application.save();
+            res.json({ success: true, message: 'AI screening complete', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not run AI screening', error: error.message });
         }
     }
 

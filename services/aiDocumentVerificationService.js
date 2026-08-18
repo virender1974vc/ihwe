@@ -129,14 +129,117 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
                 skipped: false,
                 valid: !isInvalid,
                 issue: parsed.issue ? String(parsed.issue).trim().toLowerCase() : null,
-                reason: parsed.reason || ''
+                reason: parsed.reason || '',
+                // Only populated when the caller asked for field extraction
+                // (see buildMsmeExtractionPrompt) — other callers (logo/photo
+                // moderation, general document mismatch checks) just won't
+                // have this key in their prompt's JSON, so it stays undefined.
+                extractedDetails: (parsed.extractedDetails && typeof parsed.extractedDetails === 'object') ? parsed.extractedDetails : null,
+                // Only populated when the caller asked for an eligibility
+                // screening assessment (see buildMsmeEligibilityScreeningPrompt).
+                screening: (parsed.screening && typeof parsed.screening === 'object') ? parsed.screening : null,
             };
         } catch (e) {
             // Could not parse AI response - fail open rather than blocking the upload
             return { skipped: true, reason: 'parse_error' };
         }
     }
-    async verifyDocument({ fileUrl, documentName, fileType, expectedGender }) {
+
+    // Per-document-type field list for MSME PMS claim documents — asked for
+    // literally (not inferred) so the AI doesn't invent fields that don't
+    // apply to a given document type.
+    static MSME_EXTRACT_FIELDS = {
+        udyam: ['Udyam Registration Number', 'Enterprise Name', 'Type of Enterprise (Micro/Small/Medium)', 'Date of Registration', 'Major Activity (Manufacturing/Service/Trading)', 'Registration Type', 'Social Category', 'Constitution / Organisation Type', 'Date of Incorporation / Commencement'],
+        gst: ['GSTIN', 'Legal Name of Business', 'Date of Registration'],
+        pan: ['PAN Number', 'Name'],
+        aadhaar: ['Aadhaar Number', 'Name'],
+        cheque: ['Account Holder Name', 'Account Number', 'IFSC Code', 'Bank Name'],
+        statement: ['Account Number', 'Bank Name', 'Statement Period (from-to dates)'],
+        passbook: ['Account Number', 'Bank Name', 'Account Holder Name'],
+        hotelInvoice: ['Hotel Name', 'Invoice Amount', 'Invoice Date', 'GSTIN (if shown)'],
+        hotelPayment: ['Payee Name', 'Amount Paid', 'Payment Date'],
+        travelExpense: ['Mode of Travel', 'Amount', 'Date'],
+        travelInvoice: ['Travel Provider Name', 'Invoice Amount', 'Invoice Date'],
+        courier: ['Courier Company', 'Amount', 'Date'],
+        marketing: ['Vendor Name', 'Invoice Amount', 'Invoice Date'],
+    };
+
+    // A separate, MSME-specific prompt used only from the PMS claim document
+    // upload flow (msmePmsSchemeController.js) — NOT used by the general
+    // buildPrompt() moderation check that logos/team photos/other document
+    // uploads across the app rely on, so this never changes their behavior.
+    buildMsmeExtractionPrompt(documentType, documentName) {
+        const fields = AiDocumentVerificationService.MSME_EXTRACT_FIELDS[documentType] || [];
+        const fieldList = fields.length ? fields.map(f => `"${f}"`).join(', ') : '(no specific fields — just verify document type)';
+        const fieldsExampleObj = fields.length
+            ? `{ ${fields.map(f => `"${f}": "<value found in the document, or null if not visible>"`).join(', ')} }`
+            : '{}';
+
+        return `You are a document-verification and data-extraction system for an MSME government subsidy claim portal.
+
+The uploaded file is supposed to be: "${documentName}".
+
+Step 1 — Verify:
+1. Does the image/document contain nudity, sexual content, or content involving a minor? -> issue "nudity" or "minor" (safety-critical, always report).
+2. Does the file clearly fail to match the expected document type "${documentName}" (e.g. a random unrelated photo/screenshot instead of the real document)? -> issue "mismatch".
+3. Is the file too blurry, blank, cropped, or low-quality to read? -> issue "unreadable".
+4. If none of the above, it's valid.
+
+Step 2 — Only if valid, extract these specific fields exactly as they appear on the document: ${fieldList}.
+If a field isn't visible or the document type doesn't call for it, use null for that field. Do not guess or invent values.
+
+Respond ONLY with valid JSON (no markdown fences, no extra text) in exactly this format:
+{"valid": true, "issue": null, "reason": "short reason", "extractedDetails": ${fieldsExampleObj}}
+or, if invalid:
+{"valid": false, "issue": "nudity|minor|mismatch|unreadable", "reason": "short reason", "extractedDetails": null}`;
+    }
+
+    // Used only from the admin "Book a Stand" flow (verifyUdyamCertificateStandalone
+    // in msmePmsSchemeController.js) — a live pre-booking eligibility read on a
+    // freshly uploaded Udyam certificate, combined with the industry/sector and
+    // company description the admin has already entered on the booking form.
+    // Separate from buildMsmeExtractionPrompt (used post-booking for the actual
+    // claim documents) so that flow's behavior never changes.
+    buildMsmeEligibilityScreeningPrompt(documentName, context = {}) {
+        const { industrySector, companyBrief, typeOfBusiness, validCategories } = context;
+        const fields = AiDocumentVerificationService.MSME_EXTRACT_FIELDS.udyam;
+        const fieldsExampleObj = `{ ${fields.map(f => `"${f}": "<value found in the document, or null if not visible>"`).join(', ')} }`;
+        const categoryList = Array.isArray(validCategories) && validCategories.length
+            ? validCategories.map(c => `"${c}"`).join(', ')
+            : null;
+
+        return `You are an eligibility-screening assistant for the MSME PMS reimbursement scheme at a trade exhibition, helping an admin quickly assess a Udyam Registration Certificate uploaded while booking a stand.
+
+The uploaded file is supposed to be: "${documentName}".
+
+Step 1 — Verify (safety-critical, always report first):
+1. Nudity/sexual content or a minor -> issue "nudity" or "minor".
+2. Clearly not a Udyam Registration Certificate -> issue "mismatch".
+3. Too blurry/blank/cropped to read -> issue "unreadable".
+4. Otherwise valid.
+
+Step 2 — Only if valid, extract these fields exactly as they appear on the certificate: ${fields.map(f => `"${f}"`).join(', ')}. Use null for anything not visible — never invent values.
+
+Step 3 — Only if valid, assess fit for the exhibition's MSME PMS scheme using BOTH the certificate and this context already entered on the booking form:
+- Declared Industry/Sector: "${industrySector || 'Not provided'}"
+- Company/About description: "${companyBrief || 'Not provided'}"
+- Type of Business (legal structure): "${typeOfBusiness || 'Not provided'}"
+${categoryList ? `\nThe exhibition only recognizes these Industry/Sector categories — "bestMatchingCategory" MUST be exactly one of: ${categoryList}.` : ''}
+
+Return in a "screening" object:
+- "categoryMatch": true if the certificate + description genuinely support the declared Industry/Sector, false if they clearly don't, null if you can't tell.
+- "bestMatchingCategory": which of the allowed categories above actually fits this business best, based on the description — even if it's the same one that was declared.
+- "nicCodeMatch": one or two plausible NIC 2008 activity codes for this business (e.g. "10795, 21009"), or null if you can't estimate one confidently.
+- "riskLevel": "Low", "Medium", or "High" — verification risk for this reimbursement case (mismatched category, vague description, or a generic/unclear certificate = higher risk).
+- "riskNote": one short sentence explaining the risk level.
+- "recommendation": one of "PROCEED_WITH_PMS_APPLICATION", "NEEDS_REVIEW", "NOT_RECOMMENDED".
+
+Respond ONLY with valid JSON (no markdown fences, no extra text) in exactly this format:
+{"valid": true, "issue": null, "reason": "short reason", "extractedDetails": ${fieldsExampleObj}, "screening": {"categoryMatch": true, "bestMatchingCategory": "...", "nicCodeMatch": "...", "riskLevel": "Low", "riskNote": "...", "recommendation": "PROCEED_WITH_PMS_APPLICATION"}}
+or, if invalid:
+{"valid": false, "issue": "nudity|minor|mismatch|unreadable", "reason": "short reason", "extractedDetails": null, "screening": null}`;
+    }
+    async verifyDocument({ fileUrl, documentName, fileType, expectedGender, promptOverride }) {
         const ai = await this.getAiSettings();
 
         if (!ai.isEnabled) return { skipped: true, reason: 'disabled' };
@@ -163,9 +266,9 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
             const mimeType = fileResp.headers['content-type'] || (isPdf ? 'application/pdf' : 'image/jpeg');
 
             if (ai.provider === 'gemini') {
-                return await this.verifyWithGemini(base64, mimeType, documentName, apiKey, ai.geminiModel, expectedGender);
+                return await this.verifyWithGemini(base64, mimeType, documentName, apiKey, ai.geminiModel, expectedGender, promptOverride);
             }
-            return await this.verifyWithOpenAI(base64, mimeType, documentName, apiKey, ai.openaiModel, expectedGender);
+            return await this.verifyWithOpenAI(base64, mimeType, documentName, apiKey, ai.openaiModel, expectedGender, promptOverride);
         } catch (err) {
             if (this.isQuotaError(err)) {
                 console.error('AI document verification quota error:', err.message);
@@ -176,7 +279,7 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
         }
     }
 
-    async verifyWithGemini(base64, mimeType, documentName, apiKey, model, expectedGender) {
+    async verifyWithGemini(base64, mimeType, documentName, apiKey, model, expectedGender, promptOverride) {
         const { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(apiKey);
         const genModel = genAI.getGenerativeModel({
@@ -191,7 +294,7 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
 
         const result = await genModel.generateContent([
             { inlineData: { data: base64, mimeType } },
-            { text: this.buildPrompt(documentName, expectedGender) }
+            { text: promptOverride || this.buildPrompt(documentName, expectedGender) }
         ]);
 
         const response = result.response;
@@ -212,7 +315,7 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
         return this.parseAiResponse(response.text());
     }
 
-    async verifyWithOpenAI(base64, mimeType, documentName, apiKey, model, expectedGender) {
+    async verifyWithOpenAI(base64, mimeType, documentName, apiKey, model, expectedGender, promptOverride) {
         const OpenAI = require('openai');
         const client = new OpenAI({ apiKey });
 
@@ -221,7 +324,7 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
             messages: [{
                 role: 'user',
                 content: [
-                    { type: 'text', text: this.buildPrompt(documentName, expectedGender) },
+                    { type: 'text', text: promptOverride || this.buildPrompt(documentName, expectedGender) },
                     { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
                 ]
             }],

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Estimate = require("../models/Estimate");
+const Stall = require("../models/Stall");
 const Invoice = require("../models/Invoice");
 const DeliveryChallan = require("../models/DeliveryChallan");
 const Payment = require("../models/Payment");
@@ -74,6 +75,41 @@ const syncExhibitorStallSize = async (companyId) => {
   }
 };
 
+// Putting a stall on a PI's item table only records its number as free text —
+// it never touched the Stall inventory record itself, so a stall assigned to
+// a client this way kept showing as "available" (status never left its
+// default) on every other PI's Select Stall dropdown, letting it be double-
+// booked. Flips the matching Stall doc(s) to 'booked' once they appear on a
+// live (non-cancelled/superseded) Estimate. Only ever promotes 'available' ->
+// 'booked' — never touches a stall an admin has already booked/reserved some
+// other way, and never reverts on removal (that's a deliberate admin action
+// via Manage Stalls' "Make Available", not an automatic side effect here).
+const syncStallBookingStatus = async (estimate) => {
+  if (!estimate?.eventId) return;
+  try {
+    const stallNumbers = [...new Set(
+      (estimate.items || [])
+        .filter(isStallItem)
+        .map((item) => String(item.description || '').trim())
+        .filter(Boolean)
+    )];
+    if (!stallNumbers.length) return;
+
+    let bookedBy = estimate.exhibitorRegistrationId || null;
+    if (!bookedBy) {
+      const company = await Company.findById(estimate.companyId).select('exhibitorRegistrationId').lean();
+      bookedBy = company?.exhibitorRegistrationId || null;
+    }
+
+    await Stall.updateMany(
+      { eventId: estimate.eventId, stallNumber: { $in: stallNumbers }, status: 'available' },
+      { $set: { status: 'booked', bookedBy } },
+    );
+  } catch (err) {
+    console.error('Failed to sync stall booking status from Proforma Invoice:', err);
+  }
+};
+
 const getFiscalYear = () => {
   const date = new Date();
   const currentYear = date.getFullYear();
@@ -138,6 +174,7 @@ const addEstimate = async (req, res) => {
     const estimate = new Estimate(estimateBody);
     await estimate.save();
     await syncExhibitorStallSize(estimate.companyId);
+    await syncStallBookingStatus(estimate);
     await markCompanyHotLead(estimate.companyId, estimate.crmEventId);
     const accountName = await getDocumentAccountName(estimate, "account");
     await logActivity(
@@ -469,6 +506,7 @@ const updateEstimate = async (req, res) => {
     if (!updated)
       return res.status(404).json({ message: "Estimate not found" });
     await syncExhibitorStallSize(updated.companyId);
+    await syncStallBookingStatus(updated);
     const accountName = await getDocumentAccountName(updated, "account");
     await logActivity(
       req,
