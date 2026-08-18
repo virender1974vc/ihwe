@@ -44,6 +44,8 @@ const AccessoryOrderSchema = new mongoose.Schema({
     notes: { type: String, default: '' },
     // Receipt
     receiptUrl: { type: String, default: '' },
+    // Proforma Invoice auto-generated on successful payment
+    performaInvoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'PerformaInvoice', default: null },
     // Email sent
     emailSent: { type: Boolean, default: false },
     // Notification tracking

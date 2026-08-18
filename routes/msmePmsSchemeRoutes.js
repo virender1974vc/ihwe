@@ -65,6 +65,9 @@ router.post('/upload-image', upload.single('image'), (req, res) => {
         res.status(500).json({ success: false, message: 'Image upload failed' });
     }
 });
+// Admin Book a Stand: verify + extract a Udyam certificate before an
+// ExhibitorRegistration exists yet (so it can't be tied to one).
+router.post('/verify-udyam-certificate', upload.single('file'), msmePmsSchemeController.verifyUdyamCertificateStandalone);
 // Authenticated exhibitor dashboard workflow. Keep these before /:id.
 router.get('/application/me', protectExhibitor, resolveSelectedExhibitor, msmePmsSchemeController.getMyApplication);
 router.put('/application/step/:step', protectExhibitor, resolveSelectedExhibitor, msmePmsSchemeController.saveApplicationStep);
@@ -81,6 +84,15 @@ router.delete('/:id/documents/:documentType', msmePmsSchemeController.deleteAppl
 router.post('/:id/submit', msmePmsSchemeController.submitApplicationById.bind(msmePmsSchemeController));
 router.get('/:id', msmePmsSchemeController.getApplicationById);
 router.patch('/:id/status', msmePmsSchemeController.updateApplicationStatus);
+router.patch('/:id/stage', msmePmsSchemeController.updatePmsStage);
+router.patch('/:id/portal', msmePmsSchemeController.updateMsmePortal);
+router.post('/:id/portal-acknowledgement', upload.single('file'), msmePmsSchemeController.uploadPortalAcknowledgement);
+router.patch('/:id/documents/:documentId/status', msmePmsSchemeController.updateDocumentStatus);
+router.patch('/:id/documents/:documentType/not-applicable', msmePmsSchemeController.markDocumentNotApplicable);
+router.patch('/:id/udyam-details', msmePmsSchemeController.updateUdyamDetails);
+router.patch('/:id/portal-otp-contact', msmePmsSchemeController.updatePortalOtpContact);
+router.post('/:id/ai-screening', msmePmsSchemeController.runAiScreening);
+router.patch('/:id/action-required', msmePmsSchemeController.setActionRequired);
 router.delete('/:id', msmePmsSchemeController.deleteApplication);
 
 module.exports = router;

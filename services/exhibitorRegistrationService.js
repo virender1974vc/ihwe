@@ -1249,6 +1249,7 @@ class ExhibitorRegistrationService {
             (data.paymentPlanType && data.paymentPlanType !== current.paymentPlanType);
 
         if (needsFinanceRecalc) {
+          try {
             const Settings = require('../models/Settings');
             const settings = await Settings.findOne();
             const plan = data.paymentPlanType || current.paymentPlanType || 'full';
@@ -1276,7 +1277,7 @@ class ExhibitorRegistrationService {
             const invoiceTot = sub + gstA;
             const net = invoiceTot - tdsA;
 
-            if (!data.participation) data.participation = { ...current.participation.toObject() };
+            if (!data.participation) data.participation = { ...(current.participation?.toObject?.() || current.participation || {}) };
             data.participation.amount = sub;
             data.participation.total = invoiceTot;
             data.balanceAmount = Math.max(0, Math.round(net - amountPaid));
@@ -1365,6 +1366,16 @@ class ExhibitorRegistrationService {
             delete data._newGross;
             delete data._stallDiscountPercent;
             delete data._stallDiscountAmount;
+          } catch (recalcErr) {
+            console.error('Finance recalculation failed during exhibitor registration update:', recalcErr.message);
+            // A genuine stall change failing to price correctly must not be
+            // saved silently — surface it. Anything else triggering this
+            // branch (missing grossAmount backfill, a TDS/plan tweak) is a
+            // best-effort recalculation; let the rest of the update — profile
+            // fields, category, etc. — still go through rather than blocking
+            // an unrelated edit on it.
+            if (stallChanged) throw recalcErr;
+          }
         }
 
         if (!data.installments && data.amountPaid != null && current.installments?.length) {

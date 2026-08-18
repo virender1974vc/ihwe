@@ -1,9 +1,98 @@
 const StallAccessory = require('../models/StallAccessory');
 const AccessoryOrder = require('../models/AccessoryOrder');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
+const PerformaInvoice = require('../models/PerformaInvoice');
 const pdfGenerator = require('../utils/pdfGenerator');
 const emailService = require('../utils/emailService');
 const { computeEntitlement, getExhibitorStallArea } = require('../utils/entitlementCalculator');
+
+// Same event-side constants the admin's manual Proforma Invoice / Estimate
+// forms use (CreateEstimate1.jsx) — kept in sync so an auto-generated PI
+// looks identical to one an accounts staffer would have typed by hand.
+const PROFORMA_EVENT_NAME = '9th Edition of International Health & Wellness Expo (IHWE Global Edition)';
+const PROFORMA_PLACE_OF_SUPPLY = 'Hall Nos. 12, Pragati Maidan, New Delhi - 110001, Bharat';
+const EVENT_GST_NO = '08AAFCN9238F1Z6';
+
+// ─── AUTO PROFORMA INVOICE (accessory order payment) ─────────────────────────
+
+// Mirrors the CGST/IGST split the admin manual Estimate form applies based on
+// sale type — event is hosted in Delhi, so a Delhi-based exhibitor is an
+// intrastate sale (CGST), any other Indian state is interstate (IGST), and a
+// non-Indian exhibitor is a zero-tax foreign sale.
+const gstSplitForState = (country, state) => {
+    const isForeign = country && !/india|bharat/i.test(country);
+    if (isForeign) return { cgstPer: '0', igstPer: '0' };
+    const isIntrastate = /delhi/i.test(state || '');
+    return isIntrastate ? { cgstPer: null, igstPer: '0' } : { cgstPer: '0', igstPer: null };
+};
+
+// Auto-creates a real PerformaInvoice record (same collection/numbering the
+// admin's manual Estimate -> PI flow uses) whenever an exhibitor's accessory
+// order payment completes, so accounts sees it in the normal Proforma
+// Invoices list without anyone re-keying it by hand.
+const createProformaInvoiceForAccessoryOrder = async (order, reg) => {
+    const accessoryIds = order.items.map((item) => item.accessoryId).filter(Boolean);
+    const accessories = await StallAccessory.find({ _id: { $in: accessoryIds } }).select('hsnCode sacCode');
+    const hsnById = new Map(accessories.map((a) => [String(a._id), a.hsnCode || a.sacCode || '998596']));
+
+    const { cgstPer: fixedCgstPer, igstPer: fixedIgstPer } = gstSplitForState(reg.country, reg.state);
+
+    const items = order.items.map((item) => {
+        const gstRate = Number(item.gstPercent) || 0;
+        const cgstPer = fixedCgstPer === null ? gstRate.toFixed(0) : fixedCgstPer;
+        const igstPer = fixedIgstPer === null ? gstRate.toFixed(0) : fixedIgstPer;
+        return {
+            description: item.name,
+            hsn: hsnById.get(String(item.accessoryId)) || '998596',
+            qty: item.qty || 1,
+            size: 1,
+            unit: 'Nos',
+            rate: item.unitPrice || 0,
+            amount: (item.unitPrice || 0) * (item.qty || 1),
+            disc: 0,
+            tax: item.gstAmount || 0,
+            gstRate: `${gstRate}%`,
+            cgst_per: cgstPer,
+            igst_per: igstPer,
+            finalAmount: item.totalPrice || 0,
+            remarks: '',
+        };
+    });
+
+    const gstNo = reg.gstNo || 'URP';
+    const addressParts = [reg.address, reg.city, reg.state, reg.pincode].filter(Boolean);
+
+    const pi_no = await PerformaInvoice.generateNextPINumber();
+    const invoice = new PerformaInvoice({
+        companyId: String(reg._id),
+        eventId: reg.eventId,
+        pi_no,
+        gst_no: gstNo,
+        company_name: reg.exhibitorName || '',
+        company_addr: addressParts.join(', '),
+        company_gst_no: gstNo,
+        event_name: PROFORMA_EVENT_NAME,
+        event_place_of_supply: PROFORMA_PLACE_OF_SUPPLY,
+        event_gst_no: EVENT_GST_NO,
+        consignee_name: PROFORMA_EVENT_NAME,
+        consignee_addr: PROFORMA_PLACE_OF_SUPPLY,
+        consignee_person: reg.contact1?.firstName ? `${reg.contact1.firstName} ${reg.contact1.lastName || ''}`.trim() : '',
+        consignee_phone: reg.contact1?.mobile || '',
+        country: reg.country || 'India',
+        state: reg.state || '',
+        city: reg.city || '',
+        pincode: Number(reg.pincode) || 0,
+        items,
+        finalAmount: order.grandTotal,
+        remarks: `Auto-generated for Add On Services order ${order.orderNo}`,
+        added_by: 'System (Accessory Order Payment)',
+    });
+
+    await invoice.save();
+    order.performaInvoiceId = invoice._id;
+    await order.save();
+    return invoice;
+};
 
 // ─── COMPLIMENTARY ENTITLEMENT HELPERS ───────────────────────────────────────
 
@@ -298,4 +387,5 @@ module.exports = {
     getAllAccessories, createAccessory, updateAccessory, deleteAccessory,
     getAllOrders, getOrderById, createOrder, updateOrder, deleteOrder,
     getMyEntitlements, assertComplimentaryWithinEntitlement,
+    createProformaInvoiceForAccessoryOrder,
 };

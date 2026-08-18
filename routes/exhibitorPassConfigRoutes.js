@@ -122,6 +122,7 @@ router.put('/admin/:passType', authMiddleware, async (req, res) => {
             price: Number(req.body.price || 0),
             currency: req.body.currency || 'INR',
             maxPerRequest: Number(req.body.maxPerRequest || 10),
+            hsnCode: req.body.hsnCode || '',
             gstPercentage: Number(req.body.gstPercentage ?? 18),
             isActive: req.body.isActive !== false,
             displayOrder: Number(req.body.displayOrder || 0),
@@ -140,6 +141,8 @@ router.put('/admin/:passType', authMiddleware, async (req, res) => {
                 roundingMode: ['floor', 'round', 'ceil'].includes(sub.roundingMode) ? sub.roundingMode : 'floor',
                 complimentaryQuota: Number(sub.complimentaryQuota || 0),
                 price: Number(sub.price || 0),
+                hsnCode: sub.hsnCode || '',
+                gstPercentage: Number(sub.gstPercentage ?? 18),
             });
             payload.vehicleTypeConfig = {
                 twoWheeler: normalizeSub(req.body.vehicleTypeConfig.twoWheeler),

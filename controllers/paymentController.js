@@ -444,6 +444,19 @@ const syncExhibitorFromAccountPayments = async (companyId) => {
   ].filter(Boolean))];
   const accountPayments = await Payment.find({ companyId: { $in: linkedIds } }).sort({ added: 1 }).lean();
 
+  // amountPaid above is summed across every Payment tagged to this company —
+  // i.e. across every stall it has, each raised as its own PI/Estimate — so
+  // netPayable must be summed the same way. Using only the exhibitor's own
+  // financeBreakdown.netPayable (a snapshot of its first/only self-registered
+  // stall) understates what a multi-stall client owes, which was making
+  // balanceAmount clamp to 0 as soon as later stalls' payments pushed
+  // amountPaid past that single-stall figure.
+  const activeEstimates = await Estimate.find({
+    companyId: { $in: linkedIds },
+    status: { $nin: ['cancelled', 'superseded'] },
+  }).select('finalAmount').lean();
+  const combinedEstimateTotal = activeEstimates.reduce((sum, est) => sum + (Number(est.finalAmount) || 0), 0);
+
   for (const target of uniqueTargets) {
     const exhibitor = await ExhibitorRegistration.findById(target.exhibitorRegistrationId).select("+password");
     if (!exhibitor) continue;
@@ -479,8 +492,10 @@ const syncExhibitorFromAccountPayments = async (companyId) => {
     }));
     const paymentHistory = [...nonAccountHistory, ...syncedHistory];
     const amountPaid = paymentHistory.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
-    const netPayable = Number(exhibitor.financeBreakdown?.netPayable)
-      || Math.max(0, Number(exhibitor.participation?.total || 0) - Number(exhibitor.financeBreakdown?.tdsAmount || 0));
+    const netPayable = combinedEstimateTotal > 0
+      ? combinedEstimateTotal
+      : (Number(exhibitor.financeBreakdown?.netPayable)
+        || Math.max(0, Number(exhibitor.participation?.total || 0) - Number(exhibitor.financeBreakdown?.tdsAmount || 0)));
     const balanceAmount = Math.max(0, Math.round(netPayable - amountPaid));
 
     exhibitor.paymentHistory = paymentHistory;
