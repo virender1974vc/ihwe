@@ -667,7 +667,7 @@ class MsmePmsSchemeController {
         }
     }
 
-    // Used from Book a Stand (admin) when Stall Category = "Under MSME PSM
+    // Used from Book a Stand (admin) when Stall Category = "Under MSME PMS
     // Scheme": no ExhibitorRegistration exists yet at that point, so this
     // just verifies + extracts from the certificate and hands the result
     // back for the admin form to hold onto and submit with the booking —
