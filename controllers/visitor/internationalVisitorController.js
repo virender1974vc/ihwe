@@ -196,6 +196,12 @@ const bulkResendInternationalVisitorMessages = async (req, res) => {
 
     const visitors = await InternationalVisitor.find({ _id: { $in: visitorIds } });
 
+    // See corporateVisitorController.bulkResendCorporateVisitorMessages —
+    // sending is throttled 1s/message, so a large batch would otherwise
+    // block the response past every realistic HTTP timeout. Respond now,
+    // keep sending in the background.
+    res.json({ success: true, message: `Sending messages to ${visitors.length} visitor(s) in the background.` });
+
     let sentCount = 0;
     for (const saved of visitors) {
       const emailData = {
@@ -231,10 +237,9 @@ const bulkResendInternationalVisitorMessages = async (req, res) => {
     }
 
     await logActivity(req, 'Action', 'Visitor Registrations', `Bulk resent messages to ${sentCount} international visitors.`);
-    res.json({ success: true, message: `Successfully queued messages for ${sentCount} visitors.` });
   } catch (err) {
     console.error("Bulk resend error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    if (!res.headersSent) res.status(500).json({ success: false, message: err.message });
   }
 };
 

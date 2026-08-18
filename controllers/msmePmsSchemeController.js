@@ -37,13 +37,22 @@ const PMS_STAGE_LABELS = [
 // Category Certificate only for SC/ST/OBC applicants) is a per-claim call an
 // admin makes via documents[].notApplicable, not a fixed list here.
 const PMS_CLAIM_DOCUMENT_TYPES = [
-    'claimForm', 'onlineApplicationPrintout', 'udyam', 'taxInvoice', 'paymentProof',
-    'participationProof', 'bankMandate', 'cheque', 'preReceipt', 'pfmsDetails',
-    'gst', 'pan', 'categoryCertificate', 'otherSupportingDocument',
+    'udyam', 'onlineApplicationPrintout', 'stallBookingLetter', 'taxInvoice', 'paymentProof',
+    'bankMandate', 'participationProof', 'productActivityDetails', 'caCertificateTurnover',
+    'declarationLetterhead', 'authorityLetter', 'otherSupportingDocument',
 ];
+// Document types not on the current PMS_CLAIM_DOCUMENT_TYPES checklist but
+// still valid upload targets elsewhere (application wizard's own document
+// step, or claims created before the checklist above changed) — kept in
+// DOCUMENT_TYPES/DOCUMENT_LABELS below so those files stay viewable.
+const LEGACY_CLAIM_DOCUMENT_TYPES = ['claimForm', 'preReceipt', 'pfmsDetails', 'categoryCertificate'];
+// Claim documents that only apply to some exhibitors (shown as "If
+// Applicable" rather than "Mandatory") — everything else on the checklist is
+// required for every claim.
+const CONDITIONAL_CLAIM_DOCUMENT_TYPES = new Set(['productActivityDetails', 'caCertificateTurnover', 'authorityLetter', 'otherSupportingDocument']);
 
 const REQUIRED_DOCUMENTS = ['udyam', 'gst', 'pan', 'aadhaar', 'cheque', 'statement'];
-const DOCUMENT_TYPES = new Set([...REQUIRED_DOCUMENTS, 'passbook', 'hotelInvoice', 'hotelPayment', 'travelExpense', 'travelInvoice', 'courier', 'marketing', ...PMS_CLAIM_DOCUMENT_TYPES]);
+const DOCUMENT_TYPES = new Set([...REQUIRED_DOCUMENTS, 'passbook', 'hotelInvoice', 'hotelPayment', 'travelExpense', 'travelInvoice', 'courier', 'marketing', ...PMS_CLAIM_DOCUMENT_TYPES, ...LEGACY_CLAIM_DOCUMENT_TYPES]);
 const DOCUMENT_LABELS = {
     udyam: 'Udyam Registration Certificate',
     gst: 'GST Certificate',
@@ -58,16 +67,23 @@ const DOCUMENT_LABELS = {
     travelInvoice: 'Travel Invoice',
     courier: 'Courier / Logistics Invoice',
     marketing: 'Marketing / Printing Invoice',
+    onlineApplicationPrintout: 'MSME Registration Proof',
+    stallBookingLetter: 'Stall Booking / Space Allocation Letter',
+    taxInvoice: 'Tax Invoice / Bill',
+    paymentProof: 'Payment Proof (NEFT/RTGS/Bank Receipt)',
+    bankMandate: 'Bank Details / Cancelled Cheque',
+    participationProof: 'Exhibitor Profile / Participation Proof',
+    productActivityDetails: 'Product & Activity Details',
+    caCertificateTurnover: 'CA Certificate on Turnover',
+    declarationLetterhead: 'Declaration on Letterhead',
+    authorityLetter: 'Authority Letter (if signed by authorized signatory)',
+    otherSupportingDocument: 'Any Other Supporting Document',
+    // Legacy types — no longer on the checklist, kept only so older uploads
+    // under these types remain viewable/labelled.
     claimForm: 'PMS Claim Form',
-    onlineApplicationPrintout: 'MSME Portal Application Printout',
-    taxInvoice: 'Tax Invoice / Bills',
-    paymentProof: 'Payment Proof',
-    participationProof: 'Participation Proof (Photos / Certificate)',
-    bankMandate: 'Bank Details / Mandate Form',
     preReceipt: 'Pre-Receipt / Advance Received Proof (if any)',
     pfmsDetails: 'PFMS / Other Details (if applicable)',
     categoryCertificate: 'Category Certificate (SC/ST/OBC - if applicable)',
-    otherSupportingDocument: 'Any Other Supporting Document',
 };
 
 // Same cleanup used by clientDocumentController.js for the general Document
@@ -233,7 +249,7 @@ async function makeAdminApplicationPayload(application) {
         pmsClaimDocuments: PMS_CLAIM_DOCUMENT_TYPES.map(type => ({
             type,
             label: DOCUMENT_LABELS[type],
-            required: true,
+            required: !CONDITIONAL_CLAIM_DOCUMENT_TYPES.has(type),
         })),
         // Client (Exhibitor) Contact Details card — editable via the
         // existing PUT /api/exhibitor-registration/:id, not stored here.
@@ -243,7 +259,10 @@ async function makeAdminApplicationPayload(application) {
             mobileNumber: contact.mobile || '',
             emailId: contact.email || exhibitor.companyEmail || '',
             landlineNo: exhibitor.landlineNo || '',
-            address: [exhibitor.address, exhibitor.city, exhibitor.state, exhibitor.pincode].filter(Boolean).join(', '),
+            address: [
+                exhibitor.address,
+                [exhibitor.city, exhibitor.state, exhibitor.pincode, exhibitor.country].filter(Boolean).join(', '),
+            ].filter(Boolean).join('\n'),
         },
     };
 }
@@ -525,16 +544,32 @@ class MsmePmsSchemeController {
                 });
             }
 
-            application.documents = application.documents.filter(doc => doc.documentType !== documentType);
+            // Several files can now be attached under the same documentType
+            // (e.g. multiple invoice pages) — each upload adds a new entry
+            // instead of replacing whatever was there before. Callers that
+            // want single-slot replace semantics should delete the old entry
+            // by its _id first (see deleteApplicationDocument).
+            const uploadedAt = new Date();
+            const isExhibitorUpload = req.user?.role === 'exhibitor';
             application.documents.push({
                 documentType,
                 filename: req.file.originalname,
                 path: req.file.path,
                 mimetype: req.file.mimetype,
                 size: req.file.size,
+                uploadedAt,
                 aiVerification: { checked: !aiResult.skipped, reason: aiResult.reason || '' },
                 extractedDetails: aiResult.extractedDetails || null,
                 uploadedBy: req.user?.fullName || req.user?.username || req.user?.exhibitorName || 'Admin',
+                // Admin uploading on the exhibitor's behalf is self-reviewed —
+                // only an exhibitor's own upload through their portal needs a
+                // separate Accept/Decline pass from the admin afterwards.
+                status: isExhibitorUpload ? 'Submitted' : 'Verified',
+                portalStatus: isExhibitorUpload ? '' : 'Accepted',
+                // "Uploaded on Portal" mirrors the actual upload date here —
+                // there is no separate real msme.gov.in upload step to date
+                // this against.
+                uploadedOnPortal: isExhibitorUpload ? undefined : uploadedAt,
             });
             await application.save();
             res.status(201).json({ success: true, message: 'Document uploaded', data: application });
@@ -547,7 +582,13 @@ class MsmePmsSchemeController {
         try {
             const application = await getOrCreateClaim(req.user.id);
             if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
-            application.documents = application.documents.filter(doc => doc.documentType !== req.params.documentType);
+            // A specific file (documentId) removes just that one entry, since a
+            // documentType can now hold several files; omitting it falls back to
+            // clearing every file under that type (old single-slot behaviour).
+            const documentId = req.query.documentId || req.body?.documentId;
+            application.documents = documentId
+                ? application.documents.filter(doc => String(doc._id) !== String(documentId))
+                : application.documents.filter(doc => doc.documentType !== req.params.documentType);
             await application.save();
             res.json({ success: true, message: 'Document removed', data: application });
         } catch (error) {
@@ -819,6 +860,82 @@ class MsmePmsSchemeController {
         }
     }
 
+    async updateClaimSubmission(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { claimNo, submittedOn, submittedBy, submittedByRole, portalStatus, remarks, nextReviewOn } = req.body;
+            const existing = application.claimSubmission || {};
+            application.claimSubmission = {
+                claimNo: claimNo ?? existing.claimNo ?? '',
+                submittedOn: submittedOn ?? existing.submittedOn ?? (claimNo ? new Date() : undefined),
+                submittedBy: submittedBy ?? existing.submittedBy ?? req.user?.fullName ?? req.user?.username ?? 'Admin',
+                submittedByRole: submittedByRole ?? existing.submittedByRole ?? req.user?.designation ?? '',
+                portalStatus: portalStatus ?? existing.portalStatus ?? '',
+                lastStatusChecked: portalStatus !== undefined ? new Date() : existing.lastStatusChecked,
+                nextReviewOn: nextReviewOn ?? existing.nextReviewOn,
+                remarks: remarks ?? existing.remarks ?? '',
+            };
+            application.statusHistory.push({
+                status: application.status,
+                note: `Claim status updated${portalStatus ? `: ${portalStatus}` : ''}`,
+                changedBy: req.user?.fullName || req.user?.username || 'Admin',
+            });
+            await application.save();
+            res.json({ success: true, message: 'Claim submission saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not save claim submission', error: error.message });
+        }
+    }
+
+    async updateSanction(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { status, orderNo, orderDate, sanctionedAmount } = req.body;
+            const existing = application.sanction || {};
+            application.sanction = {
+                status: status ?? existing.status ?? 'Pending',
+                orderNo: orderNo ?? existing.orderNo ?? '',
+                orderDate: orderDate ?? existing.orderDate,
+                sanctionedAmount: sanctionedAmount !== undefined ? sanctionedAmount : (existing.sanctionedAmount ?? null),
+            };
+            application.statusHistory.push({
+                status: application.status,
+                note: `Sanction status updated${status ? `: ${status}` : ''}`,
+                changedBy: req.user?.fullName || req.user?.username || 'Admin',
+            });
+            await application.save();
+            res.json({ success: true, message: 'Sanction status saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not save sanction status', error: error.message });
+        }
+    }
+
+    async updateReimbursement(req, res) {
+        try {
+            const application = await MsmePmsScheme.findById(req.params.id);
+            if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
+            const { status, pfmsTransactionId, paymentDate, amountReceived } = req.body;
+            const existing = application.reimbursement || {};
+            application.reimbursement = {
+                status: status ?? existing.status ?? 'Pending',
+                pfmsTransactionId: pfmsTransactionId ?? existing.pfmsTransactionId ?? '',
+                paymentDate: paymentDate ?? existing.paymentDate,
+                amountReceived: amountReceived !== undefined ? amountReceived : (existing.amountReceived ?? null),
+            };
+            application.statusHistory.push({
+                status: application.status,
+                note: `Reimbursement status updated${status ? `: ${status}` : ''}`,
+                changedBy: req.user?.fullName || req.user?.username || 'Admin',
+            });
+            await application.save();
+            res.json({ success: true, message: 'Reimbursement status saved', data: await makeAdminApplicationPayload(application) });
+        } catch (error) {
+            res.status(500).json({ success: false, message: 'Could not save reimbursement status', error: error.message });
+        }
+    }
+
     async setActionRequired(req, res) {
         try {
             const application = await MsmePmsScheme.findById(req.params.id);
@@ -849,12 +966,20 @@ class MsmePmsSchemeController {
             if (!application) return res.status(404).json({ success: false, message: 'Application not found' });
             const doc = application.documents.id(req.params.documentId);
             if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
-            const { status, portalStatus, uploadedOnPortal } = req.body;
+            const { status, portalStatus, uploadedOnPortal, remark } = req.body;
             if (status !== undefined) {
                 if (!['Submitted', 'Verified', 'Rejected'].includes(status)) {
                     return res.status(400).json({ success: false, message: 'Invalid document status' });
                 }
                 doc.status = status;
+                doc.reviewRemark = status === 'Rejected' ? (remark || '') : '';
+                // Keep the MSME-portal status in step with the admin's own
+                // Accept/Decline call unless this same request already set
+                // portalStatus explicitly to something else.
+                if (portalStatus === undefined) {
+                    if (status === 'Verified') { doc.portalStatus = 'Accepted'; if (!doc.uploadedOnPortal) doc.uploadedOnPortal = doc.uploadedAt || new Date(); }
+                    else if (status === 'Rejected') doc.portalStatus = 'Rejected';
+                }
             }
             if (portalStatus !== undefined) {
                 if (!['', 'Accepted', 'Pending', 'Rejected'].includes(portalStatus)) {

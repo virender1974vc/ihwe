@@ -149,12 +149,20 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
     if (!visitorIds || !Array.isArray(visitorIds) || visitorIds.length === 0) {
       return res.status(400).json({ success: false, message: "No visitor IDs provided." });
     }
-    
+
     const sendEmail = types && types.includes('email');
     const sendWhatsapp = types ? types.includes('whatsapp') : true; // Default to both if not specified
 
     const visitors = await CorporateVisitor.find({ _id: { $in: visitorIds } });
-    
+
+    // Sending is throttled (1s between messages) to stay within the
+    // WhatsApp/email provider's rate limits, so a large batch (100s of
+    // visitors) can take several minutes — far longer than the browser,
+    // any reverse proxy, or Node's own request timeout will wait. Respond
+    // immediately once the batch is validated and keep sending in the
+    // background instead of blocking the HTTP response on the whole loop.
+    res.json({ success: true, message: `Sending messages to ${visitors.length} visitor(s) in the background.` });
+
     let sentCount = 0;
     for (const saved of visitors) {
       const emailData = {
@@ -189,10 +197,9 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
     }
 
     await logActivity(req, 'Action', 'Visitor Registrations', `Bulk resent messages to ${sentCount} corporate visitors.`);
-    res.json({ success: true, message: `Successfully queued messages for ${sentCount} visitors.` });
   } catch (err) {
     console.error("Bulk resend error:", err);
-    res.status(500).json({ success: false, message: err.message });
+    if (!res.headersSent) res.status(500).json({ success: false, message: err.message });
   }
 };
 

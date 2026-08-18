@@ -49,6 +49,19 @@ class AiDocumentVerificationService {
         return status === 429 || msg.includes('quota') || msg.includes('rate limit') || msg.includes('resource_exhausted');
     }
 
+    // Gemini/OpenAI occasionally answer with a transient capacity error
+    // ("high demand", 503/overloaded, or a dropped connection) that has
+    // nothing to do with the document itself — retrying the same request a
+    // couple of times a few seconds later usually succeeds, instead of
+    // permanently skipping AI verification for that one upload.
+    isRetryableError(err) {
+        const status = err?.response?.status || err?.status;
+        const msg = (err?.message || JSON.stringify(err?.response?.data || '') || '').toLowerCase();
+        return status === 503 || status === 502 || status === 504
+            || msg.includes('high demand') || msg.includes('overloaded') || msg.includes('unavailable')
+            || msg.includes('econnreset') || msg.includes('etimedout') || msg.includes('econnaborted');
+    }
+
     buildPrompt(documentName, expectedGender) {
         if (String(documentName).trim().toLowerCase() === 'company logo') {
             return `You are a content-moderation system for company logo uploads on an exhibition portal.
@@ -149,7 +162,7 @@ Be lenient about minor image quality issues, but be strict and decisive about nu
     // literally (not inferred) so the AI doesn't invent fields that don't
     // apply to a given document type.
     static MSME_EXTRACT_FIELDS = {
-        udyam: ['Udyam Registration Number', 'Enterprise Name', 'Type of Enterprise (Micro/Small/Medium)', 'Date of Registration', 'Major Activity (Manufacturing/Service/Trading)', 'Registration Type', 'Social Category', 'Constitution / Organisation Type', 'Date of Incorporation / Commencement'],
+        udyam: ['Udyam Registration Number', 'Enterprise Name', 'Type of Enterprise (Micro/Small/Medium)', 'Date of Registration', 'Major Activity (Manufacturing/Service/Trading)', 'Registration Type', 'Social Category', 'Constitution / Organisation Type', 'Date of Incorporation / Commencement', 'Contact Person Name', 'Mobile Number', 'Email ID'],
         gst: ['GSTIN', 'Legal Name of Business', 'Date of Registration'],
         pan: ['PAN Number', 'Name'],
         aadhaar: ['Aadhaar Number', 'Name'],
@@ -265,17 +278,33 @@ or, if invalid:
             const base64 = Buffer.from(fileResp.data).toString('base64');
             const mimeType = fileResp.headers['content-type'] || (isPdf ? 'application/pdf' : 'image/jpeg');
 
-            if (ai.provider === 'gemini') {
-                return await this.verifyWithGemini(base64, mimeType, documentName, apiKey, ai.geminiModel, expectedGender, promptOverride);
+            const MAX_ATTEMPTS = 3;
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                try {
+                    if (ai.provider === 'gemini') {
+                        return await this.verifyWithGemini(base64, mimeType, documentName, apiKey, ai.geminiModel, expectedGender, promptOverride);
+                    }
+                    return await this.verifyWithOpenAI(base64, mimeType, documentName, apiKey, ai.openaiModel, expectedGender, promptOverride);
+                } catch (err) {
+                    if (this.isQuotaError(err)) {
+                        console.error('AI document verification quota error:', err.message);
+                        return { skipped: true, reason: 'quota_exceeded', error: err.message };
+                    }
+                    if (this.isRetryableError(err) && attempt < MAX_ATTEMPTS) {
+                        console.warn(`AI document verification transient error (attempt ${attempt}/${MAX_ATTEMPTS}), retrying:`, err.message);
+                        await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+                        continue;
+                    }
+                    throw err;
+                }
             }
-            return await this.verifyWithOpenAI(base64, mimeType, documentName, apiKey, ai.openaiModel, expectedGender, promptOverride);
         } catch (err) {
             if (this.isQuotaError(err)) {
                 console.error('AI document verification quota error:', err.message);
                 return { skipped: true, reason: 'quota_exceeded', error: err.message };
             }
             console.error('AI document verification error:', err.message);
-            return { skipped: true, reason: 'error' };
+            return { skipped: true, reason: 'error', error: err.message };
         }
     }
 

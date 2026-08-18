@@ -217,6 +217,19 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
         udyamAddress: String,
         udyamIssueDate: Date,
         udyamCertificateUrl: String,
+        // Read straight off the Udyam certificate by AI at upload time (Book a
+        // Stand) — kept separate from msmeCategory/typeOfBusiness below since
+        // those are different, form-driven classifications the admin sets.
+        udyamEnterpriseName: String,
+        udyamEnterpriseSize: String,
+        udyamMajorActivity: String,
+        udyamRegistrationType: String,
+        udyamSocialCategory: String,
+        udyamConstitution: String,
+        udyamDateOfIncorporation: Date,
+        // Raw AI extraction, kept verbatim so nothing the certificate actually
+        // said is ever lost even if a field above isn't parsed out on its own.
+        udyamExtractedDetails: { type: mongoose.Schema.Types.Mixed, default: null },
         dfoLocation: String,
         dfoEmail: String,
         dfoMobileNo: String,
