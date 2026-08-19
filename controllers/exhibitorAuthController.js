@@ -241,6 +241,16 @@ class ExhibitorAuthController {
             if (!isMatch)
                 return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
+            // Portal access is gated on payment — an exhibitor who hasn't
+            // paid anything yet cannot log in to the dashboard at all.
+            if (!(Number(exhibitor.amountPaid) > 0)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Portal access is available only after your payment is received. Please complete your payment to continue.',
+                    paymentRequired: true,
+                });
+            }
+
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
             exhibitor.otp = otp;
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
@@ -335,6 +345,16 @@ class ExhibitorAuthController {
             if (!exhibitor)
                 return res.status(404).json({ success: false, message: 'Exhibitor with this email not found' });
 
+            // Portal access is gated on payment — an exhibitor who hasn't
+            // paid anything yet cannot log in to the dashboard at all.
+            if (!(Number(exhibitor.amountPaid) > 0)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Portal access is available only after your payment is received. Please complete your payment to continue.',
+                    paymentRequired: true,
+                });
+            }
+
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
             exhibitor.otp = otp;
             exhibitor.otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
@@ -375,6 +395,16 @@ class ExhibitorAuthController {
 
             if (!exhibitor)
                 return res.status(404).json({ success: false, message: 'Exhibitor with this mobile number not found' });
+
+            // Portal access is gated on payment — an exhibitor who hasn't
+            // paid anything yet cannot log in to the dashboard at all.
+            if (!(Number(exhibitor.amountPaid) > 0)) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Portal access is available only after your payment is received. Please complete your payment to continue.',
+                    paymentRequired: true,
+                });
+            }
 
             const otp = Math.floor(100000 + Math.random() * 900000).toString();
             exhibitor.otp = otp;

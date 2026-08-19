@@ -36,6 +36,9 @@ const msmePmsSchemeSchema = new mongoose.Schema({
         // the AI's moderation-only check above. Doubles as the "CRM Status"
         // column on the admin tracking page.
         status: { type: String, enum: ['Submitted', 'Verified', 'Rejected'], default: 'Submitted' },
+        // Admin's reason when declining ("Rejected") this document — shown
+        // back to the exhibitor so they know what to fix on re-upload.
+        reviewRemark: { type: String, default: '' },
         // The same document also has to be uploaded on the external
         // msme.gov.in portal — tracked independently of the CRM upload above,
         // since the two can happen at different times.
@@ -124,6 +127,32 @@ const msmePmsSchemeSchema = new mongoose.Schema({
         dueDate: Date,
         resolved: { type: Boolean, default: true },
         createdAt: Date,
+    },
+    // Stage 3 tracking — the claim's own submission on msme.gov.in (separate
+    // from msmePortal above, which is the *application*'s portal submission
+    // at Stage 1) plus the sanction and reimbursement outcome, entered by an
+    // admin as they come back from the portal / PFMS.
+    claimSubmission: {
+        claimNo: { type: String, default: '' },
+        submittedOn: Date,
+        submittedBy: { type: String, default: '' },
+        submittedByRole: { type: String, default: '' },
+        portalStatus: { type: String, default: '' },
+        lastStatusChecked: Date,
+        nextReviewOn: Date,
+        remarks: { type: String, default: '' },
+    },
+    sanction: {
+        status: { type: String, enum: ['Pending', 'Sanctioned', 'Rejected'], default: 'Pending' },
+        orderNo: { type: String, default: '' },
+        orderDate: Date,
+        sanctionedAmount: { type: Number, default: null },
+    },
+    reimbursement: {
+        status: { type: String, enum: ['Pending', 'Processed', 'Received'], default: 'Pending' },
+        pfmsTransactionId: { type: String, default: '' },
+        paymentDate: Date,
+        amountReceived: { type: Number, default: null },
     },
 }, { timestamps: true });
 
