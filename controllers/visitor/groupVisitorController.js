@@ -84,7 +84,8 @@ const createGroupVisitor = async (req, res) => {
                 companyName: saved.companyName || "N/A",
                 groupRegistrationId: saved.groupRegistrationId,
                 totalMembers: saved.persons.length,
-            };
+                eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
             emailService
                 .sendVisitorConfirmationOnly(emailData, "corporate-visitor")
@@ -112,7 +113,8 @@ const createGroupVisitor = async (req, res) => {
             groupRegistrationId: saved.groupRegistrationId,
             totalMembers: saved.persons.length,
             created_by: saved.created_by,
-        };
+            eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
         emailService
             .sendDetailedVisitorNotification(adminEmailData, "admin")

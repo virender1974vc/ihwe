@@ -91,7 +91,8 @@ const createInternationalVisitor = async (req, res) => {
       companyName: saved.companyName || 'N/A',
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
-    };
+        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
     emailService.sendVisitorConfirmationOnly(emailData, 'international-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
@@ -222,7 +223,8 @@ const bulkResendInternationalVisitorMessages = async (req, res) => {
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
         isResend: true,
-      };
+          eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
       if (sendEmail || sendWhatsapp) {
         try {

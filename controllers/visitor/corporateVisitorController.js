@@ -72,6 +72,7 @@ const createCorporateVisitor = async (req, res) => {
       companyName: saved.companyName || 'N/A',
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
+      eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
     };
     emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
@@ -182,6 +183,7 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
         companyName: saved.companyName || 'N/A',
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
+        eventName: saved.eventName || 'IHWE 2026',
         isResend: true,
       };
 

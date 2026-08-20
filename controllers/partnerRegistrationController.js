@@ -127,7 +127,8 @@ class PartnerRegistrationController {
       fullName: partner.fullName,
       companyName: partner.companyName,
       registrationId: partner.registrationId,
-    };
+        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
     // Send Email to Partner
     await emailService.sendEmail({

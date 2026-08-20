@@ -18,23 +18,27 @@ const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null, ev
     let errorMsg = null;
 
     let greeting = name ? `Namo Gange Namaskar!\n\nDear ${name},\n\n` : `Namo Gange Namaskar!\n\n`;
+    
+    const isBOE = eventName && eventName.includes('BOE');
+    const shortName = isBOE ? 'BOE' : 'IHWE';
+    const fullName = isBOE ? 'Bharat Organic Expo (BOE)' : 'International Health & Wellness Expo (IHWE)';
 
-    let msg = `${greeting}IHWE Secure Verification Code:\n\n*${otp}*\n\nThis code is required to complete your mobile verification for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+    let msg = `${greeting}${shortName} Secure Verification Code:\n\n*${otp}*\n\nThis code is required to complete your mobile verification for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
 
     if (context === 'VISITOR') {
-        msg = `${greeting}IHWE Visitor Verification Code:\n\n*${otp}*\n\nThis code is required to complete your visitor registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Visitor Verification Code:\n\n*${otp}*\n\nThis code is required to complete your visitor registration for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'EXHIBITOR') {
-        msg = `${greeting}IHWE Exhibitor Verification Code:\n\n*${otp}*\n\nThis code is required to complete your exhibitor verification for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Exhibitor Verification Code:\n\n*${otp}*\n\nThis code is required to complete your exhibitor verification for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'BUYER') {
-        msg = `${greeting}IHWE Buyer Verification Code:\n\n*${otp}*\n\nThis code is required to complete your buyer registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Buyer Verification Code:\n\n*${otp}*\n\nThis code is required to complete your buyer registration for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'DELEGATE') {
-        msg = `${greeting}IHWE Delegate Verification Code:\n\n*${otp}*\n\nThis code is required to complete your delegate registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Delegate Verification Code:\n\n*${otp}*\n\nThis code is required to complete your delegate registration for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'SELLER') {
-        msg = `${greeting}IHWE Seller Verification Code:\n\n*${otp}*\n\nThis code is required to complete your seller registration for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Seller Verification Code:\n\n*${otp}*\n\nThis code is required to complete your seller registration for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'SPONSOR') {
-        msg = `${greeting}IHWE Sponsorship Verification Code:\n\n*${otp}*\n\nThis code is required to verify your interest in Sponsorship for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Sponsorship Verification Code:\n\n*${otp}*\n\nThis code is required to verify your interest in Sponsorship for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     } else if (context === 'EXPO_SUPPORT') {
-        msg = `${greeting}IHWE Expo Support Verification Code:\n\n*${otp}*\n\nThis code is required to verify your request for Expo Support Services for the International Health & Wellness Expo (IHWE).\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team IHWE\n\nNamo Gange Wellness Pvt. Ltd.`;
+        msg = `${greeting}${shortName} Expo Support Verification Code:\n\n*${otp}*\n\nThis code is required to verify your request for Expo Support Services for the ${fullName}.\n\nValid for 10 minutes only.\n\nFor your security, do not share this code with anyone.\n\n– Team ${shortName}\n\nNamo Gange Wellness Pvt. Ltd.`;
     }
 
     try {
@@ -257,7 +261,7 @@ const sendPassApprovalWhatsApp = async (mobile, quantity, type, email, name = nu
             console.warn(`[WhatsApp] AiSensy pass approval send failed, falling back to Opus: ${aisensyResult.error || aisensyResult.reason}`);
         }
 
-        const waMsg = `Dear Exhibitor,\n\nYour request for ${quantity} ${type} pass(es) has been APPROVED.\n\nWe have sent the entry QR codes to your registered email address (${email}). Please check your inbox (and spam folder) and present the QR codes at the entry gates.\n\nRegards,\nTeam IHWE`;
+        const waMsg = `Dear Exhibitor,\n\nYour request for ${quantity} ${type} pass(es) has been APPROVED.\n\nWe have sent the entry QR codes to your registered email address (${email}). Please check your inbox (and spam folder) and present the QR codes at the entry gates.\n\nRegards,\nTeam ${shortName}`;
 
         return await sendOpusWhatsAppMessage(mobile, waMsg, 'Pass Approval Notification');
     } catch (error) {

@@ -55,7 +55,8 @@ exports.createGeneralVisitor = async (req, res) => {
       registrationId: saved.registrationId,
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
-    };
+        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
     emailService.sendVisitorRegistrationEmails(emailData).catch(err => {
@@ -132,7 +133,8 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
         isResend: true,
-      };
+          eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
       if (sendEmail || sendWhatsapp) {
         try {
