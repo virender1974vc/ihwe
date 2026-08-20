@@ -53,9 +53,10 @@ const createGroupVisitor = async (req, res) => {
 
         const group = new GroupVisitor({
             ...normalizedBody,
+        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
             groupRegistrationId,
             persons: membersWithIds,
-            primaryFirstName: primary.firstName,
+            primaryeventName: saved.registrationFor || "", firstName: primary.firstName,
             primaryLastName: primary.lastName,
             primaryEmail: primary.email,
             primaryMobile: primary.mobileNo,
@@ -68,7 +69,7 @@ const createGroupVisitor = async (req, res) => {
         // Send confirmation to each member
         saved.persons.forEach((member) => {
             const emailData = {
-                firstName: member.firstName,
+                eventName: saved.registrationFor || "", firstName: member.firstName,
                 lastName: member.lastName,
                 email: member.email,
                 mobileNo: member.mobileNo,
@@ -84,7 +85,8 @@ const createGroupVisitor = async (req, res) => {
                 companyName: saved.companyName || "N/A",
                 groupRegistrationId: saved.groupRegistrationId,
                 totalMembers: saved.persons.length,
-            };
+                eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
             emailService
                 .sendVisitorConfirmationOnly(emailData, "corporate-visitor")
@@ -95,7 +97,7 @@ const createGroupVisitor = async (req, res) => {
 
         // Admin notification (primary contact details)
         const adminEmailData = {
-            firstName: primary.firstName,
+            eventName: saved.registrationFor || "", firstName: primary.firstName,
             lastName: primary.lastName,
             email: primary.email,
             mobileNo: primary.mobileNo,
@@ -112,7 +114,8 @@ const createGroupVisitor = async (req, res) => {
             groupRegistrationId: saved.groupRegistrationId,
             totalMembers: saved.persons.length,
             created_by: saved.created_by,
-        };
+            eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
         emailService
             .sendDetailedVisitorNotification(adminEmailData, "admin")

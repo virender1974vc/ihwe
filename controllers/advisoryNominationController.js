@@ -10,7 +10,7 @@ class AdvisoryNominationController {
     async submitNomination(req, res) {
         try {
             const nominationData = req.body;
-            
+
             // Basic validation
             const requiredFields = [
                 'fullName', 'designation', 'organization', 'industry', 'email', 'phone',
@@ -34,7 +34,7 @@ class AdvisoryNominationController {
 
             // Create new nomination
             const nomination = new AdvisoryNomination(nominationData);
-            
+
             // If file was uploaded (handled by multer in routes)
             if (req.file) {
                 nomination.cvPath = `/uploads/advisory/cv/${req.file.filename}`;
@@ -75,7 +75,8 @@ class AdvisoryNominationController {
             registrationId: nomination.registrationId,
             designation: nomination.designation,
             organization: nomination.organization,
-            nominatorName: nomination.nominatorName
+            nominatorName: nomination.nominatorName,
+            eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
         };
 
         // Send to Nominee
@@ -96,7 +97,7 @@ class AdvisoryNominationController {
 
         // 2. WhatsApp to Nominee
         const whatsappMsg = `Namo Gange Namaskar!\n\nDear ${nomination.fullName},\n\nWe are pleased to inform you that you have been nominated for the *Advisory Board* of the *9th International Health & Wellness Expo 2026 (IHWE)*.\n\n*Nomination ID:* ${nomination.registrationId}\n*Nominated By:* ${nomination.nominatorName}\n\nOur committee will review the nomination and get in touch with you soon.\n\nBest Regards,\nTeam IHWE\nNamo Gange Wellness Pvt. Ltd.`;
-        
+
         await whatsapp.sendWhatsAppMessage(nomination.phone, whatsappMsg, 'Advisory Nomination Confirmation');
     }
 

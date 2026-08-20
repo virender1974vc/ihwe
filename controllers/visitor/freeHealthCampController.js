@@ -38,10 +38,12 @@ const getHealthCampVisitorById = async (req, res) => {
 // ➤ Create visitor
 const createHealthCampVisitor = async (req, res) => {
   try {
-    const registrationId = await generateRegistrationId("healthCamp");
+    const eventName = req.body.eventName || req.body.registrationFor || "";
+    const registrationId = await generateRegistrationId("healthCamp", eventName);
 
     const visitor = new FreeHealthCamp({
       ...req.body,
+        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
       registrationId,
     });
 

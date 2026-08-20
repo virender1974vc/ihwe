@@ -41,11 +41,13 @@ const getCorporateVisitorById = async (req, res) => {
 // ➤ Create visitor
 const createCorporateVisitor = async (req, res) => {
   try {
-    const registrationId = await generateRegistrationId("corporate");
+    const eventName = req.body.eventName || req.body.registrationFor || "";
+    const registrationId = await generateRegistrationId("corporate", eventName);
     const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
     const visitor = new CorporateVisitor({
       ...normalizedBody,
+        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
       registrationId,
     });
 
@@ -72,6 +74,7 @@ const createCorporateVisitor = async (req, res) => {
       companyName: saved.companyName || 'N/A',
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
+      eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
     };
     emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
@@ -182,6 +185,7 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
         companyName: saved.companyName || 'N/A',
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
+        eventName: saved.eventName || 'IHWE 2026',
         isResend: true,
       };
 
@@ -215,7 +219,7 @@ const uploadCorporateVisitors = async (req, res) => {
     requiredFields: ["firstName", "lastName", "email", "mobile"],
     transformRow: (row, { parseList }) => ({ ...row, registrationFor: row.registrationFor || "Corporate Visitor", country: row.country || "India", b2bMeeting: row.b2bMeeting || "No", whatsappUpdates: row.whatsappUpdates || "Yes", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
     generateRegistrationId,
-    buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "Corporate Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "India", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
+    buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "Corporate Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "India", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
     sendNotification: (data) => emailService.sendVisitorConfirmationOnly(data, "corporate-visitor", true),
     logActivity, activityLabel: "corporate",
   });

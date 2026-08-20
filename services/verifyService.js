@@ -16,51 +16,60 @@ class VerifyService {
     /**
      * Send OTP to email.
      */
-    async sendEmailOtp(email, context = 'SPEAKER') {
+    async sendEmailOtp(email, context = 'SPEAKER', name = null, eventName = 'IHWE 2026') {
         const otp = this.generateOTP();
-        
+
         await Otp.findOneAndUpdate(
             { identifier: email, type: 'email' },
             { otp, createdAt: new Date() },
             { upsert: true, returnDocument: 'after' }
         );
 
+        const isBOE = eventName && eventName.includes('BOE');
+        const expoTitle = isBOE ? 'Bharat Organic Expo' : '9th International Health & Wellness Expo';
+        const expoSubtitle = isBOE ? 'Organic Expo | BOE 2026' : 'Global Health Connect | IHWE 2026';
+        const teamName = isBOE ? 'Team BOE' : 'Team IHWE';
+        const teamSubTitle = isBOE ? 'Bharat Organic Expo' : 'International Health & Wellness Expo';
+        const teamSubSubTitle = isBOE ? '' : 'Global Health Connect';
+        const shortName = isBOE ? 'BOE' : 'IHWE';
+        const fullEventName = isBOE ? 'Bharat Organic Expo (BOE)' : 'International Health & Wellness Expo (IHWE)';
+
         // Determine context-specific text
         let contextTitle = 'Registration';
         let contextDescription = 'registering';
-        let dashboardText = 'IHWE Portal';
+        let dashboardText = `${shortName} Portal`;
         let contextGreeting = 'User';
         
         if (context === 'BUYER' || context.includes('buyer')) {
             contextTitle = 'Buyer Registration';
             contextDescription = 'registering as a Buyer';
-            dashboardText = 'IHWE Buyer Dashboard';
+            dashboardText = `${ shortName } Buyer Dashboard`;
             contextGreeting = 'Buyer';
         } else if (context === 'EXHIBITOR' || context.includes('exhibitor')) {
             contextTitle = 'Exhibitor Registration';
             contextDescription = 'registering as an Exhibitor';
-            dashboardText = 'IHWE Exhibitor Dashboard';
+            dashboardText = `${ shortName } Exhibitor Dashboard`;
             contextGreeting = 'Exhibitor';
         } else if (context === 'VISITOR' || context.includes('visitor')) {
             contextTitle = 'Visitor Registration';
             contextDescription = 'registering as a Visitor';
-            dashboardText = 'IHWE Visitor Portal';
-            contextGreeting = 'Visitor';
-        } else if (context === 'CONTACT' || context.includes('contact')) {
-            contextTitle = 'Contact Enquiry';
-            contextDescription = 'submitting an enquiry';
-            dashboardText = 'IHWE Contact Desk';
+            dashboardText = `${shortName} Visitor Portal`;
+        contextGreeting = 'Visitor';
+    } else if(context === 'CONTACT' || context.includes('contact')) {
+    contextTitle = 'Contact Enquiry';
+    contextDescription = 'submitting an enquiry';
+    dashboardText = `${shortName} Contact Desk`;
             contextGreeting = 'Visitor';
         } else if (context === 'SPEAKER' || context.includes('speaker')) {
             contextTitle = 'Speaker Registration';
             contextDescription = 'registering as a Speaker';
-            dashboardText = 'IHWE Speaker Portal';
-            contextGreeting = 'Speaker';
-        }
+            dashboardText = `${shortName} Speaker Portal`;
+    contextGreeting = 'Speaker';
+}
 
-        const subject = `IHWE ${contextTitle} – Email Verification OTP`;
-        
-        const html = `
+        const subject = `${shortName} ${contextTitle} - Email Verification OTP`;
+
+const html = `
             <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
             <html xmlns="http://www.w3.org/1999/xhtml">
             <head>
@@ -92,8 +101,8 @@ class VerifyService {
                                         <v:textbox inset="0,0,0,0">
                                         <![endif]-->
                                         <div>
-                                            <h1 style="margin:0; padding:0; font-size: 18px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #ffffff; font-weight: 600; text-align: center; line-height: 1.1;">9th International Health & Wellness Expo</h1>
-                                            <p style="margin:3px 0 0; padding:0; font-size: 12px; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; line-height: 1.1; opacity: 0.9;">Global Health Connect | IHWE 2026</p>
+                                            <h1 style="margin:0; padding:0; font-size: 18px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #ffffff; font-weight: 600; text-align: center; line-height: 1.1;">${expoTitle}</h1>
+                                            <p style="margin:3px 0 0; padding:0; font-size: 12px; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; line-height: 1.1; opacity: 0.9;">${expoSubtitle}</p>
                                         </div>
                                         <!--[if gte mso 9]>
                                         </v:textbox>
@@ -108,7 +117,7 @@ class VerifyService {
                                             <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Dear ${contextGreeting},</p>
                                             
                                             <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
-                                                Thank you for ${contextDescription} for the <strong>International Health & Wellness Expo (IHWE)</strong>.
+                                                Thank you for ${contextDescription} for the <strong>${fullEventName}</strong>.
                                             </p>
                                             
                                             <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
@@ -124,7 +133,7 @@ class VerifyService {
                                             </p>
                                             
                                             <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
-                                                For your security, please do not share this code with anyone. <strong>IHWE or its representatives will never ask for your OTP.</strong>
+                                                For your security, please do not share this code with anyone. <strong>${shortName} or its representatives will never ask for your OTP.</strong>
                                             </p>
                                             
                                             <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
@@ -137,16 +146,16 @@ class VerifyService {
                                             
                                             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
                                                 <p style="margin: 0 0 5px 0; font-size: 14px; color: #333;">Warm Regards,</p>
-                                                <p style="margin: 5px 0; font-size: 15px; color: #23471d; font-weight: 700;">Team IHWE</p>
-                                                <p style="margin: 5px 0; font-size: 13px; color: #6b7280;">International Health & Wellness Expo</p>
-                                                <p style="margin: 5px 0 0 0; font-size: 12px; color: #9ca3af; font-style: italic;">Global Health Connect</p>
+                                                <p style="margin: 5px 0; font-size: 15px; color: #23471d; font-weight: 700;">${teamName}</p>
+                                                <p style="margin: 5px 0; font-size: 13px; color: #6b7280;">${teamSubTitle}</p>
+                                                <p style="margin: 5px 0 0 0; font-size: 12px; color: #9ca3af; font-style: italic;">${teamSubSubTitle}</p>
                                             </div>
                                         </div>
                                     </td>
                                 </tr>
                                 <tr>
                                     <td align="center" style="background: #f9fafb; padding: 20px; border-top: 1px solid #e5e7eb;">
-                                        <p style="margin:0; font-size: 13px; color: #6b7280; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">&copy; 2026 IHWE. All Rights Reserved.</p>
+                                        <p style="margin:0; font-size: 13px; color: #6b7280; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">&copy; 2026 ${shortName}. All Rights Reserved.</p>
                                         <p style="margin:3px 0 0; font-size: 12px; color: #9ca3af; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.4;">Powered by Namo Gange Wellness Pvt. Ltd.</p>
                                     </td>
                                 </tr>
@@ -158,49 +167,49 @@ class VerifyService {
             </html>
         `;
 
-        const logData = { message: `OTP for ${contextTitle}` };
-        const sent = await emailService.sendEmail({ to: email, subject, html, profile: context, logData });
-        return { success: sent };
+const logData = { message: `OTP for ${contextTitle}` };
+const sent = await emailService.sendEmail({ to: email, subject, html, profile: context, logData });
+return { success: sent };
     }
 
     /**
      * Verify OTP for email.
      */
     async verifyEmailOtp(email, otp) {
-        const record = await Otp.findOne({ identifier: email, otp, type: 'email' });
-        if (record) {
-            await record.deleteOne();
-            return true;
-        }
-        return false;
+    const record = await Otp.findOne({ identifier: email, otp, type: 'email' });
+    if (record) {
+        await record.deleteOne();
+        return true;
     }
+    return false;
+}
 
     /**
      * Send OTP to phone via WhatsApp.
      */
-    async sendPhoneOtp(phone, context = 'CONTACT', name = null) {
-        const otp = this.generateOTP();
-        
-        await Otp.findOneAndUpdate(
-            { identifier: phone, type: 'phone' },
-            { otp, createdAt: new Date() },
-            { upsert: true, returnDocument: 'after' }
-        );
+    async sendPhoneOtp(phone, context = 'CONTACT', name = null, eventName = 'IHWE 2026') {
+    const otp = this.generateOTP();
 
-        return await sendWhatsAppOTP(phone, otp, context, name);
-    }
+    await Otp.findOneAndUpdate(
+        { identifier: phone, type: 'phone' },
+        { otp, createdAt: new Date() },
+        { upsert: true, returnDocument: 'after' }
+    );
+
+    return await sendWhatsAppOTP(phone, otp, context, name, eventName);
+}
 
     /**
      * Verify OTP for phone.
      */
     async verifyPhoneOtp(phone, otp) {
-        const record = await Otp.findOne({ identifier: phone, otp, type: 'phone' });
-        if (record) {
-            await record.deleteOne();
-            return true;
-        }
-        return false;
+    const record = await Otp.findOne({ identifier: phone, otp, type: 'phone' });
+    if (record) {
+        await record.deleteOne();
+        return true;
     }
+    return false;
+}
 }
 
 module.exports = new VerifyService();

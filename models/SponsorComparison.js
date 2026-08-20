@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const SponsorCardSchema = new mongoose.Schema({
+    eventName: { type: String },
     title: { type: String, required: true },
     desc: { type: String, required: true },
     image: { type: String, required: true },

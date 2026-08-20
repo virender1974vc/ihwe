@@ -42,7 +42,11 @@ async function getExhibitorTemplateData() {
             } catch (e) { return null; }
         };
 
-        const headerBuf = getImageBuffer(template.headerImage);
+        let headerImgPath = template.headerImage;
+        if (isBOE) {
+            headerImgPath = 'public/assets/emails/boe_header.png';
+        }
+        const headerBuf = getImageBuffer(headerImgPath);
         const footerBuf = getImageBuffer(template.footerImage);
 
         const attachments = [];
@@ -188,6 +192,19 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
         const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
         let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
         let bodyContent = this.applyPlaceholders(rawBody, data);
+        
+        const isBOE = data.eventName && data.eventName.includes('BOE');
+        if (isBOE) {
+            bodyContent = bodyContent.replace(/9th Edition of International Health &amp; Wellness Expo 2026/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/9th Edition of International Health & Wellness Expo 2026/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/\(IHWE &ndash; Global Edition\)/g, '(Organic Expo | BOE 2026)');
+            bodyContent = bodyContent.replace(/\(IHWE – Global Edition\)/g, '(Organic Expo | BOE 2026)');
+            bodyContent = bodyContent.replace(/Team IHWE/g, 'Team BOE');
+            bodyContent = bodyContent.replace(/International Health &amp; Wellness Expo/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/International Health & Wellness Expo/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/Global Health Connect/g, '');
+            bodyContent = bodyContent.replace(/IHWE/g, 'BOE');
+        }
 
         const getImageBuffer = (imgPath) => {
             try {
@@ -198,7 +215,11 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             } catch (e) { console.error('[getImageBuffer] error:', e.message); return null; }
         };
 
-        const headerBuf = getImageBuffer(template.headerImage);
+        let headerImgPath = template.headerImage;
+        if (isBOE) {
+            headerImgPath = 'public/assets/emails/boe_header.png';
+        }
+        const headerBuf = getImageBuffer(headerImgPath);
         const footerBuf = getImageBuffer(template.footerImage);
         const smallLogoBuf = getImageBuffer(template.smallLogo);
 
@@ -252,7 +273,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
             footerCid: usesOwnFooter ? null : (footerBuf ? 'email_footer_img@ihwe.in' : null),
             smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
-            headerImage: template.headerImage || null,
+            headerImage: isBOE ? 'public/assets/emails/boe_header.png' : (template.headerImage || null),
             footerImage: usesOwnFooter ? null : (template.footerImage || null),
             smallLogoImage: template.smallLogo || null,
             padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : (usesOwnFooter ? '24px 20px 20px' : null)),

@@ -204,7 +204,7 @@ async function processVisitorBulkUpload({
   }
 
   const saveResults = await runWithConcurrency(prepared, 8, async (item) => {
-      const registrationId = await generateRegistrationId(registrationType);
+      const registrationId = await generateRegistrationId(registrationType, item.data.eventName || item.data.registrationFor || "");
       const siteUrl = (process.env.SITE_URL || "https://ihwe.in").replace(/\/$/, "");
       const qrCode = await qrcode.toDataURL(`${siteUrl}/visitor?id=${encodeURIComponent(registrationId)}`);
       return model.create({

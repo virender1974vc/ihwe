@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { secondaryDB } = require("../../config/secondaryDb");
 const InternationalVisitorSchema = new mongoose.Schema(
   {
+    eventName: { type: String },
     registrationId: { type: String, unique: true },
     registrationFor: { type: String, required: true },
     firstName: { type: String, required: true },

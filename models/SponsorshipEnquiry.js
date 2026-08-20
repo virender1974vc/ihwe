@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const sponsorshipEnquirySchema = new mongoose.Schema({
+    eventName: { type: String },
     fullName: {
         type: String,
         required: true,

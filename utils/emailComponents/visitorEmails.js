@@ -34,6 +34,14 @@ async function sendVisitorRegistrationEmails(data, whatsappOnly = false) {
 }
 
 async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false) {
+    const isBOE = data.eventName && data.eventName.includes('BOE');
+    const expoTitle = isBOE ? 'Bharat Organic Expo' : '${expoTitle}';
+    const expoSubtitle = isBOE ? 'Organic Expo | BOE 2026' : '${shortName} – Global Edition';
+    const teamName = isBOE ? 'Team BOE' : '${teamName}';
+    const teamSubTitle = isBOE ? 'Bharat Organic Expo' : '${teamSubTitle}';
+    const teamSubSubTitle = isBOE ? '' : '${teamSubSubTitle}';
+    const shortName = isBOE ? 'BOE' : '${shortName}';
+    const fullEventName = isBOE ? 'Bharat Organic Expo (BOE)' : '${teamSubTitle} (${shortName})';
     try {
         const template = await this.getTemplate(formType);
         if (!template) {
@@ -45,6 +53,19 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
         const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
         let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
         let bodyContent = this.applyPlaceholders(rawBody, data);
+        
+        const isBOE = data.eventName && data.eventName.includes('BOE');
+        if (isBOE) {
+            bodyContent = bodyContent.replace(/9th Edition of International Health &amp; Wellness Expo 2026/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/9th Edition of International Health & Wellness Expo 2026/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/\(IHWE &ndash; Global Edition\)/g, '(Organic Expo | BOE 2026)');
+            bodyContent = bodyContent.replace(/\(IHWE – Global Edition\)/g, '(Organic Expo | BOE 2026)');
+            bodyContent = bodyContent.replace(/Team IHWE/g, 'Team BOE');
+            bodyContent = bodyContent.replace(/International Health &amp; Wellness Expo/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/International Health & Wellness Expo/g, 'Bharat Organic Expo');
+            bodyContent = bodyContent.replace(/Global Health Connect/g, '');
+            bodyContent = bodyContent.replace(/IHWE/g, 'BOE');
+        }
         const emailAttachments = [];
 
         const getImageBuffer = (imgPath) => {
@@ -55,7 +76,11 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
                 return fs.readFileSync(absPath);
             } catch (e) { return null; }
         };
-        const headerBuf = getImageBuffer(template.headerImage);
+        let headerImgPath = template.headerImage;
+          if (isBOE) {
+              headerImgPath = 'public/assets/emails/boe_header.png';
+          }
+          const headerBuf = getImageBuffer(headerImgPath);
         const footerBuf = getImageBuffer(template.footerImage);
         const smallLogoBuf = getImageBuffer(template.smallLogo);
 
@@ -105,7 +130,7 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
             headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
             footerCid: footerBuf ? 'email_footer_img@ihwe.in' : null,
             smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
-            headerImage: template.headerImage || null,
+            headerImage: isBOE ? 'public/assets/emails/boe_header.png' : (template.headerImage || null),
             footerImage: template.footerImage || null,
             smallLogoImage: template.smallLogo || null,
         });
@@ -187,7 +212,7 @@ async function sendExhibitorAdminAlert(registration) {
             amountPaid: registration.amountPaid,
             balanceAmount: registration.balanceAmount,
             paymentMode: registration.paymentMode,
-            eventName: registration.eventId?.name || 'IHWE 2026',
+            eventName: registration.eventId?.name || '${shortName} 2026',
             referredBy: registration.referredBy,
             spokenWith: registration.spokenWith,
             filledBy: registration.filledBy,
@@ -225,7 +250,7 @@ async function sendDetailedVisitorNotification(data, recipientType = 'admin') {
 
         if (recipientType === 'b2b') {
 
-            subject = `Buyer Registration Interest Received | IHWE 2026 | Reg ID: ${data.registrationId}`;
+            subject = `Buyer Registration Interest Received | ${shortName} 2026 | Reg ID: ${data.registrationId}`;
             html = getBuyerInterestAlertTemplate(data);
             recipientEmail = process.env.B2B_COORDINATOR_EMAIL || 'vansh.2002cv@gmail.com';
             logMessage = 'B2B Coordinator Notification';
@@ -238,13 +263,13 @@ async function sendDetailedVisitorNotification(data, recipientType = 'admin') {
             const registrationSource = data.created_by ? 'Portal' : 'Web';
 
             if (isInternationalVisitor) {
-                subject = `${registrationSource} | NEW INTERNATIONAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                subject = `${registrationSource} | NEW INTERNATIONAL VISITOR REGISTRATION ALERT | ${shortName} 2026 | Reg ID: ${data.registrationId}`;
                 html = getCorporateVisitorAdminAlertTemplate(data);
             } else if (isCorporateVisitor) {
-                subject = `${registrationSource} | NEW CORPORATE VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                subject = `${registrationSource} | NEW CORPORATE VISITOR REGISTRATION ALERT | ${shortName} 2026 | Reg ID: ${data.registrationId}`;
                 html = getCorporateVisitorAdminAlertTemplate(data);
             } else {
-                subject = `${registrationSource} | NEW GENERAL VISITOR REGISTRATION ALERT | IHWE 2026 | Reg ID: ${data.registrationId}`;
+                subject = `${registrationSource} | NEW GENERAL VISITOR REGISTRATION ALERT | ${shortName} 2026 | Reg ID: ${data.registrationId}`;
                 html = getGeneralVisitorAdminAlertTemplate(data);
             }
             recipientEmail = process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
@@ -273,7 +298,7 @@ async function sendDetailedVisitorNotification(data, recipientType = 'admin') {
 
 async function sendDetailedBuyerNotification(data) {
     try {
-        const subject = `NEW BUYER REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId}`;
+        const subject = `NEW BUYER REGISTRATION | ${shortName} 2026 | Reg ID: ${data.registrationId}`;
         const html = getBuyerRegistrationAlertTemplate(data);
         const recipientEmail = process.env.BUYER_ADMIN_EMAIL || process.env.VISITOR_ADMIN_EMAIL || process.env.ADMIN_EMAIL || 'virender.1974vc@gmail.com';
 
@@ -299,7 +324,7 @@ async function sendDetailedBuyerNotification(data) {
 
 async function sendDetailedInternationalBuyerNotification(data) {
     try {
-        const subject = `NEW INTL BUYER REGISTRATION | IHWE 2026 | Reg ID: ${data.registrationId}`;
+        const subject = `NEW INTL BUYER REGISTRATION | ${shortName} 2026 | Reg ID: ${data.registrationId}`;
         const html = getInternationalBuyerRegistrationAlertTemplate(data);
         const recipientEmail = process.env.INTERNATIONAL_BUYER_ADMIN_EMAIL || process.env.VISITOR_ADMIN_EMAIL || 'virender.1974vc@gmail.com';
 

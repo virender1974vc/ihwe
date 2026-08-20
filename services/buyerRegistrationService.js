@@ -69,6 +69,7 @@ class BuyerRegistrationService {
 
         const newRegistration = new BuyerRegistration(data);
         const saved = await newRegistration.save();
+        saved.eventName = data.eventName || 'IHWE 2026';
 
         // 2. Send Notifications if payment didn't fail
         if (saved.paymentStatus !== 'Failed') {

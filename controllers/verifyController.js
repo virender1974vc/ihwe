@@ -9,10 +9,10 @@ class VerifyController {
      */
     async sendEmailOtp(req, res) {
         try {
-            const { email, profile } = req.body;
+            const { email, profile, name, eventName } = req.body;
             if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
 
-            const result = await verifyService.sendEmailOtp(email, profile);
+            const result = await verifyService.sendEmailOtp(email, profile, name, eventName);
             
             if (result.success) {
                 res.json({ success: true, message: 'OTP sent to email' });
@@ -49,10 +49,10 @@ class VerifyController {
      */
     async sendPhoneOtp(req, res) {
         try {
-            const { phone, profile, name } = req.body;
+            const { phone, profile, name, eventName } = req.body;
             if (!phone) return res.status(400).json({ success: false, message: 'Phone number is required' });
 
-            const result = await verifyService.sendPhoneOtp(phone, profile, name);
+            const result = await verifyService.sendPhoneOtp(phone, profile, name, eventName);
             
             if (result.success) {
                 res.json({ success: true, message: 'OTP sent to WhatsApp' });

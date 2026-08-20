@@ -31,7 +31,8 @@ const getInternationalVisitorById = async (req, res) => {
 // ➤ Create visitor
 const createInternationalVisitor = async (req, res) => {
   try {
-    const registrationId = await generateRegistrationId("international");
+    const eventName = req.body.eventName || req.body.registrationFor || "";
+    const registrationId = await generateRegistrationId("international", eventName);
 
     // Check for uploaded files and get their paths
     const getFilePath = (fieldName) => {
@@ -64,6 +65,7 @@ const createInternationalVisitor = async (req, res) => {
 
     const visitor = new InternationalVisitor({
       ...normalizedBody,
+        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
       ...documentFields,
       registrationId,
     });
@@ -91,7 +93,8 @@ const createInternationalVisitor = async (req, res) => {
       companyName: saved.companyName || 'N/A',
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
-    };
+        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
     emailService.sendVisitorConfirmationOnly(emailData, 'international-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
@@ -177,7 +180,7 @@ const bulkUploadInternationalVisitors = async (req, res) => {
     requiredFields: ["firstName", "lastName", "email", "mobile", "gender", "nationality"],
     transformRow: (row, { parseList }) => normalizeVisitorMultiSelectFields({ ...row, registrationFor: row.registrationFor || "International Visitor", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
     generateRegistrationId,
-    buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "International Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "N/A", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
+    buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "International Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "N/A", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
     sendNotification: (data) => emailService.sendVisitorConfirmationOnly(data, "international-visitor", true),
     logActivity, activityLabel: "international",
   });
@@ -222,7 +225,8 @@ const bulkResendInternationalVisitorMessages = async (req, res) => {
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
         isResend: true,
-      };
+          eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+};
 
       if (sendEmail || sendWhatsapp) {
         try {
