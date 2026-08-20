@@ -165,31 +165,60 @@ app.use('/api/payment/webhook', require('./routes/payment'));
 
 // Middleware
 // app.use(cors());
-const allowedOrigins = [
+const allowedOrigins = [ 
   "https://ihwe.in",
   "https://www.ihwe.in",
-  "https://api.ihwe.in",
   "https://admin.ihwe.in",
+  "https://bharatorganicexpo.com",
   "http://localhost:8080",
-  "http://localhost:5173"
+  "http://localhost:5173",
 ];
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (like Postman / mobile apps)
-      if (!origin) return callback(null, true);
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests without Origin
+    if (!origin) {
+      return callback(null, true);
+    }
 
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      } else {
-        console.warn(`⚠️ CORS blocked for origin: ${origin}`);
-        return callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true
-  })
-);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.warn(`⚠️ CORS blocked: ${origin}`);
+    return callback(new Error("Not allowed by CORS"));
+  },
+
+  credentials: true,
+
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+  ],
+
+  allowedHeaders: [
+    "Origin",
+    "X-Requested-With",
+    "Content-Type",
+    "Accept",
+    "Authorization",
+    "ngrok-skip-browser-warning",
+  ],
+
+  optionsSuccessStatus: 204,
+};
+
+// MUST be before routes
+app.use(cors(corsOptions));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+
 // const allowedOrigins = [
 //   "https://ihwe.in",
 //   "https://www.ihwe.in",
