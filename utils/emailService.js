@@ -1,5 +1,11 @@
 const nodemailer = require('nodemailer');
+const { sendMailViaGraph } = require('./msGraphMailer');
 const EmailLog = require('../models/EmailLog');
+
+// Visitor Pass emails (profile 'VISITOR') route through Microsoft Graph instead of
+// SMTP by default. Set MS_GRAPH_VISITOR_EMAIL_ENABLED=false to instantly roll back
+// to the existing visitorTransporter SMTP path below without any code changes.
+const USE_GRAPH_FOR_VISITOR = String(process.env.MS_GRAPH_VISITOR_EMAIL_ENABLED || 'true').toLowerCase() !== 'false';
 const whatsapp = require('./whatsapp');
 const { emailShell } = require('./emailTemplates/emailShell');
 const templateEngineMethods = require('./emailComponents/templateEngine');
@@ -94,6 +100,7 @@ class EmailService {
             let transporter = this.transporter;
             let fromEmail = process.env.FROM_EMAIL;
             let fromName = process.env.FROM_NAME;
+            let useGraph = false;
 
             if (profile === 'CONTACT') {
                 transporter = this.contactTransporter;
@@ -107,6 +114,7 @@ class EmailService {
                 transporter = this.visitorTransporter;
                 fromEmail = process.env.VISITOR_FROM_EMAIL || fromEmail;
                 fromName = process.env.VISITOR_FROM_NAME || fromName;
+                useGraph = USE_GRAPH_FOR_VISITOR;
             } else if (profile === 'EXHIBITOR') {
                 transporter = this.exhibitorTransporter;
                 fromEmail = process.env.EXHIBITOR_FROM_EMAIL || fromEmail;
@@ -115,18 +123,27 @@ class EmailService {
             fromEmail = fromEmail || process.env.SMTP_USER || 'no-reply@ihwe.in';
             fromName = fromName || 'IHWE Team';
 
-            const info = await transporter.sendMail({
-                from: '"' + fromName + '" <' + fromEmail + '>',
-                to: recipient,
-                subject,
-                html,
-                attachments
-            });
+            let info;
+            if (useGraph) {
+                // Visitor Pass mail: send via Microsoft Graph (no-reply@namogangewellness.com)
+                // instead of SMTP. Recipient, subject, html and attachments are unchanged.
+                await sendMailViaGraph({ to: recipient, subject, html, attachments });
+                info = { messageId: null, accepted: [recipient], rejected: [], response: 'Sent via Microsoft Graph' };
+            } else {
+                info = await transporter.sendMail({
+                    from: '"' + fromName + '" <' + fromEmail + '>',
+                    to: recipient,
+                    subject,
+                    html,
+                    attachments
+                });
+            }
 
             console.log('[Email] Sent:', {
                 to,
                 subject,
                 profile,
+                transport: useGraph ? 'graph' : 'smtp',
                 messageId: info.messageId,
                 accepted: info.accepted,
                 rejected: info.rejected,
