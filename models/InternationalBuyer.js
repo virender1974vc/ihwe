@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const internationalBuyerSchema = new mongoose.Schema(
   {
+    eventName: { type: String },
     // Section 1 – Company Information
     brandName: { type: String, required: true, trim: true },
     legalEntityType: { 

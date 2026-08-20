@@ -10,11 +10,11 @@ class ContactEnquiryService {
      * Submit a contact enquiry.
      */
     async submitEnquiry(data) {
-        const { name, email, phone, service, message } = data;
+        const { name, email, phone, service, message, eventName } = data;
         if (!name || !email || !phone || !service || !message) {
             throw { status: 400, message: 'All fields are required' };
         }
-        const newEnquiry = new ContactEnquiry({ name, email, phone, service, message });
+        const newEnquiry = new ContactEnquiry({ name, email, phone, service, message, eventName: eventName || "IHWE" });
         const savedEnquiry = await newEnquiry.save();
 
         // 1. Send Professional Dynamic Response (Email + WhatsApp)

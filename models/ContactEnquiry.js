@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const contactEnquirySchema = new mongoose.Schema({
+    eventName: { type: String },
     name: {
         type: String,
         required: true,
