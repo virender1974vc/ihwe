@@ -16,7 +16,7 @@ class VerifyService {
     /**
      * Send OTP to email.
      */
-    async sendEmailOtp(email, context = 'SPEAKER') {
+    async sendEmailOtp(email, context = 'SPEAKER', name = null, eventName = 'IHWE 2026') {
         const otp = this.generateOTP();
         
         await Otp.findOneAndUpdate(
@@ -108,7 +108,7 @@ class VerifyService {
                                             <p style="margin-bottom: 20px; font-size: 15px; line-height: 1.6;">Dear ${contextGreeting},</p>
                                             
                                             <p style="margin-bottom: 20px; font-size: 14px; line-height: 1.6;">
-                                                Thank you for ${contextDescription} for the <strong>International Health & Wellness Expo (IHWE)</strong>.
+                                                Thank you for ${contextDescription} for the <strong>${eventName && eventName.includes('BOE') ? 'Bharat Organic Expo (BOE)' : 'International Health & Wellness Expo (IHWE)'}</strong>.
                                             </p>
                                             
                                             <p style="margin-bottom: 25px; font-size: 14px; line-height: 1.6;">
@@ -178,7 +178,7 @@ class VerifyService {
     /**
      * Send OTP to phone via WhatsApp.
      */
-    async sendPhoneOtp(phone, context = 'CONTACT', name = null) {
+    async sendPhoneOtp(phone, context = 'CONTACT', name = null, eventName = 'IHWE 2026') {
         const otp = this.generateOTP();
         
         await Otp.findOneAndUpdate(
@@ -187,7 +187,7 @@ class VerifyService {
             { upsert: true, returnDocument: 'after' }
         );
 
-        return await sendWhatsAppOTP(phone, otp, context, name);
+        return await sendWhatsAppOTP(phone, otp, context, name, eventName);
     }
 
     /**

@@ -13,7 +13,7 @@ const resolveEventIdForCompany = async (companyId) => {
 const resolveEventId = (options = {}) =>
     options.eventId ? Promise.resolve(options.eventId) : resolveEventIdForCompany(options.companyId);
 
-const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null) => {
+const sendWhatsAppOTP = async (mobile, otp, context = 'CONTACT', name = null, eventName = 'IHWE 2026') => {
     let status = 'failed';
     let errorMsg = null;
 
