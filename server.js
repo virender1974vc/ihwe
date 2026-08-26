@@ -157,11 +157,33 @@ const databaseReady = mongoose
   })
   .then(() => {
     console.log("✅ Connected to MAIN MongoDB (default connection)");
+  })
+  .catch((err) => {
+    console.error("❌ Failed to connect to MAIN MongoDB:", err.message);
   });
-global.secondaryDB = mongoose;
+
+console.log("MONGO_URI_ORGANIC ->", process.env.MONGO_URI_ORGANIC);
+
+global.secondaryDB = mongoose.createConnection(process.env.MONGO_URI_ORGANIC, {
+  serverSelectionTimeoutMS: 15000,
+});
+
+global.secondaryDB.on('connected', () => {
+  console.log("✅ Connected to ORGANIC MongoDB (secondary connection)");
+});
+
+global.secondaryDB.on('error', (err) => {
+  console.error("❌ Failed to connect to ORGANIC MongoDB:", err.message);
+});
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 app.use('/api/payment/webhook', require('./routes/payment'));
+
+// Organic Expo Routes
+app.use('/api/organic/home-hero', require('./routes/organic_expo/home/homeHeroRoutes'));
+app.use('/api/organic/introduction', require('./routes/organic_expo/home/introductionSectionRoutes'));
+app.use('/api/organic/global-platform', require('./routes/organic_expo/home/globalPlatformRoutes'));
 
 // Middleware
 app.use(cors());
