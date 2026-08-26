@@ -184,6 +184,15 @@ app.use('/api/payment/webhook', require('./routes/payment'));
 app.use('/api/organic/home-hero', require('./routes/organic_expo/home/homeHeroRoutes'));
 app.use('/api/organic/introduction', require('./routes/organic_expo/home/introductionSectionRoutes'));
 app.use('/api/organic/global-platform', require('./routes/organic_expo/home/globalPlatformRoutes'));
+app.use('/api/organic/why-participate', require('./routes/organic_expo/home/whyParticipateRoutes'));
+app.use('/api/organic/conference-seminars', require('./routes/organic_expo/home/conferenceSeminarsRoutes'));
+app.use('/api/organic/expo-categories', require('./routes/organic_expo/home/expoCategoriesRoutes'));
+app.use('/api/organic/beyond-exhibition', require('./routes/organic_expo/home/beyondExhibitionRoutes'));
+app.use('/api/organic/sponsors-and-attend', require('./routes/organic_expo/home/sponsorsAndAttendRoutes'));
+app.use('/api/organic/become-sponsor', require('./routes/organic_expo/home/becomeSponsorRoutes'));
+app.use('/api/organic/sponsorship-categories', require('./routes/organic_expo/home/sponsorshipCategoriesRoutes'));
+app.use('/api/organic/partners-and-brands', require('./routes/organic_expo/home/partnersAndBrandsRoutes'));
+app.use('/api/organic/buyer-seller-meet', require('./routes/organic_expo/home/buyerSellerMeetRoutes'));
 
 // Middleware
 app.use(cors());
