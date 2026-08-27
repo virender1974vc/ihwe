@@ -195,6 +195,7 @@ app.use('/api/organic/partners-and-brands', require('./routes/organic_expo/home/
 app.use('/api/organic/buyer-seller-meet', require('./routes/organic_expo/home/buyerSellerMeetRoutes'));
 app.use('/api/organic/testimonials-carousel', require('./routes/organic_expo/home/testimonialsCarouselRoutes'));
 app.use('/api/organic/home-videos', require('./routes/organic_expo/home/homeVideosRoutes'));
+app.use('/api/organic/explore-categories', require('./routes/organic_expo/home/exploreCategoriesRoutes'));
 
 // Middleware
 app.use(cors());
