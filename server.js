@@ -193,6 +193,8 @@ app.use('/api/organic/become-sponsor', require('./routes/organic_expo/home/becom
 app.use('/api/organic/sponsorship-categories', require('./routes/organic_expo/home/sponsorshipCategoriesRoutes'));
 app.use('/api/organic/partners-and-brands', require('./routes/organic_expo/home/partnersAndBrandsRoutes'));
 app.use('/api/organic/buyer-seller-meet', require('./routes/organic_expo/home/buyerSellerMeetRoutes'));
+app.use('/api/organic/testimonials-carousel', require('./routes/organic_expo/home/testimonialsCarouselRoutes'));
+app.use('/api/organic/home-videos', require('./routes/organic_expo/home/homeVideosRoutes'));
 
 // Middleware
 app.use(cors());
