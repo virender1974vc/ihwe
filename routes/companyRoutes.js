@@ -15,6 +15,7 @@ const {
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,
+  uploadUdyamCertificate,
   uploadContactPhoto,
   uploadCompanies,
   getConvertedCompanies,
@@ -59,8 +60,20 @@ const contactPhotoStorage = multer.diskStorage({
   }
 });
 
+const udyamCertStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, '../uploads/udyam_certificates');
+    if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    cb(null, `udyam-${Date.now()}${path.extname(file.originalname)}`);
+  }
+});
+
 const upload = multer({ storage });
 const contactUpload = multer({ storage: contactPhotoStorage });
+const udyamCertUpload = multer({ storage: udyamCertStorage });
 
 // GET /api/companies — cached ONLY for dashboard calls (where it's heavy and unpaginated)
 router.get("/", async (req, res) => {
@@ -107,6 +120,7 @@ router.post("/:id/add-to-event", (req, res) => { clearCompaniesCache(); addCompa
 router.post("/:id/assign-events", (req, res) => { clearCompaniesCache(); assignEventsToCompany(req, res); });
 router.post("/bulk-assign", (req, res) => { clearCompaniesCache(); bulkAssignCompanies(req, res); });
 router.post("/:id/logo", upload.single("companyLogo"), (req, res) => { clearCompaniesCache(); uploadCompanyLogo(req, res); });
+router.post("/:id/udyam-certificate", udyamCertUpload.single("udyamCertificate"), (req, res) => { clearCompaniesCache(); uploadUdyamCertificate(req, res); });
 router.post("/:id/contact-photo", contactUpload.single("contactPhoto"), uploadContactPhoto);
 router.post(
   "/upload-companies",

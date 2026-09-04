@@ -897,6 +897,20 @@ const uploadCompanyLogo = async (req, res) => {
     res.status(500).json({ message: "Error uploading logo", error: error.message });
   }
 };
+// ➤ Upload Udyam registration certificate
+const uploadUdyamCertificate = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    const certUrl = `/uploads/udyam_certificates/${req.file.filename}`;
+    const updated = await Company.findByIdAndUpdate(req.params.id, { udyamCertificateUrl: certUrl }, { returnDocument: 'after' });
+    if (!updated) return res.status(404).json({ message: "Company not found" });
+    res.status(200).json({ message: "Udyam certificate uploaded successfully", data: updated });
+  } catch (error) {
+    res.status(500).json({ message: "Error uploading Udyam certificate", error: error.message });
+  }
+};
 const uploadContactPhoto = async (req, res) => {
   try {
     if (!req.file) {
@@ -1516,6 +1530,7 @@ module.exports = {
   updateCompany,
   deleteCompany,
   uploadCompanyLogo,
+  uploadUdyamCertificate,
   uploadContactPhoto,
   uploadCompanies,
   getAchievementRevenue,

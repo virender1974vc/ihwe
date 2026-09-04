@@ -65,6 +65,7 @@ const CompanySchema = new mongoose.Schema(
     companyStatus: { type: String, default: "New Lead" },
     added_by: { type: String, trim: true },
     udyamNumber: { type: String },
+    udyamCertificateUrl: { type: String },
     gstNumber: { type: String },
     panNo: { type: String },
     exhibitorCategory: { type: String },
