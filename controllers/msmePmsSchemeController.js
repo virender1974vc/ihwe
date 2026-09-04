@@ -509,9 +509,27 @@ class MsmePmsSchemeController {
         try {
             const { documentType } = req.params;
             if (!DOCUMENT_TYPES.has(documentType)) return res.status(400).json({ success: false, message: 'Invalid document type' });
-            if (!req.file) return res.status(400).json({ success: false, message: 'File is required' });
+            // Multer is configured with upload.array('file', 10) on this route,
+            // so several files can be selected and uploaded in one go — each
+            // one is still AI-verified individually below, exactly like a
+            // single upload always was.
+            const files = req.files?.length ? req.files : (req.file ? [req.file] : []);
+            if (!files.length) return res.status(400).json({ success: false, message: 'File is required' });
             const application = await getOrCreateClaim(req.user.id);
             if (application.status === 'Approved') return res.status(409).json({ success: false, message: 'Approved applications cannot be edited' });
+
+            const documentName = DOCUMENT_LABELS[documentType] || documentType;
+            const uploadedAt = new Date();
+            const isExhibitorUpload = req.user?.role === 'exhibitor';
+            const issueMessages = {
+                nudity: `This file appears to contain inappropriate content and cannot be accepted as "${documentName}".`,
+                minor: `This file cannot be accepted as "${documentName}".`,
+                mismatch: `This file doesn't look like a valid "${documentName}". Please upload the correct document.`,
+                unreadable: `This file is unclear/unreadable. Please upload a clearer copy of "${documentName}".`,
+            };
+
+            const accepted = [];
+            const rejected = [];
 
             // Same AI document-verification service the general Document Center
             // (clientDocumentController.js) already uses, but with an MSME-only
@@ -520,59 +538,70 @@ class MsmePmsSchemeController {
             // — the general moderation prompt used elsewhere in the app is left
             // untouched. Fails open (skipped) if AI verification isn't
             // configured/enabled, so an unconfigured key never blocks a real
-            // submission.
-            const documentName = DOCUMENT_LABELS[documentType] || documentType;
-            const fileType = (req.file.originalname.split('.').pop() || '').toUpperCase();
-            const aiResult = await aiDocumentVerificationService.verifyDocument({
-                fileUrl: req.file.path,
-                documentName,
-                fileType,
-                promptOverride: aiDocumentVerificationService.buildMsmeExtractionPrompt(documentType, documentName),
-            });
-            if (!aiResult.skipped && aiResult.valid === false) {
-                await deleteUploadedFile(req.file.path);
-                const issueMessages = {
-                    nudity: `This file appears to contain inappropriate content and cannot be accepted as "${documentName}".`,
-                    minor: `This file cannot be accepted as "${documentName}".`,
-                    mismatch: `This file doesn't look like a valid "${documentName}". Please upload the correct document.`,
-                    unreadable: `This file is unclear/unreadable. Please upload a clearer copy of "${documentName}".`,
-                };
+            // submission. Each selected file is checked on its own, so one bad
+            // file in a multi-select doesn't block the rest.
+            for (const file of files) {
+                const fileType = (file.originalname.split('.').pop() || '').toUpperCase();
+                const aiResult = await aiDocumentVerificationService.verifyDocument({
+                    fileUrl: file.path,
+                    documentName,
+                    fileType,
+                    promptOverride: aiDocumentVerificationService.buildMsmeExtractionPrompt(documentType, documentName),
+                });
+                if (!aiResult.skipped && aiResult.valid === false) {
+                    await deleteUploadedFile(file.path);
+                    rejected.push({
+                        filename: file.originalname,
+                        message: aiResult.reason || issueMessages[aiResult.issue] || `This document was rejected by AI verification: ${aiResult.issue}`,
+                        aiIssue: aiResult.issue,
+                    });
+                    continue;
+                }
+
+                // Several files can now be attached under the same documentType
+                // (e.g. multiple invoice pages) — each upload adds a new entry
+                // instead of replacing whatever was there before. Callers that
+                // want single-slot replace semantics should delete the old entry
+                // by its _id first (see deleteApplicationDocument).
+                application.documents.push({
+                    documentType,
+                    filename: file.originalname,
+                    path: file.path,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    uploadedAt,
+                    aiVerification: { checked: !aiResult.skipped, reason: aiResult.reason || '' },
+                    extractedDetails: aiResult.extractedDetails || null,
+                    uploadedBy: req.user?.fullName || req.user?.username || req.user?.exhibitorName || 'Admin',
+                    // Admin uploading on the exhibitor's behalf is self-reviewed —
+                    // only an exhibitor's own upload through their portal needs a
+                    // separate Accept/Decline pass from the admin afterwards.
+                    status: isExhibitorUpload ? 'Submitted' : 'Verified',
+                    portalStatus: isExhibitorUpload ? '' : 'Accepted',
+                    // "Uploaded on Portal" mirrors the actual upload date here —
+                    // there is no separate real msme.gov.in upload step to date
+                    // this against.
+                    uploadedOnPortal: isExhibitorUpload ? undefined : uploadedAt,
+                });
+                accepted.push(file.originalname);
+            }
+
+            if (accepted.length) await application.save();
+
+            if (!accepted.length) {
                 return res.status(400).json({
                     success: false,
-                    message: aiResult.reason || issueMessages[aiResult.issue] || `This document was rejected by AI verification: ${aiResult.issue}`,
-                    aiIssue: aiResult.issue,
+                    message: rejected[0]?.message || 'All files were rejected by AI verification',
+                    rejected,
                 });
             }
 
-            // Several files can now be attached under the same documentType
-            // (e.g. multiple invoice pages) — each upload adds a new entry
-            // instead of replacing whatever was there before. Callers that
-            // want single-slot replace semantics should delete the old entry
-            // by its _id first (see deleteApplicationDocument).
-            const uploadedAt = new Date();
-            const isExhibitorUpload = req.user?.role === 'exhibitor';
-            application.documents.push({
-                documentType,
-                filename: req.file.originalname,
-                path: req.file.path,
-                mimetype: req.file.mimetype,
-                size: req.file.size,
-                uploadedAt,
-                aiVerification: { checked: !aiResult.skipped, reason: aiResult.reason || '' },
-                extractedDetails: aiResult.extractedDetails || null,
-                uploadedBy: req.user?.fullName || req.user?.username || req.user?.exhibitorName || 'Admin',
-                // Admin uploading on the exhibitor's behalf is self-reviewed —
-                // only an exhibitor's own upload through their portal needs a
-                // separate Accept/Decline pass from the admin afterwards.
-                status: isExhibitorUpload ? 'Submitted' : 'Verified',
-                portalStatus: isExhibitorUpload ? '' : 'Accepted',
-                // "Uploaded on Portal" mirrors the actual upload date here —
-                // there is no separate real msme.gov.in upload step to date
-                // this against.
-                uploadedOnPortal: isExhibitorUpload ? undefined : uploadedAt,
+            res.status(201).json({
+                success: true,
+                message: rejected.length ? `${accepted.length} file(s) uploaded, ${rejected.length} rejected` : 'Document uploaded',
+                rejected,
+                data: application,
             });
-            await application.save();
-            res.status(201).json({ success: true, message: 'Document uploaded', data: application });
         } catch (error) {
             res.status(500).json({ success: false, message: 'Document upload failed', error: error.message });
         }

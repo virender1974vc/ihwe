@@ -71,7 +71,7 @@ router.post('/verify-udyam-certificate', upload.single('file'), msmePmsSchemeCon
 // Authenticated exhibitor dashboard workflow. Keep these before /:id.
 router.get('/application/me', protectExhibitor, resolveSelectedExhibitor, msmePmsSchemeController.getMyApplication);
 router.put('/application/step/:step', protectExhibitor, resolveSelectedExhibitor, msmePmsSchemeController.saveApplicationStep);
-router.post('/application/documents/:documentType', protectExhibitor, resolveSelectedExhibitor, upload.single('file'), msmePmsSchemeController.uploadApplicationDocument);
+router.post('/application/documents/:documentType', protectExhibitor, resolveSelectedExhibitor, upload.array('file', 10), msmePmsSchemeController.uploadApplicationDocument);
 router.delete('/application/documents/:documentType', protectExhibitor, resolveSelectedExhibitor, msmePmsSchemeController.deleteApplicationDocument);
 router.post('/application/submit', protectExhibitor, resolveSelectedExhibitor, msmePmsSchemeController.submitMyApplication);
 router.get('/all', msmePmsSchemeController.getAllApplications);
@@ -79,7 +79,7 @@ router.get('/page-content', msmePmsSchemeController.getPageContent);
 router.post('/page-content', msmePmsSchemeController.updatePageContent);
 router.get('/:id/edit', msmePmsSchemeController.getOrCreateApplicationForAdmin);
 router.put('/:id/step/:step', msmePmsSchemeController.saveApplicationStepById.bind(msmePmsSchemeController));
-router.post('/:id/documents/:documentType', upload.single('file'), msmePmsSchemeController.uploadApplicationDocumentById.bind(msmePmsSchemeController));
+router.post('/:id/documents/:documentType', upload.array('file', 10), msmePmsSchemeController.uploadApplicationDocumentById.bind(msmePmsSchemeController));
 router.delete('/:id/documents/:documentType', msmePmsSchemeController.deleteApplicationDocumentById.bind(msmePmsSchemeController));
 router.post('/:id/submit', msmePmsSchemeController.submitApplicationById.bind(msmePmsSchemeController));
 router.get('/:id', msmePmsSchemeController.getApplicationById);

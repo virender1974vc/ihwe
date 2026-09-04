@@ -554,6 +554,27 @@ app.use("/api/user-targets", require("./routes/userTargetRoutes"));
 app.use("/api/reminders", require("./routes/reminderRoutes"));
 app.use("/api/seed", seedRoutes);
 
+// A file upload rejected by multer (oversized file, disallowed type, etc.)
+// calls next(err) instead of sending a response — without this handler it
+// falls through to Express's default error page (a raw HTML stack trace,
+// HTTP 500) instead of the JSON error the frontend expects, making the
+// upload look like it silently did nothing.
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    const messages = {
+      LIMIT_FILE_SIZE: 'File is too large. Maximum allowed size is 10 MB.',
+      LIMIT_FILE_COUNT: 'Too many files selected.',
+      LIMIT_UNEXPECTED_FILE: 'Unexpected file field.',
+    };
+    return res.status(400).json({ success: false, message: messages[err.code] || err.message });
+  }
+  if (err) {
+    console.error('Unhandled request error:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+  }
+  next();
+});
+
 // ── Initialize Cron Jobs ──────────────────────────────────────────────────────
 // Disabled per request (2026-08-07). Uncomment to re-enable.
 // const { initPaymentWarningCron } = require('./jobs/paymentWarningCron');
