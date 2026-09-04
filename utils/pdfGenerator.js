@@ -2265,6 +2265,8 @@ class PDFGenerator {
                     ['GSTIN No.', hasMsme ? udyamNo : clean(registration.gstNo, 'N/A')],
                 ];
                 const leftAddressH = measureText(fromAddr, rowW, { size: 7.4, lineGap: 2 });
+                const fromNameText = clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.');
+                const clientNameText = clean(registration.exhibitorName, 'N/A');
 
                 const rightPrimaryLines = [];
                 if (hasMsme) {
@@ -2293,9 +2295,15 @@ class PDFGenerator {
                     : rightPrimaryHeights[0];
                 const primaryTextH = Math.max(leftAddressH, rightPrimaryH);
 
+                // The FROM/TO heading (company/client name) can itself wrap onto a second line
+                // for a long name — titleStep alone (sized for one line) isn't enough room, so
+                // measure it and use whichever is taller before the address/detail rows start.
+                const fromNameStep = Math.max(titleStep, measureText(fromNameText, rowW, { size: 9.5 }) + 2);
+                const clientNameStep = Math.max(titleStep, measureText(clientNameText, rowW, { size: 9.5 }) + 2);
+
                 const rightNeededH =
                     contentTop +
-                    titleStep +
+                    clientNameStep +
                     primaryTextH +
                     afterPrimaryGap +
                     afterDividerGap +
@@ -2304,7 +2312,7 @@ class PDFGenerator {
 
                 const leftAlignedNeededH =
                     contentTop +
-                    titleStep +
+                    fromNameStep +
                     primaryTextH +
                     afterPrimaryGap +
                     afterDividerGap +
@@ -2331,14 +2339,14 @@ class PDFGenerator {
                 let fy = boxTop + contentTop;
 
                 lineText(
-                    clean(settings?.companyName || 'Namo Gange Wellness Pvt. Ltd.', 'Namo Gange Wellness Pvt. Ltd.'),
+                    fromNameText,
                     mx + 12,
                     fy,
                     rowW,
                     { size: 9.5, bold: true, color: ACCENT }
                 );
 
-                fy += titleStep;
+                fy += fromNameStep;
 
                 lineText(fromAddr, mx + 12, fy, rowW, { size: 7.4, lineGap: 2 });
                 fy += primaryTextH + afterPrimaryGap;
@@ -2360,14 +2368,14 @@ class PDFGenerator {
                 let ty = boxTop + contentTop;
 
                 lineText(
-                    clean(registration.exhibitorName, 'N/A'),
+                    clientNameText,
                     rX + 12,
                     ty,
                     rowW,
                     { size: 9.5, bold: true, color: hasMsme ? CLIENT_GREEN : TEXT_DARK }
                 );
 
-                ty += titleStep;
+                ty += clientNameStep;
 
                 if (hasMsme) {
                     lineText(
@@ -2397,7 +2405,7 @@ class PDFGenerator {
                     );
                 }
 
-                ty = boxTop + contentTop + titleStep + primaryTextH + afterPrimaryGap;
+                ty = boxTop + contentTop + clientNameStep + primaryTextH + afterPrimaryGap;
 
                 doc.moveTo(rX + 12, ty)
                     .lineTo(rX + halfW - 22, ty)
@@ -2426,7 +2434,28 @@ class PDFGenerator {
                 const paymentAgainstType = /proforma/i.test(resolvedPaymentAgainstType)
                     ? 'Proforma Invoice'
                     : 'Invoice';
-                const paymentTypeText = clean(accountPayment?.pymnt_type || m.paymentType || m.pymnt_type || p.stallScheme, '');
+
+                // The stall size printed in the narration must match the specific PI/Invoice
+                // this payment is against, not registration.participation.stallSize — that field
+                // holds the exhibitor's *current* stand size, which can drift from what an older
+                // PI actually booked (e.g. after a later revision or a fresh booking).
+                let stallSizeFromDoc = null;
+                try {
+                    if (paymentAgainstType === 'Proforma Invoice') {
+                        const Estimate = require('../models/Estimate');
+                        const estDoc = await Estimate.findOne({ est_no: paymentAgainst }).lean();
+                        if (estDoc?.items?.length) {
+                            stallSizeFromDoc = estDoc.items.reduce((sum, it) => sum + (Number(it.size) || 0), 0) || null;
+                        }
+                    } else {
+                        const invDoc = await Invoice.findOne({ invoice_no: paymentAgainst }).lean();
+                        if (invDoc?.items?.length) {
+                            stallSizeFromDoc = invDoc.items.reduce((sum, it) => sum + (Number(it.size) || 0), 0) || null;
+                        }
+                    }
+                } catch (e) { }
+
+                const paymentTypeText = clean(accountPayment?.pymnt_type || m.paymentType || m.pymnt_type, '');
                 const paymentTypeLower = paymentTypeText.toLowerCase();
                 const receiptPaymentTypeLabel = paymentTypeLower.includes('running')
                     ? 'Running Payment'
@@ -2484,7 +2513,8 @@ class PDFGenerator {
                 y += paymentTableH + sectionGap;
 
                 // Narration
-                const stallSizeText = p.stallSize ? `${Number(p.stallSize).toLocaleString('en-IN')} Sq. Mt.` : 'N/A';
+                const resolvedStallSize = stallSizeFromDoc || p.stallSize;
+                const stallSizeText = resolvedStallSize ? `${Number(resolvedStallSize).toLocaleString('en-IN')} Sq. Mt.` : 'N/A';
                 const narrationEventName = eventName
                     .replace(/\s*\(?\d{1,2}\s*[-–]\s*\d{1,2}\s+[A-Za-z]+\s+\d{4}\)?\s*/g, '')
                     .replace(/IHWE\s+Global Edition/i, 'IHWE – Global Edition')
@@ -2508,8 +2538,12 @@ class PDFGenerator {
                 const narrationInvoiceValue = fmt(grandTotal);
                 const narrationPaymentDate = formatLongDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
                 const defaultNarrationText = sentenceCase(`Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${stallSizeText} stall for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received via ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`);
+                const casedPaymentPrefix = sentenceCase(`Being ${receiptPaymentKind} received from M/s`);
+                const [paymentKindPrefix, paymentKindSuffix] = casedPaymentPrefix.split(receiptPaymentKind);
                 const highlightedNarrationSegments = [
-                    { text: sentenceCase(`Being ${receiptPaymentKind} received from M/s`) },
+                    { text: paymentKindPrefix },
+                    { text: receiptPaymentKind, bold: true },
+                    { text: paymentKindSuffix },
                     { text: ` ${sentenceCase(clean(registration.exhibitorName, 'N/A'))}`, bold: true },
                     { text: ' against Proforma Invoice No.' },
                     { text: ` ${paymentAgainst}`, bold: true },

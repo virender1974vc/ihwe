@@ -143,7 +143,7 @@ const resolveClientInfo = (companyId, { companyById, exhibitorById, stallById })
     "N/A";
 
   return {
-    name: company?.companyName || exhibitor?.exhibitorName || "Unknown Client",
+    name: toTitleCase(company?.companyName || exhibitor?.exhibitorName || "Unknown Client"),
     stallNo: stallNo || "N/A",
     stallSize: stallSize ? `${stallSize} Sq. Mtr.` : "N/A",
     contactPerson,
@@ -454,7 +454,9 @@ const getAccountsReceivable = async (req, res) => {
       const overdueDays = isOverdue && dueDate
         ? Math.max(1, Math.floor((today - dueDate) / (1000 * 60 * 60 * 24)))
         : 0;
-      const status = isOverdue ? "Overdue" : "Unpaid";
+      let status = "Pending";
+      if (totalOwed > 0 && settled >= totalOwed) status = "Paid";
+      else if (settled > 0) status = "Partial Paid";
 
       const lastPayment = docPayments[docPayments.length - 1];
       const clientInfo = resolveClientInfo(doc.companyId, lookups);
@@ -539,15 +541,15 @@ const getAccountsReceivable = async (req, res) => {
     const totalTds = rows.reduce((s, r) => s + r.tds, 0);
     const netAmountReceived = totalReceived - totalTds;
     const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0);
-    const overdueAmount = rows.filter((r) => r.status === "Overdue").reduce((s, r) => s + r.outstanding, 0);
+    const overdueAmount = rows.filter((r) => r.isOverdue).reduce((s, r) => s + r.outstanding, 0);
     const pendingAmount = totalOutstanding - overdueAmount;
 
-    // r.status only ever carries a due-date reading ("Unpaid"/"Overdue"), never a payment-progress
-    // one — so "fully/partially paid" must come from paymentType, the amount-progress field.
+    // r.status carries the payment-progress reading ("Paid"/"Partial Paid"/"Pending"); overdue-ness
+    // is tracked separately via r.isOverdue (a due-date reading) so a row can be both at once.
     const fullyPaidCount = rows.filter((r) => r.paymentType === "Full Payment").length;
     const partiallyPaidCount = rows.filter((r) => r.paymentType === "Partial Payment").length;
-    const overdueCount = rows.filter((r) => r.status === "Overdue").length;
-    const unpaidCount = rows.filter((r) => r.status === "Unpaid").length;
+    const overdueCount = rows.filter((r) => r.isOverdue).length;
+    const unpaidCount = rows.filter((r) => r.status === "Pending" && !r.isOverdue).length;
     const totalCreditNotes = rows.reduce((s, r) => s + r.credited, 0);
     const totalDebitNotes = rows.reduce((s, r) => s + r.debited, 0);
     const avgInvoiceValue = rows.length ? totalInvoiceValue / rows.length : 0;
