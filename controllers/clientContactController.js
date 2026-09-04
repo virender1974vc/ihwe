@@ -101,6 +101,7 @@ exports.getClientContacts = async (req, res) => {
 
             if (!hasPrimary && !hasSameEmail) {
                 const primaryContact = {
+                    title: exhibitor.contact1.title || '',
                     name: (exhibitor.contact1.firstName || '') + (exhibitor.contact1.lastName ? ' ' + exhibitor.contact1.lastName : ''),
                     designation: exhibitor.contact1.designation || '',
                     email: exhibitor.contact1.email || '',

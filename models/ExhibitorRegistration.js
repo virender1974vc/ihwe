@@ -278,6 +278,7 @@ const ExhibitorRegistrationSchema = new mongoose.Schema({
     }],
     expoPushTokens: [{ type: String }],
     teamMembers: [{
+        title: String,
         name: String,
         designation: String,
         department: String,
