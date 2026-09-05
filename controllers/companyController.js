@@ -17,6 +17,21 @@ const mergeOrCondition = (query, orArray) => {
     query.$or = orArray;
   }
 };
+const COMPANY_TO_EXHIBITOR_FIELD_MAP = {
+  companyName: "exhibitorName",
+  email: "companyEmail",
+  landline: "landlineNo",
+  website: "website",
+  address: "address",
+  country: "country",
+  state: "state",
+  city: "city",
+  pincode: "pincode",
+  gstNumber: "gstNo",
+  panNo: "panNo",
+  companyLogo: "companyLogoUrl",
+  businessNature: "natureOfBusiness",
+};
 
 const buildEventAssignment = (payload, eventId) => ({
   eventId,
@@ -1331,9 +1346,9 @@ const getPaidCompanyIdSet = async (companies, eventId) => {
     }).select("companyId").lean(),
     registrationIds.length
       ? ExhibitorRegistration.find({
-          _id: { $in: registrationIds },
-          $or: [{ status: { $in: PAID_REGISTRATION_STATUSES } }, { amountPaid: { $gt: 0 } }],
-        }).select("_id clientId").lean()
+        _id: { $in: registrationIds },
+        $or: [{ status: { $in: PAID_REGISTRATION_STATUSES } }, { amountPaid: { $gt: 0 } }],
+      }).select("_id clientId").lean()
       : [],
   ]);
 
@@ -1489,12 +1504,12 @@ const getHotLeadCompanies = async (req, res) => {
       .filter(Boolean);
     const bookedRegistrations = linkedRegistrationIds.length
       ? await ExhibitorRegistration.find({
-          _id: { $in: linkedRegistrationIds },
-          $or: [
-            { "participation.stallNo": { $nin: [null, ""] } },
-            { "participation.stallFor": { $nin: [null, ""] } },
-          ],
-        }).select("_id").lean()
+        _id: { $in: linkedRegistrationIds },
+        $or: [
+          { "participation.stallNo": { $nin: [null, ""] } },
+          { "participation.stallFor": { $nin: [null, ""] } },
+        ],
+      }).select("_id").lean()
       : [];
     const bookedRegistrationIds = new Set(
       bookedRegistrations.map((registration) => String(registration._id)),
