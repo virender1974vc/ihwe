@@ -2539,10 +2539,17 @@ class PDFGenerator {
                 const narrationPaymentDate = formatLongDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
                 const defaultNarrationText = sentenceCase(`Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${stallSizeText} stall for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received via ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`);
                 const casedPaymentPrefix = sentenceCase(`Being ${receiptPaymentKind} received from M/s`);
-                const [paymentKindPrefix, paymentKindSuffix] = casedPaymentPrefix.split(receiptPaymentKind);
+                // sentenceCase title-cases every word, so "full payment" becomes "Full
+                // Payment" inside the prefix. Splitting on the raw lower-case value found
+                // no match: the whole prefix landed in [0], the suffix came back undefined,
+                // and the bold segment then printed the payment kind a second time.
+                const casedPaymentKind = sentenceCase(receiptPaymentKind);
+                const kindAt = casedPaymentKind ? casedPaymentPrefix.indexOf(casedPaymentKind) : -1;
+                const paymentKindPrefix = kindAt >= 0 ? casedPaymentPrefix.slice(0, kindAt) : casedPaymentPrefix;
+                const paymentKindSuffix = kindAt >= 0 ? casedPaymentPrefix.slice(kindAt + casedPaymentKind.length) : '';
                 const highlightedNarrationSegments = [
                     { text: paymentKindPrefix },
-                    { text: receiptPaymentKind, bold: true },
+                    { text: kindAt >= 0 ? casedPaymentKind : '', bold: true },
                     { text: paymentKindSuffix },
                     { text: ` ${sentenceCase(clean(registration.exhibitorName, 'N/A'))}`, bold: true },
                     { text: ' against Proforma Invoice No.' },
