@@ -142,23 +142,35 @@ const InvoiceSchema = new mongoose.Schema(
 // ✅ Static method: Auto-generate next Invoice number
 InvoiceSchema.statics.generateNextInvoiceNumber = async function () {
   const fiscalYear = getFiscalYear();
-  // आपका वांछित प्रारूप: NGW/INV/YY-YY/XXX
-  const prefix = `NGW/INV/${fiscalYear}/`;
+  // प्रारूप: NGW/YY-YY/XXX
+  const prefix = `NGW/${fiscalYear}/`;
+  const legacyPrefix = `NGW/INV/${fiscalYear}/`;
+  const seqOf = (invoiceNo) => {
+    const parts = String(invoiceNo || "").split("/");
+    const isNewShape =
+      parts.length === 3 && parts[0] === "NGW" && parts[1] === fiscalYear;
+    const isLegacyShape =
+      parts.length === 4 && parts[0] === "NGW" && parts[1] === "INV" && parts[2] === fiscalYear;
+    if (!isNewShape && !isLegacyShape) return null;
+    const seq = parseInt(parts[parts.length - 1], 10);
+    return Number.isNaN(seq) ? null : seq;
+  };
 
-  // इस fiscal year के लिए सबसे नया Invoice ढूंढें
-  const lastInvoice = await this.findOne({
-    invoice_no: { $regex: `^${prefix}` },
-  }).sort({ added: -1 });
-
-  let nextSeq = 1;
-  if (lastInvoice) {
-    const lastParts = lastInvoice.invoice_no.split("/");
-    const lastNum = parseInt(lastParts[lastParts.length - 1], 10);
-    if (!isNaN(lastNum)) nextSeq = lastNum + 1;
-  }
+  const candidates = await this.find({
+    $or: [
+      { invoice_no: { $regex: `^${prefix}` } },
+      { invoice_no: { $regex: `^${legacyPrefix}` } },
+    ],
+  })
+    .select("invoice_no")
+    .lean();
+  const maxSeq = candidates.reduce((max, doc) => {
+    const seq = seqOf(doc.invoice_no);
+    return seq === null ? max : Math.max(max, seq);
+  }, 0);
 
   // नंबर को 3-अंकों के साथ पैड करें (e.g., 001, 026)
-  const padded = String(nextSeq).padStart(3, "0");
+  const padded = String(maxSeq + 1).padStart(3, "0");
   return `${prefix}${padded}`;
 };
 
