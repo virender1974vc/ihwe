@@ -217,6 +217,12 @@ exports.updateClientContacts = async (req, res) => {
                     existingContacts = exhibitor.teamMembers || [];
                     exhibitor.teamMembers = contacts;
                     await exhibitor.save();
+                    // Keep the CRM Company's own contacts in step. Anything that reads the
+                    // client through the Company record - Client Overview, the Proforma
+                    // Invoice's Contact Person dropdown - uses company.contacts, so
+                    // returning here without writing it left those screens showing the
+                    // pre-rename contact indefinitely.
+                    await Company.updateOne({ _id: company._id }, { $set: { contacts } });
                     const prevKeys = new Set(existingContacts.map(makeKey));
                     const nextKeys = new Set(contacts.map(makeKey));
                     const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
