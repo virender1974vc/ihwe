@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const { secondaryDB } = require("../config/secondaryDb");
+const blankToNull = (value) =>
+  typeof value === "string" && value.trim() === "" ? null : value;
 const ContactSchema = new mongoose.Schema({
   title: { type: String },
   firstName: { type: String },
@@ -42,10 +44,10 @@ const CompanySchema = new mongoose.Schema(
     referralName: { type: String },
     referralMobile: { type: String },
     eventName: { type: String },
-    eventId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    eventId: { type: mongoose.Schema.Types.ObjectId, default: null, set: blankToNull },
     events: [{ type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" }],
     eventAssignments: [{
-      eventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent" },
+      eventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", set: blankToNull },
       forwardTo: { type: String },
       status: { type: String, default: "New Lead" },
       dataSource: { type: String, default: "" },
@@ -54,8 +56,8 @@ const CompanySchema = new mongoose.Schema(
       referralMobile: { type: String, default: "" },
       reminder: { type: Date, default: null },
       followUpDate: { type: Date, default: null },
-      exhibitorRegistrationId: { type: mongoose.Schema.Types.ObjectId, ref: "ExhibitorRegistration", default: null },
-      registrationEventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null },
+      exhibitorRegistrationId: { type: mongoose.Schema.Types.ObjectId, ref: "ExhibitorRegistration", default: null, set: blankToNull },
+      registrationEventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, set: blankToNull },
       lastRemark: { type: String, default: "" },
       convertedAt: { type: Date, default: null },
       createdAt: { type: Date, default: Date.now },

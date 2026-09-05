@@ -222,12 +222,12 @@ router.get("/", async (req, res) => {
         rawRemark: lastRemark,
       };
     })
-    .filter((r) => r.followUpDate)
-    .sort((a, b) => {
-      const tA = new Date(a.updatedAt || a.followUpDate).getTime() || 0;
-      const tB = new Date(b.updatedAt || b.followUpDate).getTime() || 0;
-      return tB - tA; // Latest status update on top!
-    });
+      .filter((r) => r.followUpDate)
+      .sort((a, b) => {
+        const tA = new Date(a.updatedAt || a.followUpDate).getTime() || 0;
+        const tB = new Date(b.updatedAt || b.followUpDate).getTime() || 0;
+        return tB - tA;
+      });
 
     res.json({ success: true, data: reminders, total: reminders.length });
   } catch (error) {
@@ -248,16 +248,14 @@ router.put("/:id/complete", async (req, res) => {
       return res.status(404).json({ success: false, message: "Company not found" });
     }
 
-    company.followUpDate = null;
-    company.followUpStatus = "Completed";
+
+    const update = { followUpDate: null, followUpStatus: "Completed" };
     if (company.eventAssignments && company.eventAssignments.length > 0) {
-      company.eventAssignments.forEach(ea => {
-        ea.followUpDate = null;
-        ea.followUpStatus = "Completed";
-      });
+      update["eventAssignments.$[].followUpDate"] = null;
+      update["eventAssignments.$[].followUpStatus"] = "Completed";
     }
 
-    await company.save();
+    await Company.updateOne({ _id: id }, { $set: update });
     res.json({ success: true, message: "Follow-up marked as completed" });
   } catch (error) {
     console.error("Error marking follow-up as completed:", error);

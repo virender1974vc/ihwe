@@ -129,7 +129,7 @@ exports.getClientContacts = async (req, res) => {
                 } else {
                     exhibitor = await ExhibitorRegistration.findOne({ registrationId: company.exhibitorRegistrationId });
                 }
-                
+
                 if (exhibitor) {
                     contacts = exhibitor.teamMembers || [];
                     contacts = injectPrimaryContact(contacts, exhibitor);
@@ -143,7 +143,7 @@ exports.getClientContacts = async (req, res) => {
             } else {
                 exhibitor = await ExhibitorRegistration.findOne({ registrationId: clientId });
             }
-            
+
             if (exhibitor) {
                 contacts = exhibitor.teamMembers || [];
                 contacts = injectPrimaryContact(contacts, exhibitor);
@@ -234,8 +234,8 @@ exports.updateClientContacts = async (req, res) => {
                 }
             }
             existingContacts = company.contacts || [];
+            await Company.updateOne({ _id: clientId }, { $set: { contacts } });
             company.contacts = contacts;
-            await company.save();
             const prevKeys = new Set(existingContacts.map(makeKey));
             const nextKeys = new Set(contacts.map(makeKey));
             const added = contacts.filter((c) => !prevKeys.has(makeKey(c)));
