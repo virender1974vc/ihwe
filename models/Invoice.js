@@ -82,7 +82,7 @@ const InvoiceSchema = new mongoose.Schema(
     crmEventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, index: true },
     source_estimate_id: { type: String, default: "" },
     estimate_no: { type: String, default: "" }, // Optional now
-    invoice_no: { type: String, required: true, unique: true }, 
+    invoice_no: { type: String, required: true, unique: true },
     type_of_invoice: { type: String, required: true },
     invoice_date: { type: String },
     po_no: { type: String },
@@ -94,7 +94,7 @@ const InvoiceSchema = new mongoose.Schema(
     payment_status: { type: String, enum: ["", "pending", "partial", "paid"], default: "" },
     payment_due_date: { type: Date, default: null },
     show_payment_details: { type: Boolean, default: true },
-    
+
     gst_no: { type: String },
     supply_date: { type: String }, // Can be used as invoice date if not separate
 
@@ -104,7 +104,7 @@ const InvoiceSchema = new mongoose.Schema(
     event_name: { type: String },
     event_place_of_supply: { type: String },
     event_gst_no: { type: String },
-    
+
     consignee_name: { type: String, required: true },
     consignee_addr: { type: String }, // Shipping
     consignee_person: { type: String, default: "" },
@@ -112,14 +112,14 @@ const InvoiceSchema = new mongoose.Schema(
     billing_address: { type: String },
     billing_state: { type: String },
     billing_pincode: { type: String },
-    
+
     country: { type: String },
     state: { type: String },
     city: { type: String },
     pincode: { type: String },
     place_of_supply: { type: String },
     stateCode: { type: String },
-    
+
     items: { type: [invoiceItemSchema], required: true },
     finalAmount: { type: Number, required: true },
     delivery_challan_ids: { type: [String], default: [] },
@@ -130,7 +130,7 @@ const InvoiceSchema = new mongoose.Schema(
     revision_no: { type: Number, default: 0 },
     revised_at: { type: Date, default: null },
     revisions: { type: [invoiceRevisionSchema], default: [] },
-    
+
     added_by: { type: String },
     status: { type: String, default: "active" },
     added: { type: Date, default: Date.now },
@@ -142,23 +142,35 @@ const InvoiceSchema = new mongoose.Schema(
 // ✅ Static method: Auto-generate next Invoice number
 InvoiceSchema.statics.generateNextInvoiceNumber = async function () {
   const fiscalYear = getFiscalYear();
-  // आपका वांछित प्रारूप: NGW/INV/YY-YY/XXX
-  const prefix = `NGW/INV/${fiscalYear}/`;
+  // प्रारूप: NGW/YY-YY/XXX
+  const prefix = `NGW/${fiscalYear}/`;
+  const legacyPrefix = `NGW/INV/${fiscalYear}/`;
+  const seqOf = (invoiceNo) => {
+    const parts = String(invoiceNo || "").split("/");
+    const isNewShape =
+      parts.length === 3 && parts[0] === "NGW" && parts[1] === fiscalYear;
+    const isLegacyShape =
+      parts.length === 4 && parts[0] === "NGW" && parts[1] === "INV" && parts[2] === fiscalYear;
+    if (!isNewShape && !isLegacyShape) return null;
+    const seq = parseInt(parts[parts.length - 1], 10);
+    return Number.isNaN(seq) ? null : seq;
+  };
 
-  // इस fiscal year के लिए सबसे नया Invoice ढूंढें
-  const lastInvoice = await this.findOne({
-    invoice_no: { $regex: `^${prefix}` },
-  }).sort({ added: -1 });
-
-  let nextSeq = 1;
-  if (lastInvoice) {
-    const lastParts = lastInvoice.invoice_no.split("/");
-    const lastNum = parseInt(lastParts[lastParts.length - 1], 10);
-    if (!isNaN(lastNum)) nextSeq = lastNum + 1;
-  }
+  const candidates = await this.find({
+    $or: [
+      { invoice_no: { $regex: `^${prefix}` } },
+      { invoice_no: { $regex: `^${legacyPrefix}` } },
+    ],
+  })
+    .select("invoice_no")
+    .lean();
+  const maxSeq = candidates.reduce((max, doc) => {
+    const seq = seqOf(doc.invoice_no);
+    return seq === null ? max : Math.max(max, seq);
+  }, 0);
 
   // नंबर को 3-अंकों के साथ पैड करें (e.g., 001, 026)
-  const padded = String(nextSeq).padStart(3, "0");
+  const padded = String(maxSeq + 1).padStart(3, "0");
   return `${prefix}${padded}`;
 };
 
