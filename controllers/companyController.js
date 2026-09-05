@@ -784,16 +784,28 @@ const lookupCompanyOrExhibitor = async (req, res) => {
 // ➤ Update company
 const updateCompany = async (req, res) => {
   try {
-    // --- Duplicate Validation ---
+    const current = await Company.findById(req.params.id);
+    if (!current) return res.status(404).json({ message: "Company not found" });
+
+    const sameText = (a, b) =>
+      String(a == null ? "" : a).trim().toLowerCase() ===
+      String(b == null ? "" : b).trim().toLowerCase();
+
     const orConditions = [];
-    if (req.body.companyName) {
+    if (req.body.companyName && !sameText(req.body.companyName, current.companyName)) {
       orConditions.push({ companyName: { $regex: new RegExp(`^${escapeRegex(req.body.companyName)}$`, "i") } });
     }
-    if (req.body.email) {
+    if (req.body.email && !sameText(req.body.email, current.email)) {
       orConditions.push({ email: { $regex: new RegExp(`^${escapeRegex(req.body.email)}$`, "i") } });
     }
     if (req.body.contacts && Array.isArray(req.body.contacts)) {
-      const mobiles = req.body.contacts.map((c) => c.mobile).filter(Boolean);
+      const currentMobiles = new Set(
+        (current.contacts || []).map((c) => String(c.mobile || "").trim()).filter(Boolean),
+      );
+      const mobiles = req.body.contacts
+        .map((c) => c.mobile)
+        .filter(Boolean)
+        .filter((m) => !currentMobiles.has(String(m).trim()));
       if (mobiles.length > 0) {
         orConditions.push({ "contacts.mobile": { $in: mobiles } });
       }
