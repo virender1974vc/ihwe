@@ -3,6 +3,7 @@ const fs = require("fs");
 const mongoose = require("mongoose");
 const Company = require("../models/Company.js");
 const { logActivity } = require("../utils/logger");
+const { resolveLocationCodes } = require("../utils/resolveLocationCodes");
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const mergeOrCondition = (query, orArray) => {
@@ -757,19 +758,25 @@ const lookupCompanyOrExhibitor = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       const byCode = await ExhibitorRegistration.findOne({ registrationId: id });
       if (byCode) {
-        return res.status(200).json({ ...byCode.toObject(), _source: 'exhibitor' });
+        const data = { ...byCode.toObject(), _source: 'exhibitor' };
+        await resolveLocationCodes(data);
+        return res.status(200).json(data);
       }
       return res.status(404).json({ message: "Client not found" });
     }
 
     let client = await Company.findById(id);
     if (client) {
-      return res.status(200).json({ ...client.toObject(), _source: 'company' });
+      const data = { ...client.toObject(), _source: 'company' };
+      await resolveLocationCodes(data);
+      return res.status(200).json(data);
     }
 
     client = await ExhibitorRegistration.findById(id);
     if (client) {
-      return res.status(200).json({ ...client.toObject(), _source: 'exhibitor' });
+      const data = { ...client.toObject(), _source: 'exhibitor' };
+      await resolveLocationCodes(data);
+      return res.status(200).json(data);
     }
 
     return res.status(404).json({ message: "Client not found" });

@@ -11,6 +11,7 @@ const { sendWhatsAppMessage, sendTaxInvoiceWhatsApp } = require('../utils/whatsa
 const emailService = require('../utils/emailService');
 const { logActivity } = require("../utils/logger");
 const { getDocumentAccountName } = require("../utils/accountActivityDetails");
+const { resolveLocationCodes } = require("../utils/resolveLocationCodes");
 
 const normalizeItemValue = (value) => String(value ?? "").trim().toLowerCase();
 const getItemKey = (item = {}) => [
@@ -147,28 +148,35 @@ const getAllInvoices = async (req, res) => {
     const invoiceQuery = req.query.eventId ? { eventId: req.query.eventId } : {};
     const invoices = await Invoice.find(invoiceQuery).sort({ added: -1 }).lean();
     
-    // Inject eventId
+    // Inject eventId + the linked exhibitor registration (Client Name &
+    // Address box in the invoice preview reads address/city/pincode from it).
     const companyIds = [...new Set(invoices.map(i => String(i.companyId)).filter(Boolean))];
     const exhibitors = await ExhibitorRegistration.find({
       $or: [
         { _id: { $in: companyIds } },
         { clientId: { $in: companyIds } }
       ]
-    }, "clientId eventId").lean();
+    }, "clientId eventId address city pincode").lean();
     const eventMap = {};
+    const exhibitorMap = {};
     exhibitors.forEach(e => {
       if (e.eventId) {
         eventMap[e._id.toString()] = e.eventId;
         if (e.clientId) eventMap[String(e.clientId)] = e.eventId;
       }
+      exhibitorMap[e._id.toString()] = e;
+      if (e.clientId) exhibitorMap[String(e.clientId)] = e;
     });
 
     const populatedInvoices = invoices.map(inv => {
       return {
         ...inv,
-        eventId: inv.eventId || eventMap[String(inv.companyId)] || null
+        eventId: inv.eventId || eventMap[String(inv.companyId)] || null,
+        exhibitor: exhibitorMap[String(inv.companyId)] || null,
       };
     });
+
+    await resolveLocationCodes(populatedInvoices);
 
     res.status(200).json(populatedInvoices);
   } catch (error) {
@@ -206,6 +214,8 @@ const getInvoiceById = async (req, res) => {
       if (company) invoice.company = company;
       if (exhibitor) invoice.exhibitor = exhibitor;
     }
+
+    await resolveLocationCodes(invoice);
 
     res.status(200).json(invoice);
   } catch (error) {
