@@ -319,6 +319,10 @@ const createInvoice = async (req, res) => {
 
     const newInvoice = new Invoice({
       ...req.body,
+      // Server-authoritative: must equal `added` (the actual creation
+      // timestamp, stamped by the timestamps option below on save), not
+      // whatever date the client's form happened to be showing.
+      invoice_date: new Date().toISOString().split("T")[0],
       eventId: resolvedEventId,
       crmEventId: resolvedCrmEventId,
       delivery_challan_ids: challanResult.ids,

@@ -137,9 +137,14 @@ class ExhibitorRegistrationController {
         try {
             const updatedRegistration = await exhibitorRegistrationService.updateRegistration(req.params.id, req.body);
 
-            if (updatedRegistration) {
-                await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.exhibitorName} (${updatedRegistration.registrationId})`);
+            // findByIdAndUpdate resolves to null (not a thrown error) when the id
+            // matches no document — without this check that silently reports
+            // success while writing nothing.
+            if (!updatedRegistration) {
+                return res.status(404).json({ success: false, message: 'Exhibitor registration not found' });
             }
+
+            await logActivity(req, 'Updated', 'Exhibitor Bookings', `Updated booking: ${updatedRegistration.exhibitorName} (${updatedRegistration.registrationId})`);
 
             res.status(200).json({ success: true, data: updatedRegistration });
         } catch (error) {
