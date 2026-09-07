@@ -24,7 +24,10 @@ const estimateItemSchema = new mongoose.Schema({
   description: { type: String, required: true },
   hsn: { type: String, required: true, default: "998596" },
   qty: { type: Number, required: true },
-  size: { type: Number, required: true },
+  // Not mandatory — Custom line items (and Addon Products) often have no
+  // real "size"/GST-rate concept, and the item form never marks these as
+  // required (no asterisk) in either Default or Custom mode.
+  size: { type: Number, default: 0 },
   area: { type: String, default: "" },
   unit: { type: String, required: true },
   depth: { type: String, default: "" },
@@ -32,7 +35,7 @@ const estimateItemSchema = new mongoose.Schema({
   amount: { type: Number, required: true },
   disc: { type: Number, required: true },
   tax: { type: Number, required: true },
-  gstRate: { type: String, required: true },
+  gstRate: { type: String, default: "" },
   cgst: { type: String, default: "" },
   cgst_per: { type: String, default: "9" },
   igst_per: { type: String, default: "9" },
