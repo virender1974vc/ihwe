@@ -101,6 +101,13 @@ const InvoiceSchema = new mongoose.Schema(
     company_name: { type: String },
     company_addr: { type: String },
     company_gst_no: { type: String },
+    // Snapshotted from the source estimate (or the live company profile) at
+    // creation time — this wins over the live Company profile when displaying
+    // the invoice later, since the profile's primary contact can change after
+    // the invoice was issued.
+    company_contact_person: { type: String, default: "" },
+    company_contact_mobile: { type: String, default: "" },
+    company_email: { type: String, default: "" },
     event_name: { type: String },
     event_place_of_supply: { type: String },
     event_gst_no: { type: String },
