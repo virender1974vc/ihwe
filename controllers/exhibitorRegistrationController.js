@@ -2,6 +2,7 @@ const exhibitorRegistrationService = require('../services/exhibitorRegistrationS
 const { logActivity } = require('../utils/logger');
 const ExhibitorRegistration = require('../models/ExhibitorRegistration');
 const PreviousExhibition = require('../models/PreviousExhibition');
+const { resolveLocationCodes } = require('../utils/resolveLocationCodes');
 
 const toPublicUploadPath = (filePath = '') => {
     const normalized = String(filePath).replace(/\\/g, '/');
@@ -68,11 +69,13 @@ class ExhibitorRegistrationController {
                     .populate('eventId', 'name startDate endDate location venue paymentPlans')
                     .lean();
                 if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
+                await resolveLocationCodes(registration);
                 return res.status(200).json({ success: true, data: registration });
             }
 
             const registration = await exhibitorRegistrationService.getRegistrationById(req.params.id);
             if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
+            await resolveLocationCodes(registration);
             res.status(200).json({ success: true, data: registration });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
