@@ -117,6 +117,7 @@ const InvoiceSchema = new mongoose.Schema(
     consignee_person: { type: String, default: "" },
     consignee_phone: { type: String, default: "" },
     billing_address: { type: String },
+    billing_city: { type: String },
     billing_state: { type: String },
     billing_pincode: { type: String },
 

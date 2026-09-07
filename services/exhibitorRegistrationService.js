@@ -786,12 +786,17 @@ class ExhibitorRegistrationService {
             try {
                 const Company = require('../models/Company');
                 const crmEvent = await resolveCrmEventForRegistration(data.eventId);
-                const companyUpdate = crmEvent?._id
-                    ? {}
-                    : ((isAdminRegistration || isCommittedRegistration) ? {
-                        exhibitorRegistrationId: saved._id,
-                        companyStatus: boundStatus
-                    } : {});
+                // This flat pointer is read all over the codebase (invoices, estimates,
+                // payments, delivery challans, MSME PMS lookup, ...) as THE shortcut to
+                // "the exhibitor registration for this company" — it must stay populated
+                // even when the booking is event-scoped, or all of those reads silently
+                // find nothing despite eventAssignments[].exhibitorRegistrationId (set
+                // below) being correct. Previously this was only set when no CRM event
+                // resolved, which left it null for the now-standard event-scoped path.
+                const companyUpdate = (isAdminRegistration || isCommittedRegistration) ? {
+                    exhibitorRegistrationId: saved._id,
+                    companyStatus: boundStatus
+                } : {};
 
                 if (data.exhibitorName) companyUpdate.companyName = data.exhibitorName;
                 if (data.website) companyUpdate.website = data.website;
