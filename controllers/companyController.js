@@ -1378,6 +1378,42 @@ const getPaidCompanyIdSet = async (companies, eventId) => {
   return paidIds;
 };
 
+// "Booked" (has a stand) is independent of "Paid" — a company can pay via
+// PI/Estimate before ever booking a stand. Booked is true when either the
+// event assignment status says so, or the linked ExhibitorRegistration
+// already has a stall number assigned.
+const getBookedCompanyIdSet = async (companies, eventId) => {
+  const ExhibitorRegistration = require("../models/ExhibitorRegistration");
+
+  const registrationIds = companies
+    .map((company) => (company.eventAssignments || []).find(
+      (item) => String(item.eventId) === String(eventId),
+    )?.exhibitorRegistrationId)
+    .filter(Boolean);
+
+  const bookedRegistrations = registrationIds.length
+    ? await ExhibitorRegistration.find({
+      _id: { $in: registrationIds },
+      $or: [
+        { "participation.stallNo": { $nin: [null, ""] } },
+        { "participation.stallFor": { $nin: [null, ""] } },
+      ],
+    }).select("_id").lean()
+    : [];
+  const bookedRegistrationIds = new Set(bookedRegistrations.map((reg) => String(reg._id)));
+
+  const bookedCompanyIds = new Set();
+  companies.forEach((company) => {
+    const assignment = (company.eventAssignments || []).find(
+      (item) => String(item.eventId) === String(eventId),
+    );
+    const bookedByStatus = BOOKED_STATUS_REGEX.test(assignment?.status || "");
+    const bookedByRegistration = bookedRegistrationIds.has(String(assignment?.exhibitorRegistrationId || ""));
+    if (bookedByStatus || bookedByRegistration) bookedCompanyIds.add(String(company._id));
+  });
+  return bookedCompanyIds;
+};
+
 // Shared shape for both "Converted" and "Booked": a Company matched by its
 // per-event assignment, merged with whatever ExhibitorRegistration it links
 // to (so the existing exhibitor-registration-shaped table UI keeps working).
@@ -1428,9 +1464,12 @@ const buildRoleScopedElemMatch = (eventId, username, role) => {
   return elemMatch;
 };
 
-// "Converted" = a Payment has actually come in for this event — status is
-// irrelevant (it can be set by hand without a real Payment ever being
-// logged, so it isn't trusted on its own).
+// "Converted" = a Payment has actually come in for this event AND a stand
+// has actually been booked. Status is irrelevant on its own (it can be set
+// by hand without a real Payment ever being logged). Payment alone is also
+// not enough: a PI/Estimate can be paid before any stand is booked, and
+// until a stand is booked that company is not yet an exhibitor — it stays
+// in Hot Leads instead (see getHotLeadCompanies).
 const getConvertedCompanies = async (req, res) => {
   try {
     const { eventId } = req.query;
@@ -1442,8 +1481,12 @@ const getConvertedCompanies = async (req, res) => {
     // salesperson/forwardTo user viewing the CRM.
     const elemMatch = { eventId };
     const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
-    const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
-    const companies = candidates.filter((company) => paidCompanyIds.has(String(company._id)));
+    const [paidCompanyIds, bookedCompanyIds] = await Promise.all([
+      getPaidCompanyIdSet(candidates, eventId),
+      getBookedCompanyIdSet(candidates, eventId),
+    ]);
+    const companies = candidates.filter((company) => paidCompanyIds.has(String(company._id))
+      && bookedCompanyIds.has(String(company._id)));
 
     const data = await buildEventCompanyResponse(companies, eventId, () => true, "Converted");
     return res.status(200).json({ success: true, data, total: data.length });
@@ -1453,10 +1496,12 @@ const getConvertedCompanies = async (req, res) => {
   }
 };
 
-// "Booked" = eventAssignments.status is "Booked" for this event AND no
-// Payment has come in yet. The moment a Payment appears, a company leaves
-// this list and starts showing up in Converted instead — both are live
-// queries, so there's no explicit "move" step.
+// "Booked" = the company has a stand (eventAssignments.status says so, OR
+// the linked registration already has a stall number — see
+// getBookedCompanyIdSet) for this event AND no Payment has come in yet. The
+// moment a Payment appears, a company leaves this list and starts showing up
+// in Converted instead — both are live queries, so there's no explicit
+// "move" step.
 // "Booking Confirmed" is the canonical post-Book-A-Stand lifecycle. Keep the
 // two historical values readable so existing bookings do not disappear.
 // Payment still exclusively controls the move from Bookings to Converted.
@@ -1470,19 +1515,21 @@ const getBookedCompanies = async (req, res) => {
     }
 
     // Bookings are shared event-wide so accounts and operations can see every
-    // confirmed booking, irrespective of lead ownership.
+    // confirmed booking, irrespective of lead ownership. Fetch every company
+    // assigned to the event, then apply the shared "Booked" definition so a
+    // company booked via the online flow (which sets the stall number
+    // without touching eventAssignments.status) still shows up here instead
+    // of falling through the cracks.
     const elemMatch = { eventId };
-    elemMatch.status = { $regex: BOOKED_STATUS_REGEX };
-    const candidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
-    const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
-    const companies = candidates.filter((company) => !paidCompanyIds.has(String(company._id)));
+    const allCandidates = await Company.find({ eventAssignments: { $elemMatch: elemMatch } }).lean();
+    const [bookedCompanyIds, paidCompanyIds] = await Promise.all([
+      getBookedCompanyIdSet(allCandidates, eventId),
+      getPaidCompanyIdSet(allCandidates, eventId),
+    ]);
+    const companies = allCandidates.filter((company) => bookedCompanyIds.has(String(company._id))
+      && !paidCompanyIds.has(String(company._id)));
 
-    const data = await buildEventCompanyResponse(
-      companies,
-      eventId,
-      (status) => BOOKED_STATUS_REGEX.test(status),
-      "Booking Confirmed",
-    );
+    const data = await buildEventCompanyResponse(companies, eventId, () => true, "Booking Confirmed");
     return res.status(200).json({ success: true, data, total: data.length });
   } catch (error) {
     console.error("Error fetching booked companies:", error);
@@ -1490,11 +1537,13 @@ const getBookedCompanies = async (req, res) => {
   }
 };
 
-// "Hot Lead" = a PI/Estimate has been raised for this event and no Payment
-// has come in yet — independent of eventAssignments.status. A lead can sit
-// in any pipeline status (New Lead, Follow-up, Contacted...) and still be
-// Hot the moment a commercial document exists for it; once it's paid it
-// belongs in Converted instead, not here.
+// "Hot Lead" = a PI/Estimate has been raised for this event and the company
+// has not booked a stand yet — independent of Payment. A lead can sit in any
+// pipeline status (New Lead, Follow-up, Contacted...) and still be Hot the
+// moment a commercial document exists for it. Paying (via PI/Estimate) does
+// NOT by itself graduate a company out of Hot Leads: a company that has paid
+// but has no stand booked yet is not an exhibitor yet, so it stays here
+// until a stand is actually booked, at which point it moves to Converted.
 const getHotLeadCompanies = async (req, res) => {
   try {
     const { eventId, username = "", role = "" } = req.query;
@@ -1515,33 +1564,8 @@ const getHotLeadCompanies = async (req, res) => {
       eventAssignments: { $elemMatch: elemMatch },
     }).lean();
 
-    const ExhibitorRegistration = require("../models/ExhibitorRegistration");
-    const linkedRegistrationIds = candidates
-      .map((company) => (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId),
-      )?.exhibitorRegistrationId)
-      .filter(Boolean);
-    const bookedRegistrations = linkedRegistrationIds.length
-      ? await ExhibitorRegistration.find({
-        _id: { $in: linkedRegistrationIds },
-        $or: [
-          { "participation.stallNo": { $nin: [null, ""] } },
-          { "participation.stallFor": { $nin: [null, ""] } },
-        ],
-      }).select("_id").lean()
-      : [];
-    const bookedRegistrationIds = new Set(
-      bookedRegistrations.map((registration) => String(registration._id)),
-    );
-    const paidCompanyIds = await getPaidCompanyIdSet(candidates, eventId);
-    const companies = candidates.filter((company) => {
-      const assignment = (company.eventAssignments || []).find(
-        (item) => String(item.eventId) === String(eventId),
-      );
-      return !BOOKED_STATUS_REGEX.test(assignment?.status || "")
-        && !bookedRegistrationIds.has(String(assignment?.exhibitorRegistrationId || ""))
-        && !paidCompanyIds.has(String(company._id));
-    });
+    const bookedCompanyIds = await getBookedCompanyIdSet(candidates, eventId);
+    const companies = candidates.filter((company) => !bookedCompanyIds.has(String(company._id)));
 
     const data = await buildEventCompanyResponse(companies, eventId, () => true, "Hot Lead");
     return res.status(200).json({ success: true, data, total: data.length });
