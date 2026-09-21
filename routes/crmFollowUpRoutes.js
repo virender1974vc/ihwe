@@ -3,6 +3,13 @@ const router = express.Router();
 const Company = require("../models/Company");
 
 const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Full lead visibility (no forwardTo/added_by scoping) is limited to Super
+// Administrator and Sales Manager — every other role only sees leads
+// forwarded to them or that they personally added.
+const hasFullLeadAccess = (role) => {
+  const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, "") : "";
+  return cleanRole.includes("superadmin") || cleanRole.includes("salesmanager");
+};
 
 /**
  * GET /api/crm-follow-ups
@@ -58,10 +65,9 @@ router.get("/", async (req, res) => {
 
     // Authorization scope
     const lowerUsername = username ? username.toLowerCase() : null;
-    const cleanRole = role ? role.toLowerCase().replace(/[^a-z]/g, "") : "";
-    const isSuperAdmin = cleanRole.includes("superadmin");
+    const isFullAccessRole = hasFullLeadAccess(role);
 
-    if (lowerUsername && !isSuperAdmin) {
+    if (lowerUsername && !isFullAccessRole) {
       let lowerFullName = lowerUsername;
       try {
         const User = require("../models/User");
