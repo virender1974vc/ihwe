@@ -43,7 +43,9 @@ async function getExhibitorTemplateData() {
         };
 
         let headerImgPath = template.headerImage;
-
+        if (isBOE) {
+            headerImgPath = 'public/assets/emails/boe_header.png';
+        }
         const headerBuf = getImageBuffer(headerImgPath);
         const footerBuf = getImageBuffer(template.footerImage);
 
@@ -68,13 +70,15 @@ async function getExhibitorTemplateData() {
 }
 
 function resolvePlaceholderValue(key, data) {
+    const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
+
     const aliases = {
-        'EVENT_SHORT_DATE': data._dbShortDate || '15-17 May 2026',
-        'EVENT_DATE': data._dbShortDate || '15-17 May 2026',
-        'EVENT_VENUE': data._dbVenue || 'Hall Nos. 12, Pragati Maidan New Delhi – 110001, Delhi, India',
-        'TEAM_NAME': `Team ${data._dbShortName || 'IHWE'}`,
-        'EVENT_FULL_NAME': data._dbFullName || 'International Health & Wellness Expo 2026',
-        'EVENT_SUBTITLE': data._dbSubtitle || 'Global Health Connect',
+        'EVENT_SHORT_DATE': data._dbShortDate || (isBOE ? '20–22 March 2026' : '15-17 May 2026'),
+        'EVENT_DATE': data._dbShortDate || (isBOE ? '20–22 March 2026' : '15-17 May 2026'),
+        'EVENT_VENUE': data._dbVenue || (isBOE ? 'Hall No. 12, Pragati Maidain, New Delhi, India' : 'IICC, Yashobhoomi, New Delhi, India'),
+        'TEAM_NAME': `Team ${data._dbShortName || (isBOE ? 'BOE' : 'IHWE')}`,
+        'EVENT_FULL_NAME': data._dbFullName || (isBOE ? 'Bharat Organic Expo 2026' : 'International Health & Wellness Expo 2026'),
+        'EVENT_SUBTITLE': data._dbShortName ? `Organic Expo | ${data._dbShortName}` : (isBOE ? 'Organic Expo | BOE 2026' : 'Global Health Connect'),
         'NAME': data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : ''),
         'REG_ID': data.registrationId || data.regId || data.REG_ID || 'N/A',
         'SERVICE': data.service || data.proposedTopic || data.topic || 'IHWE Services',
@@ -151,10 +155,11 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
     const campaignEnvKey = AISENSY_CAMPAIGN_BY_FORM_TYPE[formType];
     if (!campaignEnvKey) return { skipped: true };
 
+    const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
     try {
         const EventModel = require('../../models/Event');
         const eventDocs = await EventModel.find({ status: 'active' });
-        const matchedEvent = eventDocs.find(e => e.paymentFilterName.toLowerCase().includes('ihwe'));
+        const matchedEvent = eventDocs.find(e => isBOE ? e.paymentFilterName.includes('BOE') : e.paymentFilterName.includes('IHWE'));
         if (matchedEvent) {
             const start = new Date(matchedEvent.startDate);
             const end = new Date(matchedEvent.endDate);
@@ -196,10 +201,11 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
 
 async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT', attachments = [], padding, notifyAdmin: shouldNotifyAdmin = true, whatsappOnly = false }) {
     try {
+        const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
         try {
             const EventModel = require('../../models/Event');
             const eventDocs = await EventModel.find({ status: 'active' });
-            const matchedEvent = eventDocs.find(e => e.paymentFilterName.includes('IHWE'));
+            const matchedEvent = eventDocs.find(e => isBOE ? e.paymentFilterName.includes('BOE') : e.paymentFilterName.includes('IHWE'));
             if (matchedEvent) {
                 const start = new Date(matchedEvent.startDate);
                 const end = new Date(matchedEvent.endDate);
@@ -239,6 +245,9 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
         let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
         let bodyContent = this.applyPlaceholders(rawBody, data);
 
+        if (isBOE) {
+            // Placeholder replacements are now handling the dynamic values
+        }
 
         const getImageBuffer = (imgPath) => {
             try {
@@ -250,7 +259,9 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
         };
 
         let headerImgPath = template.headerImage;
-
+        if (isBOE) {
+            headerImgPath = 'public/assets/emails/boe_header.png';
+        }
         const headerBuf = getImageBuffer(headerImgPath);
         const footerBuf = getImageBuffer(template.footerImage);
         const smallLogoBuf = getImageBuffer(template.smallLogo);
@@ -271,17 +282,17 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                     margin: 2,
                     color: { dark: '#000000', light: '#ffffff' }
                 });
-                const qrBlock = `
-                        <div style="text-align: center; margin: 25px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-                            <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
-                            <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
-                            <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
-                            <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
+                const qrImageOnly = `<img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="100" height="100" style="border:2px solid #23471d;border-radius:8px;display:inline-block;" />`;
+                const qrBlockFull = `
+                        <div style="text-align: center; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px;">
+                            <p style="font-weight:700;color:#23471d;margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
+                            ${qrImageOnly}
+                            <p style="margin:4px 0 0;font-size:10px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
                         </div>`;
                 if (bodyContent.includes(QR_TOKEN)) {
-                    bodyContent = bodyContent.replace(QR_TOKEN, qrBlock);
+                    bodyContent = bodyContent.replace(QR_TOKEN, qrImageOnly);
                 } else {
-                    bodyContent += qrBlock;
+                    bodyContent += qrBlockFull;
                 }
 
                 data.__qrBuffer = qrBuffer;
@@ -305,10 +316,10 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             headerCid: headerBuf ? 'email_header_img@ihwe.in' : null,
             footerCid: usesOwnFooter ? null : (footerBuf ? 'email_footer_img@ihwe.in' : null),
             smallLogoCid: smallLogoBuf ? 'email_small_logo_img@ihwe.in' : null,
-            headerImage: template.headerImage || null,
+            headerImage: isBOE ? 'public/assets/emails/boe_header.png' : (template.headerImage || null),
             footerImage: usesOwnFooter ? null : (template.footerImage || null),
             smallLogoImage: template.smallLogo || null,
-            padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : (usesOwnFooter ? '24px 20px 20px' : null)),
+            padding: padding || (formType === 'exhibitor-payment-receipt' ? '8px 20px 10px 20px' : (usesOwnFooter ? '24px 20px 20px' : '0px 20px 10px 20px')),
             hideFallbackFooter: formType === 'exhibitor-payment-receipt' || usesOwnFooter
         });
 
@@ -364,6 +375,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
             html,
             attachments: [...emailAttachments, ...attachments],
             profile,
+            customFromName: 'BOE Visitor Portal',
             logData: {
                 name: data.contact_person || data.firstName || data.name,
                 phone: data.mobile || data.phone,

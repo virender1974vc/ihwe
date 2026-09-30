@@ -36,8 +36,10 @@ exports.createGeneralVisitor = async (req, res) => {
     const registrationId = await generateRegistrationId("general", eventName);
     const normalizedBody = normalizeVisitorMultiSelectFields(req.body);
 
-    const visitor = new GeneralVisitor({ ...normalizedBody,
-        eventName: req.body.eventName || req.body.registrationFor || "IHWE", registrationId });
+    const visitor = new GeneralVisitor({
+      ...normalizedBody,
+      eventName: req.body.eventName || req.body.registrationFor || "IHWE", registrationId
+    });
     const siteUrl = process.env.SITE_URL ? process.env.SITE_URL.replace(/\/$/, '') : 'https://ihwe.in';
     const qrPayload = `${siteUrl}/visitor?id=${registrationId}`;
     visitor.qrCode = await qrcode.toDataURL(qrPayload);
@@ -57,11 +59,13 @@ exports.createGeneralVisitor = async (req, res) => {
       registrationId: saved.registrationId,
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
-        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
-};
+      eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+    };
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
-    emailService.sendVisitorRegistrationEmails(emailData).catch(err => {
+    const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+    const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+    emailSvc.sendVisitorRegistrationEmails(emailData).catch(err => {
       console.error("Error sending visitor registration notifications:", err);
     });
 
@@ -135,12 +139,14 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
         isResend: true,
-          eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
-};
+        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+      };
 
       if (sendEmail || sendWhatsapp) {
         try {
-          await emailService.sendVisitorRegistrationEmails(emailData);
+          const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+          const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+          await emailSvc.sendVisitorRegistrationEmails(emailData);
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (err) {
           console.error("Error resending visitor email:", err);
@@ -169,7 +175,11 @@ exports.bulkUploadGeneralVisitors = async (req, res) => {
     transformRow: (row, { parseList }) => normalizeVisitorMultiSelectFields({ ...row, registrationFor: row.registrationFor || "General Visitor", country: row.country || "India", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
     generateRegistrationId,
     buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "General Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["General Interest"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["General"], city: visitor.city || "N/A", country: visitor.country || "India", registrationId: visitor.registrationId, eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
-    sendNotification: (data) => emailService.sendVisitorRegistrationEmails(data, true),
+    sendNotification: (data) => {
+      const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
+      const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+      return emailSvc.sendVisitorRegistrationEmails(data, true);
+    },
     logActivity, activityLabel: "general",
   });
 };

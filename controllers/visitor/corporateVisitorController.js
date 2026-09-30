@@ -47,7 +47,7 @@ const createCorporateVisitor = async (req, res) => {
 
     const visitor = new CorporateVisitor({
       ...normalizedBody,
-        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
+      eventName: req.body.eventName || req.body.registrationFor || "IHWE",
       registrationId,
     });
 
@@ -76,12 +76,15 @@ const createCorporateVisitor = async (req, res) => {
       created_by: saved.created_by,
       eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
     };
-    emailService.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
+    const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+    const emailSvc = isBOE ? require('../../utils/organicEmailService') : emailService;
+
+    emailSvc.sendVisitorConfirmationOnly(emailData, 'corporate-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
     });
 
     // Send NEW detailed template to Admin (always)
-    emailService.sendDetailedVisitorNotification(emailData, 'admin').catch(err => {
+    emailSvc.sendDetailedVisitorNotification(emailData, 'admin').catch(err => {
       console.error("Error sending admin notification:", err);
     });
 
@@ -91,7 +94,7 @@ const createCorporateVisitor = async (req, res) => {
     // If B2B Meeting is "Yes" or "yes", send NEW detailed template to B2B Coordinator
     if (saved.b2bMeeting && saved.b2bMeeting.toLowerCase() === 'yes') {
       console.log('[DEBUG] B2B Meeting is Yes - sending to coordinator');
-      emailService.sendDetailedVisitorNotification(emailData, 'b2b').catch(err => {
+      emailSvc.sendDetailedVisitorNotification(emailData, 'b2b').catch(err => {
         console.error("Error sending B2B coordinator notification:", err);
       });
     } else {
@@ -191,7 +194,9 @@ const bulkResendCorporateVisitorMessages = async (req, res) => {
 
       if (sendEmail || sendWhatsapp) {
         try {
-          await emailService.sendVisitorRegistrationEmails(emailData);
+          const isBOE = (emailData.eventName && (emailData.eventName.includes('BOE') || emailData.eventName.includes('Bharat Organic'))) || req.body.domainName === 'boe';
+          const emailSvc = isBOE ? require('../../utils/organicEmailService') : emailService;
+          await emailSvc.sendVisitorRegistrationEmails(emailData);
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (err) {
           console.error("Error resending visitor messages:", err);
@@ -220,7 +225,11 @@ const uploadCorporateVisitors = async (req, res) => {
     transformRow: (row, { parseList }) => ({ ...row, registrationFor: row.registrationFor || "Corporate Visitor", country: row.country || "India", b2bMeeting: row.b2bMeeting || "No", whatsappUpdates: row.whatsappUpdates || "Yes", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
     generateRegistrationId,
     buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "Corporate Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "India", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
-    sendNotification: (data) => emailService.sendVisitorConfirmationOnly(data, "corporate-visitor", true),
+    sendNotification: (data) => {
+      const isBOE = (data.eventName && (data.eventName.includes('BOE') || data.eventName.includes('Bharat Organic'))) || data.domainName === 'boe';
+      const emailSvc = isBOE ? require('../../utils/organicEmailService') : emailService;
+      return emailSvc.sendVisitorConfirmationOnly(data, "corporate-visitor", true);
+    },
     logActivity, activityLabel: "corporate",
   });
 };

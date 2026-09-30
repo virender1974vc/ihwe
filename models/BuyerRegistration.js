@@ -121,7 +121,8 @@ const buyerRegistrationSchema = new mongoose.Schema(
     password: { type: String, select: false },
     otp: { type: String, select: false },
     otpExpiry: { type: Date, select: false },
-
+    eventName: { type: String },
+    domainName: { type: String, default: "ihwe" }
 
   },
   { timestamps: true }

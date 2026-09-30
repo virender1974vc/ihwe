@@ -65,7 +65,7 @@ const createInternationalVisitor = async (req, res) => {
 
     const visitor = new InternationalVisitor({
       ...normalizedBody,
-        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
+      eventName: req.body.eventName || req.body.registrationFor || "IHWE",
       ...documentFields,
       registrationId,
     });
@@ -93,19 +93,22 @@ const createInternationalVisitor = async (req, res) => {
       companyName: saved.companyName || 'N/A',
       registrationDate: saved.createdAt,
       created_by: saved.created_by,
-        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
-};
+      eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+    };
 
-    emailService.sendVisitorConfirmationOnly(emailData, 'international-visitor').catch(err => {
+    const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+    const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+
+    emailSvc.sendVisitorConfirmationOnly(emailData, 'international-visitor').catch(err => {
       console.error("Error sending visitor registration notifications:", err);
     });
 
-    emailService.sendDetailedVisitorNotification(emailData, 'admin').catch(err => {
+    emailSvc.sendDetailedVisitorNotification(emailData, 'admin').catch(err => {
       console.error("Error sending admin notification:", err);
     });
 
     if (saved.b2bMeeting && saved.b2bMeeting.toLowerCase() === 'yes') {
-      emailService.sendDetailedVisitorNotification(emailData, 'b2b').catch(err => {
+      emailSvc.sendDetailedVisitorNotification(emailData, 'b2b').catch(err => {
         console.error("Error sending B2B coordinator notification:", err);
       });
     }
@@ -181,7 +184,11 @@ const bulkUploadInternationalVisitors = async (req, res) => {
     transformRow: (row, { parseList }) => normalizeVisitorMultiSelectFields({ ...row, registrationFor: row.registrationFor || "International Visitor", purposeOfVisit: parseList(row.purposeOfVisit), areaOfInterest: parseList(row.areaOfInterest), status: "New Reg." }),
     generateRegistrationId,
     buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "International Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "N/A", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
-    sendNotification: (data) => emailService.sendVisitorConfirmationOnly(data, "international-visitor", true),
+    sendNotification: (data) => {
+      const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
+      const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+      return emailSvc.sendVisitorConfirmationOnly(data, "international-visitor", true);
+    },
     logActivity, activityLabel: "international",
   });
 };
@@ -225,13 +232,15 @@ const bulkResendInternationalVisitorMessages = async (req, res) => {
         registrationDate: saved.createdAt,
         created_by: saved.created_by,
         isResend: true,
-          eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
-};
+        eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
+      };
 
       if (sendEmail || sendWhatsapp) {
         try {
           const whatsappOnly = !sendEmail;
-          await emailService.sendVisitorRegistrationEmails(emailData, whatsappOnly);
+          const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+          const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+          await emailSvc.sendVisitorRegistrationEmails(emailData, whatsappOnly);
           await new Promise(resolve => setTimeout(resolve, 1000));
         } catch (err) {
           console.error("Error resending visitor email:", err);

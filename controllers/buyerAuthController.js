@@ -32,8 +32,11 @@ class BuyerAuthController {
                 otpExpiry: new Date(Date.now() + 10 * 60 * 1000)
             });
 
+            const isBOE = buyer.eventName && buyer.eventName.includes('BOE') || buyer.domainName === 'boe';
+            const emailSvc = isBOE ? require('../utils/organicEmailService') : emailService;
+            
             // Send OTP via email
-            await emailService.sendOtpEmail(email, otp, buyer.companyName);
+            await emailSvc.sendOtpEmail(email, otp, buyer.companyName);
 
             res.status(200).json({
                 success: true,
@@ -101,8 +104,11 @@ class BuyerAuthController {
                 otpExpiry: new Date(Date.now() + 10 * 60 * 1000)
             });
 
+            const isBOE = buyer.eventName && buyer.eventName.includes('BOE') || buyer.domainName === 'boe';
+            const emailSvc = isBOE ? require('../utils/organicEmailService') : emailService;
+
             // Send OTP via email
-            await emailService.sendOtpEmail(email.trim().toLowerCase(), otp, buyer.companyName);
+            await emailSvc.sendOtpEmail(email.trim().toLowerCase(), otp, buyer.companyName);
 
             res.status(200).json({
                 success: true,
@@ -132,17 +138,20 @@ class BuyerAuthController {
                 otpExpiry: new Date(Date.now() + 10 * 60 * 1000)
             });
 
+            const isBOE = buyer.eventName && buyer.eventName.includes('BOE') || buyer.domainName === 'boe';
+            const emailSvc = isBOE ? require('../utils/organicEmailService') : emailService;
+
             // Try sending via WhatsApp if available
             try {
-                const { sendWhatsAppOTP } = require('../utils/whatsapp');
-                await sendWhatsAppOTP(mobile, otp, 'BUYER', buyer.companyName);
+                const waSvc = isBOE ? require('../utils/organicWhatsapp') : require('../utils/whatsapp');
+                await waSvc.sendWhatsAppOTP(mobile, otp, 'BUYER', buyer.companyName);
             } catch (waError) {
                 console.error("WhatsApp OTP failed:", waError.message);
             }
 
             // Also send via email
             if (buyer.emailAddress) {
-                await emailService.sendOtpEmail(buyer.emailAddress, otp, buyer.companyName);
+                await emailSvc.sendOtpEmail(buyer.emailAddress, otp, buyer.companyName);
             }
 
             res.status(200).json({

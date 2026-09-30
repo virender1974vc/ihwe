@@ -48,12 +48,15 @@ class BuyerRegistrationService {
         const randBuyer = Math.floor(100 + Math.random() * 899); // 3-digit random for a suffix
         const randTxn = Math.floor(1000 + Math.random() * 8999); // 4-digit random for txn
 
+        const isBoe = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.includes('Bharat Organic'))) || data.domainName === 'boe';
+        const prefix = isBoe ? 'BOE' : 'IHWE';
+
         if (!data.registrationId) {
-            data.registrationId = `IHWE/${year}/BYR-${randBuyer}`;
+            data.registrationId = `${prefix}/${year}/BYR-${randBuyer}`;
         }
 
         if (!data.transactionId) {
-            data.transactionId = `IHWE/${year}/TXN-${randTxn}`;
+            data.transactionId = `${prefix}/${year}/TXN-${randTxn}`;
         }
 
         // 3. Ensure registrationFee is set (or default to 0)
@@ -127,12 +130,14 @@ class BuyerRegistrationService {
         };
 
         // 1. Send Professional Confirmation to User (with QR)
-        emailService.sendVisitorConfirmationOnly(saved, 'buyer-registration').catch(err => {
+        const isBOE = saved.eventName?.toLowerCase().includes('boe') || saved.domainName === 'boe';
+        const emailSvc = isBOE ? require('../utils/organicEmailService') : emailService;
+        emailSvc.sendVisitorConfirmationOnly(saved, 'buyer-registration').catch(err => {
             console.error("User email fail:", err.message);
         });
 
         // 2. Send Detailed Alert to Admin
-        emailService.sendDetailedBuyerNotification(saved).catch(err => {
+        emailSvc.sendDetailedBuyerNotification(saved).catch(err => {
             console.error("Admin notification fail:", err.message);
         });
     }
