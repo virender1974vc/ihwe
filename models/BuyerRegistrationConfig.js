@@ -18,6 +18,8 @@ const PackageBenefitSchema = new mongoose.Schema({
 });
 
 const BuyerRegistrationConfigSchema = new mongoose.Schema({
+    // CrmEvent _id this config belongs to. null/missing = the global (all-events) config.
+    eventId: { type: String, default: null },
     companyTypes: [{ type: String }],
     annualTurnoverRanges: [{ type: String }],
     regions: [{ type: String }],

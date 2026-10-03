@@ -1,12 +1,39 @@
 const mongoose = require("mongoose");
 
+// Buyer leads live in this same collection (isLead: true) with only a few fields filled in.
+// The full-registration fields are required only for real registrations; when the
+// website/admin registration comes in for the same buyer, the lead is completed and isLead cleared.
+// A lead converted through Accounts (payment received) keeps its short record, so it stays exempt too.
+const requiredUnlessLead = function () { return !(this.isLead || this.convertedFromLead); };
+
 const buyerRegistrationSchema = new mongoose.Schema(
   {
+    // 0. CRM lead pipeline
+    isLead: { type: Boolean, default: false },
+    // Set when Accounts payments (not the website flow) moved this buyer to Converted.
+    accountsPaid: { type: Boolean, default: false },
+    convertedFromLead: { type: Boolean, default: false },
+    // "Converted" is not stored — a buyer is converted once paymentStatus === 'Completed'.
+    leadStatus: { type: String, enum: ['New Lead', 'Follow-Up', 'Proposal Sent', 'Hot Lead', 'Lost'], default: 'New Lead' },
+    followUpDate: { type: Date, default: null },
+    assignedTo: { type: String, trim: true },
+    leadSource: { type: String, trim: true },
+    createdBy: { type: String, default: null },
+    // Every pipeline update made from the Buyer Lead overview (status / follow-up / assignee / remark).
+    leadActivity: [{
+      status: { type: String },
+      remark: { type: String },
+      assignedTo: { type: String },
+      followUpDate: { type: Date },
+      by: { type: String },
+      at: { type: Date, default: Date.now },
+    }],
+
     // 1. Basic Business Information
     fullName: { type: String, required: false, trim: true }, // Legacy
     designation: { type: String, required: false, trim: true }, // Legacy
     companyName: { type: String, required: true, trim: true },
-    businessType: { type: String, required: true },
+    businessType: { type: String, required: requiredUnlessLead },
     companyFirmName: { type: String, required: false },
     basicBusinessType: { type: String, required: false },
     yearOfEstablishment: { type: String, required: false },
@@ -17,23 +44,23 @@ const buyerRegistrationSchema = new mongoose.Schema(
     // 2. Contact Information
     mobileNumber: { type: String, required: true, trim: true },
     alternateNumber: { type: String, trim: true },
-    emailAddress: { type: String, required: true, trim: true, lowercase: true },
+    emailAddress: { type: String, required: requiredUnlessLead, trim: true, lowercase: true },
     website: { type: String, trim: true },
-    registeredAddress: { type: String, required: true },
-    pinCode: { type: String, required: true },
+    registeredAddress: { type: String, required: requiredUnlessLead },
+    pinCode: { type: String, required: requiredUnlessLead },
     country: { type: String, required: false },
-    stateProvince: { type: String, required: true },
-    city: { type: String, required: true },
+    stateProvince: { type: String, required: requiredUnlessLead },
+    city: { type: String, required: requiredUnlessLead },
 
     // 3. Business Profile
     natureOfBusiness: { type: String, required: false },
     yearsInBusiness: { type: String, required: false },
     numberOfOutlets: { type: String, required: false },
-    annualTurnover: { type: String, required: true },
+    annualTurnover: { type: String, required: requiredUnlessLead },
     buyerIndustry: { type: String },
 
     // 4. Sourcing & Buying Interests
-    primaryProductInterest: { type: String, required: true },
+    primaryProductInterest: { type: String, required: requiredUnlessLead },
     secondaryProductCategories: { type: [String], default: [] },
     specificProductRequirements: { type: String },
     estimatedPurchaseVolume: { type: String },
@@ -52,9 +79,9 @@ const buyerRegistrationSchema = new mongoose.Schema(
 
     // 6. Purchase Intent & Capacity
     buyingFrequency: { type: String, required: false }, // One-time / Monthly / Quarterly / Long-term
-    estimatedAnnualPurchaseValue: { type: String, required: true },
-    purchaseTimeline: { type: String, required: true }, // Immediate / 1–3 Months / 3–6 Months / Exploring
-    roleInPurchaseDecision: { type: String, required: true }, // Final Decision Maker / Influencer / Research Only
+    estimatedAnnualPurchaseValue: { type: String, required: requiredUnlessLead },
+    purchaseTimeline: { type: String, required: requiredUnlessLead }, // Immediate / 1–3 Months / 3–6 Months / Exploring
+    roleInPurchaseDecision: { type: String, required: requiredUnlessLead }, // Final Decision Maker / Influencer / Research Only
     experienceWithIndianSuppliers: { type: String }, // First time / Regular / Limited / None
 
     // 7. Matchmaking Interest
@@ -95,9 +122,9 @@ const buyerRegistrationSchema = new mongoose.Schema(
     remarks: { type: String },
 
     // 15. Paid Registration Details
-    registrationCategory: { type: String, required: true }, // Standard / VIP / Hosted
+    registrationCategory: { type: String, required: requiredUnlessLead }, // Standard / VIP / Hosted
     registrationFee: { type: String, required: false, default: "0" }, // Made optional to avoid validation errors
-    paymentMode: { type: String, required: true }, // UPI / Card / Net Banking
+    paymentMode: { type: String, required: requiredUnlessLead }, // UPI / Card / Net Banking
     transactionId: { type: String },
     paymentProof: { type: String }, // File path for screenshot
 

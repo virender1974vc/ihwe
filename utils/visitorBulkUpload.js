@@ -203,6 +203,16 @@ async function processVisitorBulkUpload({
     });
   }
 
+  // Event chosen in the upload dialog applies to every row, overriding the
+  // template's registrationFor column / type default.
+  const chosenEvent = String(req.body?.eventName || "").trim();
+  if (chosenEvent) {
+    prepared.forEach((item) => {
+      item.data.eventName = chosenEvent;
+      item.data.registrationFor = chosenEvent;
+    });
+  }
+
   const saveResults = await runWithConcurrency(prepared, 8, async (item) => {
       const registrationId = await generateRegistrationId(registrationType, item.data.eventName || item.data.registrationFor || "");
       const siteUrl = (process.env.SITE_URL || "https://ihwe.in").replace(/\/$/, "");

@@ -2515,6 +2515,10 @@ class PDFGenerator {
                 // Narration
                 const resolvedStallSize = stallSizeFromDoc || p.stallSize;
                 const stallSizeText = resolvedStallSize ? `${Number(resolvedStallSize).toLocaleString('en-IN')} Sq. Mt.` : 'N/A';
+                // Buyer receipts are for a Buyer Pass, not a stall.
+                const isBuyerReceipt = !!registration.isBuyerReceipt;
+                const bookingItemText = isBuyerReceipt ? 'Buyer Pass' : stallSizeText;
+                const bookingItemSuffix = isBuyerReceipt ? '' : ' stall';
                 const narrationEventName = eventName
                     .replace(/\s*\(?\d{1,2}\s*[-–]\s*\d{1,2}\s+[A-Za-z]+\s+\d{4}\)?\s*/g, '')
                     .replace(/IHWE\s+Global Edition/i, 'IHWE – Global Edition')
@@ -2537,7 +2541,7 @@ class PDFGenerator {
                                     : 'advance payment';
                 const narrationInvoiceValue = fmt(grandTotal);
                 const narrationPaymentDate = formatLongDate(accountPayment?.payment_date || accountPayment?.neft_date || m.paidAt || registration.updatedAt || Date.now());
-                const defaultNarrationText = sentenceCase(`Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${stallSizeText} stall for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received via ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`);
+                const defaultNarrationText = sentenceCase(`Being ${receiptPaymentKind} received from M/s ${clean(registration.exhibitorName, 'N/A')} against Proforma Invoice No. ${paymentAgainst} towards booking of a ${bookingItemText}${bookingItemSuffix} for the ${narrationEventName || eventName}, scheduled from ${narrationEventRange} at ${narrationVenue}. Total Proforma Invoice Value: ${narrationInvoiceValue}. Payment received via ${narrationPaymentMode}${receivedBank !== '-' ? ` in ${receivedBank}` : ''} on ${narrationPaymentDate} vide Transaction No.: ${numericReference}.`);
                 const casedPaymentPrefix = sentenceCase(`Being ${receiptPaymentKind} received from M/s`);
                 // sentenceCase title-cases every word, so "full payment" becomes "Full
                 // Payment" inside the prefix. Splitting on the raw lower-case value found
@@ -2555,8 +2559,8 @@ class PDFGenerator {
                     { text: ' against Proforma Invoice No.' },
                     { text: ` ${paymentAgainst}`, bold: true },
                     { text: ` ${sentenceCase('towards booking of a')}` },
-                    { text: ` ${stallSizeText}`, bold: true },
-                    { text: ` ${sentenceCase(`stall for the ${narrationEventName || eventName}, scheduled from`)}` },
+                    { text: ` ${bookingItemText}`, bold: true },
+                    { text: ` ${sentenceCase(`${isBuyerReceipt ? '' : 'stall '}for the ${narrationEventName || eventName}, scheduled from`)}` },
                     { text: ` ${narrationEventRange}`, bold: true },
                     { text: ` ${sentenceCase(`at ${narrationVenue}. Total Proforma Invoice Value:`)}` },
                     { text: ` ${narrationInvoiceValue}`, bold: true },

@@ -5,7 +5,8 @@ const qrcode = require('qrcode');
 
 class InternationalBuyerService {
     async getAllRegistrations() {
-        return await InternationalBuyer.find().sort({ createdAt: -1 });
+        // Open leads (not yet registered) are managed on the Buyer Leads pages.
+        return await InternationalBuyer.find({ isLead: { $ne: true } }).sort({ createdAt: -1 });
     }
 
     async getRegistrationById(id) {
@@ -14,7 +15,7 @@ class InternationalBuyerService {
 
     async addRegistration(data) {
         // Generate a unique registration ID
-        const count = await InternationalBuyer.countDocuments();
+        const count = await InternationalBuyer.countDocuments({ isLead: { $ne: true } });
         const registrationId = `INTL-BUY-${2026}-${(count + 1).toString().padStart(4, '0')}`;
         
         let qrCodeDataURI = '';
@@ -29,11 +30,27 @@ class InternationalBuyerService {
             console.error("QR Code Generation failed:", err.message);
         }
 
-        const registration = new InternationalBuyer({
-            ...data,
-            registrationId,
-            qrCode: qrCodeDataURI
-        });
+        // Same buyer already captured as a lead (same mobile/email)? Complete that record
+        // instead of creating a second one — leads and registrations share this collection.
+        const contact = data.primaryContact || {};
+        const matchers = [];
+        if (contact.mobileNumber) matchers.push({ 'primaryContact.mobileNumber': contact.mobileNumber });
+        if (contact.emailId) matchers.push({ 'primaryContact.emailId': String(contact.emailId).trim().toLowerCase() });
+        const existingLead = matchers.length
+            ? await InternationalBuyer.findOne({ isLead: true, $or: matchers })
+            : null;
+
+        let registration;
+        if (existingLead) {
+            existingLead.set({ ...data, isLead: false, registrationId, qrCode: qrCodeDataURI });
+            registration = existingLead;
+        } else {
+            registration = new InternationalBuyer({
+                ...data,
+                registrationId,
+                qrCode: qrCodeDataURI
+            });
+        }
         const saved = await registration.save();
 
         // Send Notifications

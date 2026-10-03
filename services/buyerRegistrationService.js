@@ -70,7 +70,22 @@ class BuyerRegistrationService {
             console.error("Failed to generate QR code for buyer", err);
         }
 
-        const newRegistration = new BuyerRegistration(data);
+        // Same buyer already captured as a lead (same mobile/email)? Complete that
+        // record instead of creating a second one — leads and registrations share this collection.
+        const matchers = [];
+        if (data.mobileNumber) matchers.push({ mobileNumber: data.mobileNumber });
+        if (data.emailAddress) matchers.push({ emailAddress: String(data.emailAddress).trim().toLowerCase() });
+        const existingLead = matchers.length
+            ? await BuyerRegistration.findOne({ isLead: true, $or: matchers })
+            : null;
+
+        let newRegistration;
+        if (existingLead) {
+            existingLead.set({ ...data, isLead: false });
+            newRegistration = existingLead;
+        } else {
+            newRegistration = new BuyerRegistration(data);
+        }
         const saved = await newRegistration.save();
         saved.eventName = data.eventName || 'IHWE 2026';
 
@@ -172,7 +187,8 @@ class BuyerRegistrationService {
      * Get all buyer registrations.
      */
     async getAllRegistrations() {
-        return await BuyerRegistration.find().sort({ createdAt: -1 });
+        // Open leads (not yet registered) are managed on the Buyer Leads pages.
+        return await BuyerRegistration.find({ isLead: { $ne: true } }).sort({ createdAt: -1 });
     }
 
     async getRegistrationById(id) {

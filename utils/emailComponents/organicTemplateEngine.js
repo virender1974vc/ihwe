@@ -78,7 +78,7 @@ function resolvePlaceholderValue(key, data) {
         'EVENT_VENUE': data._dbVenue || (isBOE ? 'Hall No. 12, Pragati Maidain, New Delhi, India' : 'IICC, Yashobhoomi, New Delhi, India'),
         'TEAM_NAME': `Team ${data._dbShortName || (isBOE ? 'BOE' : 'IHWE')}`,
         'EVENT_FULL_NAME': data._dbFullName || (isBOE ? 'Bharat Organic Expo 2026' : 'International Health & Wellness Expo 2026'),
-        'EVENT_SUBTITLE': data._dbShortName ? `Organic Expo | ${data._dbShortName}` : (isBOE ? 'Organic Expo | BOE 2026' : 'Global Health Connect'),
+        'EVENT_SUBTITLE': data._dbShortName ? `Organic Expo | ${data._dbShortName}` : (isBOE ? 'Organic Expo | BOE 2027' : 'Global Health Connect'),
         'NAME': data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : ''),
         'REG_ID': data.registrationId || data.regId || data.REG_ID || 'N/A',
         'SERVICE': data.service || data.proposedTopic || data.topic || 'IHWE Services',

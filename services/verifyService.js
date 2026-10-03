@@ -27,7 +27,7 @@ class VerifyService {
 
         const isBOE = eventName && eventName.includes('BOE');
         const expoTitle = isBOE ? 'Bharat Organic Expo' : '9th International Health & Wellness Expo';
-        const expoSubtitle = isBOE ? 'Organic Expo | BOE 2026' : 'Global Health Connect | IHWE 2026';
+        const expoSubtitle = isBOE ? 'Organic Expo | BOE 2027' : 'Global Health Connect | IHWE 2026';
         const teamName = isBOE ? 'Team BOE' : 'Team IHWE';
         const teamSubTitle = isBOE ? 'Bharat Organic Expo' : 'International Health & Wellness Expo';
         const teamSubSubTitle = isBOE ? '' : 'Global Health Connect';

@@ -1,4 +1,5 @@
 const XLSX = require("xlsx");
+const { findBuyerAsCompany } = require('../utils/buyerAsCompany');
 const fs = require("fs");
 const mongoose = require("mongoose");
 const Company = require("../models/Company.js");
@@ -516,6 +517,8 @@ const getCompanyById = async (req, res) => {
       if (company) {
         return res.status(200).json({ ...company.toObject(), _source: 'exhibitorRegistration' });
       }
+      const buyerAsCompany = await findBuyerAsCompany(req.params.id);
+      if (buyerAsCompany) return res.status(200).json(buyerAsCompany);
       return res.status(404).json({ message: "Company not found" });
     }
     const plain = company.toObject();
@@ -783,6 +786,9 @@ const lookupCompanyOrExhibitor = async (req, res) => {
       await resolveLocationCodes(data);
       return res.status(200).json(data);
     }
+
+    const buyerAsCompany = await findBuyerAsCompany(id);
+    if (buyerAsCompany) return res.status(200).json(buyerAsCompany);
 
     return res.status(404).json({ message: "Client not found" });
   } catch (error) {

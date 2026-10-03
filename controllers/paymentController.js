@@ -1,4 +1,6 @@
 const Payment = require("../models/Payment");
+const { syncBuyerPaymentStatus } = require("../utils/buyerPaymentSync");
+const { findBuyerAsCompany } = require("../utils/buyerAsCompany");
 const Invoice = require("../models/Invoice");
 const Estimate = require("../models/Estimate");
 const PerformaInvoice = require("../models/PerformaInvoice");
@@ -144,6 +146,7 @@ const getReceiptContact = async (payment) => {
   let gstNo = "";
   let rmName = "";
   let website = "";
+  let isBuyer = false;
 
   if (exhibitor) {
     const contact1 = exhibitor.contact1 || {};
@@ -183,9 +186,28 @@ const getReceiptContact = async (payment) => {
     gstNo = company.gstNumber || "";
     rmName = company.added_by || "";
     website = company.website || "";
+  } else if (companyId) {
+    // Buyer billed through Accounts (companyId = buyer _id): take the client details from the buyer record.
+    const buyer = await findBuyerAsCompany(companyId);
+    if (buyer) {
+      const contact = buyer.contacts?.[0] || {};
+      email = contact.email || buyer.email || "";
+      mobile = contact.mobile || buyer.mobile || "";
+      name = contact.name || buyer.contactPerson || buyer.companyName || "Contact";
+      designation = contact.designation || "";
+      companyName = buyer.companyName || companyName;
+      address = buyer.address || "";
+      city = buyer.city || "";
+      state = buyer.state || "";
+      country = buyer.country || "";
+      pincode = buyer.pincode || "";
+      gstNo = buyer.gstNo || "";
+      website = buyer.website || "";
+      isBuyer = true;
+    }
   }
 
-  return { email, mobile, name, designation, companyName, address, city, state, country, pincode, gstNo, rmName, website, exhibitor };
+  return { email, mobile, name, designation, companyName, address, city, state, country, pincode, gstNo, rmName, website, exhibitor, isBuyer };
 };
 
 const DEFAULT_RECEIPT_EVENT = {
@@ -323,6 +345,7 @@ const generateAccountPaymentReceipt = async (payment) => {
     },
     eventId: eventDoc,
     isGenericInvoice: true,
+    isBuyerReceipt: !!contact.isBuyer,
     participation: {
       currency: "INR",
       stallFor: documentNo,
@@ -417,6 +440,8 @@ const resolvePaymentAccount = async (payment) => {
 };
 
 const syncExhibitorFromAccountPayments = async (companyId) => {
+  // Buyers share the Accounts documents; payment received moves them to Converted.
+  await syncBuyerPaymentStatus(companyId);
   if (!companyId || !mongoose.Types.ObjectId.isValid(companyId)) return;
 
   let company = await Company.findById(companyId).lean();

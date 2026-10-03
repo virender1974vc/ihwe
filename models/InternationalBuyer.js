@@ -1,14 +1,37 @@
 const mongoose = require("mongoose");
 
+// Buyer leads live in this same collection (isLead: true); full-registration fields are
+// required only for real registrations. "Converted" = paymentStatus === 'Completed'.
+// A lead converted through Accounts (payment received) keeps its short record, so it stays exempt too.
+const requiredUnlessLead = function () { return !(this.isLead || this.convertedFromLead); };
+
 const internationalBuyerSchema = new mongoose.Schema(
   {
+    isLead: { type: Boolean, default: false },
+    // Set when Accounts payments (not the website flow) moved this buyer to Converted.
+    accountsPaid: { type: Boolean, default: false },
+    convertedFromLead: { type: Boolean, default: false },
+    leadStatus: { type: String, enum: ['New Lead', 'Follow-Up', 'Proposal Sent', 'Hot Lead', 'Lost'], default: 'New Lead' },
+    followUpDate: { type: Date, default: null },
+    assignedTo: { type: String, trim: true },
+    leadSource: { type: String, trim: true },
+    createdBy: { type: String, default: null },
+    // Every pipeline update made from the Buyer Lead overview (status / follow-up / assignee / remark).
+    leadActivity: [{
+      status: { type: String },
+      remark: { type: String },
+      assignedTo: { type: String },
+      followUpDate: { type: Date },
+      by: { type: String },
+      at: { type: Date, default: Date.now },
+    }],
     eventName: { type: String },
     // Section 1 – Company Information
     brandName: { type: String, required: true, trim: true },
     legalEntityType: { 
       type: String
     },
-    countryOfRegistration: { type: String, required: true },
+    countryOfRegistration: { type: String, required: requiredUnlessLead },
     registrationStatus: { type: String, enum: ['India', 'Other Country'], default: 'Other Country' },
     yearOfEstablishment: { type: String },
     registrationNumber: { type: String },
@@ -18,10 +41,10 @@ const internationalBuyerSchema = new mongoose.Schema(
     natureOfBusiness: { type: [String], default: [] }, // Multiple: Manufacturer, Exporter, etc.
 
     // Section 2 – Registered Office Details
-    address: { type: String, required: true },
-    city: { type: String, required: true },
+    address: { type: String, required: requiredUnlessLead },
+    city: { type: String, required: requiredUnlessLead },
     stateProvince: { type: String },
-    country: { type: String, required: true },
+    country: { type: String, required: requiredUnlessLead },
     postalCode: { type: String },
     website: { type: String },
     linkedInPage: { type: String },
@@ -33,7 +56,7 @@ const internationalBuyerSchema = new mongoose.Schema(
       designation: { type: String },
       mobileNumber: { type: String, required: true },
       whatsappNumber: { type: String },
-      emailId: { type: String, required: true, lowercase: true }
+      emailId: { type: String, required: requiredUnlessLead, lowercase: true }
     },
 
     // Section 4 – Secondary Contact Person
