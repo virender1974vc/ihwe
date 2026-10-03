@@ -102,6 +102,7 @@ router.get("/", async (req, res) => {
 router.get("/achievement-revenue", require("../controllers/companyController.js").getAchievementRevenue);
 router.get("/leaderboard", require("../controllers/companyController.js").getSalesLeaderboard);
 router.get("/stats-summary", getCompanyStatsSummary);
+router.get("/filter-options", require("../controllers/companyController.js").getCompanyFilterOptions);
 router.get("/converted", getConvertedCompanies);
 router.get("/booked", getBookedCompanies);
 router.get("/hot-leads", getHotLeadCompanies);

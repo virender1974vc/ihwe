@@ -352,7 +352,7 @@ const getCompanies = async (req, res) => {
     // Just the matching ids — powers "select all N leads matching filters"
     // in Master Data's bulk-assign toolbar, without shipping full documents.
     if (idsOnly === 'true') {
-      const rows = await Company.find(query).select('_id').limit(5000).lean();
+      const rows = await Company.find(query).select('_id').limit(100000).lean();
       return res.status(200).json({ ids: rows.map((r) => r._id) });
     }
 
@@ -394,6 +394,30 @@ const getCompanies = async (req, res) => {
     });
   }
 };
+// Values for the Master Data filter dropdowns, taken from the whole collection (not from whichever
+// rows happen to be on screen). Case-insensitive duplicates are folded since the filters match that way.
+const getCompanyFilterOptions = async (req, res) => {
+  try {
+    const [sources, statuses, industries, handlers] = await Promise.all([
+      Company.distinct('dataSource'),
+      Company.distinct('companyStatus'),
+      Company.distinct('businessNature'),
+      Company.distinct('forwardTo'),
+    ]);
+    const tidy = (list) => {
+      const seen = new Map();
+      list.forEach((v) => {
+        const t = typeof v === 'string' ? v.trim() : '';
+        if (t && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+      });
+      return [...seen.values()].sort((a, b) => a.localeCompare(b));
+    };
+    res.status(200).json({ success: true, sources: tidy(sources), statuses: tidy(statuses), industries: tidy(industries), handlers: tidy(handlers) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching filter options', error: error.message });
+  }
+};
+
 const getCompanyStatsSummary = async (req, res) => {
   try {
     const { eventId, username, role, status } = req.query;
@@ -1586,6 +1610,7 @@ const getHotLeadCompanies = async (req, res) => {
 };
 
 module.exports = {
+  getCompanyFilterOptions,
   addCompany,
   getCompanies,
   getCompanyStatsSummary,
