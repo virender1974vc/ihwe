@@ -53,7 +53,7 @@ const createGroupVisitor = async (req, res) => {
 
         const group = new GroupVisitor({
             ...normalizedBody,
-        eventName: req.body.eventName || req.body.registrationFor || "IHWE",
+            eventName: req.body.eventName || req.body.registrationFor || "IHWE",
             groupRegistrationId,
             persons: membersWithIds,
             primaryeventName: saved.registrationFor || "", firstName: primary.firstName,
@@ -86,9 +86,12 @@ const createGroupVisitor = async (req, res) => {
                 groupRegistrationId: saved.groupRegistrationId,
                 totalMembers: saved.persons.length,
                 eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
-};
+            };
 
-            emailService
+            const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+            const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+
+            emailSvc
                 .sendVisitorConfirmationOnly(emailData, "corporate-visitor")
                 .catch((err) =>
                     console.error(`Error sending confirmation to ${member.email}:`, err)
@@ -115,16 +118,19 @@ const createGroupVisitor = async (req, res) => {
             totalMembers: saved.persons.length,
             created_by: saved.created_by,
             eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
-};
+        };
 
-        emailService
+        const isBOEAdmin = (adminEmailData.eventName && (adminEmailData.eventName.toLowerCase().includes('boe') || adminEmailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+        const adminEmailSvc = isBOEAdmin ? require("../../utils/organicEmailService") : emailService;
+
+        adminEmailSvc
             .sendDetailedVisitorNotification(adminEmailData, "admin")
             .catch((err) =>
                 console.error("Error sending admin group notification:", err)
             );
 
         if (saved.b2bMeeting && saved.b2bMeeting.toLowerCase() === "yes") {
-            emailService
+            adminEmailSvc
                 .sendDetailedVisitorNotification(adminEmailData, "b2b")
                 .catch((err) =>
                     console.error("Error sending B2B coordinator notification:", err)

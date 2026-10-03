@@ -1280,6 +1280,7 @@ const sendEmailInvoice = async (req, res) => {
 
 // ✅ EXPORT
 module.exports = {
+  buildInvoiceItemsFromEstimate,
   getAllInvoices,
   getInvoiceById,
   createInvoice,

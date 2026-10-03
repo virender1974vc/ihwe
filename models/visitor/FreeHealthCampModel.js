@@ -43,6 +43,7 @@ const FreeHealthCampSchema = new mongoose.Schema(
     subscribe: { type: Boolean, default: false },
     qrCode: { type: String },
     status: { type: String, default: "New Reg." },
+    domainName: { type: String, default: "ihwe" },
     created_by: { type: String, default: null },
     updated_by: { type: String, default: null },
   },

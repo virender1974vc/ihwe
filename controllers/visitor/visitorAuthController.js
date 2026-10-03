@@ -49,14 +49,17 @@ const sendVisitorOtp = async (req, res) => {
     });
 
     // 4. Send OTP via Email
-    const emailSent = await emailService.sendOtpEmail(visitor.email, otp, `${visitor.firstName} ${visitor.lastName}`, 'VISITOR');
-    
-    // 5. Send OTP via WhatsApp
-    const visitorName = `${visitor.firstName} ${visitor.lastName}`;
-    const waSent = await whatsapp.sendWhatsAppOTP(visitor.mobile, otp, 'VISITOR', visitorName);
+    const isBOE = (visitor.eventName && (visitor.eventName.toLowerCase().includes('boe') || visitor.eventName.toLowerCase().includes('bharat organic'))) || visitor.domainName === 'boe';
+    const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
+    const emailSent = await emailSvc.sendOtpEmail(visitor.email, otp, `${visitor.firstName} ${visitor.lastName}`, 'VISITOR');
 
-    res.json({ 
-      success: true, 
+    // 5. Send OTP via WhatsApp
+    const waSvc = isBOE ? require("../../utils/organicWhatsapp") : whatsapp;
+    const visitorName = `${visitor.firstName} ${visitor.lastName}`;
+    const waSent = await waSvc.sendWhatsAppOTP(visitor.mobile, otp, 'VISITOR', visitorName);
+
+    res.json({
+      success: true,
       message: "Verification code sent to your registered Email and WhatsApp",
       data: {
         toEmail: visitor.email.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
@@ -94,7 +97,7 @@ const verifyVisitorOtp = async (req, res) => {
     }
 
     if (!visitor) {
-        return res.status(404).json({ success: false, message: "Visitor record no longer exists" });
+      return res.status(404).json({ success: false, message: "Visitor record no longer exists" });
     }
 
     // Clear OTP after successful verification

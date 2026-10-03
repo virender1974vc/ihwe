@@ -7,7 +7,18 @@ class InternationalBuyerRegistrationConfigController {
 
     async getConfig(req, res) {
         try {
-            let config = await InternationalBuyerRegistrationConfig.findOne();
+            const eventId = req.query.eventId || null;
+            let config = await InternationalBuyerRegistrationConfig.findOne({ eventId });
+
+            // First visit to an event's config: start from a copy of the global one.
+            if (!config && eventId) {
+                const base = await InternationalBuyerRegistrationConfig.findOne({ eventId: null });
+                if (base) {
+                    const { _id, createdAt, updatedAt, __v, ...fields } = base.toObject();
+                    config = new InternationalBuyerRegistrationConfig({ ...fields, eventId });
+                    await config.save();
+                }
+            }
 
             // Dynamically load Active records from admin-managed collections
             const BusinessType = require('../models/add_by_admin/BusinessType');
@@ -120,6 +131,7 @@ class InternationalBuyerRegistrationConfigController {
 
             if (!config) {
                 config = new InternationalBuyerRegistrationConfig({
+                    eventId,
                     companyTypes: ["Importer", "Distributor", "Retailer", "Wholesaler", "Hospital", "Wellness Center", "Others"],
                     annualTurnoverRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
                     regions: ["Global", "North America", "Europe", "Asia", "Middle East", "Africa"],
@@ -164,9 +176,10 @@ class InternationalBuyerRegistrationConfigController {
 
     async updateConfig(req, res) {
         try {
-            let config = await InternationalBuyerRegistrationConfig.findOne();
+            const eventId = req.query.eventId || null;
+            let config = await InternationalBuyerRegistrationConfig.findOne({ eventId });
             if (!config) {
-                config = new InternationalBuyerRegistrationConfig(req.body);
+                config = new InternationalBuyerRegistrationConfig({ ...req.body, _id: undefined, eventId });
             } else {
                 const fields = [
                     'companyTypes', 'annualTurnoverRanges', 'regions', 'supplierTypes', 

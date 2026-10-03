@@ -3,7 +3,7 @@ const { secondaryDB } = require("../../config/secondaryDb");
 
 const GroupMemberSchema = new mongoose.Schema(
     {
-    eventName: { type: String },
+        eventName: { type: String },
         registrationId: { type: String },
         firstName: { type: String, required: true, trim: true },
         lastName: { type: String, required: true, trim: true },
@@ -11,6 +11,7 @@ const GroupMemberSchema = new mongoose.Schema(
         designation: { type: String },
         email: { type: String, required: true, trim: true, lowercase: true },
         mobileNo: { type: String, required: true, trim: true },
+        domainName: { type: String, default: "ihwe" },
     },
     { _id: true }
 );

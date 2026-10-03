@@ -7,7 +7,18 @@ class BuyerRegistrationConfigController {
 
     async getConfig(req, res) {
         try {
-            let config = await BuyerRegistrationConfig.findOne();
+            const eventId = req.query.eventId || null;
+            let config = await BuyerRegistrationConfig.findOne({ eventId });
+
+            // First visit to an event's config: start from a copy of the global one.
+            if (!config && eventId) {
+                const base = await BuyerRegistrationConfig.findOne({ eventId: null });
+                if (base) {
+                    const { _id, createdAt, updatedAt, __v, ...fields } = base.toObject();
+                    config = new BuyerRegistrationConfig({ ...fields, eventId });
+                    await config.save();
+                }
+            }
 
             // Dynamically load Active records from admin-managed collections
             const BusinessType = require('../models/add_by_admin/BusinessType');
@@ -120,6 +131,7 @@ class BuyerRegistrationConfigController {
 
             if (!config) {
                 config = new BuyerRegistrationConfig({
+                    eventId,
                     companyTypes: ["Importer", "Distributor", "Retailer", "Wholesaler", "Hospital", "Wellness Center", "Others"],
                     annualTurnoverRanges: ["< 10 Lakhs", "10 - 50 Lakhs", "50 Lakhs - 1 Crore", "1 - 5 Crores", "5 - 10 Crores", "> 10 Crores"],
                     regions: ["North India", "South India", "East India", "West India", "Pan India", "Global"],
@@ -221,9 +233,10 @@ class BuyerRegistrationConfigController {
      */
     async updateConfig(req, res) {
         try {
-            let config = await BuyerRegistrationConfig.findOne();
+            const eventId = req.query.eventId || null;
+            let config = await BuyerRegistrationConfig.findOne({ eventId });
             if (!config) {
-                config = new BuyerRegistrationConfig(req.body);
+                config = new BuyerRegistrationConfig({ ...req.body, _id: undefined, eventId });
             } else {
                 // Update fields
                 const { companyTypes, annualTurnoverRanges, regions, supplierTypes, purchaseTimelines, roles, secondaryProductCategories, buyingFrequencies, annualPurchaseValueRanges, primaryProductInterests, budgetRanges, purchaseFrequencyOptions, businessModelOptions, meetingCategoryOptions, meetingDayOptions, exhibitorTypeOptions, companySizes, certificationOptions, numberOfMeetingsOptions, meetingObjectiveOptions, preferredBusinessTypeOptions, packages, stateCodes, lastUpdatedBy } = req.body;
