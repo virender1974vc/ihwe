@@ -1,3 +1,4 @@
+const { getPeriodRange } = require('../utils/periodRange');
 const XLSX = require("xlsx");
 const { findBuyerAsCompany } = require('../utils/buyerAsCompany');
 const fs = require("fs");
@@ -71,13 +72,43 @@ const withEventLifecycle = (company, eventId) => {
     socialMediaType: assignment.socialMediaType || company.socialMediaType,
     referralName: assignment.referralName || company.referralName,
     referralMobile: assignment.referralMobile || company.referralMobile,
-    reminder: assignment.reminder || company.reminder,
+    // Prefer this event's own follow-up date over a company-level reminder left by another event.
+    reminder: assignment.reminder || assignment.followUpDate || company.reminder,
     followUpDate: assignment.followUpDate || company.followUpDate,
     forwardTo: assignment.forwardTo || company.forwardTo,
     exhibitorRegistrationId: assignment.exhibitorRegistrationId || company.exhibitorRegistrationId,
     activeEventId: assignment.eventId,
     eventLifecycle: assignment,
   };
+};
+
+// Adds `lastConversation` ({ by, type, at, message, status }) to each row: the newest CRM
+// review (status update / call / WhatsApp / email) logged for that company, scoped to the
+// event when one is given. `by` is the user who handled that conversation.
+const attachLastConversation = async (rows, eventId) => {
+  const list = Array.isArray(rows) ? rows : [];
+  const ids = [...new Set(list.map((r) => String(r.clientId || r.companyId || r._id || '')).filter(Boolean))];
+  if (ids.length === 0) return list;
+  try {
+    const CrmReview = require('../models/CrmExhibatorReview2023');
+    const match = { cmpny_id: { $in: ids } };
+    if (eventId) match.evnt_id = String(eventId);
+    const latest = await CrmReview.aggregate([
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: '$cmpny_id', doc: { $first: '$$ROOT' } } },
+    ]);
+    const byCompany = new Map(latest.map((x) => [x._id, x.doc]));
+    return list.map((r) => {
+      const d = byCompany.get(String(r.clientId || r.companyId || r._id || ''));
+      return d
+        ? { ...r, lastConversation: { by: d.updated_by || '', type: d.type || 'status', at: d.createdAt, message: d.re_msg || '', status: d.status_short || '' } }
+        : r;
+    });
+  } catch (err) {
+    console.error('attachLastConversation failed:', err.message);
+    return list;
+  }
 };
 
 // ➤ Add new company
@@ -200,7 +231,7 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, forwardTo, eventId, state, city } = req.query;
+    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, followUpFrom, followUpTo, forwardTo, eventId, state, city } = req.query;
 
     let query = {};
 
@@ -236,7 +267,10 @@ const getCompanies = async (req, res) => {
 
       const scopedAssigneeCondition = eventId
         ? { eventAssignments: { $elemMatch: { eventId, forwardTo: { $in: userRegexes } } } }
-        : { forwardTo: { $in: userRegexes } };
+        : dashboard === 'true'
+          // Dashboard also covers leads this user holds through any event assignment.
+          ? { $or: [{ forwardTo: { $in: userRegexes } }, { 'eventAssignments.forwardTo': { $in: userRegexes } }] }
+          : { forwardTo: { $in: userRegexes } };
       const authOr = [
         scopedAssigneeCondition,
         {
@@ -269,26 +303,36 @@ const getCompanies = async (req, res) => {
     }
 
     // Filters
+    // Event-scoped filters (status / source / owner / follow-up date) must all match the
+    // SAME event assignment, so they are collected into one $elemMatch instead of each
+    // overwriting query.eventAssignments.
+    const eventMatch = eventId ? { eventId } : null;
     if (status) {
       const statuses = status.split(',').map(s => new RegExp(`^${escapeRegex(s.trim())}$`, 'i'));
-      if (eventId) {
-        query.eventAssignments = { $elemMatch: { eventId, status: { $in: statuses } } };
-      } else {
-        query.companyStatus = { $in: statuses };
-      }
+      if (eventMatch) eventMatch.status = { $in: statuses };
+      else query.companyStatus = { $in: statuses };
     }
     if (source) {
       const sourceRegex = new RegExp(`^${escapeRegex(source)}$`, 'i');
-      if (eventId) {
-        query.eventAssignments = { $elemMatch: { eventId, dataSource: sourceRegex } };
-      } else query.dataSource = sourceRegex;
+      if (eventMatch) eventMatch.dataSource = sourceRegex;
+      else query.dataSource = sourceRegex;
     }
     if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
     if (forwardTo) {
       const assigneeRegex = new RegExp(`^${escapeRegex(forwardTo)}$`, 'i');
-      if (eventId) {
-        query.eventAssignments = { $elemMatch: { eventId, forwardTo: assigneeRegex } };
-      } else query.forwardTo = assigneeRegex;
+      if (eventMatch) eventMatch.forwardTo = assigneeRegex;
+      else query.forwardTo = assigneeRegex;
+    }
+    // Follow-up date range (reminder or followUpDate) — used by the Follow-Ups list.
+    if (followUpFrom || followUpTo) {
+      const range = {};
+      if (followUpFrom) range.$gte = new Date(followUpFrom);
+      if (followUpTo) { const e = new Date(followUpTo); e.setUTCHours(23, 59, 59, 999); range.$lte = e; }
+      if (eventMatch) eventMatch.$or = [{ followUpDate: range }, { reminder: range }];
+      else mergeOrCondition(query, [{ followUpDate: range }, { reminder: range }]);
+    }
+    if (eventMatch && Object.keys(eventMatch).length > 1) {
+      query.eventAssignments = { $elemMatch: eventMatch };
     }
     // state/city come from the CrmState/CrmCity reference lists (state_id /
     // city_id backed dropdowns) — matched by name since Company itself still
@@ -342,7 +386,7 @@ const getCompanies = async (req, res) => {
     // Keeps the raw-doc payload small; exact totals still come from stats-summary.
     if (dashboard === 'true') {
       const companies = await Company.find(query)
-        .select('companyName companyStatus forwardTo added_by contacts reminder updatedAt lastNote eventAssignments')
+        .select('companyName companyStatus forwardTo added_by contacts reminder followUpDate createdAt updatedAt lastNote eventAssignments')
         .sort({ createdAt: -1 })
         .limit(3000)
         .lean();
@@ -352,7 +396,7 @@ const getCompanies = async (req, res) => {
     // Just the matching ids — powers "select all N leads matching filters"
     // in Master Data's bulk-assign toolbar, without shipping full documents.
     if (idsOnly === 'true') {
-      const rows = await Company.find(query).select('_id').limit(5000).lean();
+      const rows = await Company.find(query).select('_id').limit(100000).lean();
       return res.status(200).json({ ids: rows.map((r) => r._id) });
     }
 
@@ -375,7 +419,7 @@ const getCompanies = async (req, res) => {
         .lean();
 
       return res.status(200).json({
-        data: companies.map((company) => withEventLifecycle(company, eventId)),
+        data: await attachLastConversation(companies.map((company) => withEventLifecycle(company, eventId)), eventId),
         pagination: {
           total,
           page: pageNum,
@@ -394,6 +438,30 @@ const getCompanies = async (req, res) => {
     });
   }
 };
+// Values for the Master Data filter dropdowns, taken from the whole collection (not from whichever
+// rows happen to be on screen). Case-insensitive duplicates are folded since the filters match that way.
+const getCompanyFilterOptions = async (req, res) => {
+  try {
+    const [sources, statuses, industries, handlers] = await Promise.all([
+      Company.distinct('dataSource'),
+      Company.distinct('companyStatus'),
+      Company.distinct('businessNature'),
+      Company.distinct('forwardTo'),
+    ]);
+    const tidy = (list) => {
+      const seen = new Map();
+      list.forEach((v) => {
+        const t = typeof v === 'string' ? v.trim() : '';
+        if (t && !seen.has(t.toLowerCase())) seen.set(t.toLowerCase(), t);
+      });
+      return [...seen.values()].sort((a, b) => a.localeCompare(b));
+    };
+    res.status(200).json({ success: true, sources: tidy(sources), statuses: tidy(statuses), industries: tidy(industries), handlers: tidy(handlers) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching filter options', error: error.message });
+  }
+};
+
 const getCompanyStatsSummary = async (req, res) => {
   try {
     const { eventId, username, role, status } = req.query;
@@ -1220,31 +1288,9 @@ const getAchievementRevenue = async (req, res) => {
     };
 
     // Date filtering
-    const now = new Date();
-    if (period === 'today') {
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
-    } else if (period === 'this_week') {
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday start
-      startOfWeek.setHours(0, 0, 0, 0);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      query.createdAt = { $gte: startOfWeek, $lte: endOfWeek };
-    } else if (period === 'this_month' || period === 'current_month') {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      query.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
-    } else if (period === 'this_year') {
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-      query.createdAt = { $gte: startOfYear, $lte: endOfYear };
-    } else if (period === 'previous_month') {
-      const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      query.createdAt = { $gte: startOfPrevMonth, $lte: endOfPrevMonth };
+    if (period) {
+      const { start, end } = getPeriodRange(period);
+      query.createdAt = { $gte: start, $lt: end };
     }
 
     // 3. Find converted registrations and calculate total revenue
@@ -1276,31 +1322,9 @@ const getSalesLeaderboard = async (req, res) => {
     const ExhibitorRegistration = require('../models/ExhibitorRegistration');
     const query = { status: { $in: ['confirmed', 'paid', 'advance-paid'] } };
 
-    const now = new Date();
-    if (period === 'today') {
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-      query.createdAt = { $gte: startOfDay, $lte: endOfDay };
-    } else if (period === 'this_week') {
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday start
-      startOfWeek.setHours(0, 0, 0, 0);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      query.createdAt = { $gte: startOfWeek, $lte: endOfWeek };
-    } else if (period === 'this_month' || period === 'current_month') {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      query.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
-    } else if (period === 'this_year') {
-      const startOfYear = new Date(now.getFullYear(), 0, 1);
-      const endOfYear = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-      query.createdAt = { $gte: startOfYear, $lte: endOfYear };
-    } else if (period === 'previous_month') {
-      const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-      query.createdAt = { $gte: startOfPrevMonth, $lte: endOfPrevMonth };
+    if (period) {
+      const { start, end } = getPeriodRange(period);
+      query.createdAt = { $gte: start, $lt: end };
     }
 
     // 3. Fetch converted registrations first
@@ -1577,7 +1601,10 @@ const getHotLeadCompanies = async (req, res) => {
     const bookedCompanyIds = await getBookedCompanyIdSet(candidates, eventId);
     const companies = candidates.filter((company) => !bookedCompanyIds.has(String(company._id)));
 
-    const data = await buildEventCompanyResponse(companies, eventId, () => true, "Hot Lead");
+    const data = await attachLastConversation(
+      await buildEventCompanyResponse(companies, eventId, () => true, "Hot Lead"),
+      eventId,
+    );
     return res.status(200).json({ success: true, data, total: data.length });
   } catch (error) {
     console.error("Error fetching hot lead companies:", error);
@@ -1586,6 +1613,7 @@ const getHotLeadCompanies = async (req, res) => {
 };
 
 module.exports = {
+  getCompanyFilterOptions,
   addCompany,
   getCompanies,
   getCompanyStatsSummary,
