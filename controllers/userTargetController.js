@@ -1,3 +1,4 @@
+const { getPeriodRange, getTargetBucket } = require('../utils/periodRange');
 const UserTarget = require('../models/UserTarget');
 const CrmUser = require('../models/CrmUser');
 const User = require('../models/User');
@@ -150,20 +151,8 @@ class UserTargetController {
                 const [year, monthIndex] = targetMonth.split('-').map(Number);
                 start = new Date(year, monthIndex - 1, 1, 0, 0, 0, 0);
                 end = new Date(year, monthIndex, 1, 0, 0, 0, 0);
-            } else if (period === 'today') {
-                start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-                end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-            } else if (period === 'this_week') {
-                const day = now.getDay() || 7; // Sunday is 0, make it 7 for ISO week
-                start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1, 0, 0, 0);
-                end = new Date(now.getFullYear(), now.getMonth(), start.getDate() + 7, 0, 0, 0);
-            } else if (period === 'this_year') {
-                start = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
-                end = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0);
             } else {
-                // Default to this month
-                start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-                end = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
+                ({ start, end } = getPeriodRange(period));
             }
 
             const target = await UserTarget.findOne({
@@ -172,10 +161,7 @@ class UserTargetController {
             }).sort({ createdAt: -1 });
             let targetObj = { callTarget: 0, whatsappTarget: 0, emailTarget: 0, meetingTarget: 0 };
             if (target) {
-                if (period === 'today') targetObj = target.daily;
-                else if (period === 'this_week') targetObj = target.weekly;
-                else if (period === 'this_year') targetObj = target.yearly;
-                else targetObj = target.monthly; // default
+                targetObj = target[getTargetBucket(period)] || targetObj;
             }
 
             const targets = {
@@ -196,8 +182,45 @@ class UserTargetController {
                 call: 0,
                 whatsapp: 0,
                 email: 0,
-                meeting: 0
+                meeting: 0,
+                statusUpdate: 0,
+                interested: 0
             };
+
+            // Status updates the user made in this period (stored as CRM reviews of type "status",
+            // keyed by the display name the user was logged in with).
+            const CrmReview = require('../models/CrmExhibatorReview2023');
+            const escapeRe = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRe(username)}$`, 'i') } }).select('username fullName name').lean();
+            const nameSet = [username, adminUser?.fullName, adminUser?.name].filter(Boolean);
+            const statusFilter = {
+                type: 'status',
+                updated_by: { $in: nameSet.map(n => new RegExp(`^${escapeRe(n.trim())}$`, 'i')) },
+                createdAt: { $gte: start, $lt: end }
+            };
+            completed.statusUpdate = await CrmReview.countDocuments(statusFilter);
+
+            // "Interested" = distinct clients for whom a Proforma Invoice was raised in this
+            // period, among the user's own clients (assigned to or added by them) or PIs they created.
+            const Company = require('../models/Company');
+            const PerformaInvoice = require('../models/PerformaInvoice');
+            const nameRegexes = nameSet.map(n => new RegExp(`^${escapeRe(n.trim())}$`, 'i'));
+            const myCompanies = await Company.find({
+                $or: [
+                    { forwardTo: { $in: nameRegexes } },
+                    { added_by: { $in: nameRegexes } },
+                    { 'eventAssignments.forwardTo': { $in: nameRegexes } }
+                ]
+            }).select('_id').lean();
+            const piIds = await PerformaInvoice.distinct('companyId', {
+                added: { $gte: start, $lt: end },
+                status: { $not: /cancel|delete/i },
+                $or: [
+                    { companyId: { $in: myCompanies.map(c => String(c._id)) } },
+                    { added_by: { $in: nameRegexes } }
+                ]
+            });
+            completed.interested = piIds.length;
 
             if (userId && userId !== 'undefined' && userId !== 'null') {
                 completed.call = await CallLog.countDocuments({ ...callFilter, callDate: { $gte: start, $lt: end } });
