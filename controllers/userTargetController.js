@@ -263,6 +263,13 @@ class UserTargetController {
             const companies = await Company.find({ _id: { $in: validIds } }).select('companyName').lean();
             const nameById = new Map(companies.map((c) => [String(c._id), c.companyName]));
 
+            // Event names come from the CrmEvent collection (by the review's evnt_id), not from the
+            // free-text event_name saved on the review, which can be stale.
+            const CrmEvent = require('../models/CrmEvent');
+            const eventIds = [...new Set(reviews.map((r) => r.evnt_id))].filter((id) => mongoose.Types.ObjectId.isValid(id));
+            const crmEvents = await CrmEvent.find({ _id: { $in: eventIds } }).select('event_name event_fullName').lean();
+            const eventNameById = new Map(crmEvents.map((e) => [String(e._id), e.event_fullName || e.event_name]));
+
             res.status(200).json({
                 success: true,
                 data: reviews.map((r) => ({
@@ -274,7 +281,7 @@ class UserTargetController {
                     forwardTo: r.forward_to || '',
                     followUpDate: r.follow_up_date || r.reminder_dt || '',
                     eventId: r.evnt_id || '',
-                    eventName: r.event_name || '',
+                    eventName: eventNameById.get(String(r.evnt_id)) || r.event_name || '',
                     by: r.updated_by || '',
                     at: r.createdAt,
                 })),
