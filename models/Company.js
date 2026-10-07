@@ -60,8 +60,18 @@ const CompanySchema = new mongoose.Schema(
       registrationEventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", default: null, set: blankToNull },
       lastRemark: { type: String, default: "" },
       convertedAt: { type: Date, default: null },
+      // When this lead was assigned to this event / to the current person, and by whom.
+      assignedAt: { type: Date, default: null },
+      assignedBy: { type: String, default: "" },
       createdAt: { type: Date, default: Date.now },
       updatedAt: { type: Date, default: Date.now },
+    }],
+    // Append-only log of every assignment: who it went to, for which event (null = event-agnostic), when, and by whom.
+    assignmentHistory: [{
+      eventId: { type: mongoose.Schema.Types.ObjectId, ref: "CrmEvent", default: null, set: blankToNull },
+      forwardTo: { type: String, default: "" },
+      assignedBy: { type: String, default: "" },
+      assignedAt: { type: Date, default: Date.now },
     }],
     reminder: { type: Date },
     companyStatus: { type: String, default: "New Lead" },
