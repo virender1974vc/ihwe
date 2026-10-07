@@ -43,7 +43,21 @@ const COMPANY_TO_EXHIBITOR_FIELD_MAP = {
   businessNature: "natureOfBusiness",
 };
 
-const buildEventAssignment = (payload, eventId) => ({
+// Who performed the action — same precedence the activity logger uses.
+const assignmentActor = (req) =>
+  String(
+    req?.body?.updated_by || req?.body?.added_by || req?.user?.fullName ||
+    req?.user?.user_fullname || req?.user?.name || req?.user?.username || "System",
+  ).trim();
+
+const assignmentHistoryEntry = (eventId, forwardTo, actor) => ({
+  eventId: eventId || null,
+  forwardTo: (forwardTo || "").trim(),
+  assignedBy: actor,
+  assignedAt: new Date(),
+});
+
+const buildEventAssignment = (payload, eventId, actor = "") => ({
   eventId,
   forwardTo: payload.forwardTo || "",
   status: payload.companyStatus || "New Lead",
@@ -56,6 +70,8 @@ const buildEventAssignment = (payload, eventId) => ({
   exhibitorRegistrationId: payload.exhibitorRegistrationId || null,
   registrationEventId: payload.registrationEventId || null,
   lastRemark: "",
+  assignedAt: new Date(),
+  assignedBy: actor || payload.added_by || "",
   updatedAt: new Date(),
 });
 
@@ -76,6 +92,8 @@ const withEventLifecycle = (company, eventId) => {
     reminder: assignment.reminder || assignment.followUpDate || company.reminder,
     followUpDate: assignment.followUpDate || company.followUpDate,
     forwardTo: assignment.forwardTo || company.forwardTo,
+    assignedAt: assignment.assignedAt || null,
+    assignedBy: assignment.assignedBy || '',
     exhibitorRegistrationId: assignment.exhibitorRegistrationId || company.exhibitorRegistrationId,
     activeEventId: assignment.eventId,
     eventLifecycle: assignment,
@@ -154,12 +172,16 @@ const addCompany = async (req, res) => {
               duplicateInEvent: true,
             });
           }
-          const assignment = buildEventAssignment(req.body, eventId);
+          const actor = assignmentActor(req);
+          const assignment = buildEventAssignment(req.body, eventId, actor);
           const linked = await Company.findOneAndUpdate(
             { _id: existing._id, "eventAssignments.eventId": { $ne: eventId } },
             {
               $addToSet: { events: eventId },
-              $push: { eventAssignments: assignment },
+              $push: {
+                eventAssignments: assignment,
+                assignmentHistory: assignmentHistoryEntry(eventId, req.body.forwardTo, actor),
+              },
             },
             { new: true, runValidators: true },
           );
@@ -198,7 +220,10 @@ const addCompany = async (req, res) => {
       ]));
       companyPayload.eventAssignments = [
         ...(companyPayload.eventAssignments || []),
-        buildEventAssignment(companyPayload, companyPayload.eventId),
+        buildEventAssignment(companyPayload, companyPayload.eventId, assignmentActor(req)),
+      ];
+      companyPayload.assignmentHistory = [
+        assignmentHistoryEntry(companyPayload.eventId, companyPayload.forwardTo, assignmentActor(req)),
       ];
     }
     const newCompany = new Company(companyPayload);
@@ -231,7 +256,7 @@ const addCompany = async (req, res) => {
 // ➤ Get all companies
 const getCompanies = async (req, res) => {
   try {
-    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, followUpFrom, followUpTo, forwardTo, eventId, state, city } = req.query;
+    const { search, status, source, industry, page, limit, countOnly, idsOnly, dashboard, username, role, startDate, endDate, followUpFrom, followUpTo, forwardTo, eventId, state, city, lastConversation, tzOffset, assignedSearch, handledBy } = req.query;
 
     let query = {};
 
@@ -313,11 +338,31 @@ const getCompanies = async (req, res) => {
       else query.companyStatus = { $in: statuses };
     }
     if (source) {
-      const sourceRegex = new RegExp(`^${escapeRegex(source)}$`, 'i');
-      if (eventMatch) eventMatch.dataSource = sourceRegex;
-      else query.dataSource = sourceRegex;
+      // Contains-match (typed into a column filter). Rows with no source are shown as
+      // "Website", so typing "website" must find them too.
+      const sourceRegex = new RegExp(escapeRegex(source.trim()), 'i');
+      const websiteLike = sourceRegex.test('Website');
+      const noSource = { $in: [null, ''] };
+      if (eventMatch) {
+        // Rows show the event's source, falling back to the company-level one when the
+        // event entry has none (see withEventLifecycle) — the filter must do the same.
+        const alternatives = [
+          { eventAssignments: { $elemMatch: { eventId, dataSource: sourceRegex } } },
+          { dataSource: sourceRegex, eventAssignments: { $elemMatch: { eventId, dataSource: noSource } } },
+        ];
+        if (websiteLike) alternatives.push({ dataSource: noSource, eventAssignments: { $elemMatch: { eventId, dataSource: noSource } } });
+        query.$and = [...(query.$and || []), { $or: alternatives }];
+      } else {
+        query.$and = [...(query.$and || []), { $or: websiteLike ? [{ dataSource: sourceRegex }, { dataSource: noSource }] : [{ dataSource: sourceRegex }] }];
+      }
     }
-    if (industry) query.businessNature = { $regex: new RegExp(`^${escapeRegex(industry)}$`, 'i') };
+    if (industry) query.businessNature = { $regex: new RegExp(escapeRegex(industry.trim()), 'i') };
+    // Assigned-to typed into a column filter: contains-match on the (event-scoped) assignee.
+    if (assignedSearch) {
+      const assigneeLike = new RegExp(escapeRegex(assignedSearch.trim()), 'i');
+      if (eventMatch) eventMatch.forwardTo = assigneeLike;
+      else query.forwardTo = assigneeLike;
+    }
     if (forwardTo) {
       const assigneeRegex = new RegExp(`^${escapeRegex(forwardTo)}$`, 'i');
       if (eventMatch) eventMatch.forwardTo = assigneeRegex;
@@ -364,6 +409,48 @@ const getCompanies = async (req, res) => {
       mergeOrCondition(query, searchOr);
     }
 
+    // Last-conversation filters. Both use the newest CRM review per company (same source as
+    // `lastConversation` on each row), falling back — like the table does — to the company's
+    // own last update / updated_by when the lead has no conversation yet.
+    //  • lastConversation = YYYY-MM-DD: that conversation was on this day. `tzOffset` is the
+    //    viewer's Date.getTimezoneOffset() so "that day" is their local day, not UTC.
+    //  • handledBy = text: who handled it (contains-match).
+    const lcDate = lastConversation && /^\d{4}-\d{2}-\d{2}$/.test(String(lastConversation)) ? String(lastConversation) : '';
+    const lcHandler = typeof handledBy === 'string' ? handledBy.trim() : '';
+    if (lcDate || lcHandler) {
+      const CrmReview = require('../models/CrmExhibatorReview2023');
+      const match = {};
+      if (eventId) match.evnt_id = String(eventId);
+      const latest = await CrmReview.aggregate([
+        { $match: match },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: '$cmpny_id', at: { $first: '$createdAt' }, by: { $first: '$updated_by' } } },
+      ]);
+      const reviewedIds = latest.map((x) => x._id);
+      if (lcDate) {
+        const offsetMs = (parseInt(tzOffset, 10) || 0) * 60000;
+        const dayStart = new Date(new Date(`${lcDate}T00:00:00.000Z`).getTime() + offsetMs);
+        const dayEnd = new Date(dayStart.getTime() + 86400000);
+        const inDay = latest.filter((x) => x.at >= dayStart && x.at < dayEnd).map((x) => x._id);
+        query.$and = [...(query.$and || []), {
+          $or: [
+            { _id: { $in: inDay } },
+            { _id: { $nin: reviewedIds }, updatedAt: { $gte: dayStart, $lt: dayEnd } },
+          ],
+        }];
+      }
+      if (lcHandler) {
+        const handlerRegex = new RegExp(escapeRegex(lcHandler), 'i');
+        const byHandler = latest.filter((x) => handlerRegex.test(x.by || '')).map((x) => x._id);
+        query.$and = [...(query.$and || []), {
+          $or: [
+            { _id: { $in: byHandler } },
+            { _id: { $nin: reviewedIds }, updated_by: handlerRegex },
+          ],
+        }];
+      }
+    }
+
     // A company's eventAssignments.status text (Follow-up, Contacted, New
     // Lead...) doesn't get updated once a real payment comes in for this
     // event — same gap fixed for Hot Leads in getPaidCompanyIdSet. Any
@@ -386,7 +473,7 @@ const getCompanies = async (req, res) => {
     // Keeps the raw-doc payload small; exact totals still come from stats-summary.
     if (dashboard === 'true') {
       const companies = await Company.find(query)
-        .select('companyName companyStatus forwardTo added_by contacts reminder followUpDate createdAt updatedAt lastNote eventAssignments')
+        .select('companyName companyStatus forwardTo added_by contacts reminder followUpDate createdAt updatedAt lastNote eventAssignments eventId events assignmentHistory')
         .sort({ createdAt: -1 })
         .limit(3000)
         .lean();
@@ -638,8 +725,11 @@ const addCompanyToEvent = async (req, res) => {
               status: 'New Lead',
               dataSource: 'Master Data Re-engagement',
               forwardTo: '',
+              assignedAt: new Date(),
+              assignedBy: assignmentActor(req),
               updatedAt: new Date(),
             },
+            assignmentHistory: assignmentHistoryEntry(eventId, '', assignmentActor(req)),
           },
         },
       );
@@ -662,16 +752,24 @@ const addCompanyToEvent = async (req, res) => {
 // have an entry for that event, and pushes a fresh entry for companies that
 // don't — across `companyIds`. Scoped strictly to `eventIds`, so assigning a
 // person for Organic Expo 2027 never touches an existing IHWE Expo 2026 entry.
-const upsertEventAssignments = async (companyIds, eventIds, forwardTo) => {
+const upsertEventAssignments = async (companyIds, eventIds, forwardTo, actor = "") => {
+  const person = typeof forwardTo === "string" ? forwardTo.trim() : "";
   for (const eventId of eventIds) {
-    if (typeof forwardTo === "string" && forwardTo.trim()) {
+    if (person) {
+      // Only companies whose assignee actually changes get a new date + history entry.
       await Company.updateMany(
-        { _id: { $in: companyIds }, "eventAssignments.eventId": eventId },
+        {
+          _id: { $in: companyIds },
+          eventAssignments: { $elemMatch: { eventId, forwardTo: { $ne: person } } },
+        },
         {
           $set: {
-            "eventAssignments.$.forwardTo": forwardTo.trim(),
+            "eventAssignments.$.forwardTo": person,
+            "eventAssignments.$.assignedAt": new Date(),
+            "eventAssignments.$.assignedBy": actor,
             "eventAssignments.$.updatedAt": new Date(),
           },
+          $push: { assignmentHistory: assignmentHistoryEntry(eventId, person, actor) },
         },
       );
     }
@@ -681,10 +779,13 @@ const upsertEventAssignments = async (companyIds, eventIds, forwardTo) => {
         $push: {
           eventAssignments: {
             eventId,
-            forwardTo: typeof forwardTo === "string" ? forwardTo.trim() : "",
+            forwardTo: person,
             status: "New Lead",
+            assignedAt: new Date(),
+            assignedBy: actor,
             updatedAt: new Date(),
           },
+          assignmentHistory: assignmentHistoryEntry(eventId, person, actor),
         },
       },
     );
@@ -708,11 +809,25 @@ const updateEventLifecycle = async (req, res) => {
       }
     });
 
+    // A changed assignee gets a fresh assigned-on date and a history entry.
+    const actor = assignmentActor(req);
+    const newAssignee = typeof req.body.forwardTo === "string" ? req.body.forwardTo.trim() : "";
+    let assigneeChanged = false;
+    if (newAssignee) {
+      const prior = await Company.findOne({ _id: id, "eventAssignments.eventId": eventId }).select("eventAssignments.$").lean();
+      assigneeChanged = !prior || (prior.eventAssignments?.[0]?.forwardTo || "").trim().toLowerCase() !== newAssignee.toLowerCase();
+      if (assigneeChanged) {
+        setFields["eventAssignments.$.assignedAt"] = new Date();
+        setFields["eventAssignments.$.assignedBy"] = actor;
+      }
+    }
+
     let company = await Company.findOneAndUpdate(
       { _id: id, "eventAssignments.eventId": eventId },
       {
         $set: setFields,
         $addToSet: { events: eventId },
+        ...(assigneeChanged ? { $push: { assignmentHistory: assignmentHistoryEntry(eventId, newAssignee, actor) } } : {}),
       },
       { returnDocument: "after" },
     ).lean();
@@ -723,12 +838,15 @@ const updateEventLifecycle = async (req, res) => {
       const assignment = buildEventAssignment({
         companyStatus: req.body.status,
         ...req.body,
-      }, eventId);
+      }, eventId, actor);
       company = await Company.findByIdAndUpdate(
         id,
         {
           $addToSet: { events: eventId },
-          $push: { eventAssignments: assignment },
+          $push: {
+            eventAssignments: assignment,
+            assignmentHistory: assignmentHistoryEntry(eventId, newAssignee, actor),
+          },
         },
         { returnDocument: "after" },
       ).lean();
@@ -764,7 +882,7 @@ const assignEventsToCompany = async (req, res) => {
 
     await Company.findByIdAndUpdate(req.params.id, { $addToSet: { events: { $each: eventIds } } });
 
-    await upsertEventAssignments([req.params.id], eventIds, forwardTo);
+    await upsertEventAssignments([req.params.id], eventIds, forwardTo, assignmentActor(req));
 
     const updated = await Company.findById(req.params.id);
     if (!updated) return res.status(404).json({ success: false, message: "Company not found" });
@@ -802,11 +920,17 @@ const bulkAssignCompanies = async (req, res) => {
         { _id: { $in: companyIds } },
         { $addToSet: { events: { $each: eventIds } } },
       );
-      await upsertEventAssignments(companyIds, eventIds, hasForwardTo ? forwardTo : "");
+      await upsertEventAssignments(companyIds, eventIds, hasForwardTo ? forwardTo : "", assignmentActor(req));
     }
 
     if (hasForwardTo && !hasEvents) {
-      result = await Company.updateMany({ _id: { $in: companyIds } }, { $set: { forwardTo: forwardTo.trim() } });
+      result = await Company.updateMany(
+        { _id: { $in: companyIds } },
+        {
+          $set: { forwardTo: forwardTo.trim() },
+          $push: { assignmentHistory: assignmentHistoryEntry(null, forwardTo, assignmentActor(req)) },
+        },
+      );
     }
 
     await logActivity(
@@ -915,7 +1039,16 @@ const updateCompany = async (req, res) => {
       }
     }
 
-    const updated = await Company.findByIdAndUpdate(req.params.id, req.body, {
+    // Event-agnostic reassignment: log it (eventId null) when the assignee actually changes.
+    const updateDoc = { ...req.body };
+    delete updateDoc.assignmentHistory;
+    if (typeof updateDoc.forwardTo === 'string' && updateDoc.forwardTo.trim()) {
+      const prior = await Company.findById(req.params.id).select('forwardTo').lean();
+      if (prior && (prior.forwardTo || '').trim().toLowerCase() !== updateDoc.forwardTo.trim().toLowerCase()) {
+        updateDoc.$push = { assignmentHistory: assignmentHistoryEntry(null, updateDoc.forwardTo, assignmentActor(req)) };
+      }
+    }
+    const updated = await Company.findByIdAndUpdate(req.params.id, updateDoc, {
       returnDocument: 'after',
     });
     if (!updated) return res.status(404).json({ message: "Company not found" });
@@ -1277,7 +1410,7 @@ const getAchievementRevenue = async (req, res) => {
     const companyIds = userCompanies.map(c => c._id.toString());
 
     if (companyIds.length === 0) {
-      return res.status(200).json({ success: true, revenue: 0 });
+      return res.status(200).json({ success: true, revenue: 0, registrations: [], dues: [], dueTotal: 0 });
     }
 
     // 2. Build the query for ExhibitorRegistration
@@ -1294,7 +1427,11 @@ const getAchievementRevenue = async (req, res) => {
     }
 
     // 3. Find converted registrations and calculate total revenue
-    const convertedRegistrations = await ExhibitorRegistration.find(query).select('financeBreakdown participation amountPaid');
+    const convertedRegistrations = await ExhibitorRegistration.find(query)
+      .select('financeBreakdown participation amountPaid exhibitorName eventId status createdAt spokenWith clientId')
+      .populate('eventId', 'name')
+      .sort({ createdAt: -1 })
+      .lean();
 
     let totalRevenue = 0;
     convertedRegistrations.forEach(reg => {
@@ -1302,7 +1439,63 @@ const getAchievementRevenue = async (req, res) => {
       totalRevenue += revenue;
     });
 
-    res.status(200).json({ success: true, revenue: totalRevenue, convertedCount: convertedRegistrations.length });
+    // Rows behind the dashboard's "Stall Booked" card: the converted clients.
+    const nameById = new Map(
+      (await Company.find({ _id: { $in: convertedRegistrations.map((r) => r.clientId).filter(Boolean) } }).select('companyName forwardTo').lean())
+        .map((c) => [String(c._id), c]),
+    );
+    const registrations = convertedRegistrations.map((reg) => {
+      const company = nameById.get(String(reg.clientId));
+      return {
+        _id: reg._id,
+        companyName: reg.exhibitorName || company?.companyName || '',
+        eventName: reg.eventId?.name || '',
+        // participation.stallNo can hold a stall record id — only show human-readable values.
+        stallNo: reg.participation?.stallFor || (/^[a-f0-9]{24}$/i.test(reg.participation?.stallNo || '') ? '' : (reg.participation?.stallNo || '')),
+        stallSize: reg.participation?.stallSize || 0,
+        amount: reg.amountPaid || reg.financeBreakdown?.subtotal || reg.participation?.total || 0,
+        status: reg.status,
+        bookedOn: reg.createdAt,
+        handledBy: company?.forwardTo || reg.spokenWith || '',
+      };
+    });
+
+    // Payments due: outstanding balance on the user's booked clients (not limited to the period).
+    const dueRegs = await ExhibitorRegistration.find({
+      clientId: { $in: companyIds },
+      status: { $in: ['confirmed', 'advance-paid', 'approved'] },
+    })
+      .select('exhibitorName eventId status amountPaid balanceAmount totalPayable financeBreakdown participation installments spokenWith clientId')
+      .populate('eventId', 'name')
+      .lean();
+    const dueCompanies = new Map(
+      (await Company.find({ _id: { $in: dueRegs.map((r) => r.clientId).filter(Boolean) } }).select('companyName forwardTo').lean())
+        .map((c) => [String(c._id), c]),
+    );
+    const dues = dueRegs.map((reg) => {
+      const unpaid = (reg.installments || []).filter((i) => i.status !== 'paid');
+      const total = reg.totalPayable || reg.financeBreakdown?.netPayable || reg.participation?.total || 0;
+      const paid = reg.amountPaid || 0;
+      const due = (reg.installments || []).length
+        ? unpaid.reduce((sum, i) => sum + Math.max((i.dueAmount || 0) - (i.paidAmount || 0), 0), 0)
+        : (reg.balanceAmount > 0 ? reg.balanceAmount : Math.max(total - paid, 0));
+      const nextDue = unpaid.map((i) => i.dueDate).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0] || null;
+      const company = dueCompanies.get(String(reg.clientId));
+      return {
+        _id: reg._id,
+        companyName: reg.exhibitorName || company?.companyName || '',
+        eventName: reg.eventId?.name || '',
+        total,
+        paid,
+        due,
+        status: reg.status,
+        nextDueDate: nextDue,
+        handledBy: company?.forwardTo || reg.spokenWith || '',
+      };
+    }).filter((d) => d.due > 0).sort((a, b) => b.due - a.due);
+    const dueTotal = dues.reduce((sum, d) => sum + d.due, 0);
+
+    res.status(200).json({ success: true, revenue: totalRevenue, convertedCount: convertedRegistrations.length, registrations, dues, dueTotal });
   } catch (err) {
     console.error("Error in getAchievementRevenue:", err);
     res.status(500).json({ success: false, message: "Error calculating revenue" });

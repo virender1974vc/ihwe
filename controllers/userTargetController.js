@@ -199,6 +199,8 @@ class UserTargetController {
                 createdAt: { $gte: start, $lt: end }
             };
             completed.statusUpdate = await CrmReview.countDocuments(statusFilter);
+            // Follow-up updates in this period: statuses Contacted / Follow-up.
+            completed.followUp = await CrmReview.countDocuments({ ...statusFilter, status_short: /^\s*(follow[\s-]?up|contacted)/i });
 
             // "Interested" = distinct clients for whom a Proforma Invoice was raised in this
             // period, among the user's own clients (assigned to or added by them) or PIs they created.
@@ -231,6 +233,139 @@ class UserTargetController {
             res.status(200).json({ success: true, targets, completed, periodRange: { start, end } });
         } catch (error) {
             console.error("Error fetching dashboard stats:", error);
+            res.status(500).json({ success: false, message: 'Server error' });
+        }
+    }
+
+    // Status updates the user made in a period (the rows behind "Calls Made" on the dashboard):
+    // which status they set, on which client, when.
+    async getStatusUpdates(req, res) {
+        try {
+            const { username, period } = req.query;
+            if (!username) {
+                return res.status(400).json({ success: false, message: 'username is required' });
+            }
+            const { start, end } = getPeriodRange(period);
+
+            const CrmReview = require('../models/CrmExhibatorReview2023');
+            const Company = require('../models/Company');
+            const escapeRe = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRe(username)}$`, 'i') } }).select('username fullName name').lean();
+            const nameSet = [username, adminUser?.fullName, adminUser?.name].filter(Boolean);
+
+            const reviews = await CrmReview.find({
+                type: 'status',
+                updated_by: { $in: nameSet.map((n) => new RegExp(`^${escapeRe(n.trim())}$`, 'i')) },
+                createdAt: { $gte: start, $lt: end },
+            }).sort({ createdAt: -1 }).limit(500).lean();
+
+            const validIds = [...new Set(reviews.map((r) => r.cmpny_id))].filter((id) => mongoose.Types.ObjectId.isValid(id));
+            const companies = await Company.find({ _id: { $in: validIds } }).select('companyName').lean();
+            const nameById = new Map(companies.map((c) => [String(c._id), c.companyName]));
+
+            res.status(200).json({
+                success: true,
+                data: reviews.map((r) => ({
+                    _id: r._id,
+                    companyId: r.cmpny_id,
+                    companyName: nameById.get(String(r.cmpny_id)) || '',
+                    status: r.status_short || '',
+                    remark: r.re_msg || '',
+                    forwardTo: r.forward_to || '',
+                    followUpDate: r.follow_up_date || r.reminder_dt || '',
+                    eventId: r.evnt_id || '',
+                    eventName: r.event_name || '',
+                    by: r.updated_by || '',
+                    at: r.createdAt,
+                })),
+            });
+        } catch (error) {
+            console.error('Error fetching status updates:', error);
+            res.status(500).json({ success: false, message: 'Server error' });
+        }
+    }
+
+    // The clients behind "Interested" on the dashboard (hot leads = a Proforma Invoice was raised in
+    // the period, among the user's own clients or PIs they created): last PI, amount, status,
+    // latest remark and who handles the client.
+    async getInterestedClients(req, res) {
+        try {
+            const { username, period } = req.query;
+            if (!username) {
+                return res.status(400).json({ success: false, message: 'username is required' });
+            }
+            const { start, end } = getPeriodRange(period);
+
+            const Company = require('../models/Company');
+            const PerformaInvoice = require('../models/PerformaInvoice');
+            const CrmReview = require('../models/CrmExhibatorReview2023');
+            const escapeRe = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const adminUser = await User.findOne({ username: { $regex: new RegExp(`^${escapeRe(username)}$`, 'i') } }).select('username fullName name').lean();
+            const nameRegexes = [username, adminUser?.fullName, adminUser?.name].filter(Boolean)
+                .map((n) => new RegExp(`^${escapeRe(n.trim())}$`, 'i'));
+
+            const myCompanies = await Company.find({
+                $or: [
+                    { forwardTo: { $in: nameRegexes } },
+                    { added_by: { $in: nameRegexes } },
+                    { 'eventAssignments.forwardTo': { $in: nameRegexes } },
+                ],
+            }).select('_id').lean();
+
+            const pis = await PerformaInvoice.find({
+                added: { $gte: start, $lt: end },
+                status: { $not: /cancel|delete/i },
+                $or: [
+                    { companyId: { $in: myCompanies.map((c) => String(c._id)) } },
+                    { added_by: { $in: nameRegexes } },
+                ],
+            }).sort({ added: -1 }).select('companyId pi_no finalAmount company_name event_name status added').lean();
+
+            // Latest PI per client.
+            const lastPiByCompany = new Map();
+            pis.forEach((pi) => { if (!lastPiByCompany.has(pi.companyId)) lastPiByCompany.set(pi.companyId, pi); });
+            const companyIds = [...lastPiByCompany.keys()];
+            const validIds = companyIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+            const companies = await Company.find({ _id: { $in: validIds } })
+                .select('companyName companyStatus forwardTo eventAssignments').lean();
+            const companyById = new Map(companies.map((c) => [String(c._id), c]));
+
+            const reviews = await CrmReview.aggregate([
+                { $match: { cmpny_id: { $in: companyIds }, type: 'status' } },
+                { $sort: { createdAt: -1 } },
+                { $group: { _id: '$cmpny_id', status: { $first: '$status_short' }, msg: { $first: '$re_msg' }, at: { $first: '$createdAt' } } },
+            ]);
+            const reviewById = new Map(reviews.map((r) => [r._id, r]));
+
+            const remarkOf = (msg) => {
+                const m = String(msg || '').match(/Remark:\s*([\s\S]*)$/i);
+                return m ? m[1].trim() : '';
+            };
+
+            const rows = companyIds.map((id) => {
+                const pi = lastPiByCompany.get(id);
+                const c = companyById.get(id);
+                const review = reviewById.get(id);
+                const latestAssignment = (c?.eventAssignments || []).filter((a) => a.forwardTo)
+                    .sort((x, y) => new Date(y.assignedAt || y.updatedAt || 0) - new Date(x.assignedAt || x.updatedAt || 0))[0];
+                return {
+                    _id: id,
+                    companyId: id,
+                    companyName: c?.companyName || pi.company_name || '',
+                    piNo: pi.pi_no,
+                    piAmount: pi.finalAmount || 0,
+                    piDate: pi.added,
+                    eventName: pi.event_name || '',
+                    status: review?.status || c?.companyStatus || '',
+                    remark: remarkOf(review?.msg),
+                    handledBy: c?.forwardTo || latestAssignment?.forwardTo || '',
+                };
+            }).sort((x, y) => new Date(y.piDate) - new Date(x.piDate));
+
+            res.status(200).json({ success: true, data: rows });
+        } catch (error) {
+            console.error('Error fetching interested clients:', error);
             res.status(500).json({ success: false, message: 'Server error' });
         }
     }
