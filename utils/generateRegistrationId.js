@@ -1,7 +1,8 @@
 const Counter = require("../models/visitor/CounterModel.js");
+const { isBoeEvent } = require("./isBoeEvent");
 
 const generateRegistrationId = async (type, eventName = '') => {
-  const isBOE = eventName && String(eventName).toUpperCase().includes('BOE');
+  const isBOE = isBoeEvent(eventName);
   const orgPrefix = isBOE ? 'BOE' : 'IHWE';
 
   const prefixMap = {
@@ -27,7 +28,8 @@ const generateRegistrationId = async (type, eventName = '') => {
 
   const currentYear = new Date().getFullYear().toString().slice(-2);
   const seriesNum = counter.seq > 100000 ? (counter.seq % 100000) : counter.seq;
-  const paddedSeq = String(seriesNum).padStart(4, '0');
+  // BOE series is 5 digits (00001); IHWE keeps its existing 4-digit format
+  const paddedSeq = String(seriesNum).padStart(isBOE ? 5 : 4, '0');
 
   return `${prefix}/${currentYear}/${paddedSeq}`;
 };

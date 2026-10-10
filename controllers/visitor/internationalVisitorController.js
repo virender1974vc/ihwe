@@ -1,4 +1,5 @@
 const InternationalVisitor = require("../../models/visitor/InternationalVisitorModel");
+const { isBoeEvent } = require("../../utils/isBoeEvent");
 const fs = require("fs");
 const emailService = require("../../utils/emailService");
 const { generateRegistrationId } = require("../../utils/generateRegistrationId");
@@ -96,7 +97,7 @@ const createInternationalVisitor = async (req, res) => {
       eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
     };
 
-    const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+    const isBOE = isBoeEvent(emailData.eventName || emailData.registrationFor, req.body.domainName);
     const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
 
     emailSvc.sendVisitorConfirmationOnly(emailData, 'international-visitor').catch(err => {
@@ -185,7 +186,7 @@ const bulkUploadInternationalVisitors = async (req, res) => {
     generateRegistrationId,
     buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "International Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["Business Networking"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["Healthcare"], city: visitor.city || "N/A", country: visitor.country || "N/A", registrationId: visitor.registrationId, b2bMeeting: visitor.b2bMeeting, designation: visitor.designation || "N/A", companyName: visitor.companyName || "N/A", eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
     sendNotification: (data) => {
-      const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
+      const isBOE = isBoeEvent(data.eventName || data.registrationFor, data.domainName);
       const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
       return emailSvc.sendVisitorConfirmationOnly(data, "international-visitor", true);
     },
@@ -238,7 +239,7 @@ const bulkResendInternationalVisitorMessages = async (req, res) => {
       if (sendEmail || sendWhatsapp) {
         try {
           const whatsappOnly = !sendEmail;
-          const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+          const isBOE = isBoeEvent(emailData.eventName || emailData.registrationFor, req.body.domainName);
           const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
           await emailSvc.sendVisitorRegistrationEmails(emailData, whatsappOnly);
           await new Promise(resolve => setTimeout(resolve, 1000));

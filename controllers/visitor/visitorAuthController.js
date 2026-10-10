@@ -1,4 +1,5 @@
 const CorporateVisitor = require("../../models/visitor/CorporateVisitorModel");
+const { isBoeEvent } = require("../../utils/isBoeEvent");
 const GeneralVisitor = require("../../models/visitor/GeneralVisitorModel");
 const VisitorOTP = require("../../models/visitor/VisitorOTPModel");
 const emailService = require("../../utils/emailService");
@@ -49,7 +50,7 @@ const sendVisitorOtp = async (req, res) => {
     });
 
     // 4. Send OTP via Email
-    const isBOE = (visitor.eventName && (visitor.eventName.toLowerCase().includes('boe') || visitor.eventName.toLowerCase().includes('bharat organic'))) || visitor.domainName === 'boe';
+    const isBOE = isBoeEvent(visitor.eventName || visitor.registrationFor, visitor.domainName);
     const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
     const emailSent = await emailSvc.sendOtpEmail(visitor.email, otp, `${visitor.firstName} ${visitor.lastName}`, 'VISITOR');
 
