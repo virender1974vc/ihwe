@@ -3,10 +3,22 @@ const fs = require('fs');
 const QRCode = require('qrcode');
 const whatsapp = require('../whatsapp');
 const aisensy = require('../aisensyService');
-const { AISENSY_CAMPAIGN_BY_FORM_TYPE, AISENSY_BANNER_BY_FORM_TYPE } = require('./aisensyConfig');
+const { AISENSY_CAMPAIGN_BY_FORM_TYPE, AISENSY_BANNER_BY_FORM_TYPE, COMMON_VISITOR_FORM_TYPES } = require('./aisensyConfig');
 const { getCorporateVisitorAdminAlertTemplate } = require('../emailTemplates/corporateVisitorAdminAlert');
 const { getGeneralVisitorAdminAlertTemplate } = require('../emailTemplates/generalVisitorAdminAlert');
 const { getGeneralEnquiryAdminAlertTemplate } = require('../emailTemplates/generalEnquiryAdminAlert');
+
+function ordinalDay(n) {
+    const suffixes = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+}
+
+function formatLongDateRange(start, end) {
+    const startMonth = start.toLocaleString('default', { month: 'long' });
+    const endMonth = end.toLocaleString('default', { month: 'long' });
+    return `${ordinalDay(start.getDate())} ${startMonth} to ${ordinalDay(end.getDate())} ${endMonth} ${end.getFullYear()}`;
+}
 
 async function getTemplate(formType) {
     try {
@@ -74,7 +86,7 @@ function resolvePlaceholderValue(key, data) {
 
     const aliases = {
         'EVENT_SHORT_DATE': data._dbShortDate || (isBOE ? '20–22 March 2026' : '15-17 May 2026'),
-        'EVENT_DATE': data._dbShortDate || (isBOE ? '20–22 March 2026' : '15-17 May 2026'),
+        'EVENT_DATE': data._dbLongDate || (isBOE ? '20th March to 22nd March 2026' : '15th May to 17th May 2026'),
         'EVENT_VENUE': data._dbVenue || (isBOE ? 'Hall No. 12, Pragati Maidain, New Delhi, India' : 'IICC, Yashobhoomi, New Delhi, India'),
         'TEAM_NAME': `Team ${data._dbShortName || (isBOE ? 'BOE' : 'IHWE')}`,
         'EVENT_FULL_NAME': data._dbFullName || (isBOE ? 'Bharat Organic Expo 2026' : 'International Health & Wellness Expo 2026'),
@@ -191,10 +203,25 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
         filename = `qrcode_${data.registrationId.replace(/\//g, '_')}.png`;
     }
 
+    // The common_visiitor campaign is a fixed AiSensy template with 7 positional
+    // slots (not the dynamic [[placeholder]] params used by other form types):
+    // 1 name, 2 visitor type, 3 event name, 4 registration ID, 5 date, 6 venue, 7 team/short name.
+    const templateParams = COMMON_VISITOR_FORM_TYPES.includes(formType)
+        ? [
+            data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : '') || 'Visitor',
+            data.visitorType || 'Visitor',
+            data._dbFullName || (isBOE ? 'Bharat Organic Expo 2026' : 'International Health & Wellness Expo 2026'),
+            data.registrationId || 'N/A',
+            data._dbShortDate || (isBOE ? '19-21 February 2027' : '15-17 May 2026'),
+            data._dbVenue || (isBOE ? 'Hall No. 12, Pragati Maidain, New Delhi, India' : 'IICC, Yashobhoomi, New Delhi, India'),
+            data._dbShortName || (isBOE ? 'BOE' : 'IHWE')
+        ]
+        : this.extractPlaceholderParams(template.whatsappBody, data);
+
     return await aisensy.sendTemplate({
         campaignEnvKey,
         phone: mobile,
-        templateParams: this.extractPlaceholderParams(template.whatsappBody, data),
+        templateParams,
         media: mediaUrl ? { url: mediaUrl, filename } : null
     });
 }
@@ -214,6 +241,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                 const month = start.toLocaleString('default', { month: 'long' });
                 const year = start.getFullYear();
                 data._dbShortDate = `${startDay}–${endDay} ${month} ${year}`;
+                data._dbLongDate = formatLongDateRange(start, end);
                 data._dbVenue = matchedEvent.location;
                 data._dbFullName = matchedEvent.name;
                 data._dbShortName = matchedEvent.paymentFilterName;
@@ -282,7 +310,9 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                     margin: 2,
                     color: { dark: '#000000', light: '#ffffff' }
                 });
-                const qrImageOnly = `<img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="100" height="100" style="border:2px solid #23471d;border-radius:8px;display:inline-block;" />`;
+                const qrImageOnly = `<img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />`;
+                const qrImageLabeled = `<p style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-weight:700;color:#23471d;margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;text-align:center;">Scan QR Code for Entry</p>
+                        <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:block;margin:0 auto;" />`;
                 const qrBlockFull = `
                         <div style="text-align: center; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px;">
                             <p style="font-weight:700;color:#23471d;margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
@@ -290,7 +320,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                             <p style="margin:4px 0 0;font-size:10px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
                         </div>`;
                 if (bodyContent.includes(QR_TOKEN)) {
-                    bodyContent = bodyContent.replace(QR_TOKEN, qrImageOnly);
+                    bodyContent = bodyContent.replace(QR_TOKEN, qrImageLabeled);
                 } else {
                     bodyContent += qrBlockFull;
                 }
@@ -521,4 +551,4 @@ function getExhibitorRecipient(registration) {
     ).trim();
 }
 
-module.exports = { getTemplate, getExhibitorTemplateData, resolvePlaceholderValue, applyPlaceholders, extractPlaceholderParams, trySendAisensyForFormType, sendDynamicConfirmation, notifyAdmin, getAdminEmailForProfile, getExhibitorRecipient };
+module.exports = { getTemplate, getExhibitorTemplateData, resolvePlaceholderValue, applyPlaceholders, extractPlaceholderParams, trySendAisensyForFormType, sendDynamicConfirmation, notifyAdmin, getAdminEmailForProfile, getExhibitorRecipient, ordinalDay, formatLongDateRange };

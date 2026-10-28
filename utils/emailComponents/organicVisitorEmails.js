@@ -8,6 +8,7 @@ const { getBuyerRegistrationAlertTemplate } = require('../emailTemplates/buyerRe
 const { getInternationalBuyerRegistrationAlertTemplate } = require('../emailTemplates/internationalBuyerRegistrationAlert');
 const { getCorporateVisitorAdminAlertTemplate } = require('../emailTemplates/corporateVisitorAdminAlert');
 const { getGeneralVisitorAdminAlertTemplate } = require('../emailTemplates/generalVisitorAdminAlert');
+const { formatLongDateRange } = require('./organicTemplateEngine');
 
 async function sendVisitorRegistrationEmails(data, whatsappOnly = false) {
     const type = data.visitorType.toLowerCase().includes('corporate') ? 'corporate-visitor' :
@@ -43,6 +44,24 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
     const shortName = isBOE ? 'BOE' : '${shortName}';
     const fullEventName = isBOE ? 'Bharat Organic Expo (BOE)' : '${teamSubTitle} (${shortName})';
     try {
+        try {
+            const EventModel = require('../../models/Event');
+            const eventDocs = await EventModel.find({ status: 'active' });
+            const matchedEvent = eventDocs.find(e => isBOE ? e.paymentFilterName.includes('BOE') : e.paymentFilterName.includes('IHWE'));
+            if (matchedEvent) {
+                const start = new Date(matchedEvent.startDate);
+                const end = new Date(matchedEvent.endDate);
+                data._dbShortDate = `${start.getDate()}–${end.getDate()} ${start.toLocaleString('default', { month: 'long' })} ${start.getFullYear()}`;
+                data._dbLongDate = formatLongDateRange(start, end);
+                data._dbVenue = matchedEvent.location;
+                data._dbFullName = matchedEvent.name;
+                data._dbShortName = matchedEvent.paymentFilterName;
+                data._dbSubtitle = matchedEvent.description ? matchedEvent.description.substring(0, 50) + '...' : 'Global Health Connect';
+            }
+        } catch (dbErr) {
+            console.error("Failed to fetch Event from DB:", dbErr.message);
+        }
+
         const template = await this.getTemplate(formType);
         if (!template) {
             console.warn('No dynamic template found for ' + formType);
@@ -53,8 +72,7 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
         const QR_TOKEN = '__QR_CODE_PLACEHOLDER__';
         let rawBody = template.emailBody.replace(/\[\[QR_CODE\]\]/g, QR_TOKEN);
         let bodyContent = this.applyPlaceholders(rawBody, data);
-        
-        const isBOE = data.eventName && data.eventName.includes('BOE');
+
         if (isBOE) {
             bodyContent = bodyContent.replace(/9th Edition of International Health &amp; Wellness Expo 2026/g, 'Bharat Organic Expo');
             bodyContent = bodyContent.replace(/9th Edition of International Health & Wellness Expo 2026/g, 'Bharat Organic Expo');
@@ -96,14 +114,24 @@ async function sendVisitorConfirmationOnly(data, formType, whatsappOnly = false)
                 const scanPath = formType === 'buyer-registration' ? 'buyer-scan' : 'visitor';
                 const scanUrl = `${frontendUrl}/${scanPath}?id=${encodeURIComponent(data.registrationId)}`;
                 const qrBuffer = await QRCode.toBuffer(scanUrl, { width: 150, margin: 2, color: { dark: '#000000', light: '#ffffff' } });
-                const qrBlock = `
+                if (bodyContent.includes(QR_TOKEN)) {
+                    // Template already lays [[QR_CODE]] out inside its own table cell (next to
+                    // the registration details), so just drop in a bare image sized to roughly
+                    // match that cell's height — the bordered/titled card below is only used
+                    // as a standalone fallback when a template has no such cell to sit in.
+                    const qrImage = `<p style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-weight:700;color:#23471d;margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;text-align:center;">Scan QR Code for Entry</p>
+                        <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:block;margin:0 auto;" />`;
+                    bodyContent = bodyContent.replace(QR_TOKEN, qrImage);
+                } else {
+                    const qrBlock = `
                         <div style="text-align: center; margin: 25px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
                             <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
                             <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
                             <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
                             <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
                         </div>`;
-                bodyContent = bodyContent.includes(QR_TOKEN) ? bodyContent.replace(QR_TOKEN, qrBlock) : bodyContent + qrBlock;
+                    bodyContent += qrBlock;
+                }
                 emailAttachments.push({ filename: 'entry-qr.png', content: qrBuffer, cid: 'qrcode_entry@ihwe.in' });
             } catch (qrErr) {
                 console.error('[QR] Failed to generate QR code:', qrErr.message);
