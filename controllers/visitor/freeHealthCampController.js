@@ -1,4 +1,5 @@
 const FreeHealthCamp = require("../../models/visitor/FreeHealthCampModel");
+const { isBoeEvent } = require("../../utils/isBoeEvent");
 const emailService = require("../../utils/emailService");
 const whatsapp = require("../../utils/whatsapp");
 const {
@@ -90,7 +91,7 @@ const createHealthCampVisitor = async (req, res) => {
     };
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
-    const isBOE = (visitorData.eventName && (visitorData.eventName.toLowerCase().includes('boe') || visitorData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+    const isBOE = isBoeEvent(visitorData.eventName || visitorData.registrationFor, req.body.domainName);
     const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
     emailSvc.sendVisitorRegistrationEmails(visitorData).catch(err => {
       console.error("Error sending health camp registration notifications:", err);
@@ -201,7 +202,7 @@ const bulkResendHealthCampVisitorMessages = async (req, res) => {
 
       if (sendEmail || sendWhatsapp) {
         try {
-          const isBOE = (visitorData.eventName && (visitorData.eventName.toLowerCase().includes('boe') || visitorData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+          const isBOE = isBoeEvent(visitorData.eventName || visitorData.registrationFor, req.body.domainName);
           const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
           await emailSvc.sendVisitorRegistrationEmails(visitorData);
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -234,7 +235,7 @@ const bulkUploadHealthCampVisitors = async (req, res) => {
     generateRegistrationId,
     buildNotificationData: (visitor) => ({ registrationFor: visitor.registrationFor, firstName: visitor.firstName, lastName: visitor.lastName, fullName: `${visitor.firstName} ${visitor.lastName}`.trim(), email: visitor.email, mobile: visitor.mobile, alternateNo: visitor.alternateNo, dateOfBirth: visitor.dateOfBirth, gender: visitor.gender, residenceAddress: visitor.residenceAddress, country: visitor.country, state: visitor.state, city: visitor.city, existingMedicalConditions: visitor.existingMedicalConditions, isTakingMedications: visitor.isTakingMedications, medicationNames: visitor.medicationNames, hasAllergies: visitor.hasAllergies, allergyDetails: visitor.allergyDetails, isExperiencingSymptoms: visitor.isExperiencingSymptoms, symptomDetails: visitor.symptomDetails, healthCheckupServices: visitor.healthCheckupServices, preferredDate: visitor.preferredDate, preferredTimeSlot: visitor.preferredTimeSlot, consentMedicalData: visitor.consentMedicalData, agreeToUpdates: visitor.agreeToUpdates, specificHealthConcerns: visitor.specificHealthConcerns, visitorType: "Health Camp Participant", registrationId: visitor.registrationId, purposeOfVisit: "Free Health Checkup", areaOfInterest: "Healthcare Services", created_by: visitor.created_by, eventName: visitor.registrationFor || "" }),
     sendNotification: (data) => {
-      const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
+      const isBOE = isBoeEvent(data.eventName || data.registrationFor, data.domainName);
       const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
       return emailSvc.sendVisitorRegistrationEmails(data, true);
     },

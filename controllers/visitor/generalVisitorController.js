@@ -1,4 +1,5 @@
 const GeneralVisitor = require("../../models/visitor/GeneralVisitorModel");
+const { isBoeEvent } = require("../../utils/isBoeEvent");
 const emailService = require("../../utils/emailService");
 const whatsapp = require("../../utils/whatsapp");
 const {
@@ -63,7 +64,7 @@ exports.createGeneralVisitor = async (req, res) => {
     };
 
     // Send dynamic notifications (Email + WhatsApp) to User & Admin Alert
-    const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+    const isBOE = isBoeEvent(emailData.eventName || emailData.registrationFor, req.body.domainName);
     const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
     emailSvc.sendVisitorRegistrationEmails(emailData).catch(err => {
       console.error("Error sending visitor registration notifications:", err);
@@ -144,7 +145,7 @@ exports.bulkResendGeneralVisitorMessages = async (req, res) => {
 
       if (sendEmail || sendWhatsapp) {
         try {
-          const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+          const isBOE = isBoeEvent(emailData.eventName || emailData.registrationFor, req.body.domainName);
           const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
           await emailSvc.sendVisitorRegistrationEmails(emailData);
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -176,7 +177,7 @@ exports.bulkUploadGeneralVisitors = async (req, res) => {
     generateRegistrationId,
     buildNotificationData: (visitor) => ({ firstName: visitor.firstName, lastName: visitor.lastName, email: visitor.email, mobileNo: visitor.mobile, mobile: visitor.mobile, visitorType: "General Visitor", purposeOfVisit: visitor.purposeOfVisit?.length ? visitor.purposeOfVisit : ["General Interest"], areaOfInterest: visitor.areaOfInterest?.length ? visitor.areaOfInterest : ["General"], city: visitor.city || "N/A", country: visitor.country || "India", registrationId: visitor.registrationId, eventName: visitor.registrationFor || "", registrationDate: visitor.createdAt, created_by: visitor.created_by }),
     sendNotification: (data) => {
-      const isBOE = (data.eventName && (data.eventName.toLowerCase().includes('boe') || data.eventName.toLowerCase().includes('bharat organic'))) || data.domainName === 'boe';
+      const isBOE = isBoeEvent(data.eventName || data.registrationFor, data.domainName);
       const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
       return emailSvc.sendVisitorRegistrationEmails(data, true);
     },

@@ -1,4 +1,5 @@
 const GroupVisitor = require("../../models/visitor/GroupVisitorModel");
+const { isBoeEvent } = require("../../utils/isBoeEvent");
 const emailService = require("../../utils/emailService");
 const { generateRegistrationId } = require("../../utils/generateRegistrationId");
 const { logActivity } = require("../../utils/logger");
@@ -88,7 +89,7 @@ const createGroupVisitor = async (req, res) => {
                 eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
             };
 
-            const isBOE = (emailData.eventName && (emailData.eventName.toLowerCase().includes('boe') || emailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+            const isBOE = isBoeEvent(emailData.eventName || emailData.registrationFor, req.body.domainName);
             const emailSvc = isBOE ? require("../../utils/organicEmailService") : emailService;
 
             emailSvc
@@ -120,7 +121,7 @@ const createGroupVisitor = async (req, res) => {
             eventName: saved.eventName || req.body.eventName || saved.registrationFor || req.body.registrationFor || 'IHWE 2026',
         };
 
-        const isBOEAdmin = (adminEmailData.eventName && (adminEmailData.eventName.toLowerCase().includes('boe') || adminEmailData.eventName.toLowerCase().includes('bharat organic'))) || req.body.domainName === 'boe';
+        const isBOEAdmin = isBoeEvent(adminEmailData.eventName || adminEmailData.registrationFor, req.body.domainName);
         const adminEmailSvc = isBOEAdmin ? require("../../utils/organicEmailService") : emailService;
 
         adminEmailSvc

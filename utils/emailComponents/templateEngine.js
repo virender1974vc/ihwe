@@ -3,10 +3,22 @@ const fs = require('fs');
 const QRCode = require('qrcode');
 const whatsapp = require('../whatsapp');
 const aisensy = require('../aisensyService');
-const { AISENSY_CAMPAIGN_BY_FORM_TYPE, AISENSY_BANNER_BY_FORM_TYPE } = require('./aisensyConfig');
+const { AISENSY_CAMPAIGN_BY_FORM_TYPE, AISENSY_BANNER_BY_FORM_TYPE, COMMON_VISITOR_FORM_TYPES } = require('./aisensyConfig');
 const { getCorporateVisitorAdminAlertTemplate } = require('../emailTemplates/corporateVisitorAdminAlert');
 const { getGeneralVisitorAdminAlertTemplate } = require('../emailTemplates/generalVisitorAdminAlert');
 const { getGeneralEnquiryAdminAlertTemplate } = require('../emailTemplates/generalEnquiryAdminAlert');
+
+function ordinalDay(n) {
+    const suffixes = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
+}
+
+function formatLongDateRange(start, end) {
+    const startMonth = start.toLocaleString('default', { month: 'long' });
+    const endMonth = end.toLocaleString('default', { month: 'long' });
+    return `${ordinalDay(start.getDate())} ${startMonth} to ${ordinalDay(end.getDate())} ${endMonth} ${end.getFullYear()}`;
+}
 
 async function getTemplate(formType) {
     try {
@@ -70,7 +82,7 @@ async function getExhibitorTemplateData() {
 function resolvePlaceholderValue(key, data) {
     const aliases = {
         'EVENT_SHORT_DATE': data._dbShortDate || '15-17 May 2026',
-        'EVENT_DATE': data._dbShortDate || '15-17 May 2026',
+        'EVENT_DATE': data._dbLongDate || '15th May to 17th May 2026',
         'EVENT_VENUE': data._dbVenue || 'Hall Nos. 12, Pragati Maidan New Delhi – 110001, Delhi, India',
         'TEAM_NAME': `Team ${data._dbShortName || 'IHWE'}`,
         'EVENT_FULL_NAME': data._dbFullName || 'International Health & Wellness Expo 2026',
@@ -186,10 +198,25 @@ async function trySendAisensyForFormType(formType, mobile, template, data) {
         filename = `qrcode_${data.registrationId.replace(/\//g, '_')}.png`;
     }
 
+    // The common_visiitor campaign is a fixed AiSensy template with 7 positional
+    // slots (not the dynamic [[placeholder]] params used by other form types):
+    // 1 name, 2 visitor type, 3 event name, 4 registration ID, 5 date, 6 venue, 7 team/short name.
+    const templateParams = COMMON_VISITOR_FORM_TYPES.includes(formType)
+        ? [
+            data.fullName || data.name || (data.firstName ? `${data.firstName} ${data.lastName || ''}`.trim() : '') || 'Visitor',
+            data.visitorType || 'Visitor',
+            data._dbFullName || data.eventName || 'International Health & Wellness Expo 2026',
+            data.registrationId || 'N/A',
+            data._dbShortDate || '15-17 May 2026',
+            data._dbVenue || 'Hall Nos. 12, Pragati Maidan New Delhi – 110001, Delhi, India',
+            data._dbShortName || 'IHWE'
+        ]
+        : this.extractPlaceholderParams(template.whatsappBody, data);
+
     return await aisensy.sendTemplate({
         campaignEnvKey,
         phone: mobile,
-        templateParams: this.extractPlaceholderParams(template.whatsappBody, data),
+        templateParams,
         media: mediaUrl ? { url: mediaUrl, filename } : null
     });
 }
@@ -208,6 +235,7 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                 const month = start.toLocaleString('default', { month: 'long' });
                 const year = start.getFullYear();
                 data._dbShortDate = `${startDay}–${endDay} ${month} ${year}`;
+                data._dbLongDate = formatLongDateRange(start, end);
                 data._dbVenue = matchedEvent.location;
                 data._dbFullName = matchedEvent.name;
                 data._dbShortName = matchedEvent.paymentFilterName;
@@ -271,16 +299,22 @@ async function sendDynamicConfirmation({ to, formType, data, profile = 'DEFAULT'
                     margin: 2,
                     color: { dark: '#000000', light: '#ffffff' }
                 });
-                const qrBlock = `
+                if (bodyContent.includes(QR_TOKEN)) {
+                    // Template already lays [[QR_CODE]] out inside its own table cell (next to
+                    // the registration details), so just drop in a bare image sized to roughly
+                    // match that cell's height — the bordered/titled card below is only used
+                    // as a standalone fallback when a template has no such cell to sit in.
+                    const qrImage = `<p style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-weight:700;color:#23471d;margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:1px;text-align:center;">Scan QR Code for Entry</p>
+                        <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:block;margin:0 auto;" />`;
+                    bodyContent = bodyContent.replace(QR_TOKEN, qrImage);
+                } else {
+                    const qrBlock = `
                         <div style="text-align: center; margin: 25px 0; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
                             <p style="font-weight:700;color:#23471d;margin:0 0 12px;font-size:14px;text-transform:uppercase;letter-spacing:1px;">Scan QR Code for Entry</p>
                             <img src="cid:qrcode_entry@ihwe.in" alt="Entry QR Code" width="120" height="120" style="border:4px solid #23471d;border-radius:8px;display:inline-block;" />
                             <p style="margin:10px 0 0;font-size:12px;color:#6b7280;">Registration ID: <strong>${data.registrationId}</strong></p>
                             <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Present this QR code at the entrance for hassle-free access.</p>
                         </div>`;
-                if (bodyContent.includes(QR_TOKEN)) {
-                    bodyContent = bodyContent.replace(QR_TOKEN, qrBlock);
-                } else {
                     bodyContent += qrBlock;
                 }
 
@@ -509,4 +543,4 @@ function getExhibitorRecipient(registration) {
     ).trim();
 }
 
-module.exports = { getTemplate, getExhibitorTemplateData, resolvePlaceholderValue, applyPlaceholders, extractPlaceholderParams, trySendAisensyForFormType, sendDynamicConfirmation, notifyAdmin, getAdminEmailForProfile, getExhibitorRecipient };
+module.exports = { getTemplate, getExhibitorTemplateData, resolvePlaceholderValue, applyPlaceholders, extractPlaceholderParams, trySendAisensyForFormType, sendDynamicConfirmation, notifyAdmin, getAdminEmailForProfile, getExhibitorRecipient, ordinalDay, formatLongDateRange };
